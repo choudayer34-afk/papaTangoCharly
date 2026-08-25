@@ -1,0 +1,79 @@
+/*
+  Design tokens — Pilotage
+  Philosophie reprise d'EnVie / eProtec (rayons doux, ombres légères, transitions courtes)
+  mais palette propre à Pilotage (cahier des charges section 58 : couleur d'accent propre,
+  philosophie commune).
+*/
+
+:root {
+  /* Couleurs de marque */
+  --color-primary: #4C56C4;
+  --color-primary-dark: #383F94;
+  --color-primary-light: #E7E9FB;
+
+  /* Surfaces */
+  --color-bg: #F5F6FA;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F0F1F8;
+  --color-border: #E1E3EF;
+
+  /* Texte */
+  --color-text: #23263B;
+  --color-text-muted: #6B6F8C;
+  --color-text-inverse: #FFFFFF;
+
+  /* États sémantiques (statuts, alertes) */
+  --color-success: #2E9E6B;
+  --color-success-bg: #E4F6EE;
+  --color-warning: #C98A1E;
+  --color-warning-bg: #FBF0DC;
+  --color-danger: #D64550;
+  --color-danger-bg: #FBE4E5;
+  --color-info: #3E7BD6;
+  --color-info-bg: #E6EEFC;
+  --color-waiting: #7A6FD1;
+  --color-waiting-bg: #EEEBFA;
+
+  /* Rayons */
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
+
+  /* Ombres */
+  --shadow-sm: 0 1px 2px rgba(35, 38, 59, 0.06), 0 1px 1px rgba(35, 38, 59, 0.04);
+  --shadow-md: 0 6px 16px rgba(35, 38, 59, 0.10);
+
+  /* Espacements */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Typo */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
+
+  /* Divers */
+  --transition: 0.18s ease;
+  --max-width: 760px;
+  --nav-height: 64px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #15172A;
+    --color-surface: #1E2140;
+    --color-surface-alt: #262A4D;
+    --color-border: #33375C;
+    --color-text: #EDEFFB;
+    --color-text-muted: #A2A5C7;
+    --color-primary-light: #2A2D5E;
+  }
+}
