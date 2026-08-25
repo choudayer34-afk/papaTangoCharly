@@ -9,8 +9,13 @@ Cahier des charges complet et proposition d'architecture cible : voir le projet 
 ## Stack
 
 PWA en JavaScript vanilla (ES modules), sans framework ni bundler — dans la continuité
-d'EnVie et d'eProtec. Stockage local via IndexedDB pour l'instant (`js/services/storage.js`),
-pensé pour être remplacé par un adaptateur Firestore sans toucher au reste du code.
+d'EnVie et d'eProtec. Stockage via Firestore (`js/services/storage.js`), offline-first
+(cache local persistant) avec synchronisation automatique entre appareils. Authentification
+Firebase (Google ou email/mot de passe) requise — les données vivent sous `users/{uid}/...`.
+Une implémentation alternative 100 % locale (IndexedDB, sans compte) est conservée dans
+`js/services/storage-local.js` à titre de référence — elle respecte exactement la même
+interface, c'est ce qui permettrait de revenir en arrière ou de proposer un mode hors-ligne
+pur plus tard.
 
 ## Lancer en local
 
@@ -20,7 +25,21 @@ Aucun build nécessaire. Servir le dossier avec n'importe quel serveur statique,
 npx serve .
 ```
 
-puis ouvrir l'URL indiquée.
+puis ouvrir l'URL indiquée. Une connexion (Google ou email/mot de passe, à activer dans
+Firebase Authentication) est nécessaire au premier chargement.
+
+### Règle de sécurité Firestore recommandée
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+```
 
 ## État actuel (socle P0)
 
@@ -29,5 +48,6 @@ puis ouvrir l'URL indiquée.
 - ✅ Tâches avec critère de clôture
 - ✅ Kanban à 5 colonnes, drag & drop
 - ✅ Dashboard (retards, à traiter, à suivre, en attente, projets)
+- ✅ Synchro multi-appareils (Firestore, offline-first)
 - ⏳ À venir : projets détaillés, personnes/suivis collaborateurs, ressources, calendrier,
-  canevas, rappels, recherche, historique visible, synchro Firestore multi-appareils
+  canevas, rappels, recherche, historique visible
