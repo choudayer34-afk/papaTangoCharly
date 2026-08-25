@@ -43,24 +43,33 @@ export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
 
+/**
+ * Met à jour une tâche. Si `patch.status` est présent, `completedAt` est géré
+ * automatiquement (posé quand on passe à "done", effacé sinon) — quel que soit le
+ * chemin par lequel le statut change (Kanban, fiche détail, etc.), pas seulement
+ * setStatus(). Une seule règle, un seul endroit.
+ */
 export async function updateTask(id, patch) {
   const current = await storage.get(COLLECTION, id);
   if (!current) throw new Error("Tâche introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
-  await storage.logHistory("Task", id, "updated", { patch });
+
+  const finalPatch = { ...patch };
+  if (patch.status && patch.status !== current.status) {
+    finalPatch.completedAt = patch.status === "done" ? Date.now() : null;
+  }
+
+  const updated = await storage.put(COLLECTION, { ...current, ...finalPatch });
+  if (patch.status && patch.status !== current.status) {
+    await storage.logHistory("Task", id, "status_changed", { from: current.status, to: patch.status });
+  } else {
+    await storage.logHistory("Task", id, "updated", { patch });
+  }
   return updated;
 }
 
 export async function setStatus(id, status) {
   if (!STATUSES.includes(status)) throw new Error("Statut inconnu : " + status);
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const patch = { status };
-  if (status === "done" && !current.completedAt) patch.completedAt = Date.now();
-  if (status !== "done") patch.completedAt = null;
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
-  await storage.logHistory("Task", id, "status_changed", { from: current.status, to: status });
-  return updated;
+  return updateTask(id, { status });
 }
 
 export function isLate(task) {
