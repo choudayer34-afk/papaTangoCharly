@@ -51,27 +51,33 @@ export function renderDashboard(container) {
     `;
   }
 
-  function renderProjects() {
+  function renderProjectsSection() {
     projectsSection.innerHTML = `<div class="section-title">📦 Mes projets</div>`;
-    if (!projects.length) {
+    const active = projects.filter((p) => p.status === "active");
+    if (!active.length) {
       projectsSection.innerHTML += `
         <div class="empty-state">
           <span class="emoji">📦</span>
-          Pas encore de projet. Ils apparaîtront ici une fois créés depuis une tâche.
+          Pas encore de projet. Crée-en un depuis l'onglet Projets.
         </div>`;
       return;
     }
     const list = document.createElement("div");
     list.className = "card";
-    for (const project of projects) {
-      const count = tasks.filter((t) => t.projectId === project.id && t.status !== "done").length;
+    for (const project of active) {
+      const projectTasks = tasks.filter((t) => t.projectId === project.id);
+      const progress = projectsApi.computeProgress(projectTasks);
       const row = document.createElement("div");
       row.className = "item-row";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(project.name)}</div>
-          <div class="item-meta">${count} tâche(s) en cours</div>
-        </div>`;
+          <div style="height:5px;background:var(--color-surface-alt);border-radius:var(--radius-pill);overflow:hidden;margin-top:6px;">
+            <div style="height:100%;width:${progress.percent}%;background:var(--color-primary);"></div>
+          </div>
+        </div>
+        <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
+      `;
       list.appendChild(row);
     }
     projectsSection.appendChild(list);
@@ -80,7 +86,7 @@ export function renderDashboard(container) {
   const unsubTasks = tasksApi.subscribe((items) => {
     tasks = items;
     renderStats();
-    renderProjects();
+    renderProjectsSection();
   });
   const unsubInbox = inboxApi.subscribePending((items) => {
     inboxPendingCount = items.length;
@@ -88,7 +94,7 @@ export function renderDashboard(container) {
   });
   const unsubProjects = projectsApi.subscribe((items) => {
     projects = items;
-    renderProjects();
+    renderProjectsSection();
   });
 
   return function cleanup() {

@@ -18,9 +18,10 @@ export function renderKanban(container) {
   `;
 
   const board = container.querySelector("#kanban-board");
-  let projects = [];
+  let latestTasks = [];
+  let latestProjects = [];
 
-  function render(tasks) {
+  function render(tasks, projects) {
     board.innerHTML = "";
     for (const status of tasksApi.STATUSES) {
       const column = document.createElement("div");
@@ -58,9 +59,17 @@ export function renderKanban(container) {
     }
   }
 
-  const unsubTasks = tasksApi.subscribe(render);
-  const unsubProjects = projectsApi.subscribe((items) => {
-    projects = items;
+  function renderBoard() {
+    render(latestTasks, latestProjects);
+  }
+
+  const unsubTasks = tasksApi.subscribe((tasks) => {
+    latestTasks = tasks;
+    renderBoard();
+  });
+  const unsubProjects = projectsApi.subscribe((projects) => {
+    latestProjects = projects;
+    renderBoard();
   });
 
   return function cleanup() {
@@ -82,7 +91,7 @@ function renderCard(task, projects) {
   const late = tasksApi.isLate(task);
 
   card.innerHTML = `
-    <div class="kanban-card-title">${escapeHtml(task.title)}</div>
+    <div class="kanban-card-title">${task.isBlocked ? "🔴 " : ""}${escapeHtml(task.title)}</div>
     <div class="kanban-card-meta">
       ${project ? `<span>📦 ${escapeHtml(project.name)}</span>` : ""}
       ${task.dueDate ? `<span class="${late ? "badge badge-late" : ""}">📅 ${formatDate(task.dueDate)}</span>` : ""}
@@ -112,6 +121,17 @@ function openTaskDetail(task, projects) {
         ${tasksApi.STATUSES.map((s) => `<option value="${s}" ${s === task.status ? "selected" : ""}>${tasksApi.STATUS_LABELS[s]}</option>`).join("")}
       </select>
     </div>
+    <div class="field">
+      <label for="detail-project">Projet</label>
+      <select id="detail-project">
+        <option value="">— Aucun —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input id="detail-blocked" type="checkbox" style="width:auto;" ${task.isBlocked ? "checked" : ""} />
+      <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
+    </div>
   `;
 
   const { bodyEl, close } = openModal({
@@ -131,6 +151,8 @@ function openTaskDetail(task, projects) {
             successCriteria: bodyEl.querySelector("#detail-criteria").value,
             dueDate: bodyEl.querySelector("#detail-due").value || null,
             status: bodyEl.querySelector("#detail-status").value,
+            projectId: bodyEl.querySelector("#detail-project").value || null,
+            isBlocked: bodyEl.querySelector("#detail-blocked").checked,
           });
           close();
           showToast("Tâche mise à jour");
