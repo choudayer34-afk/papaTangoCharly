@@ -45,9 +45,12 @@ service cloud.firestore {
 
 - ✅ Capture express (bouton flottant, partout dans l'app)
 - ✅ Inbox + qualification (Action / Information / Archiver — les autres types arrivent)
-- ✅ Tâches avec critère de clôture
+- ✅ Tâches avec critère de clôture, rattachement à un projet, indicateur bloqué
 - ✅ Kanban à 5 colonnes, drag & drop
-- ✅ Dashboard (retards, à traiter, à suivre, en attente, projets)
+- ✅ Projets (objectif, critère de réussite, avancement calculé depuis les tâches liées)
+- ✅ Équipe (liste + fiche par personne : engagements en cours, réalisé, notes)
+- ✅ Suivis collaborateurs (engagement, échéance, date de contrôle, statut)
+- ✅ Dashboard (retards, à traiter, à suivre, en attente, avancement des projets)
 - ✅ Synchro multi-appareils (Firestore, offline-first)
-- ⏳ À venir : projets détaillés, personnes/suivis collaborateurs, ressources, calendrier,
-  canevas, rappels, recherche, historique visible
+- ⏳ À venir : ressources, calendrier, canevas, rappels programmés, recherche, historique
+  visible, revue hebdomadaire, points collaborateur/manager automatiques
