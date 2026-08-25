@@ -1,9 +1,13 @@
 // Point d'entrée — routeur minimal par hash, pas de framework (cohérent avec EnVie/eProtec).
+// Attend l'état d'authentification Firebase avant d'afficher l'app (les données sont
+// scopées par utilisateur dans Firestore, voir js/services/storage.js).
 
 import { renderDashboard } from "./views/dashboard.js";
 import { renderInbox } from "./views/inbox.js";
 import { renderKanban } from "./views/kanban.js";
+import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
+import { onAuthChange } from "./services/firebase.js";
 
 const ROUTES = {
   "#/dashboard": { render: renderDashboard, label: "Accueil", icon: "🏠" },
@@ -13,47 +17,62 @@ const ROUTES = {
 
 const appRoot = document.getElementById("app");
 let currentCleanup = null;
+let nav = null;
+let appMounted = false;
 
 function mountNav() {
-  const nav = document.createElement("nav");
-  nav.className = "bottom-nav";
+  const el = document.createElement("nav");
+  el.className = "bottom-nav";
   for (const [hash, route] of Object.entries(ROUTES)) {
     const link = document.createElement("a");
     link.href = hash;
     link.dataset.hash = hash;
     link.innerHTML = `<span class="icon">${route.icon}</span><span>${route.label}</span>`;
-    nav.appendChild(link);
+    el.appendChild(link);
   }
-  document.body.appendChild(nav);
-  return nav;
+  document.body.appendChild(el);
+  return el;
 }
 
-function updateNavActive(nav, hash) {
-  nav.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.hash === hash));
+function updateNavActive(hash) {
+  nav?.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.hash === hash));
 }
 
-function renderRoute(nav) {
+function renderRoute() {
   const hash = ROUTES[location.hash] ? location.hash : "#/dashboard";
-  if (location.hash !== hash) {
-    history.replaceState(null, "", hash);
-  }
+  if (location.hash !== hash) history.replaceState(null, "", hash);
   currentCleanup?.();
   currentCleanup = ROUTES[hash].render(appRoot) || null;
-  updateNavActive(nav, hash);
+  updateNavActive(hash);
 }
 
-function init() {
-  const nav = mountNav();
+function mountApp() {
+  if (appMounted) return;
+  appMounted = true;
+  nav = mountNav();
   mountCaptureFab();
-  window.addEventListener("hashchange", () => renderRoute(nav));
-  renderRoute(nav);
+  window.addEventListener("hashchange", renderRoute);
+  renderRoute();
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", init);
-} else {
-  init();
+function unmountApp() {
+  appMounted = false;
+  currentCleanup?.();
+  currentCleanup = null;
+  nav?.remove();
+  nav = null;
+  document.querySelector(".fab")?.remove();
+  window.removeEventListener("hashchange", renderRoute);
 }
+
+onAuthChange((user) => {
+  if (user) {
+    mountApp();
+  } else {
+    unmountApp();
+    renderLogin(appRoot);
+  }
+});
 
 // PWA : service worker (ne bloque jamais le fonctionnement de base si indisponible).
 if ("serviceWorker" in navigator) {
