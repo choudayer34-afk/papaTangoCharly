@@ -4,8 +4,10 @@
 import * as resourcesApi from "../domain/resources.js";
 import * as projectsApi from "../domain/projects.js";
 import * as tasksApi from "../domain/tasks.js";
+import * as historyApi from "../domain/history.js";
 import { openModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
 
 const FILTERS = [
   { key: "recent", label: "Récentes" },
@@ -204,7 +206,12 @@ function openCreateResourceModal(prefill = {}) {
   });
 }
 
-function openResourceDetail(resource, projects, tasks) {
+async function openResourceDetail(resource, projects, tasks) {
+  const allHistory = await historyApi.listAll();
+  const resourceHistory = allHistory
+    .filter((h) => h.entityType === "Resource" && h.entityId === resource.id)
+    .sort((a, b) => a.date - b.date);
+
   const body = document.createElement("div");
   body.innerHTML = `
     ${resource.url ? `<a id="res-open-link" href="${escapeAttr(resource.url)}" target="_blank" rel="noopener" class="btn btn-secondary btn-block" style="margin-bottom:16px;">🔗 Ouvrir le lien</a>` : ""}
@@ -220,9 +227,12 @@ function openResourceDetail(resource, projects, tasks) {
     <div id="res-projects-links"></div>
     <div class="section-title">✅ Tâches liées</div>
     <div id="res-tasks-links"></div>
+    <div class="section-title">🕒 Historique (${resourceHistory.length})</div>
+    <div class="card" id="res-history" style="margin-bottom:8px;"></div>
   `;
 
   body.querySelector("#res-open-link")?.addEventListener("click", () => resourcesApi.touchLastUsed(resource.id));
+  renderHistoryTimeline(body.querySelector("#res-history"), resourceHistory);
 
   renderLinkPicker(
     body.querySelector("#res-projects-links"),

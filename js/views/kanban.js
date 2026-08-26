@@ -4,9 +4,11 @@
 import * as tasksApi from "../domain/tasks.js";
 import * as projectsApi from "../domain/projects.js";
 import * as resourcesApi from "../domain/resources.js";
+import * as historyApi from "../domain/history.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
 
 export function renderKanban(container) {
   container.innerHTML = `
@@ -103,9 +105,12 @@ function renderCard(task, projects) {
 }
 
 async function openTaskDetail(task, projects) {
-  const allResources = await resourcesApi.listAll();
+  const [allResources, allHistory] = await Promise.all([resourcesApi.listAll(), historyApi.listAll()]);
   const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
   const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));
+  const taskHistory = allHistory
+    .filter((h) => h.entityType === "Task" && h.entityId === task.id)
+    .sort((a, b) => a.date - b.date);
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -144,12 +149,15 @@ async function openTaskDetail(task, projects) {
       <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
       <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
     </div>
+    <div class="section-title">🕒 Historique (${taskHistory.length})</div>
+    <div class="card" id="detail-history" style="margin-bottom:16px;"></div>
   `;
 
   const resourcesEl = body.querySelector("#detail-resources");
   renderResourceList(resourcesEl, linkedResources, {
     onUnlink: (r) => resourcesApi.linkToTask(r.id, task.id, false),
   });
+  renderHistoryTimeline(body.querySelector("#detail-history"), taskHistory);
   body.querySelector("#link-resource-btn").addEventListener("click", () => {
     if (!unlinkedResources.length) {
       showToast("Aucune autre ressource à lier pour l'instant");

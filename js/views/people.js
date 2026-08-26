@@ -3,8 +3,10 @@
 import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as projectsApi from "../domain/projects.js";
+import * as historyApi from "../domain/history.js";
 import { openModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
 
 export function renderPeople(container) {
   container.innerHTML = `
@@ -123,10 +125,18 @@ function openCreatePersonModal() {
   });
 }
 
-function openPersonDetail(person, allFollowUps) {
+async function openPersonDetail(person, allFollowUps) {
   const own = allFollowUps.filter((f) => f.personId === person.id);
   const active = own.filter((f) => f.status !== "done");
   const done = own.filter((f) => f.status === "done");
+
+  // §38 "Où en est Clément ?" : l'historique d'une personne, c'est le sien plus celui de
+  // tous ses suivis — même principe que l'agrégation faite côté fiche Projet (§46).
+  const allHistory = await historyApi.listAll();
+  const trackedKeys = new Set([`Person:${person.id}`, ...own.map((f) => `FollowUp:${f.id}`)]);
+  const personHistory = allHistory
+    .filter((h) => trackedKeys.has(`${h.entityType}:${h.entityId}`))
+    .sort((a, b) => a.date - b.date);
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -139,12 +149,15 @@ function openPersonDetail(person, allFollowUps) {
       <label for="person-notes">Notes</label>
       <textarea id="person-notes" placeholder="Contexte, points d'attention...">${escapeHtml(person.notes || "")}</textarea>
     </div>
+    <div class="section-title">🕒 Historique (${personHistory.length})</div>
+    <div class="card" id="person-history" style="margin-bottom:16px;"></div>
   `;
 
   const activeEl = body.querySelector("#active-followups");
   renderFollowUpList(activeEl, active);
   const doneEl = body.querySelector("#done-followups");
   renderFollowUpList(doneEl, done);
+  renderHistoryTimeline(body.querySelector("#person-history"), personHistory);
 
   body.querySelector("#add-followup-btn").addEventListener("click", () => openCreateFollowUpModal(person));
 

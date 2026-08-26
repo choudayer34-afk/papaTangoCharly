@@ -4,9 +4,14 @@
 import * as projectsApi from "../domain/projects.js";
 import * as tasksApi from "../domain/tasks.js";
 import * as resourcesApi from "../domain/resources.js";
+import * as followUpsApi from "../domain/followups.js";
+import * as meetingsApi from "../domain/meetings.js";
+import * as decisionsApi from "../domain/decisions.js";
+import * as historyApi from "../domain/history.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
 
 export function renderProjects(container) {
   container.innerHTML = `
@@ -22,7 +27,7 @@ export function renderProjects(container) {
 
   const listEl = container.querySelector("#projects-list");
   const subtitleEl = container.querySelector("#projects-subtitle");
-  container.querySelector("#new-project-btn").addEventListener("click", openCreateProjectModal);
+  container.querySelector("#new-project-btn").addEventListener("click", () => openCreateProjectModal());
 
   let projects = [];
   let tasks = [];
@@ -85,23 +90,28 @@ export function renderProjects(container) {
   };
 }
 
-function openCreateProjectModal() {
+/**
+ * Exportée pour être réutilisée depuis la qualification Inbox (§13) avec un titre
+ * pré-rempli à partir de la capture brute, sans dupliquer ce formulaire — même pattern
+ * que openCreateResourceModal côté Ressources.
+ */
+export function openCreateProjectModal(prefill = {}) {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
       <label for="project-name">Nom</label>
-      <input id="project-name" type="text" placeholder="Ex. Communication Agro" />
+      <input id="project-name" type="text" placeholder="Ex. Communication Agro" value="${escapeAttr(prefill.name || "")}" />
     </div>
     <div class="field">
       <label for="project-objective">Objectif (optionnel)</label>
-      <textarea id="project-objective" placeholder="Qu'est-ce qu'on cherche à obtenir ?"></textarea>
+      <textarea id="project-objective" placeholder="Qu'est-ce qu'on cherche à obtenir ?">${escapeHtml(prefill.objective || "")}</textarea>
     </div>
   `;
   const { bodyEl, close } = openModal({
     title: "Nouveau projet",
     body,
     actions: [
-      { label: "Annuler", variant: "ghost" },
+      { label: "Annuler", variant: "ghost", onClick: () => prefill.onCancel?.() },
       {
         label: "Créer",
         variant: "primary",
@@ -109,12 +119,13 @@ function openCreateProjectModal() {
         onClick: async () => {
           const name = bodyEl.querySelector("#project-name").value.trim();
           if (!name) return;
-          await projectsApi.createProject({
+          const project = await projectsApi.createProject({
             name,
             objective: bodyEl.querySelector("#project-objective").value.trim(),
           });
           close();
           showToast("Projet créé");
+          prefill.onCreated?.(project);
         },
       },
     ],
@@ -123,9 +134,34 @@ function openCreateProjectModal() {
 
 async function openProjectDetail(project, tasks) {
   const progress = projectsApi.computeProgress(tasks);
-  const allResources = await resourcesApi.listAll();
+  const [allResources, allFollowUps, allMeetings, allDecisions, allHistory] = await Promise.all([
+    resourcesApi.listAll(),
+    followUpsApi.listAll(),
+    meetingsApi.listAll(),
+    decisionsApi.listAll(),
+    historyApi.listAll(),
+  ]);
   const linkedResources = allResources.filter((r) => (r.projectIds || []).includes(project.id));
   const unlinkedResources = allResources.filter((r) => !(r.projectIds || []).includes(project.id));
+  const linkedFollowUps = allFollowUps.filter((f) => f.projectId === project.id);
+  const linkedMeetings = allMeetings.filter((m) => m.projectId === project.id);
+  const linkedDecisions = allDecisions.filter((d) => d.projectId === project.id);
+
+  // §46 : l'historique d'un projet n'est pas que le sien — c'est le fil de tout ce qui lui
+  // est rattaché (tâches, suivis, réunions, décisions, ressources), exactement comme
+  // l'exemple du cahier des charges ("Demande reçue → Réunion → Décision → Action créée →
+  // Validation → Publication").
+  const trackedKeys = new Set([
+    `Project:${project.id}`,
+    ...tasks.map((t) => `Task:${t.id}`),
+    ...linkedFollowUps.map((f) => `FollowUp:${f.id}`),
+    ...linkedMeetings.map((m) => `Meeting:${m.id}`),
+    ...linkedDecisions.map((d) => `Decision:${d.id}`),
+    ...linkedResources.map((r) => `Resource:${r.id}`),
+  ]);
+  const projectHistory = allHistory
+    .filter((h) => trackedKeys.has(`${h.entityType}:${h.entityId}`))
+    .sort((a, b) => a.date - b.date);
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -139,12 +175,20 @@ async function openProjectDetail(project, tasks) {
     </div>
     <div class="section-title" style="margin-top:0;">Tâches (${progress.total})</div>
     <div class="card" id="detail-tasks" style="margin-bottom:16px;"></div>
+    <div class="section-title">👀 Suivis (${linkedFollowUps.length})</div>
+    <div class="card" id="detail-followups" style="margin-bottom:16px;"></div>
+    <div class="section-title">🗓️ Réunions (${linkedMeetings.length})</div>
+    <div class="card" id="detail-meetings" style="margin-bottom:16px;"></div>
+    <div class="section-title">🗳️ Décisions (${linkedDecisions.length})</div>
+    <div class="card" id="detail-decisions" style="margin-bottom:16px;"></div>
     <div class="section-title">📎 Ressources (${linkedResources.length})</div>
     <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
       <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
     </div>
+    <div class="section-title">🕒 Historique (${projectHistory.length})</div>
+    <div class="card" id="detail-history" style="margin-bottom:16px;"></div>
   `;
 
   const tasksEl = body.querySelector("#detail-tasks");
@@ -164,10 +208,64 @@ async function openProjectDetail(project, tasks) {
     }
   }
 
+  const followUpsEl = body.querySelector("#detail-followups");
+  if (!linkedFollowUps.length) {
+    followUpsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun suivi lié pour l'instant.</div>`;
+  } else {
+    for (const f of linkedFollowUps) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(f.title)}</div>
+          <div class="item-meta">${f.controlDate ? "Contrôle : " + formatDate(f.controlDate) : "Pas de date de contrôle"}</div>
+        </div>
+        <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
+      `;
+      followUpsEl.appendChild(row);
+    }
+  }
+
+  const meetingsEl = body.querySelector("#detail-meetings");
+  if (!linkedMeetings.length) {
+    meetingsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune réunion liée pour l'instant.</div>`;
+  } else {
+    for (const m of linkedMeetings) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(m.title)}</div>
+          <div class="item-meta">${m.date ? formatDate(m.date) : "Pas de date"}${m.objective ? " · " + escapeHtml(m.objective) : ""}</div>
+        </div>
+      `;
+      meetingsEl.appendChild(row);
+    }
+  }
+
+  const decisionsEl = body.querySelector("#detail-decisions");
+  if (!linkedDecisions.length) {
+    decisionsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune décision liée pour l'instant.</div>`;
+  } else {
+    for (const d of linkedDecisions) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(d.title)}</div>
+          <div class="item-meta">${escapeHtml(d.decision)}</div>
+        </div>
+      `;
+      decisionsEl.appendChild(row);
+    }
+  }
+
   const resourcesEl = body.querySelector("#detail-resources");
   renderResourceList(resourcesEl, linkedResources, {
     onUnlink: (r) => resourcesApi.linkToProject(r.id, project.id, false),
   });
+
+  renderHistoryTimeline(body.querySelector("#detail-history"), projectHistory);
 
   body.querySelector("#link-resource-btn").addEventListener("click", () => {
     if (!unlinkedResources.length) {
@@ -219,8 +317,16 @@ async function openProjectDetail(project, tasks) {
   });
 }
 
+function formatDate(dateStr) {
+  return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str || "";
   return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, "&quot;");
 }
