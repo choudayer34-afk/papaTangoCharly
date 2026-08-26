@@ -11,8 +11,8 @@
 import { generateId } from "./id.js";
 
 const DB_NAME = "pilotage";
-const DB_VERSION = 2;
-const STORES = ["inboxItems", "tasks", "projects", "people", "followUps", "resources", "meetings", "decisions", "history"];
+const DB_VERSION = 3;
+const STORES = ["inboxItems", "tasks", "projects", "people", "followUps", "resources", "meetings", "decisions", "history", "preferences"];
 
 let dbPromise = null;
 const subscribers = new Map(); // collection -> Set<callback>
