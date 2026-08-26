@@ -44,16 +44,26 @@ service cloud.firestore {
 ## État actuel (socle P0)
 
 - ✅ Capture express (bouton flottant, partout dans l'app)
-- ✅ Inbox + qualification (Action / Information / Archiver — les autres types arrivent)
+- ✅ Inbox + qualification complète (Action, Suivi, Projet, Réunion, Décision, Ressource,
+  Information, Idée, Archiver — les 9 issues du §12 créent toutes une vraie entité, plus
+  aucune ne retombe silencieusement en "Information" générique)
 - ✅ Tâches avec critère de clôture, rattachement à un projet, indicateur bloqué
 - ✅ Kanban à 5 colonnes, drag & drop
-- ✅ Projets (objectif, critère de réussite, avancement calculé depuis les tâches liées)
+- ✅ Projets (objectif, critère de réussite, avancement calculé depuis les tâches liées,
+  Suivis/Réunions/Décisions/Ressources liés visibles depuis la fiche projet)
 - ✅ Équipe (liste + fiche par personne : engagements en cours, réalisé, notes)
 - ✅ Suivis collaborateurs (engagement, échéance, date de contrôle, statut)
 - ✅ Ressources (bibliothèque de liens/emplacements, détection auto du type, rattachement
   multiple à des projets et des tâches sans jamais dupliquer la ressource, filtres
   Récentes / Par type / Non classées, recherche titre/description/tag)
-- ✅ Dashboard (retards, à traiter, à suivre, en attente, avancement des projets)
+- ✅ Réunions et Décisions (capture rapide, rattachement optionnel à un projet, retrouvables
+  depuis la fiche projet ou depuis "🧠 Récemment" au Dashboard)
+- ✅ Historique visible (§46) : chaque fiche importante (Projet, Tâche, Personne, Ressource)
+  affiche sa propre frise chronologique — celle d'un Projet ou d'une Personne agrège aussi
+  l'historique de tout ce qui lui est rattaché (tâches, suivis, réunions, décisions,
+  ressources) ; un fil global "🕒 Tout l'historique" est accessible depuis le Dashboard
+- ✅ Dashboard (retards, à traiter, à suivre, en attente, avancement des projets, réunions et
+  décisions récentes, accès à l'historique complet)
 - ✅ Synchro multi-appareils (Firestore, offline-first)
-- ⏳ À venir : calendrier, canevas, rappels programmés, recherche globale cross-entités,
-  historique visible, revue hebdomadaire, points collaborateur/manager automatiques
+- ⏳ À venir : calendrier, canevas pilotés par données, rappels programmés, recherche globale
+  cross-entités, revue hebdomadaire, points collaborateur/manager automatiques
