@@ -3,8 +3,10 @@
 
 import * as tasksApi from "../domain/tasks.js";
 import * as projectsApi from "../domain/projects.js";
-import { openModal } from "../components/modal.js";
+import * as resourcesApi from "../domain/resources.js";
+import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 
 export function renderKanban(container) {
   container.innerHTML = `
@@ -100,7 +102,11 @@ function renderCard(task, projects) {
   return card;
 }
 
-function openTaskDetail(task, projects) {
+async function openTaskDetail(task, projects) {
+  const allResources = await resourcesApi.listAll();
+  const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
+  const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));
+
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -132,7 +138,45 @@ function openTaskDetail(task, projects) {
       <input id="detail-blocked" type="checkbox" style="width:auto;" ${task.isBlocked ? "checked" : ""} />
       <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
     </div>
+    <div class="section-title">📎 Ressources (${linkedResources.length})</div>
+    <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
+      <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+    </div>
   `;
+
+  const resourcesEl = body.querySelector("#detail-resources");
+  renderResourceList(resourcesEl, linkedResources, {
+    onUnlink: (r) => resourcesApi.linkToTask(r.id, task.id, false),
+  });
+  body.querySelector("#link-resource-btn").addEventListener("click", () => {
+    if (!unlinkedResources.length) {
+      showToast("Aucune autre ressource à lier pour l'instant");
+      return;
+    }
+    // Une seule modale à la fois (voir components/modal.js) : on referme la fiche tâche
+    // avant d'ouvrir le sélecteur, puis on la rouvre avec des données fraîches ensuite —
+    // sinon la fiche tâche disparaît silencieusement sous le sélecteur.
+    closeModal();
+    openResourcePickerModal(
+      unlinkedResources,
+      async (resource) => {
+        await resourcesApi.linkToTask(resource.id, task.id, true);
+        showToast("Ressource liée");
+        openTaskDetail(task, projects);
+      },
+      () => openTaskDetail(task, projects)
+    );
+  });
+  body.querySelector("#new-resource-btn-inline").addEventListener("click", () => {
+    closeModal();
+    openCreateResourceModal({
+      taskId: task.id,
+      onCreated: () => openTaskDetail(task, projects),
+      onCancel: () => openTaskDetail(task, projects),
+    });
+  });
 
   const { bodyEl, close } = openModal({
     title: "Détail de la tâche",

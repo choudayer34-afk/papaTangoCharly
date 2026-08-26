@@ -3,8 +3,10 @@
 
 import * as projectsApi from "../domain/projects.js";
 import * as tasksApi from "../domain/tasks.js";
-import { openModal } from "../components/modal.js";
+import * as resourcesApi from "../domain/resources.js";
+import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 
 export function renderProjects(container) {
   container.innerHTML = `
@@ -119,8 +121,11 @@ function openCreateProjectModal() {
   });
 }
 
-function openProjectDetail(project, tasks) {
+async function openProjectDetail(project, tasks) {
   const progress = projectsApi.computeProgress(tasks);
+  const allResources = await resourcesApi.listAll();
+  const linkedResources = allResources.filter((r) => (r.projectIds || []).includes(project.id));
+  const unlinkedResources = allResources.filter((r) => !(r.projectIds || []).includes(project.id));
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -134,6 +139,12 @@ function openProjectDetail(project, tasks) {
     </div>
     <div class="section-title" style="margin-top:0;">Tâches (${progress.total})</div>
     <div class="card" id="detail-tasks" style="margin-bottom:16px;"></div>
+    <div class="section-title">📎 Ressources (${linkedResources.length})</div>
+    <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
+      <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+    </div>
   `;
 
   const tasksEl = body.querySelector("#detail-tasks");
@@ -152,6 +163,39 @@ function openProjectDetail(project, tasks) {
       tasksEl.appendChild(row);
     }
   }
+
+  const resourcesEl = body.querySelector("#detail-resources");
+  renderResourceList(resourcesEl, linkedResources, {
+    onUnlink: (r) => resourcesApi.linkToProject(r.id, project.id, false),
+  });
+
+  body.querySelector("#link-resource-btn").addEventListener("click", () => {
+    if (!unlinkedResources.length) {
+      showToast("Aucune autre ressource à lier pour l'instant");
+      return;
+    }
+    // Une seule modale à la fois (voir components/modal.js) : on referme la fiche projet
+    // avant d'ouvrir le sélecteur, puis on la rouvre avec des données fraîches ensuite —
+    // sinon la fiche projet disparaît silencieusement sous le sélecteur.
+    closeModal();
+    openResourcePickerModal(
+      unlinkedResources,
+      async (resource) => {
+        await resourcesApi.linkToProject(resource.id, project.id, true);
+        showToast("Ressource liée");
+        openProjectDetail(project, tasks);
+      },
+      () => openProjectDetail(project, tasks)
+    );
+  });
+  body.querySelector("#new-resource-btn-inline").addEventListener("click", () => {
+    closeModal();
+    openCreateResourceModal({
+      projectId: project.id,
+      onCreated: () => openProjectDetail(project, tasks),
+      onCancel: () => openProjectDetail(project, tasks),
+    });
+  });
 
   const { bodyEl, close } = openModal({
     title: project.name,
