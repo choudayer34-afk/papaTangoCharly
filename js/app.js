@@ -7,6 +7,7 @@ import { renderInbox } from "./views/inbox.js";
 import { renderKanban } from "./views/kanban.js";
 import { renderProjects } from "./views/projects.js";
 import { renderPeople } from "./views/people.js";
+import { renderResources } from "./views/resources.js";
 import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { onAuthChange } from "./services/firebase.js";
@@ -17,6 +18,7 @@ const ROUTES = {
   "#/kanban": { render: renderKanban, label: "Pilotage", icon: "📋" },
   "#/projects": { render: renderProjects, label: "Projets", icon: "📦" },
   "#/people": { render: renderPeople, label: "Équipe", icon: "👥" },
+  "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
 };
 
 const appRoot = document.getElementById("app");
