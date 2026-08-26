@@ -258,7 +258,7 @@ async function openGlobalHistory() {
  * spécifiques (objectif/notes vs décision/contexte) changeant selon item.kind ; le déroulé
  * complet Avant/Pendant/Après viendra avec les canevas pilotés par données (§14-19).
  */
-function openRecentDetail(item, projects) {
+export function openRecentDetail(item, projects) {
   const isMeeting = item.kind === "meeting";
   const data = item.data;
 

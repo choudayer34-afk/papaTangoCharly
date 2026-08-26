@@ -206,7 +206,7 @@ function openCreateResourceModal(prefill = {}) {
   });
 }
 
-async function openResourceDetail(resource, projects, tasks) {
+export async function openResourceDetail(resource, projects, tasks) {
   const allHistory = await historyApi.listAll();
   const resourceHistory = allHistory
     .filter((h) => h.entityType === "Resource" && h.entityId === resource.id)

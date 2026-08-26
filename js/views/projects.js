@@ -132,7 +132,7 @@ export function openCreateProjectModal(prefill = {}) {
   });
 }
 
-async function openProjectDetail(project, tasks) {
+export async function openProjectDetail(project, tasks) {
   const progress = projectsApi.computeProgress(tasks);
   const [allResources, allFollowUps, allMeetings, allDecisions, allHistory] = await Promise.all([
     resourcesApi.listAll(),

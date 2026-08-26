@@ -155,6 +155,7 @@ export async function openPersonDetail(person, allFollowUps) {
       <label for="person-detail-role">Rôle</label>
       <input id="person-detail-role" type="text" value="${escapeAttr(person.role || "")}" />
     </div>
+    <button id="prep-btn" class="btn btn-secondary btn-block" style="margin-bottom:16px;">🗒️ Préparer mon point avec ${escapeHtml(person.name)}</button>
     <div class="section-title" style="margin-top:0;">🎯 Engagements en cours (${active.length})</div>
     <div class="card" id="active-followups" style="margin-bottom:16px;"></div>
     <button id="add-followup-btn" class="btn btn-secondary btn-sm btn-block" style="margin-bottom:16px;">+ Suivi</button>
@@ -168,13 +169,37 @@ export async function openPersonDetail(person, allFollowUps) {
     <div class="card" id="person-history" style="margin-bottom:16px;"></div>
   `;
 
+  // Rouvre la fiche avec des données fraîches — utilisé par toute action menée depuis une
+  // modale imbriquée (créer/modifier/supprimer un suivi), plutôt que de laisser la fiche
+  // fermée après l'action (bug connu signalé par Charles-Henri : la création d'un suivi
+  // refermait la fiche au lieu d'y rester, contrairement au pattern déjà en place pour les
+  // ressources liées à un projet/une tâche).
+  const reopen = async () => openPersonDetail(person, await followUpsApi.listAll());
+
   const activeEl = body.querySelector("#active-followups");
-  renderFollowUpList(activeEl, active);
+  renderFollowUpList(activeEl, active, {
+    onOpen: (f) => {
+      closeModal();
+      openEditFollowUpModal(f, { onDone: reopen });
+    },
+  });
   const doneEl = body.querySelector("#done-followups");
-  renderFollowUpList(doneEl, done);
+  renderFollowUpList(doneEl, done, {
+    onOpen: (f) => {
+      closeModal();
+      openEditFollowUpModal(f, { onDone: reopen });
+    },
+  });
   renderHistoryTimeline(body.querySelector("#person-history"), personHistory);
 
-  body.querySelector("#add-followup-btn").addEventListener("click", () => openCreateFollowUpModal(person));
+  body.querySelector("#add-followup-btn").addEventListener("click", () => {
+    closeModal();
+    openCreateFollowUpModal(person, { onDone: reopen });
+  });
+  body.querySelector("#prep-btn").addEventListener("click", () => {
+    closeModal();
+    openPrepModal(person, own, { onDone: reopen });
+  });
 
   const { bodyEl, close } = openModal({
     title: (person.type === "manager" ? "👔 " : "👤 ") + person.name,
@@ -194,7 +219,7 @@ export async function openPersonDetail(person, allFollowUps) {
               await peopleApi.removePerson(person.id);
               showToast("Personne supprimée");
             },
-            onCancel: () => openPersonDetail(person, allFollowUps),
+            onCancel: () => reopen(),
           });
         },
       },
@@ -219,7 +244,52 @@ export async function openPersonDetail(person, allFollowUps) {
   });
 }
 
-function renderFollowUpList(container, followUps) {
+/**
+ * "Suivi managérial" : préparer un point collaborateur en un coup d'œil, sans avoir à
+ * relire manuellement chaque engagement — ce que Charles-Henri fait avant chaque 1:1.
+ * Purement une lecture recomposée des mêmes suivis déjà présents sur la fiche (retard de
+ * contrôle en premier, puis le reste par date de contrôle, puis les derniers terminés) :
+ * aucune nouvelle donnée, aucun nouveau champ.
+ */
+function openPrepModal(person, own, { onDone } = {}) {
+  const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => {
+    const da = a.controlDate ? new Date(a.controlDate).getTime() : Infinity;
+    const db = b.controlDate ? new Date(b.controlDate).getTime() : Infinity;
+    return da - db;
+  });
+  const overdue = active.filter(followUpsApi.isControlDue);
+  const upcoming = active.filter((f) => !followUpsApi.isControlDue(f));
+  const recentlyDone = [...own.filter((f) => f.status === "done")]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 5);
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    ${person.notes ? `<div class="section-title" style="margin-top:0;">📝 Notes</div><div class="card" style="margin-bottom:16px;padding:12px 16px;white-space:pre-wrap;">${escapeHtml(person.notes)}</div>` : ""}
+    <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
+    <div class="card" id="prep-overdue" style="margin-bottom:16px;"></div>
+    <div class="section-title">🎯 À aborder (${upcoming.length})</div>
+    <div class="card" id="prep-upcoming" style="margin-bottom:16px;"></div>
+    <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
+    <div class="card" id="prep-done" style="margin-bottom:8px;"></div>
+  `;
+
+  const openFromPrep = (f) => {
+    closeModal();
+    openEditFollowUpModal(f, { onDone: () => openPrepModal(person, own, { onDone }) });
+  };
+  renderFollowUpList(body.querySelector("#prep-overdue"), overdue, { onOpen: openFromPrep });
+  renderFollowUpList(body.querySelector("#prep-upcoming"), upcoming, { onOpen: openFromPrep });
+  renderFollowUpList(body.querySelector("#prep-done"), recentlyDone, { onOpen: openFromPrep });
+
+  openModal({
+    title: `🗒️ Point avec ${person.name}`,
+    body,
+    actions: [{ label: "Fermer", variant: "ghost", onClick: () => onDone?.() }],
+  });
+}
+
+function renderFollowUpList(container, followUps, { onOpen } = {}) {
   if (!followUps.length) {
     container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
     return;
@@ -235,12 +305,12 @@ function renderFollowUpList(container, followUps) {
       </div>
       <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
     `;
-    row.addEventListener("click", () => openEditFollowUpModal(f));
+    row.addEventListener("click", () => (onOpen ? onOpen(f) : openEditFollowUpModal(f)));
     container.appendChild(row);
   }
 }
 
-async function openCreateFollowUpModal(person) {
+async function openCreateFollowUpModal(person, { onDone } = {}) {
   const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
@@ -268,7 +338,7 @@ async function openCreateFollowUpModal(person) {
     title: "Nouveau suivi",
     body,
     actions: [
-      { label: "Annuler", variant: "ghost" },
+      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
       {
         label: "Créer",
         variant: "primary",
@@ -285,13 +355,14 @@ async function openCreateFollowUpModal(person) {
           });
           close();
           showToast("Suivi créé");
+          onDone?.();
         },
       },
     ],
   });
 }
 
-async function openEditFollowUpModal(followUp) {
+export async function openEditFollowUpModal(followUp, { onDone } = {}) {
   const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
@@ -325,7 +396,7 @@ async function openEditFollowUpModal(followUp) {
     title: "Modifier le suivi",
     body,
     actions: [
-      { label: "Fermer", variant: "ghost" },
+      { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
       {
         label: "🗑️ Supprimer",
         variant: "danger",
@@ -338,8 +409,9 @@ async function openEditFollowUpModal(followUp) {
             onConfirm: async () => {
               await followUpsApi.removeFollowUp(followUp.id);
               showToast("Suivi supprimé");
+              onDone?.();
             },
-            onCancel: () => openEditFollowUpModal(followUp),
+            onCancel: () => openEditFollowUpModal(followUp, { onDone }),
           });
         },
       },
@@ -357,6 +429,7 @@ async function openEditFollowUpModal(followUp) {
           });
           close();
           showToast("Suivi mis à jour");
+          onDone?.();
         },
       },
     ],

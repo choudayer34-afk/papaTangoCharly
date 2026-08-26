@@ -104,7 +104,7 @@ function renderCard(task, projects) {
   return card;
 }
 
-async function openTaskDetail(task, projects) {
+export async function openTaskDetail(task, projects) {
   const [allResources, allHistory] = await Promise.all([resourcesApi.listAll(), historyApi.listAll()]);
   const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
   const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));
