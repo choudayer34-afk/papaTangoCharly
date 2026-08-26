@@ -81,6 +81,17 @@ service cloud.firestore {
 - ✅ Préparer un point collaborateur (§33, "suivi managérial") : depuis la fiche d'une
   personne, un bouton recompose en un coup d'œil ses suivis en retard, ceux à aborder et les
   derniers terminés — prêt pour un 1:1 sans relire chaque engagement un par un
+- ✅ Fil conducteur (liens entre fiches) : n'importe quelle fiche (Tâche, Projet, Personne,
+  Suivi, Ressource, Réunion, Décision) peut être liée à n'importe quelle autre, dans les deux
+  sens — une section "🔗 Lié" sur chaque fiche, avec "🔗 Lier une fiche" (choisir parmi
+  l'existant) et "+ Créer et lier" (créer une nouvelle fiche d'un autre type sans quitter le
+  sujet en cours, ex. créer la tâche "Parler à N. du retard de D" directement depuis la fiche
+  Projet ou Réunion). Modélisé comme une collection dédiée (`js/domain/links.js`), pas des
+  tableaux embarqués — même principe que l'historique — et chaque lien/déliaison s'inscrit
+  aussi dans l'historique de fiche (§46)
+- ✅ Ergonomie du Kanban : chaque carte a désormais des boutons ◀ › pour changer son statut
+  sans dépendre du glisser-déposer ni du défilement horizontal (utile sur mobile), en plus du
+  drag & drop existant et du changement de statut depuis la fiche tâche
 - ✅ Synchro multi-appareils (Firestore, offline-first)
 - ⏳ À venir : calendrier, canevas pilotés par données, rappels programmés, revue
   hebdomadaire, statut de projet (clôturer/rouvrir/archiver), point manager automatique
