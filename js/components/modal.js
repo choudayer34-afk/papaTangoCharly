@@ -81,3 +81,27 @@ export function closeModal() {
   activeOverlay?.remove();
   activeOverlay = null;
 }
+
+/**
+ * Petite confirmation réutilisable avant une suppression définitive — un seul endroit pour
+ * ce pattern plutôt qu'un window.confirm() par fiche. Suit le même principe que les autres
+ * modales imbriquées de l'app (voir kanban.js/projects.js) : `onCancel` permet à l'appelant
+ * de rouvrir la fiche d'origine, puisque ouvrir cette confirmation l'a refermée.
+ * @param {Object} opts
+ * @param {string} [opts.title]
+ * @param {string} opts.message
+ * @param {Function} opts.onConfirm
+ * @param {Function} [opts.onCancel]
+ */
+export function confirmDelete({ title = "Supprimer ?", message, onConfirm, onCancel }) {
+  const body = document.createElement("div");
+  body.textContent = message || "Cette action est irréversible.";
+  openModal({
+    title,
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onCancel?.() },
+      { label: "Supprimer", variant: "danger", onClick: onConfirm },
+    ],
+  });
+}
