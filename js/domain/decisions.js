@@ -40,3 +40,8 @@ export function listAll() {
 export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
+
+export async function removeDecision(id) {
+  await storage.logHistory("Decision", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}

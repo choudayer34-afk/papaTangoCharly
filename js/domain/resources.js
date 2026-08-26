@@ -81,6 +81,11 @@ export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
 
+export async function removeResource(id) {
+  await storage.logHistory("Resource", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}
+
 export async function touchLastUsed(id) {
   const current = await storage.get(COLLECTION, id);
   if (!current) return;

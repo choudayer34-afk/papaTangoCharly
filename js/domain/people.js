@@ -35,3 +35,13 @@ export function listAll() {
 export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
+
+/**
+ * Supprime la personne. Ne supprime PAS en cascade ses suivis/décisions liés — mêmes
+ * raisons que removeProject() dans projects.js : les entités liées gardent leur personId
+ * dans le vide plutôt qu'un effet de bord risqué.
+ */
+export async function removePerson(id) {
+  await storage.logHistory("Person", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}

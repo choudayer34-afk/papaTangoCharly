@@ -45,6 +45,11 @@ export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
 
+export async function removeFollowUp(id) {
+  await storage.logHistory("FollowUp", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}
+
 export function isControlDue(followUp) {
   if (!followUp.controlDate || followUp.status === "done") return false;
   return new Date(followUp.controlDate).getTime() < startOfToday();

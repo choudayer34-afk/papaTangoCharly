@@ -40,6 +40,17 @@ export function subscribe(callback) {
 }
 
 /**
+ * Supprime le projet. Ne supprime PAS en cascade les tâches/suivis/réunions/décisions/
+ * ressources qui lui étaient rattachés — ils gardent leur projectId, qui pointe simplement
+ * dans le vide (aucune vue ne plante pour autant : le badge projet disparaît juste). Une
+ * suppression en cascade serait plus risquée qu'utile pour un usage strictement personnel.
+ */
+export async function removeProject(id) {
+  await storage.logHistory("Project", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}
+
+/**
  * Calcule l'avancement d'un projet à partir de ses tâches (§37). `tasks` doit déjà être
  * filtré sur le projet — cette fonction ne fait que compter, jamais d'accès storage, pour
  * rester utilisable aussi bien côté Dashboard que côté fiche projet.

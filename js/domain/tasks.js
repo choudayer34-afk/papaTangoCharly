@@ -72,6 +72,16 @@ export async function setStatus(id, status) {
   return updateTask(id, { status });
 }
 
+/**
+ * Supprime la tâche. L'historique déjà journalisé n'est pas purgé (le fil global reste un
+ * vrai journal d'audit) — il disparaît simplement des vues agrégées (fiche projet) qui ne
+ * regardent que les tâches encore existantes.
+ */
+export async function removeTask(id) {
+  await storage.logHistory("Task", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}
+
 export function isLate(task) {
   if (!task.dueDate || task.status === "done") return false;
   return new Date(task.dueDate).getTime() < startOfToday();

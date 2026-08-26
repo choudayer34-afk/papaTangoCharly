@@ -41,3 +41,8 @@ export function listAll() {
 export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
+
+export async function removeMeeting(id) {
+  await storage.logHistory("Meeting", id, "deleted", {});
+  return storage.remove(COLLECTION, id);
+}
