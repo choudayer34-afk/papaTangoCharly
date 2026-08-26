@@ -42,6 +42,13 @@ const ACTION_META = {
   "Decision:deleted": { emoji: "🗑️", label: "Décision supprimée" },
 };
 
+// Le "fil conducteur" (§ retour de Charles-Henri : "les éléments semblent séparés") ajoute
+// deux actions communes à tous les types plutôt que d'écrire 14 entrées à la main.
+for (const type of ["Task", "Project", "Person", "FollowUp", "Resource", "Meeting", "Decision"]) {
+  ACTION_META[`${type}:linked`] = { emoji: "🔗", label: "Lien ajouté" };
+  ACTION_META[`${type}:unlinked`] = { emoji: "🔗", label: "Lien retiré" };
+}
+
 export function listAll() {
   return storage.listAll(COLLECTION);
 }
@@ -64,6 +71,12 @@ export function describe(entry) {
   let detail = entry.metadata?.title || entry.metadata?.name || "";
   if (!detail && entry.action === "status_changed" && entry.metadata?.from && entry.metadata?.to) {
     detail = `${entry.metadata.from} → ${entry.metadata.to}`;
+  }
+  if (!detail && entry.action === "linked" && entry.metadata?.to) {
+    detail = `Lié à ${entry.metadata.to.label || entry.metadata.to.type}`;
+  }
+  if (!detail && entry.action === "unlinked" && entry.metadata?.from) {
+    detail = `Délié de ${entry.metadata.from.label || entry.metadata.from.type}`;
   }
   return { emoji: meta.emoji, label: meta.label, detail };
 }
