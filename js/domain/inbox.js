@@ -27,18 +27,31 @@ export function subscribePending(callback) {
   return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "pending")));
 }
 
+// Pour ces issues, l'entité résultante est déjà créée par la vue (js/views/inbox.js), qui
+// réutilise directement le domaine et — quand c'est possible — la modale de création déjà
+// existante (Projet, Ressource) plutôt que de dupliquer cette logique ici. `qualify()` se
+// contente de retenir quel objet a résulté de la capture, pour ne jamais perdre le lien
+// entre l'InboxItem original et ce qu'il est devenu (§78.6).
+const RESULT_KEY = {
+  followup: "resultFollowUpId",
+  project: "resultProjectId",
+  meeting: "resultMeetingId",
+  decision: "resultDecisionId",
+  resource: "resultResourceId",
+};
+
 /**
- * Qualifie un élément d'Inbox. Pour l'instant, 3 issues sont réellement implémentées :
+ * Qualifie un élément d'Inbox.
  * - "task"     → crée une vraie Tâche à partir du contenu (le reste des champs se fait
  *                dans la fiche tâche, pas ici — traitement guidé §13, aussi peu de champs
  *                obligatoires que possible).
+ * - "followup" / "project" / "meeting" / "decision" / "resource" → l'entité a déjà été
+ *                créée côté vue ; on marque juste l'InboxItem traité et on garde le lien
+ *                (extra.id) vers l'objet résultant.
  * - "kept"     → l'information est conservée telle quelle, sans devenir une tâche
  *                (§47 "information de contexte").
  * - "archived" → l'élément est classé sans suite.
- * Les autres types du cahier des charges (Suivi, Projet, Réunion, Décision, Ressource,
- * Idée) arriveront avec leurs entités dédiées dans une itération suivante ; en attendant,
- * on ne perd jamais la capture (Règle 3) : elle reste "kept" si on ne sait pas encore quoi
- * en faire.
+ * Dans tous les cas, la capture brute originale n'est jamais perdue (Règle 3).
  */
 export async function qualify(itemId, outcome, extra = {}) {
   const item = await storage.get(COLLECTION, itemId);
@@ -57,13 +70,22 @@ export async function qualify(itemId, outcome, extra = {}) {
     return { outcome: "task", task };
   }
 
+  if (RESULT_KEY[outcome]) {
+    const patch = { status: "processed" };
+    if (extra.id) patch[RESULT_KEY[outcome]] = extra.id;
+    await storage.put(COLLECTION, { ...item, ...patch });
+    await storage.logHistory("InboxItem", item.id, "qualified_as_" + outcome, { id: extra.id });
+    return { outcome };
+  }
+
   if (outcome === "archived") {
     await storage.put(COLLECTION, { ...item, status: "archived" });
     await storage.logHistory("InboxItem", item.id, "archived", {});
     return { outcome: "archived" };
   }
 
-  // "kept" et tout type non encore implémenté : on conserve l'information brute.
+  // "kept" et tout type non prévu ci-dessus : on conserve l'information brute plutôt que
+  // de la perdre (Règle 3).
   await storage.put(COLLECTION, { ...item, status: "kept", keptAsType: outcome });
   await storage.logHistory("InboxItem", item.id, "kept", { asType: outcome });
   return { outcome: "kept" };
