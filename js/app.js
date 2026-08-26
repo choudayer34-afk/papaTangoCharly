@@ -10,6 +10,8 @@ import { renderPeople } from "./views/people.js";
 import { renderResources } from "./views/resources.js";
 import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
+import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
+import { mountGlobalSearch } from "./components/search.js";
 import { onAuthChange } from "./services/firebase.js";
 
 const ROUTES = {
@@ -57,8 +59,11 @@ function mountApp() {
   appMounted = true;
   nav = mountNav();
   mountCaptureFab();
+  mountHelpButton();
+  mountGlobalSearch();
   window.addEventListener("hashchange", renderRoute);
   renderRoute();
+  maybeShowFirstRunTour();
 }
 
 function unmountApp() {
@@ -68,6 +73,8 @@ function unmountApp() {
   nav?.remove();
   nav = null;
   document.querySelector(".fab")?.remove();
+  document.querySelector(".help-fab")?.remove();
+  document.querySelector(".search-fab")?.remove();
   window.removeEventListener("hashchange", renderRoute);
 }
 
