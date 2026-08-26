@@ -318,6 +318,32 @@ a { color: inherit; }
 .choice-btn:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
 .choice-btn .emoji { font-size: 20px; }
 
+/* ---------- Chips (filtres) ---------- */
+.chip-row {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+  margin-bottom: var(--space-4);
+}
+.chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip.active {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;
