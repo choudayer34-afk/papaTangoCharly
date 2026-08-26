@@ -72,6 +72,15 @@ service cloud.firestore {
   avancement des projets, réunions et décisions récentes, accès à l'historique complet) —
   les suivis collaborateurs en retard de contrôle remontent maintenant ici (nouvelle section
   "📣 Suivis à relancer" + pastille dans les stats), sans avoir à ouvrir l'onglet Équipe
+- ✅ Onboarding intégré : visite guidée au tout premier lancement (6 écrans, une fois,
+  mémorisée), et bouton ❓ Aide toujours accessible (cycle capture → qualification, Tâche vs
+  Suivi, rejouer la visite à tout moment)
+- ✅ Recherche globale cross-entités (§45/§52) : bouton 🔎 toujours accessible, un mot-clé
+  interroge tâches/projets/personnes/suivis/ressources/réunions/décisions d'un coup,
+  résultats groupés par type, cliquables vers la vraie fiche (jamais une vue dupliquée)
+- ✅ Préparer un point collaborateur (§33, "suivi managérial") : depuis la fiche d'une
+  personne, un bouton recompose en un coup d'œil ses suivis en retard, ceux à aborder et les
+  derniers terminés — prêt pour un 1:1 sans relire chaque engagement un par un
 - ✅ Synchro multi-appareils (Firestore, offline-first)
-- ⏳ À venir : calendrier, canevas pilotés par données, rappels programmés, recherche globale
-  cross-entités, revue hebdomadaire, points collaborateur/manager automatiques
+- ⏳ À venir : calendrier, canevas pilotés par données, rappels programmés, revue
+  hebdomadaire, statut de projet (clôturer/rouvrir/archiver), point manager automatique
