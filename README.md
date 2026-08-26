@@ -50,7 +50,10 @@ service cloud.firestore {
 - ✅ Projets (objectif, critère de réussite, avancement calculé depuis les tâches liées)
 - ✅ Équipe (liste + fiche par personne : engagements en cours, réalisé, notes)
 - ✅ Suivis collaborateurs (engagement, échéance, date de contrôle, statut)
+- ✅ Ressources (bibliothèque de liens/emplacements, détection auto du type, rattachement
+  multiple à des projets et des tâches sans jamais dupliquer la ressource, filtres
+  Récentes / Par type / Non classées, recherche titre/description/tag)
 - ✅ Dashboard (retards, à traiter, à suivre, en attente, avancement des projets)
 - ✅ Synchro multi-appareils (Firestore, offline-first)
-- ⏳ À venir : ressources, calendrier, canevas, rappels programmés, recherche, historique
-  visible, revue hebdomadaire, points collaborateur/manager automatiques
+- ⏳ À venir : calendrier, canevas, rappels programmés, recherche globale cross-entités,
+  historique visible, revue hebdomadaire, points collaborateur/manager automatiques
