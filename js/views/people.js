@@ -7,6 +7,7 @@ import * as historyApi from "../domain/history.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
 
 export function renderPeople(container) {
   container.innerHTML = `
@@ -167,6 +168,12 @@ export async function openPersonDetail(person, allFollowUps) {
     </div>
     <div class="section-title">🕒 Historique (${personHistory.length})</div>
     <div class="card" id="person-history" style="margin-bottom:16px;"></div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
   `;
 
   // Rouvre la fiche avec des données fraîches — utilisé par toute action menée depuis une
@@ -192,9 +199,26 @@ export async function openPersonDetail(person, allFollowUps) {
   });
   renderHistoryTimeline(body.querySelector("#person-history"), personHistory);
 
+  const linkRef = { type: "Person", id: person.id };
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(linkRef, person.name, {
+      onLinked: () => reopen(),
+      onCancel: () => reopen(),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(linkRef, person.name, {
+      onLinked: () => reopen(),
+      onCancel: () => reopen(),
+    });
+  });
+
   body.querySelector("#add-followup-btn").addEventListener("click", () => {
     closeModal();
-    openCreateFollowUpModal(person, { onDone: reopen });
+    openCreateFollowUpModal({ person, onCreated: () => reopen(), onCancel: () => reopen() });
   });
   body.querySelector("#prep-btn").addEventListener("click", () => {
     closeModal();
@@ -310,16 +334,36 @@ function renderFollowUpList(container, followUps, { onOpen } = {}) {
   }
 }
 
-async function openCreateFollowUpModal(person, { onDone } = {}) {
-  const projects = await projectsApi.listAll();
+/**
+ * Créer un suivi. `person` est optionnel : appelée depuis une fiche personne, il est déjà
+ * connu ; appelée depuis "+ Créer et lier" (fil conducteur, components/linkedItems.js) sur
+ * une fiche d'un autre type, on ne sait pas encore de qui il s'agit — un sélecteur
+ * "Personne" apparaît alors dans le formulaire.
+ */
+export async function openCreateFollowUpModal({ person, onCreated, onCancel } = {}) {
+  const [projects, people] = await Promise.all([
+    projectsApi.listAll(),
+    person ? Promise.resolve(null) : peopleApi.listAll(),
+  ]);
   const body = document.createElement("div");
   body.innerHTML = `
+    ${
+      person
+        ? ""
+        : `
     <div class="field">
-      <label for="fu-title">Qu'est-ce que ${escapeHtml(person.name)} s'engage à faire ?</label>
+      <label for="fu-person">Personne</label>
+      <select id="fu-person">
+        ${people.map((p) => `<option value="${p.id}">${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>`
+    }
+    <div class="field">
+      <label for="fu-title">Qu'est-ce que ${person ? escapeHtml(person.name) : "la personne"} s'engage à faire ?</label>
       <input id="fu-title" type="text" placeholder="Ex. Terminer la migration" />
     </div>
     <div class="field">
-      <label for="fu-due">Échéance de ${escapeHtml(person.name)}</label>
+      <label for="fu-due">Échéance de la personne</label>
       <input id="fu-due" type="date" />
     </div>
     <div class="field">
@@ -338,7 +382,7 @@ async function openCreateFollowUpModal(person, { onDone } = {}) {
     title: "Nouveau suivi",
     body,
     actions: [
-      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      { label: "Annuler", variant: "ghost", onClick: () => onCancel?.() },
       {
         label: "Créer",
         variant: "primary",
@@ -346,16 +390,18 @@ async function openCreateFollowUpModal(person, { onDone } = {}) {
         onClick: async () => {
           const title = bodyEl.querySelector("#fu-title").value.trim();
           if (!title) return;
-          await followUpsApi.createFollowUp({
+          const personId = person ? person.id : bodyEl.querySelector("#fu-person").value;
+          if (!personId) return;
+          const followUp = await followUpsApi.createFollowUp({
             title,
-            personId: person.id,
+            personId,
             dueDate: bodyEl.querySelector("#fu-due").value || null,
             controlDate: bodyEl.querySelector("#fu-control").value || null,
             projectId: bodyEl.querySelector("#fu-project").value || null,
           });
           close();
           showToast("Suivi créé");
-          onDone?.();
+          onCreated?.(followUp);
         },
       },
     ],
@@ -391,7 +437,31 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         ${projects.map((p) => `<option value="${p.id}" ${p.id === followUp.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
   `;
+
+  const linkRef = { type: "FollowUp", id: followUp.id };
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(linkRef, followUp.title, {
+      onLinked: () => openEditFollowUpModal(followUp, { onDone }),
+      onCancel: () => openEditFollowUpModal(followUp, { onDone }),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(linkRef, followUp.title, {
+      onLinked: () => openEditFollowUpModal(followUp, { onDone }),
+      onCancel: () => openEditFollowUpModal(followUp, { onDone }),
+    });
+  });
+
   const { bodyEl, close } = openModal({
     title: "Modifier le suivi",
     body,

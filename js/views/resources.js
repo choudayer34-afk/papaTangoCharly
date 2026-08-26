@@ -8,6 +8,7 @@ import * as historyApi from "../domain/history.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
 
 const FILTERS = [
   { key: "recent", label: "Récentes" },
@@ -238,11 +239,34 @@ export async function openResourceDetail(resource, projects, tasks) {
     <div class="section-title">✅ Tâches liées</div>
     <div id="res-tasks-links"></div>
     <div class="section-title">🕒 Historique (${resourceHistory.length})</div>
-    <div class="card" id="res-history" style="margin-bottom:8px;"></div>
+    <div class="card" id="res-history" style="margin-bottom:16px;"></div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
   `;
 
   body.querySelector("#res-open-link")?.addEventListener("click", () => resourcesApi.touchLastUsed(resource.id));
   renderHistoryTimeline(body.querySelector("#res-history"), resourceHistory);
+
+  const linkRef = { type: "Resource", id: resource.id };
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(linkRef, resource.title, {
+      onLinked: () => openResourceDetail(resource, projects, tasks),
+      onCancel: () => openResourceDetail(resource, projects, tasks),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(linkRef, resource.title, {
+      onLinked: () => openResourceDetail(resource, projects, tasks),
+      onCancel: () => openResourceDetail(resource, projects, tasks),
+    });
+  });
 
   renderLinkPicker(
     body.querySelector("#res-projects-links"),

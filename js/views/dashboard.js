@@ -13,6 +13,7 @@ import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import { openPersonDetail } from "./people.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
 
 export function renderDashboard(container) {
   container.innerHTML = `
@@ -254,6 +255,91 @@ async function openGlobalHistory() {
 }
 
 /**
+ * "+ Créer et lier" (fil conducteur, components/linkedItems.js) pour une Réunion. Formulaire
+ * minimal — titre + date — le reste (objectif, notes) se complète en rouvrant la fiche.
+ */
+export function openCreateMeetingModal(prefill = {}) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="new-meeting-title">Titre</label>
+      <input id="new-meeting-title" type="text" placeholder="Ex. Point collaborateur" value="${escapeAttr(prefill.title || "")}" />
+    </div>
+    <div class="field">
+      <label for="new-meeting-date">Date</label>
+      <input id="new-meeting-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: "Nouvelle réunion",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => prefill.onCancel?.() },
+      {
+        label: "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const title = bodyEl.querySelector("#new-meeting-title").value.trim();
+          if (!title) return;
+          const meeting = await meetingsApi.createMeeting({
+            title,
+            date: bodyEl.querySelector("#new-meeting-date").value || null,
+            projectId: prefill.projectId || null,
+          });
+          close();
+          showToast("Réunion créée");
+          prefill.onCreated?.(meeting);
+        },
+      },
+    ],
+  });
+}
+
+/**
+ * "+ Créer et lier" pour une Décision. Formulaire minimal — sujet + ce qui a été décidé —
+ * le contexte détaillé se complète en rouvrant la fiche.
+ */
+export function openCreateDecisionModal(prefill = {}) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="new-decision-title">Sujet</label>
+      <input id="new-decision-title" type="text" placeholder="Ex. Retard récurrent de D" value="${escapeAttr(prefill.title || "")}" />
+    </div>
+    <div class="field">
+      <label for="new-decision-decision">Ce qui a été décidé</label>
+      <textarea id="new-decision-decision"></textarea>
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: "Nouvelle décision",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => prefill.onCancel?.() },
+      {
+        label: "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const title = bodyEl.querySelector("#new-decision-title").value.trim();
+          if (!title) return;
+          const decision = await decisionsApi.createDecision({
+            title,
+            decision: bodyEl.querySelector("#new-decision-decision").value.trim(),
+            date: new Date().toISOString().slice(0, 10),
+            projectId: prefill.projectId || null,
+          });
+          close();
+          showToast("Décision enregistrée");
+          prefill.onCreated?.(decision);
+        },
+      },
+    ],
+  });
+}
+
+/**
  * Fiche modifiable — réunion ou décision. Un seul formulaire pour les deux, les champs
  * spécifiques (objectif/notes vs décision/contexte) changeant selon item.kind ; le déroulé
  * complet Avant/Pendant/Après viendra avec les canevas pilotés par données (§14-19).
@@ -300,7 +386,30 @@ export function openRecentDetail(item, projects) {
         ${projects.map((p) => `<option value="${p.id}" ${p.id === data.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
   `;
+
+  const linkRef = { type: isMeeting ? "Meeting" : "Decision", id: data.id };
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(linkRef, data.title, {
+      onLinked: () => openRecentDetail(item, projects),
+      onCancel: () => openRecentDetail(item, projects),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(linkRef, data.title, {
+      onLinked: () => openRecentDetail(item, projects),
+      onCancel: () => openRecentDetail(item, projects),
+    });
+  });
 
   const { bodyEl, close } = openModal({
     title: `${item.emoji} ${data.title}`,

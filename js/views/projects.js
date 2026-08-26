@@ -12,6 +12,7 @@ import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
 
 export function renderProjects(container) {
   container.innerHTML = `
@@ -193,6 +194,12 @@ export async function openProjectDetail(project, tasks) {
     </div>
     <div class="section-title">🕒 Historique (${projectHistory.length})</div>
     <div class="card" id="detail-history" style="margin-bottom:16px;"></div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
   `;
 
   const tasksEl = body.querySelector("#detail-tasks");
@@ -270,6 +277,23 @@ export async function openProjectDetail(project, tasks) {
   });
 
   renderHistoryTimeline(body.querySelector("#detail-history"), projectHistory);
+
+  const linkRef = { type: "Project", id: project.id };
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(linkRef, project.name, {
+      onLinked: () => openProjectDetail(project, tasks),
+      onCancel: () => openProjectDetail(project, tasks),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(linkRef, project.name, {
+      onLinked: () => openProjectDetail(project, tasks),
+      onCancel: () => openProjectDetail(project, tasks),
+    });
+  });
 
   body.querySelector("#link-resource-btn").addEventListener("click", () => {
     if (!unlinkedResources.length) {

@@ -9,13 +9,14 @@ import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
 
 export function renderKanban(container) {
   container.innerHTML = `
     <div class="topbar">
       <div>
         <h1>Pilotage</h1>
-        <div class="subtitle">Glisse une carte pour changer son statut</div>
+        <div class="subtitle">Glisse une carte, ou utilise ‹ › pour changer son statut</div>
       </div>
     </div>
     <div class="view"><div class="kanban-board" id="kanban-board"></div></div>
@@ -82,6 +83,12 @@ export function renderKanban(container) {
   };
 }
 
+/**
+ * Le glisser-déposer entre colonnes est peu fiable au doigt sur mobile, surtout dès que la
+ * cible n'est pas visible sans scroller horizontalement (§ergonomie signalée par
+ * Charles-Henri). Les boutons ‹ › offrent un chemin qui ne dépend jamais du scroll ni du
+ * drag : changer de statut reste possible même quand une seule colonne tient à l'écran.
+ */
 function renderCard(task, projects) {
   const card = document.createElement("div");
   card.className = "kanban-card";
@@ -93,6 +100,9 @@ function renderCard(task, projects) {
 
   const project = projects.find((p) => p.id === task.projectId);
   const late = tasksApi.isLate(task);
+  const statusIndex = tasksApi.STATUSES.indexOf(task.status);
+  const prevStatus = statusIndex > 0 ? tasksApi.STATUSES[statusIndex - 1] : null;
+  const nextStatus = statusIndex < tasksApi.STATUSES.length - 1 ? tasksApi.STATUSES[statusIndex + 1] : null;
 
   card.innerHTML = `
     <div class="kanban-card-title">${task.isBlocked ? "🔴 " : ""}${escapeHtml(task.title)}</div>
@@ -100,8 +110,67 @@ function renderCard(task, projects) {
       ${project ? `<span>📦 ${escapeHtml(project.name)}</span>` : ""}
       ${task.dueDate ? `<span class="${late ? "badge badge-late" : ""}">📅 ${formatDate(task.dueDate)}</span>` : ""}
     </div>
+    <div class="kanban-card-move">
+      <button type="button" class="kanban-move-btn" data-dir="prev" aria-label="Statut précédent" ${prevStatus ? "" : "disabled"}>‹</button>
+      <span class="kanban-move-label">${tasksApi.STATUS_LABELS[task.status]}</span>
+      <button type="button" class="kanban-move-btn" data-dir="next" aria-label="Statut suivant" ${nextStatus ? "" : "disabled"}>›</button>
+    </div>
   `;
+
+  card.querySelector('[data-dir="prev"]').addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (prevStatus) tasksApi.setStatus(task.id, prevStatus);
+  });
+  card.querySelector('[data-dir="next"]').addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (nextStatus) tasksApi.setStatus(task.id, nextStatus);
+  });
+
   return card;
+}
+
+/**
+ * Création autonome d'une tâche, hors du parcours Inbox → qualification — utilisée par le
+ * "fil conducteur" (components/linkedItems.js) pour "créer à la volée" une tâche liée à une
+ * autre fiche. Même pattern prefill/onCreated/onCancel que openCreateProjectModal et
+ * openCreateResourceModal.
+ */
+export function openCreateTaskModal(prefill = {}) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="new-task-title">Titre</label>
+      <input id="new-task-title" type="text" placeholder="Ex. Préparer la réunion du 27" value="${escapeAttr(prefill.title || "")}" />
+    </div>
+    <div class="field">
+      <label for="new-task-due">Échéance (optionnel)</label>
+      <input id="new-task-due" type="date" />
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: "Nouvelle tâche",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => prefill.onCancel?.() },
+      {
+        label: "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const title = bodyEl.querySelector("#new-task-title").value.trim();
+          if (!title) return;
+          const task = await tasksApi.createTask({
+            title,
+            dueDate: bodyEl.querySelector("#new-task-due").value || null,
+            projectId: prefill.projectId || null,
+          });
+          close();
+          showToast("Tâche créée");
+          prefill.onCreated?.(task);
+        },
+      },
+    ],
+  });
 }
 
 export async function openTaskDetail(task, projects) {
@@ -151,7 +220,29 @@ export async function openTaskDetail(task, projects) {
     </div>
     <div class="section-title">🕒 Historique (${taskHistory.length})</div>
     <div class="card" id="detail-history" style="margin-bottom:16px;"></div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
   `;
+
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), { type: "Task", id: task.id });
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal({ type: "Task", id: task.id }, task.title, {
+      onLinked: () => openTaskDetail(task, projects),
+      onCancel: () => openTaskDetail(task, projects),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal({ type: "Task", id: task.id }, task.title, {
+      onLinked: () => openTaskDetail(task, projects),
+      onCancel: () => openTaskDetail(task, projects),
+    });
+  });
 
   const resourcesEl = body.querySelector("#detail-resources");
   renderResourceList(resourcesEl, linkedResources, {
