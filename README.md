@@ -62,8 +62,16 @@ service cloud.firestore {
   affiche sa propre frise chronologique — celle d'un Projet ou d'une Personne agrège aussi
   l'historique de tout ce qui lui est rattaché (tâches, suivis, réunions, décisions,
   ressources) ; un fil global "🕒 Tout l'historique" est accessible depuis le Dashboard
-- ✅ Dashboard (retards, à traiter, à suivre, en attente, avancement des projets, réunions et
-  décisions récentes, accès à l'historique complet)
+- ✅ Modifier / Supprimer partout : les 7 types d'entité (Tâche, Projet, Personne, Suivi,
+  Ressource, Réunion, Décision) ont désormais une fiche entièrement modifiable (tous les
+  champs, pas seulement quelques-uns) et un bouton Supprimer avec confirmation — plus aucune
+  fiche en lecture seule, plus aucune erreur de saisie irréversible. Aucune suppression n'est
+  en cascade : les entités liées gardent leur lien dans le vide plutôt qu'un effet de bord
+  risqué (voir les commentaires de chaque removeX() dans js/domain/)
+- ✅ Dashboard (retards, à traiter, à suivre, en attente, relances collaborateurs dues,
+  avancement des projets, réunions et décisions récentes, accès à l'historique complet) —
+  les suivis collaborateurs en retard de contrôle remontent maintenant ici (nouvelle section
+  "📣 Suivis à relancer" + pastille dans les stats), sans avoir à ouvrir l'onglet Équipe
 - ✅ Synchro multi-appareils (Firestore, offline-first)
 - ⏳ À venir : calendrier, canevas pilotés par données, rappels programmés, recherche globale
   cross-entités, revue hebdomadaire, points collaborateur/manager automatiques
