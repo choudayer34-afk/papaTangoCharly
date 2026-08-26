@@ -7,8 +7,12 @@ import * as projectsApi from "../domain/projects.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
-import { openModal } from "../components/modal.js";
+import * as peopleApi from "../domain/people.js";
+import * as followUpsApi from "../domain/followups.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import { openPersonDetail } from "./people.js";
 
 export function renderDashboard(container) {
   container.innerHTML = `
@@ -20,12 +24,14 @@ export function renderDashboard(container) {
     </div>
     <div class="view">
       <div class="stat-grid" id="stat-grid"></div>
+      <div id="followups-section"></div>
       <div id="projects-section"></div>
       <div id="recent-section"></div>
     </div>
   `;
 
   const statGrid = container.querySelector("#stat-grid");
+  const followUpsSection = container.querySelector("#followups-section");
   const projectsSection = container.querySelector("#projects-section");
   const recentSection = container.querySelector("#recent-section");
 
@@ -34,11 +40,14 @@ export function renderDashboard(container) {
   let projects = [];
   let meetings = [];
   let decisions = [];
+  let people = [];
+  let followUps = [];
 
   function renderStats() {
     const late = tasks.filter(tasksApi.isLate).length;
     const followUp = tasks.filter((t) => t.status === "follow_up").length;
     const waiting = tasks.filter((t) => t.status === "waiting").length;
+    const overdueFollowUps = followUps.filter(followUpsApi.isControlDue).length;
 
     statGrid.innerHTML = `
       <div class="stat-tile stat-danger">
@@ -57,7 +66,46 @@ export function renderDashboard(container) {
         <div class="stat-value">${waiting}</div>
         <div class="stat-label">⏳ En attente</div>
       </div>
+      <div class="stat-tile ${overdueFollowUps ? "stat-danger" : ""}">
+        <div class="stat-value">${overdueFollowUps}</div>
+        <div class="stat-label">📣 Relances dues</div>
+      </div>
     `;
+  }
+
+  /**
+   * §33/§38 : les suivis collaborateurs dont la date de contrôle est dépassée n'étaient
+   * visibles auparavant que via un petit compteur dans la liste Équipe — on ne les "attend"
+   * jamais si on n'ouvre pas cette liste. Les faire remonter ici, là où le pilotage
+   * quotidien se passe, c'est ce qui permet de répondre à "ai-je bien relancé les bonnes
+   * personnes ?" sans avoir à s'en souvenir soi-même.
+   */
+  function renderFollowUpsSection() {
+    const overdue = followUps.filter(followUpsApi.isControlDue);
+    if (!overdue.length) {
+      followUpsSection.innerHTML = "";
+      return;
+    }
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    followUpsSection.innerHTML = `<div class="section-title" style="margin-top:0;">📣 Suivis à relancer (${overdue.length})</div>`;
+    const list = document.createElement("div");
+    list.className = "card";
+    for (const f of overdue) {
+      const person = peopleById.get(f.personId);
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = person ? "pointer" : "default";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
+          <div class="item-meta">Contrôle prévu : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
+        </div>
+        <span class="badge badge-late">🔴</span>
+      `;
+      if (person) row.addEventListener("click", () => openPersonDetail(person, followUps));
+      list.appendChild(row);
+    }
+    followUpsSection.appendChild(list);
   }
 
   function renderProjectsSection() {
@@ -134,7 +182,7 @@ export function renderDashboard(container) {
           </div>
         </div>
       `;
-      row.addEventListener("click", () => openRecentDetail(item));
+      row.addEventListener("click", () => openRecentDetail(item, projects));
       list.appendChild(row);
     }
     recentSection.appendChild(list);
@@ -162,6 +210,15 @@ export function renderDashboard(container) {
     decisions = items;
     renderRecentSection();
   });
+  const unsubPeople = peopleApi.subscribe((items) => {
+    people = items;
+    renderFollowUpsSection();
+  });
+  const unsubFollowUps = followUpsApi.subscribe((items) => {
+    followUps = items;
+    renderStats();
+    renderFollowUpsSection();
+  });
 
   return function cleanup() {
     unsubTasks();
@@ -169,6 +226,8 @@ export function renderDashboard(container) {
     unsubProjects();
     unsubMeetings();
     unsubDecisions();
+    unsubPeople();
+    unsubFollowUps();
   };
 }
 
@@ -194,27 +253,104 @@ async function openGlobalHistory() {
   });
 }
 
-/** Vue lecture seule — la modification complète viendra avec les canevas (§14-19). */
-function openRecentDetail(item) {
+/**
+ * Fiche modifiable — réunion ou décision. Un seul formulaire pour les deux, les champs
+ * spécifiques (objectif/notes vs décision/contexte) changeant selon item.kind ; le déroulé
+ * complet Avant/Pendant/Après viendra avec les canevas pilotés par données (§14-19).
+ */
+function openRecentDetail(item, projects) {
+  const isMeeting = item.kind === "meeting";
+  const data = item.data;
+
   const body = document.createElement("div");
-  if (item.kind === "meeting") {
-    body.innerHTML = `
-      ${item.data.date ? `<div class="item-meta" style="margin-bottom:12px;">${formatDate(item.data.date)}</div>` : ""}
-      ${item.data.objective ? `<div class="section-title" style="margin-top:0;">Objectif</div><div class="card" style="margin-bottom:12px;">${escapeHtml(item.data.objective)}</div>` : ""}
-      ${item.data.notes ? `<div class="section-title">Notes</div><div class="card">${escapeHtml(item.data.notes)}</div>` : ""}
-    `;
-  } else {
-    body.innerHTML = `
-      ${item.data.date ? `<div class="item-meta" style="margin-bottom:12px;">${formatDate(item.data.date)}</div>` : ""}
-      <div class="section-title" style="margin-top:0;">Décision</div>
-      <div class="card" style="margin-bottom:12px;">${escapeHtml(item.data.decision)}</div>
-      ${item.data.context ? `<div class="section-title">Contexte</div><div class="card">${escapeHtml(item.data.context)}</div>` : ""}
-    `;
-  }
-  openModal({
-    title: `${item.emoji} ${item.data.title}`,
+  body.innerHTML = `
+    <div class="field">
+      <label for="rd-title">Titre</label>
+      <input id="rd-title" type="text" value="${escapeAttr(data.title)}" />
+    </div>
+    <div class="field">
+      <label for="rd-date">Date</label>
+      <input id="rd-date" type="date" value="${data.date || ""}" />
+    </div>
+    ${
+      isMeeting
+        ? `
+    <div class="field">
+      <label for="rd-objective">Objectif</label>
+      <textarea id="rd-objective">${escapeHtml(data.objective || "")}</textarea>
+    </div>
+    <div class="field">
+      <label for="rd-notes">Notes</label>
+      <textarea id="rd-notes">${escapeHtml(data.notes || "")}</textarea>
+    </div>`
+        : `
+    <div class="field">
+      <label for="rd-decision">Décision</label>
+      <textarea id="rd-decision">${escapeHtml(data.decision || "")}</textarea>
+    </div>
+    <div class="field">
+      <label for="rd-context">Contexte</label>
+      <textarea id="rd-context">${escapeHtml(data.context || "")}</textarea>
+    </div>`
+    }
+    <div class="field">
+      <label for="rd-project">Projet</label>
+      <select id="rd-project">
+        <option value="">— Aucun —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${p.id === data.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>
+  `;
+
+  const { bodyEl, close } = openModal({
+    title: `${item.emoji} ${data.title}`,
     body,
-    actions: [{ label: "Fermer", variant: "ghost" }],
+    actions: [
+      { label: "Fermer", variant: "ghost" },
+      {
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: isMeeting ? "Supprimer cette réunion ?" : "Supprimer cette décision ?",
+            message: `« ${data.title} » sera définitivement supprimée.`,
+            onConfirm: async () => {
+              if (isMeeting) await meetingsApi.removeMeeting(data.id);
+              else await decisionsApi.removeDecision(data.id);
+              showToast(isMeeting ? "Réunion supprimée" : "Décision supprimée");
+            },
+            onCancel: () => openRecentDetail(item, projects),
+          });
+        },
+      },
+      {
+        label: "Enregistrer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const title = bodyEl.querySelector("#rd-title").value.trim();
+          if (!title) return;
+          const patch = {
+            title,
+            date: bodyEl.querySelector("#rd-date").value || null,
+            projectId: bodyEl.querySelector("#rd-project").value || null,
+          };
+          if (isMeeting) {
+            patch.objective = bodyEl.querySelector("#rd-objective").value.trim();
+            patch.notes = bodyEl.querySelector("#rd-notes").value.trim();
+            await meetingsApi.updateMeeting(data.id, patch);
+          } else {
+            patch.decision = bodyEl.querySelector("#rd-decision").value.trim();
+            patch.context = bodyEl.querySelector("#rd-context").value.trim();
+            await decisionsApi.updateDecision(data.id, patch);
+          }
+          close();
+          showToast(isMeeting ? "Réunion mise à jour" : "Décision mise à jour");
+        },
+      },
+    ],
   });
 }
 
@@ -230,4 +366,8 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return escapeHtml(str).replace(/"/g, "&quot;");
 }

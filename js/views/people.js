@@ -4,7 +4,7 @@ import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as projectsApi from "../domain/projects.js";
 import * as historyApi from "../domain/history.js";
-import { openModal } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 
@@ -125,7 +125,7 @@ function openCreatePersonModal() {
   });
 }
 
-async function openPersonDetail(person, allFollowUps) {
+export async function openPersonDetail(person, allFollowUps) {
   const own = allFollowUps.filter((f) => f.personId === person.id);
   const active = own.filter((f) => f.status !== "done");
   const done = own.filter((f) => f.status === "done");
@@ -140,6 +140,21 @@ async function openPersonDetail(person, allFollowUps) {
 
   const body = document.createElement("div");
   body.innerHTML = `
+    <div class="field">
+      <label for="person-detail-name">Nom</label>
+      <input id="person-detail-name" type="text" value="${escapeAttr(person.name)}" />
+    </div>
+    <div class="field">
+      <label for="person-detail-type">Type</label>
+      <select id="person-detail-type">
+        <option value="collaborateur" ${person.type !== "manager" ? "selected" : ""}>👤 Collaborateur</option>
+        <option value="manager" ${person.type === "manager" ? "selected" : ""}>👔 Manager</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="person-detail-role">Rôle</label>
+      <input id="person-detail-role" type="text" value="${escapeAttr(person.role || "")}" />
+    </div>
     <div class="section-title" style="margin-top:0;">🎯 Engagements en cours (${active.length})</div>
     <div class="card" id="active-followups" style="margin-bottom:16px;"></div>
     <button id="add-followup-btn" class="btn btn-secondary btn-sm btn-block" style="margin-bottom:16px;">+ Suivi</button>
@@ -167,13 +182,37 @@ async function openPersonDetail(person, allFollowUps) {
     actions: [
       { label: "Fermer", variant: "ghost" },
       {
-        label: "Enregistrer les notes",
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: "Supprimer cette personne ?",
+            message: `« ${person.name} » sera définitivement supprimée. Ses suivis ne sont pas supprimés — ils perdent simplement leur lien vers cette personne.`,
+            onConfirm: async () => {
+              await peopleApi.removePerson(person.id);
+              showToast("Personne supprimée");
+            },
+            onCancel: () => openPersonDetail(person, allFollowUps),
+          });
+        },
+      },
+      {
+        label: "Enregistrer",
         variant: "primary",
         closesModal: false,
         onClick: async () => {
-          await peopleApi.updatePerson(person.id, { notes: bodyEl.querySelector("#person-notes").value });
+          const name = bodyEl.querySelector("#person-detail-name").value.trim();
+          if (!name) return;
+          await peopleApi.updatePerson(person.id, {
+            name,
+            type: bodyEl.querySelector("#person-detail-type").value,
+            role: bodyEl.querySelector("#person-detail-role").value.trim(),
+            notes: bodyEl.querySelector("#person-notes").value,
+          });
           close();
-          showToast("Notes enregistrées");
+          showToast("Personne mise à jour");
         },
       },
     ],
@@ -252,7 +291,8 @@ async function openCreateFollowUpModal(person) {
   });
 }
 
-function openEditFollowUpModal(followUp) {
+async function openEditFollowUpModal(followUp) {
+  const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -266,8 +306,19 @@ function openEditFollowUpModal(followUp) {
       </select>
     </div>
     <div class="field">
+      <label for="fu-edit-due">Échéance de la personne</label>
+      <input id="fu-edit-due" type="date" value="${followUp.dueDate || ""}" />
+    </div>
+    <div class="field">
       <label for="fu-edit-control">Prochain contrôle</label>
       <input id="fu-edit-control" type="date" value="${followUp.controlDate || ""}" />
+    </div>
+    <div class="field">
+      <label for="fu-edit-project">Projet</label>
+      <select id="fu-edit-project">
+        <option value="">— Aucun —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${p.id === followUp.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
     </div>
   `;
   const { bodyEl, close } = openModal({
@@ -276,6 +327,23 @@ function openEditFollowUpModal(followUp) {
     actions: [
       { label: "Fermer", variant: "ghost" },
       {
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: "Supprimer ce suivi ?",
+            message: `« ${followUp.title} » sera définitivement supprimé.`,
+            onConfirm: async () => {
+              await followUpsApi.removeFollowUp(followUp.id);
+              showToast("Suivi supprimé");
+            },
+            onCancel: () => openEditFollowUpModal(followUp),
+          });
+        },
+      },
+      {
         label: "Enregistrer",
         variant: "primary",
         closesModal: false,
@@ -283,7 +351,9 @@ function openEditFollowUpModal(followUp) {
           await followUpsApi.updateFollowUp(followUp.id, {
             title: bodyEl.querySelector("#fu-edit-title").value.trim(),
             status: bodyEl.querySelector("#fu-edit-status").value,
+            dueDate: bodyEl.querySelector("#fu-edit-due").value || null,
             controlDate: bodyEl.querySelector("#fu-edit-control").value || null,
+            projectId: bodyEl.querySelector("#fu-edit-project").value || null,
           });
           close();
           showToast("Suivi mis à jour");

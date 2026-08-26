@@ -5,7 +5,7 @@ import * as tasksApi from "../domain/tasks.js";
 import * as projectsApi from "../domain/projects.js";
 import * as resourcesApi from "../domain/resources.js";
 import * as historyApi from "../domain/history.js";
-import { openModal, closeModal } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
@@ -191,6 +191,23 @@ async function openTaskDetail(task, projects) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost" },
+      {
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: "Supprimer cette tâche ?",
+            message: `« ${task.title} » sera définitivement supprimée. Cette action est irréversible.`,
+            onConfirm: async () => {
+              await tasksApi.removeTask(task.id);
+              showToast("Tâche supprimée");
+            },
+            onCancel: () => openTaskDetail(task, projects),
+          });
+        },
+      },
       {
         label: "Enregistrer",
         variant: "primary",

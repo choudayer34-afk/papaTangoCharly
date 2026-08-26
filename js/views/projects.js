@@ -8,7 +8,7 @@ import * as followUpsApi from "../domain/followups.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
-import { openModal, closeModal } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
@@ -166,6 +166,10 @@ async function openProjectDetail(project, tasks) {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
+      <label for="detail-name">Nom</label>
+      <input id="detail-name" type="text" value="${escapeAttr(project.name)}" />
+    </div>
+    <div class="field">
       <label for="detail-objective">Objectif</label>
       <textarea id="detail-objective">${escapeHtml(project.objective || "")}</textarea>
     </div>
@@ -301,11 +305,31 @@ async function openProjectDetail(project, tasks) {
     actions: [
       { label: "Fermer", variant: "ghost" },
       {
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: "Supprimer ce projet ?",
+            message: `« ${project.name} » sera définitivement supprimé. Les tâches, suivis, réunions, décisions et ressources qui lui étaient rattachés ne sont pas supprimés — ils perdent simplement leur lien vers ce projet.`,
+            onConfirm: async () => {
+              await projectsApi.removeProject(project.id);
+              showToast("Projet supprimé");
+            },
+            onCancel: () => openProjectDetail(project, tasks),
+          });
+        },
+      },
+      {
         label: "Enregistrer",
         variant: "primary",
         closesModal: false,
         onClick: async () => {
+          const name = bodyEl.querySelector("#detail-name").value.trim();
+          if (!name) return;
           await projectsApi.updateProject(project.id, {
+            name,
             objective: bodyEl.querySelector("#detail-objective").value.trim(),
             successCriteria: bodyEl.querySelector("#detail-criteria").value.trim(),
           });

@@ -5,7 +5,7 @@ import * as resourcesApi from "../domain/resources.js";
 import * as projectsApi from "../domain/projects.js";
 import * as tasksApi from "../domain/tasks.js";
 import * as historyApi from "../domain/history.js";
-import { openModal } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 
@@ -220,6 +220,16 @@ async function openResourceDetail(resource, projects, tasks) {
       <input id="res-detail-title" type="text" value="${escapeAttr(resource.title)}" />
     </div>
     <div class="field">
+      <label for="res-detail-type">Type</label>
+      <select id="res-detail-type">
+        ${resourcesApi.TYPES.map((t) => `<option value="${t.key}" ${t.key === resource.type ? "selected" : ""}>${t.emoji} ${t.label}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label for="res-detail-url">Lien</label>
+      <input id="res-detail-url" type="url" placeholder="https://..." value="${escapeAttr(resource.url || "")}" />
+    </div>
+    <div class="field">
       <label for="res-detail-description">Description</label>
       <textarea id="res-detail-description">${escapeHtml(resource.description || "")}</textarea>
     </div>
@@ -253,12 +263,33 @@ async function openResourceDetail(resource, projects, tasks) {
     actions: [
       { label: "Fermer", variant: "ghost" },
       {
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: "Supprimer cette ressource ?",
+            message: `« ${resource.title} » sera définitivement supprimée. Les projets et tâches qui y étaient liés perdent simplement le lien.`,
+            onConfirm: async () => {
+              await resourcesApi.removeResource(resource.id);
+              showToast("Ressource supprimée");
+            },
+            onCancel: () => openResourceDetail(resource, projects, tasks),
+          });
+        },
+      },
+      {
         label: "Enregistrer",
         variant: "primary",
         closesModal: false,
         onClick: async () => {
+          const title = bodyEl.querySelector("#res-detail-title").value.trim();
+          if (!title) return;
           await resourcesApi.updateResource(resource.id, {
-            title: bodyEl.querySelector("#res-detail-title").value.trim(),
+            title,
+            type: bodyEl.querySelector("#res-detail-type").value,
+            url: bodyEl.querySelector("#res-detail-url").value.trim(),
             description: bodyEl.querySelector("#res-detail-description").value.trim(),
           });
           close();
