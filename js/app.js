@@ -11,6 +11,7 @@ import { renderManagement } from "./views/management.js";
 import { renderCalendar } from "./views/calendar.js";
 import { renderResources } from "./views/resources.js";
 import { renderPrompts } from "./views/prompts.js";
+import { renderGuide } from "./views/guide.js";
 import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
@@ -27,6 +28,15 @@ const ROUTES = {
   "#/calendar": { render: renderCalendar, label: "Calendrier", icon: "📅" },
   "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
   "#/prompts": { render: renderPrompts, label: "Prompts", icon: "🤖" },
+};
+
+// Le guide (§ retour de Charles-Henri : "accessible même hors ligne via l'appli", pas
+// hébergé ailleurs) est volontairement HORS de ROUTES : c'est une page de référence qu'on
+// consulte ponctuellement depuis le bouton ❓ Aide, pas un onglet de travail — l'ajouter à
+// ROUTES l'aurait automatiquement affiché dans la barre de navigation du bas (mountNav
+// itère ROUTES), ce qui aurait ajouté un dixième onglet permanent pour un besoin occasionnel.
+const HIDDEN_ROUTES = {
+  "#/guide": { render: renderGuide },
 };
 
 const appRoot = document.getElementById("app");
@@ -53,10 +63,12 @@ function updateNavActive(hash) {
 }
 
 function renderRoute() {
-  const hash = ROUTES[location.hash] ? location.hash : "#/dashboard";
+  const known = ROUTES[location.hash] || HIDDEN_ROUTES[location.hash];
+  const hash = known ? location.hash : "#/dashboard";
   if (location.hash !== hash) history.replaceState(null, "", hash);
   currentCleanup?.();
-  currentCleanup = ROUTES[hash].render(appRoot) || null;
+  const route = ROUTES[hash] || HIDDEN_ROUTES[hash];
+  currentCleanup = route.render(appRoot) || null;
   updateNavActive(hash);
 }
 
