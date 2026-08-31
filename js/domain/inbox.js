@@ -40,6 +40,26 @@ export function subscribeKept(callback) {
   return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "kept")));
 }
 
+const KEPT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
+
+/**
+ * Auto-archivage des Informations/Idées après 15 jours (retour de Charles-Henri du 31/08 :
+ * "les info ou idées sont automatiquement archivées au bout de 15 jours") — pour que la
+ * section "🧠 Informations & idées" du Dashboard reste naturellement courte plutôt que de
+ * s'allonger indéfiniment. L'app n'a pas de tâche de fond côté serveur (tout vit côté client +
+ * Firestore) : ce balayage se fait donc au chargement de l'app (voir js/app.js) plutôt que sur
+ * une vraie tâche planifiée — un léger différé plutôt qu'un instant exact à J+15, largement
+ * suffisant pour ce besoin ("ne pas laisser traîner", pas "supprimer pile à la seconde près").
+ * Utilise qualify() comme le bouton "Archiver" manuel existant : même chemin, même historique.
+ */
+export async function autoArchiveStaleKept() {
+  const kept = await listKept();
+  const cutoff = Date.now() - KEPT_MAX_AGE_MS;
+  const stale = kept.filter((item) => (item.createdAt || 0) < cutoff);
+  await Promise.all(stale.map((item) => qualify(item.id, "archived")));
+  return stale.length;
+}
+
 // Pour ces issues, l'entité résultante est déjà créée par la vue (js/views/inbox.js), qui
 // réutilise directement le domaine et — quand c'est possible — la modale de création déjà
 // existante (Projet, Ressource) plutôt que de dupliquer cette logique ici. `qualify()` se
