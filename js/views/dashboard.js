@@ -10,8 +10,10 @@ import * as historyApi from "../domain/history.js";
 import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as preferencesApi from "../domain/preferences.js";
+import * as casquettesApi from "../domain/casquettes.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { showHintOnce } from "../components/hint.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import { openPersonDetail } from "./people.js";
 import { openProjectDetail } from "./projects.js";
@@ -23,6 +25,18 @@ import { openQualifyChoice } from "./inbox.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
+// Sections repliables/masquables (piste UX du 31/08/2026, retour de Charles-Henri : "l'accueil
+// se rallonge avec les éléments qui prennent de l'ampleur") — chaque section connaît sa propre
+// clé de préférence (js/domain/preferences.js#dashboardHidden) ; le bloc chiffré (stat-grid)
+// n'y figure pas volontairement : c'est le seul repère qui doit toujours rester visible.
+const DASHBOARD_SECTIONS = [
+  { key: "dueSoon", label: "🗓️ À échéance dans les 7 jours" },
+  { key: "followups", label: "📣 Suivis en retard" },
+  { key: "kept", label: "🧠 Informations & idées" },
+  { key: "projects", label: "📦 Mes projets" },
+  { key: "recent", label: "🧠 Récemment" },
+];
+
 export function renderDashboard(container) {
   container.innerHTML = `
     <div class="topbar">
@@ -30,9 +44,14 @@ export function renderDashboard(container) {
         <h1>Mon pilotage</h1>
         <div class="subtitle">${formatToday()}</div>
       </div>
-      <button id="weekly-review-btn" class="btn btn-secondary btn-sm">🧭 Revue hebdo</button>
+      <div style="display:flex;gap:8px;">
+        <button id="weekly-review-btn" class="btn btn-secondary btn-sm">🧭 Revue hebdo</button>
+        <button id="dashboard-settings-btn" class="btn btn-secondary btn-sm" aria-label="Personnaliser l'accueil">⚙️</button>
+      </div>
     </div>
     <div class="view">
+      <div id="review-reminder"></div>
+      <div class="chip-row" id="hat-filter"></div>
       <div class="stat-grid" id="stat-grid"></div>
       <div id="due-soon-section"></div>
       <div id="followups-section"></div>
@@ -43,7 +62,15 @@ export function renderDashboard(container) {
   `;
 
   container.querySelector("#weekly-review-btn").addEventListener("click", () => openWeeklyReview());
+  container.querySelector("#dashboard-settings-btn").addEventListener("click", () => openDashboardSettingsModal());
+  showHintOnce(
+    container.querySelector(".view"),
+    "dashboard-hats-v1",
+    "Le filtre <strong>Toutes / Toi / Équipe / Projets / Manager / CSE</strong> ci-dessous limite l'Accueil à une seule casquette à la fois — il est déduit automatiquement du projet ou de la personne concernée. Le bouton ⚙️ permet de replier les sections dont tu ne te sers pas."
+  );
 
+  const reviewReminderEl = container.querySelector("#review-reminder");
+  const hatFilterEl = container.querySelector("#hat-filter");
   const statGrid = container.querySelector("#stat-grid");
   const dueSoonSection = container.querySelector("#due-soon-section");
   const followUpsSection = container.querySelector("#followups-section");
@@ -61,12 +88,116 @@ export function renderDashboard(container) {
   let keptItems = [];
   let projectSortMode = "manual";
   let categories = {};
+  let activeHat = "all";
+  let hiddenSections = new Set();
 
   preferencesApi.getPreferences().then((prefs) => {
     projectSortMode = prefs.projectSort || "manual";
     categories = prefs.categories || {};
+    activeHat = prefs.casquette || "all";
+    hiddenSections = new Set(prefs.dashboardHidden || []);
+    renderHatFilter();
+    renderReviewReminder(prefs.lastWeeklyReviewAt);
+    renderStats();
+    renderDueSoonSection();
+    renderKeptSection();
     renderProjectsSection();
+    renderFollowUpsSection();
+    renderRecentSection();
   });
+
+  function renderHatFilter() {
+    casquettesApi.renderHatChipRow(hatFilterEl, activeHat, async (hatId) => {
+      activeHat = hatId;
+      renderHatFilter();
+      renderStats();
+      renderDueSoonSection();
+      renderProjectsSection();
+      renderFollowUpsSection();
+      renderRecentSection();
+      await preferencesApi.setCasquette(hatId);
+    });
+  }
+
+  /** Filtre une liste de Tâches/Suivis sur la casquette active — "all" = pas de filtre.
+   *  Cartes projets/réunions/décisions ont chacune leur propre variante (voir plus bas), le
+   *  besoin de map projets/personnes n'étant pas le même. */
+  function hatFilterTasks(list) {
+    if (activeHat === "all") return list;
+    const projectsById = new Map(projects.map((p) => [p.id, p]));
+    return list.filter((t) => casquettesApi.taskHat(t, projectsById) === activeHat);
+  }
+
+  function hatFilterFollowUps(list) {
+    if (activeHat === "all") return list;
+    const projectsById = new Map(projects.map((p) => [p.id, p]));
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    return list.filter((f) => casquettesApi.followUpHat(f, projectsById, peopleById) === activeHat);
+  }
+
+  /**
+   * Rappel de rythme (retour de Charles-Henri : "il y a du retard partout") : un bandeau
+   * doux, jamais culpabilisant — pas de rouge, la couleur "warning" suffit — dès que la Revue
+   * hebdomadaire n'a pas été relancée depuis plus de 7 jours (ou jamais).
+   */
+  function renderReviewReminder(lastAt) {
+    const days = lastAt ? Math.floor((Date.now() - lastAt) / 86400000) : null;
+    if (days !== null && days < 7) {
+      reviewReminderEl.innerHTML = "";
+      return;
+    }
+    reviewReminderEl.innerHTML = `
+      <div class="review-banner">
+        <span>🧭 ${days === null ? "Pas encore de revue hebdomadaire lancée." : `Revue hebdomadaire non relancée depuis ${days} jours.`}</span>
+        <button id="review-reminder-btn" class="btn btn-primary btn-sm">Lancer la revue</button>
+      </div>
+    `;
+    reviewReminderEl.querySelector("#review-reminder-btn").addEventListener("click", () => {
+      openWeeklyReview();
+      reviewReminderEl.innerHTML = "";
+    });
+  }
+
+  /** Modale "⚙️ Personnaliser l'accueil" (retour de Charles-Henri : "l'accueil se rallonge") —
+   *  une case à cocher par section masquable, mémorisée pour de bon (pas juste pour cette
+   *  session). */
+  function openDashboardSettingsModal() {
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <p style="margin-top:0;color:var(--color-text-muted);">Décoche les sections dont tu ne te sers pas — elles disparaissent de l'Accueil (le bloc chiffré en haut reste toujours visible).</p>
+      ${DASHBOARD_SECTIONS.map(
+        (s) => `
+        <div class="field" style="display:flex;align-items:center;gap:8px;">
+          <input id="dash-sec-${s.key}" type="checkbox" style="width:auto;" ${hiddenSections.has(s.key) ? "" : "checked"} />
+          <label for="dash-sec-${s.key}" style="margin:0;">${s.label}</label>
+        </div>`
+      ).join("")}
+    `;
+    openModal({
+      title: "⚙️ Personnaliser l'accueil",
+      body,
+      actions: [
+        { label: "Annuler", variant: "ghost" },
+        {
+          label: "Enregistrer",
+          variant: "primary",
+          closesModal: false,
+          onClick: async () => {
+            const hidden = DASHBOARD_SECTIONS.filter((s) => !body.querySelector(`#dash-sec-${s.key}`).checked).map((s) => s.key);
+            hiddenSections = new Set(hidden);
+            await preferencesApi.setDashboardHidden(hidden);
+            closeModal();
+            renderDueSoonSection();
+            renderKeptSection();
+            renderProjectsSection();
+            renderFollowUpsSection();
+            renderRecentSection();
+            showToast("Accueil mis à jour");
+          },
+        },
+      ],
+    });
+  }
 
   /** Liste cliquable réutilisée par chaque carte chiffrée (retour de Charles-Henri : les
    *  cartes >0 doivent pouvoir s'ouvrir pour voir le détail) — un même petit gabarit pour les
@@ -139,11 +270,17 @@ export function renderDashboard(container) {
   }
 
   function renderStats() {
-    const lateList = tasks.filter(tasksApi.isLate);
-    const followUpList = tasks.filter((t) => t.status === "follow_up");
-    const waitingList = tasks.filter((t) => t.status === "waiting");
-    const todayList = tasks.filter(isDueToday);
-    const overdueFollowUpsList = followUps.filter(followUpsApi.isControlDue);
+    // Le compteur Inbox reste global, jamais filtré par casquette : une capture pas encore
+    // qualifiée n'a par définition ni projet ni personne pour en déduire une (voir
+    // js/domain/casquettes.js) — la filtrer donnerait l'impression trompeuse que "rien à
+    // traiter" alors que des captures attendent juste d'être qualifiées.
+    const hatTasks = hatFilterTasks(tasks);
+    const hatFollowUps = hatFilterFollowUps(followUps);
+    const lateList = hatTasks.filter(tasksApi.isLate);
+    const followUpList = hatTasks.filter((t) => t.status === "follow_up");
+    const waitingList = hatTasks.filter((t) => t.status === "waiting");
+    const todayList = hatTasks.filter(isDueToday);
+    const overdueFollowUpsList = hatFollowUps.filter(followUpsApi.isControlDue);
 
     statGrid.innerHTML = `
       <div class="stat-tile stat-danger" id="stat-late" style="cursor:pointer;">
@@ -188,7 +325,13 @@ export function renderDashboard(container) {
    * "qu'est-ce qui arrive cette semaine ?".
    */
   function renderDueSoonSection() {
-    const dueSoon = tasks.filter((t) => t.status !== "done" && t.dueDate && daysFromToday(t.dueDate) > 0 && daysFromToday(t.dueDate) <= 7);
+    if (hiddenSections.has("dueSoon")) {
+      dueSoonSection.innerHTML = "";
+      return;
+    }
+    const dueSoon = hatFilterTasks(tasks).filter(
+      (t) => t.status !== "done" && t.dueDate && daysFromToday(t.dueDate) > 0 && daysFromToday(t.dueDate) <= 7
+    );
     dueSoonSection.innerHTML = `
       <details ${dueSoon.length ? "open" : ""}>
         <summary class="section-title" style="margin-top:0;cursor:pointer;">🗓️ À échéance dans les 7 jours (${dueSoon.length})</summary>
@@ -221,7 +364,7 @@ export function renderDashboard(container) {
    * avec un raccourci pour les archiver directement d'ici si elles ne servent plus.
    */
   function renderKeptSection() {
-    if (!keptItems.length) {
+    if (hiddenSections.has("kept") || !keptItems.length) {
       keptSection.innerHTML = "";
       return;
     }
@@ -258,8 +401,8 @@ export function renderDashboard(container) {
    * personnes ?" sans avoir à s'en souvenir soi-même.
    */
   function renderFollowUpsSection() {
-    const overdue = followUps.filter(followUpsApi.isControlDue);
-    if (!overdue.length) {
+    const overdue = hatFilterFollowUps(followUps).filter(followUpsApi.isControlDue);
+    if (hiddenSections.has("followups") || !overdue.length) {
       followUpsSection.innerHTML = "";
       return;
     }
@@ -292,13 +435,18 @@ export function renderDashboard(container) {
    * depuis les préférences, pour ne jamais avoir deux logiques d'ordonnancement qui divergent.
    */
   function renderProjectsSection() {
+    if (hiddenSections.has("projects")) {
+      projectsSection.innerHTML = "";
+      return;
+    }
     projectsSection.innerHTML = `<div class="section-title">📦 Mes projets</div>`;
-    const active = projects.filter((p) => p.status === "active");
+    let active = projects.filter((p) => p.status === "active");
+    if (activeHat !== "all") active = active.filter((p) => casquettesApi.projectHat(p) === activeHat);
     if (!active.length) {
       projectsSection.innerHTML += `
         <div class="empty-state">
           <span class="emoji">📦</span>
-          Pas encore de projet. Crée-en un depuis l'onglet Projets.
+          ${activeHat !== "all" ? "Aucun projet sur cette casquette." : "Pas encore de projet. Crée-en un depuis l'onglet Projets."}
         </div>`;
       return;
     }
@@ -337,11 +485,16 @@ export function renderDashboard(container) {
    * Règle 3) mais invisible nulle part dans l'interface.
    */
   function renderRecentSection() {
+    if (hiddenSections.has("recent")) {
+      recentSection.innerHTML = "";
+      return;
+    }
     const projectById = new Map(projects.map((p) => [p.id, p]));
-    const items = [
+    let items = [
       ...meetings.map((m) => ({ kind: "meeting", emoji: "🗓️", label: "Réunion", date: m.date || m.createdAt, data: m })),
       ...decisions.map((d) => ({ kind: "decision", emoji: "🗳️", label: "Décision", date: d.date || d.createdAt, data: d })),
     ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    if (activeHat !== "all") items = items.filter((item) => casquettesApi.itemHat(item.data, projectById) === activeHat);
 
     recentSection.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:baseline;">

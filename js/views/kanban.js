@@ -5,8 +5,11 @@ import * as tasksApi from "../domain/tasks.js";
 import * as projectsApi from "../domain/projects.js";
 import * as resourcesApi from "../domain/resources.js";
 import * as historyApi from "../domain/history.js";
+import * as preferencesApi from "../domain/preferences.js";
+import * as casquettesApi from "../domain/casquettes.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -36,6 +39,7 @@ export function renderKanban(container) {
       </div>
     </div>
     <div class="view">
+      <div class="chip-row" id="kanban-hat-filter"></div>
       <div class="chip-row" id="kanban-filters" style="flex-wrap:wrap;">
         <select id="kanban-project-filter" class="chip" style="border-radius:var(--radius-sm);"></select>
       </div>
@@ -43,13 +47,36 @@ export function renderKanban(container) {
     </div>
   `;
 
+  showHintOnce(
+    container.querySelector(".view"),
+    "kanban-intro-v1",
+    "Ici, seulement <strong>tes</strong> tâches — pas de collaborateur à choisir, tout ce qui s'y trouve est déjà à toi. Ce qu'un collaborateur doit faire, c'est un Suivi sur sa fiche (onglet Équipe). Le filtre par casquette est le même qu'à l'Accueil."
+  );
+
   const board = container.querySelector("#kanban-board");
+  const hatFilterEl = container.querySelector("#kanban-hat-filter");
   const filtersEl = container.querySelector("#kanban-filters");
   const projectFilterEl = container.querySelector("#kanban-project-filter");
   let latestTasks = [];
   let latestProjects = [];
   let filterWindow = "all";
   let filterProjectId = "all";
+  let activeHat = "all";
+
+  preferencesApi.getPreferences().then((prefs) => {
+    activeHat = prefs.casquette || "all";
+    renderHatFilter();
+    renderBoard();
+  });
+
+  function renderHatFilter() {
+    casquettesApi.renderHatChipRow(hatFilterEl, activeHat, async (hatId) => {
+      activeHat = hatId;
+      renderHatFilter();
+      renderBoard();
+      await preferencesApi.setCasquette(hatId);
+    });
+  }
 
   filtersEl.insertAdjacentHTML(
     "afterbegin",
@@ -69,6 +96,10 @@ export function renderKanban(container) {
 
   function applyFilters(tasks) {
     let list = tasks;
+    if (activeHat !== "all") {
+      const projectsById = new Map(latestProjects.map((p) => [p.id, p]));
+      list = list.filter((t) => casquettesApi.taskHat(t, projectsById) === activeHat);
+    }
     if (filterProjectId !== "all") list = list.filter((t) => t.projectId === filterProjectId);
     if (filterWindow === "late") list = list.filter((t) => tasksApi.isLate(t));
     else if (filterWindow === "7" || filterWindow === "15") {

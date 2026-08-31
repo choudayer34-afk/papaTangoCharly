@@ -7,6 +7,7 @@ import * as historyApi from "../domain/history.js";
 import * as objectivesApi from "../domain/objectives.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { showHintOnce } from "../components/hint.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 
@@ -721,6 +722,12 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
       </div>
     </div>
   `;
+
+  showHintOnce(
+    body,
+    "followup-direction-v1",
+    "« J'attends quelque chose » : c'est <strong>elle</strong> qui agit, tu contrôles à la date choisie. « Je dois transmettre » : c'est <strong>toi</strong> qui dois lui dire quelque chose avant cette date. Dans les deux cas c'est un Suivi, jamais une Tâche."
+  );
 
   const applyDirection = (direction) => {
     const isToTell = direction === "to_tell";

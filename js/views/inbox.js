@@ -10,6 +10,7 @@ import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
+import { showHintOnce } from "../components/hint.js";
 import { openCreateProjectModal } from "./projects.js";
 import { openCreateResourceModal } from "./resources.js";
 
@@ -37,11 +38,16 @@ export function renderInbox(container) {
         <div class="subtitle" id="inbox-subtitle">—</div>
       </div>
     </div>
-    <div class="view"><div id="inbox-list"></div></div>
+    <div class="view"><div id="inbox-hint"></div><div id="inbox-list"></div></div>
   `;
 
   const listEl = container.querySelector("#inbox-list");
   const subtitleEl = container.querySelector("#inbox-subtitle");
+  showHintOnce(
+    container.querySelector("#inbox-hint"),
+    "inbox-intro-v1",
+    "Une capture en attente ici n'est <strong>jamais</strong> un retard — c'est juste qualifié plus tard. Qualifie-la en Tâche (c'est toi qui agis) ou en Suivi (quelqu'un d'autre s'engage) pour qu'elle rejoigne le bon endroit."
+  );
 
   function render(items) {
     subtitleEl.textContent = items.length
