@@ -7,7 +7,10 @@ import { renderInbox } from "./views/inbox.js";
 import { renderKanban } from "./views/kanban.js";
 import { renderProjects } from "./views/projects.js";
 import { renderPeople } from "./views/people.js";
+import { renderManagement } from "./views/management.js";
+import { renderCalendar } from "./views/calendar.js";
 import { renderResources } from "./views/resources.js";
+import { renderPrompts } from "./views/prompts.js";
 import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
@@ -20,7 +23,10 @@ const ROUTES = {
   "#/kanban": { render: renderKanban, label: "Pilotage", icon: "📋" },
   "#/projects": { render: renderProjects, label: "Projets", icon: "📦" },
   "#/people": { render: renderPeople, label: "Équipe", icon: "👥" },
+  "#/management": { render: renderManagement, label: "Management", icon: "👔" },
+  "#/calendar": { render: renderCalendar, label: "Calendrier", icon: "📅" },
   "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
+  "#/prompts": { render: renderPrompts, label: "Prompts", icon: "🤖" },
 };
 
 const appRoot = document.getElementById("app");
