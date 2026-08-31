@@ -15,14 +15,21 @@ import * as followUpsApi from "../domain/followups.js";
 import * as resourcesApi from "../domain/resources.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
+import * as inboxApi from "../domain/inbox.js";
 import { openTaskDetail, openCreateTaskModal } from "../views/kanban.js";
 import { openProjectDetail, openCreateProjectModal } from "../views/projects.js";
 import { openPersonDetail, openEditFollowUpModal, openCreateFollowUpModal } from "../views/people.js";
 import { openResourceDetail, openCreateResourceModal } from "../views/resources.js";
 import { openRecentDetail, openCreateMeetingModal, openCreateDecisionModal } from "../views/dashboard.js";
+import { openKeptItemDetail } from "../views/inbox.js";
 
 /** Les 7 types liables. Personne n'apparaît pas dans "+ Créer et lier" (rarement une fiche
- *  qu'on crée depuis un autre sujet) mais reste liable à une fiche existante. */
+ *  qu'on crée depuis un autre sujet) mais reste liable à une fiche existante — même chose pour
+ *  une Information/Idée (§ correction du 31/08/2026, retour de Charles-Henri : "une tâche liée
+ *  à une information n'est pas visible") : elle se crée uniquement par qualification depuis
+ *  l'Inbox, jamais depuis "+ Créer et lier", mais doit rester liable à une fiche existante et
+ *  se résoudre correctement quand une autre fiche pointe vers elle (voir resolveRef/allRefs
+ *  plus bas, et openKeptItemDetail dans js/views/inbox.js pour sa propre section "🔗 Lié"). */
 export const ENTITY_KINDS = [
   { type: "Task", label: "Tâche", emoji: "✅" },
   { type: "Project", label: "Projet", emoji: "📦" },
@@ -33,7 +40,7 @@ export const ENTITY_KINDS = [
 ];
 
 export async function fetchBundle() {
-  const [tasks, projects, people, followUps, resources, meetings, decisions] = await Promise.all([
+  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems] = await Promise.all([
     tasksApi.listAll(),
     projectsApi.listAll(),
     peopleApi.listAll(),
@@ -41,8 +48,9 @@ export async function fetchBundle() {
     resourcesApi.listAll(),
     meetingsApi.listAll(),
     decisionsApi.listAll(),
+    inboxApi.listKept(),
   ]);
-  return { tasks, projects, people, followUps, resources, meetings, decisions };
+  return { tasks, projects, people, followUps, resources, meetings, decisions, keptItems };
 }
 
 /** Résout une référence {type, id} en { emoji, title, onOpen }, ou null si l'élément visé a
@@ -97,6 +105,19 @@ export function resolveRef(bundle, ref) {
         }
       );
     }
+    case "Kept": {
+      const k = (bundle.keptItems || []).find((x) => x.id === ref.id);
+      // Résolu à null si l'Information a été auto-archivée depuis (§ balayage 15 jours,
+      // js/domain/inbox.js) — même traitement que tout autre élément disparu : le lien reste
+      // affiché comme "Élément supprimé" plutôt que de planter, jamais une perte silencieuse.
+      return (
+        k && {
+          emoji: k.keptAsType === "idea" ? "💡" : "🧠",
+          title: k.rawContent,
+          onOpen: () => openKeptItemDetail(k),
+        }
+      );
+    }
     default:
       return null;
   }
@@ -111,6 +132,7 @@ function allRefs(bundle) {
     ...bundle.resources.map((r) => ({ type: "Resource", id: r.id })),
     ...bundle.meetings.map((m) => ({ type: "Meeting", id: m.id })),
     ...bundle.decisions.map((d) => ({ type: "Decision", id: d.id })),
+    ...(bundle.keptItems || []).map((k) => ({ type: "Kept", id: k.id })),
   ];
 }
 
@@ -248,6 +270,16 @@ export function openCreateAndLinkModal(ref, currentLabel, { onLinked, onCancel }
     body,
     actions: [{ label: "Annuler", variant: "ghost", onClick: () => onCancel?.() }],
   });
+}
+
+/**
+ * Comme openCreateAndLinkModal, mais saute directement le choix de type — utilisé quand le
+ * type pertinent est déjà connu (§ suggestions de prochaine étape du 31/08/2026, voir
+ * js/components/suggestNextStep.js : après avoir coché "Créer les actions" sur un canevas, ou
+ * après avoir enregistré une Décision, inutile de repasser par la grille des 7 types).
+ */
+export function openCreateAndLinkDirect(type, ref, currentLabel, { onLinked, onCancel } = {}) {
+  openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel });
 }
 
 function openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel }) {
