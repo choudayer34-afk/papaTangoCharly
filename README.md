@@ -149,6 +149,21 @@ service cloud.firestore {
   volontairement simple (pas d'export/impression, pas de comparaison multi-campagnes)
 - ✅ Bibliothèque de prompts IA (`#/prompts`) : titre/description/texte, recherche, copier en
   un clic — version simple sans catégorisation ni rattachement au fil conducteur
+- ✅ Guide utilisateur intégré à l'app (`#/guide`, accessible depuis le bouton ❓ Aide) :
+  casquette par casquette (Toi, Équipe, Projets, Manager, CSE), cas d'usage détaillés avec le
+  gain et la fonction à utiliser — vit dans le code, mis en cache par le service worker,
+  consultable sans connexion (pas une page hébergée à part)
+- ✅ Casquettes (`js/domain/casquettes.js`) : filtre Toutes/Toi/Équipe/Projets/Manager/CSE
+  partagé entre l'Accueil et Pilotage, déduit automatiquement du projet lié ou du type de
+  personne — aucun nouveau champ à saisir sur les Tâches/Suivis/Réunions/Décisions
+- ✅ Rappel de rythme : bandeau sur l'Accueil si la Revue hebdomadaire n'a pas été relancée
+  depuis plus de 7 jours (ou jamais)
+- ✅ Accueil personnalisable : bouton ⚙️ pour replier/masquer les sections dont on ne se sert
+  pas (le bloc chiffré reste toujours visible), mémorisé durablement
+- ✅ Aide contextuelle au premier usage (`js/components/hint.js`) : un bandeau discret
+  explique Accueil, Pilotage, Inbox et la création d'un Suivi la première fois qu'on les
+  ouvre, puis ne revient jamais
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés, statut de projet
   (clôturer/rouvrir/archiver), horodatage réel du "dernier point manager", vraie intégration
-  Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle
+  Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle ; le
+  filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage
