@@ -1,7 +1,7 @@
 // Service worker — app-shell versionné, stratégie network-first avec repli cache.
 // Pattern repris d'EnVie (§56/§57 : réutiliser l'existant avant de recréer).
 
-const CACHE_NAME = "pilotage-cache-v10";
+const CACHE_NAME = "pilotage-cache-v11";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -44,6 +44,7 @@ const APP_SHELL = [
   "./js/views/calendar.js",
   "./js/views/resources.js",
   "./js/views/prompts.js",
+  "./js/views/guide.js",
   "./js/views/login.js",
 ];
 
