@@ -17,6 +17,7 @@ import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { onAuthChange } from "./services/firebase.js";
+import { autoArchiveStaleKept } from "./domain/inbox.js";
 
 const ROUTES = {
   "#/dashboard": { render: renderDashboard, label: "Accueil", icon: "🏠" },
@@ -82,6 +83,11 @@ function mountApp() {
   window.addEventListener("hashchange", renderRoute);
   renderRoute();
   maybeShowFirstRunTour();
+  // Auto-archivage des Informations/Idées de plus de 15 jours (retour de Charles-Henri, voir
+  // js/domain/inbox.js) — balayage silencieux à chaque montage plutôt qu'une vraie tâche
+  // planifiée côté serveur, qui n'existe pas dans cette architecture. Jamais bloquant : erreur
+  // avalée plutôt que de gêner l'ouverture de l'app pour un nettoyage secondaire.
+  autoArchiveStaleKept().catch(() => {});
 }
 
 function unmountApp() {
