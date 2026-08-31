@@ -3,6 +3,8 @@
 // colonnes, le Dashboard les traduit autrement — une seule source de vérité.
 
 import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
+import { buildSteps } from "./templates.js";
 
 const COLLECTION = "tasks";
 
@@ -17,6 +19,10 @@ export const STATUS_LABELS = {
 };
 
 export async function createTask(data) {
+  // Canevas Communication (§18, §78.9) : activé volontairement (case à cocher à la création),
+  // pas déduit automatiquement du type — "communication" n'est pas l'un des types d'exemple
+  // du §21 et forcer la détection serait plus fragile qu'utile pour un cas encore rare.
+  const useCommunicationCanevas = data.type === "communication";
   const task = await storage.put(COLLECTION, {
     title: data.title,
     description: data.description || "",
@@ -29,10 +35,43 @@ export async function createTask(data) {
     successCriteria: data.successCriteria || "",
     isBlocked: false,
     sourceInboxItemId: data.sourceInboxItemId || null,
+    steps: useCommunicationCanevas ? buildSteps("communication") : [],
     completedAt: null,
+    outlookMeetings: [], // référence manuelle (pas de vraie intégration Outlook, voir plus bas)
   });
   await storage.logHistory("Task", task.id, "created", { title: task.title });
   return task;
+}
+
+/** Coche/décoche une étape du canevas Communication — même principe que projects.js/meetings.js.
+ *  `doneAt` horodate la coche (retour de Charles-Henri : voir à quel moment un point de la
+ *  checklist a été traité), affiché par js/components/canevas.js à côté de l'étape cochée. */
+export async function toggleStep(id, stepKey, done) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const steps = (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s));
+  return storage.put(COLLECTION, { ...current, steps });
+}
+
+/**
+ * Association manuelle à une réunion Outlook (§ retour de Charles-Henri) — pas de vraie
+ * intégration Microsoft Graph (authentification, synchro) : juste un titre + une date que
+ * Charles-Henri note lui-même sur la tâche, visible dans les deux sens... mais uniquement
+ * depuis la tâche, puisque l'app n'a aucun accès à Outlook lui-même. Un vrai aller-retour
+ * avec Outlook serait un chantier à part (OAuth, permissions IT) — voir le doc de suivi.
+ */
+export async function addOutlookMeeting(id, { title, date }) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const outlookMeetings = [...(current.outlookMeetings || []), { id: generateId(), title, date: date || null }];
+  return storage.put(COLLECTION, { ...current, outlookMeetings });
+}
+
+export async function removeOutlookMeeting(id, outlookId) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const outlookMeetings = (current.outlookMeetings || []).filter((m) => m.id !== outlookId);
+  return storage.put(COLLECTION, { ...current, outlookMeetings });
 }
 
 export function listAll() {

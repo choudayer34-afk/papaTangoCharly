@@ -27,6 +27,19 @@ export function subscribePending(callback) {
   return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "pending")));
 }
 
+/**
+ * Éléments qualifiés en "Information" ou "Idée" (§47 "information de contexte") : ils ne
+ * deviennent jamais une tâche, mais restaient jusqu'ici invisibles une fois qualifiés — retour
+ * de Charles-Henri ("les informations, idées, ne remontent pas"). Exposés au Dashboard.
+ */
+export function listKept() {
+  return storage.listAll(COLLECTION).then((items) => items.filter((i) => i.status === "kept"));
+}
+
+export function subscribeKept(callback) {
+  return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "kept")));
+}
+
 // Pour ces issues, l'entité résultante est déjà créée par la vue (js/views/inbox.js), qui
 // réutilise directement le domaine et — quand c'est possible — la modale de création déjà
 // existante (Projet, Ressource) plutôt que de dupliquer cette logique ici. `qualify()` se
@@ -60,9 +73,14 @@ export async function qualify(itemId, outcome, extra = {}) {
   if (outcome === "task") {
     const task = await createTask({
       title: extra.title || item.rawContent.slice(0, 120),
-      description: item.rawContent,
+      // La capture brute part toujours dans la description (Règle 3 : ne jamais rien
+      // perdre), même quand `extra.description` a été retouché à la qualification — pour
+      // ne jamais réduire "titre court" à "seule trace conservée" (retour de
+      // Charles-Henri : le détail semblait tronqué à la transformation en action).
+      description: extra.description !== undefined ? extra.description : item.rawContent,
       projectId: extra.projectId || null,
       dueDate: extra.dueDate || null,
+      type: extra.type || "action",
       sourceInboxItemId: item.id,
     });
     await storage.put(COLLECTION, { ...item, status: "processed", resultTaskId: task.id });
