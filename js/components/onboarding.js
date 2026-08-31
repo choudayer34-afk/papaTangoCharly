@@ -7,6 +7,11 @@
 import { openModal, closeModal } from "./modal.js";
 import * as preferencesApi from "../domain/preferences.js";
 
+// Guide complet (casquettes, cas d'usage détaillés, référence par onglet) — hébergé hors
+// code (retour de Charles-Henri : "j'y accède comment depuis l'appli ?"), un lien suffit,
+// pas besoin de dupliquer tout ce contenu dans l'app elle-même.
+const FULL_GUIDE_URL = "https://claude.ai/code/artifact/e6ebc02e-1788-4256-affb-0f5ba9432511";
+
 const TOUR_STEPS = [
   {
     emoji: "🧭",
@@ -36,7 +41,7 @@ const TOUR_STEPS = [
   {
     emoji: "🎉",
     title: "C'est parti",
-    text: "Tu peux revoir cette visite, ou la distinction Tâche/Suivi, à tout moment avec le bouton ❓ en bas à gauche.",
+    text: "Tu peux revoir cette visite, la distinction Tâche/Suivi, ou ouvrir le guide complet (casquette par casquette, cas d'usage détaillés) à tout moment avec le bouton ❓ en bas à gauche.",
   },
 ];
 
@@ -106,6 +111,7 @@ function openHelpModal() {
     <div class="section-title">S'y retrouver plus tard</div>
     <p>Chaque fiche garde son 🕒 Historique. Le bouton 🕒 Tout l'historique sur l'Accueil ouvre le fil complet, tous types confondus.</p>
 
+    <a id="full-guide-link" href="${FULL_GUIDE_URL}" target="_blank" rel="noopener" class="btn btn-secondary btn-block" style="margin-top:8px;text-decoration:none;">📖 Ouvrir le guide complet</a>
     <button id="replay-tour-btn" class="btn btn-secondary btn-block" style="margin-top:8px;">🧭 Revoir la visite guidée</button>
   `;
 
