@@ -11,6 +11,7 @@ import * as projectsApi from "../domain/projects.js";
 import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as resourcesApi from "../domain/resources.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal } from "./modal.js";
 import { showToast } from "./toast.js";
 import { openQualifyModal } from "../views/inbox.js";
@@ -20,6 +21,12 @@ import { openPersonDetail } from "../views/people.js";
 import { openResourceDetail } from "../views/resources.js";
 
 export async function openWeeklyReview() {
+  // Rappel de rythme (§ piste UX du 31/08/2026, retour de Charles-Henri : "il y a du retard
+  // partout") : horodater le lancement ici, pas la fermeture — l'engagement dans la revue
+  // compte déjà, pas besoin d'attendre qu'elle soit "terminée" (aucune notion de session ici,
+  // voir le commentaire en tête de fichier).
+  preferencesApi.markWeeklyReviewDone();
+
   const [inboxPending, tasks, projects, people, followUps, resources] = await Promise.all([
     inboxApi.listPending(),
     tasksApi.listAll(),
