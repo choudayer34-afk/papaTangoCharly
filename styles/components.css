@@ -16,6 +16,13 @@ a { color: inherit; }
   margin: 0 auto;
   padding-bottom: calc(var(--nav-height) + var(--space-5));
 }
+/* Le tableau de pilotage (Kanban) prend toute la largeur en mode web (retour de
+   Charles-Henri : éviter la scrollbar horizontale) — appliqué seulement à partir d'une
+   largeur d'écran où ça a du sens ; en dessous, #app garde sa largeur habituelle et le
+   Kanban garde son défilement horizontal par colonnes (comportement mobile inchangé). */
+@media (min-width: 900px) {
+  #app.app-wide { max-width: none; padding-left: var(--space-5); padding-right: var(--space-5); }
+}
 
 /* ---------- Layout / Header ---------- */
 .topbar {
@@ -48,10 +55,12 @@ a { color: inherit; }
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   display: flex;
+  overflow-x: auto;
   z-index: 20;
 }
 .bottom-nav a {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 64px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -61,6 +70,11 @@ a { color: inherit; }
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   transition: color var(--transition);
+}
+/* Sur les écrans assez larges pour tout faire tenir, revenir à une répartition égale plutôt
+   que de laisser 8 entrées collées à gauche avec du vide à droite. */
+@media (min-width: 560px) {
+  .bottom-nav a { flex: 1; }
 }
 .bottom-nav a .icon { font-size: 20px; }
 .bottom-nav a.active { color: var(--color-primary); font-weight: 600; }
@@ -245,6 +259,31 @@ a { color: inherit; }
   padding: var(--space-3);
   min-height: 120px;
   scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+}
+/* En mode web plein écran (#app.app-wide, >= 900px), les colonnes se répartissent la
+   largeur disponible plutôt que de défiler horizontalement (retour de Charles-Henri). Le
+   mode mobile n'est jamais concerné : il garde le flex + scroll-snap ci-dessus. */
+@media (min-width: 900px) {
+  #app.app-wide .kanban-board {
+    overflow-x: visible;
+    scroll-snap-type: none;
+    margin: 0;
+    padding-left: 0;
+    padding-right: 0;
+    align-items: flex-start;
+  }
+  #app.app-wide .kanban-column { flex: 1 1 0; min-width: 0; }
+}
+/* Chaque colonne défile ses propres cartes indépendamment (retour de Charles-Henri : les
+   titres de colonne ne doivent pas disparaître au scroll) — l'en-tête reste donc hors de
+   cette zone, jamais besoin de position:sticky ni de calcul de décalage. */
+.kanban-column-cards {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(100dvh - 260px);
 }
 .kanban-column-header {
   display: flex;
@@ -335,16 +374,29 @@ a { color: inherit; }
   width: 100%;
   max-width: 520px;
   max-height: calc(100dvh - 48px);
-  overflow-y: auto;
+  /* Colonne flex plutôt qu'un simple overflow-y sur toute la modale : les boutons
+     d'action doivent rester visibles sans avoir à descendre tout en bas du contenu
+     (titre + boutons hors du scroll, seul le corps défile). */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 @media (min-width: 640px) {
   .modal { border-radius: var(--radius-lg); }
 }
-.modal h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); }
+.modal h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); flex: none; }
+.modal .modal-body {
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
 .modal .modal-actions {
   display: flex;
   gap: var(--space-2);
   margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  flex: none;
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -419,6 +471,104 @@ a { color: inherit; }
   background: var(--color-primary);
   color: var(--color-text-inverse);
   border-color: var(--color-primary);
+}
+
+/* Variante "radio" du chip — même look, mais wrap un <input type="radio"/checkbox"> plutôt
+   qu'un <button>, pour les choix à sélection unique dans un formulaire (ex. sens d'un Suivi). */
+.chip-radio {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip-radio input { width: auto; margin: 0; }
+.chip-radio:has(input:checked) {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-color: var(--color-primary);
+}
+
+/* Titre de section + action associée (ex. "+ Ajouter" par bloc sur la fiche projet) */
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+.section-header-row .section-title { margin-bottom: 0; }
+
+/* ---------- Calendrier (§26) ---------- */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.cal-weekday {
+  background: var(--color-surface-alt);
+  text-align: center;
+  padding: var(--space-2) 0;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.cal-cell {
+  background: var(--color-surface);
+  min-height: 84px;
+  padding: 4px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.cal-cell-outside { background: var(--color-bg); color: var(--color-text-muted); }
+.cal-cell-outside .cal-cell-num { opacity: 0.4; }
+.cal-cell-today .cal-cell-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+.cal-cell-num { font-size: var(--font-size-sm); font-weight: 600; margin-bottom: 2px; }
+.cal-drop-target { background: var(--color-primary-light); }
+.cal-pills { display: flex; flex-direction: column; gap: 2px; }
+.cal-pill {
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--color-surface-alt);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: grab;
+}
+.cal-more { font-size: 11px; color: var(--color-text-muted); padding-left: 4px; }
+.cal-week-day-label {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin: var(--space-3) 0 var(--space-2);
 }
 
 /* ---------- Toast ---------- */
