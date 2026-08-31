@@ -85,7 +85,10 @@ export function renderInbox(container) {
   return unsubscribe;
 }
 
-function openQualifyModal(item) {
+/** Exportée pour la Revue hebdomadaire guidée (§51, components/weeklyReview.js), qui doit
+ *  pouvoir sauter directement sur la qualification d'un élément Inbox sans dupliquer ce
+ *  choix de type ailleurs. */
+export function openQualifyModal(item) {
   const body = document.createElement("div");
   const raw = document.createElement("div");
   raw.className = "item-raw card";
@@ -112,6 +115,18 @@ function openQualifyModal(item) {
   body.appendChild(grid);
 
   openModal({ title: "Traiter", body, actions: [{ label: "Plus tard", variant: "ghost" }] });
+}
+
+/**
+ * Exportée pour la capture express (js/components/capture.js, "+ Préciser maintenant") : elle
+ * peut sauter directement sur un type choisi au moment de la capture plutôt que de repasser
+ * par l'Inbox et le choix "Qu'est-ce que c'est ?" — réutilise exactement le même dispatcheur
+ * que la qualification normale, pour ne jamais dupliquer cette logique.
+ */
+export function openQualifyChoice(item, key) {
+  const choice = QUALIFY_CHOICES.find((c) => c.key === key);
+  if (!choice) return openQualifyModal(item);
+  return handleChoice(item, choice);
 }
 
 async function handleChoice(item, choice) {
@@ -157,6 +172,10 @@ async function openTaskFromInboxModal(item) {
       <input id="task-title" type="text" value="${escapeAttr(item.rawContent.slice(0, 80))}" />
     </div>
     <div class="field">
+      <label for="task-description">Description</label>
+      <textarea id="task-description" placeholder="Le détail — la capture d'origine part ici par défaut, rien n'est perdu">${escapeHtml(item.rawContent)}</textarea>
+    </div>
+    <div class="field">
       <label for="task-due">Pour quand ? (optionnel)</label>
       <input id="task-due" type="date" />
     </div>
@@ -166,6 +185,10 @@ async function openTaskFromInboxModal(item) {
         <option value="">— Aucun —</option>
         ${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
       </select>
+    </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input id="task-communication" type="checkbox" style="width:auto;" />
+      <label for="task-communication" style="margin:0;">📣 C'est une communication (article, message) — activer son canevas de production</label>
     </div>
   `;
 
@@ -181,9 +204,11 @@ async function openTaskFromInboxModal(item) {
         onClick: async () => {
           const title = bodyEl.querySelector("#task-title").value.trim();
           if (!title) return;
+          const description = bodyEl.querySelector("#task-description").value.trim();
           const dueDate = bodyEl.querySelector("#task-due").value || null;
           const projectId = bodyEl.querySelector("#task-project").value || null;
-          await inboxApi.qualify(item.id, "task", { title, dueDate, projectId });
+          const type = bodyEl.querySelector("#task-communication").checked ? "communication" : "action";
+          await inboxApi.qualify(item.id, "task", { title, description, dueDate, projectId, type });
           close();
           showToast("Action créée");
         },
@@ -305,6 +330,12 @@ async function openMeetingFromInboxModal(item) {
       <textarea id="mt-objective" placeholder="Qu'est-ce qu'on cherche à obtenir de cette réunion ?"></textarea>
     </div>
     <div class="field">
+      <label for="mt-canevas">Canevas (optionnel)</label>
+      <select id="mt-canevas">
+        ${meetingsApi.CANEVAS_OPTIONS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
       <label for="mt-project">Projet (optionnel)</label>
       <select id="mt-project">
         <option value="">— Aucun —</option>
@@ -329,6 +360,7 @@ async function openMeetingFromInboxModal(item) {
             title,
             date: bodyEl.querySelector("#mt-date").value || null,
             objective: bodyEl.querySelector("#mt-objective").value.trim(),
+            canevasKey: bodyEl.querySelector("#mt-canevas").value,
             projectId: bodyEl.querySelector("#mt-project").value || null,
           });
           await inboxApi.qualify(item.id, "meeting", { id: meeting.id });

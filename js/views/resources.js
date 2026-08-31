@@ -238,8 +238,10 @@ export async function openResourceDetail(resource, projects, tasks) {
     <div id="res-projects-links"></div>
     <div class="section-title">✅ Tâches liées</div>
     <div id="res-tasks-links"></div>
-    <div class="section-title">🕒 Historique (${resourceHistory.length})</div>
-    <div class="card" id="res-history" style="margin-bottom:16px;"></div>
+    <details ${resourceHistory.length > 6 ? "" : "open"}>
+      <summary class="section-title" style="cursor:pointer;">🕒 Historique (${resourceHistory.length})</summary>
+      <div class="card" id="res-history" style="margin-top:8px;margin-bottom:16px;"></div>
+    </details>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -327,6 +329,10 @@ export async function openResourceDetail(resource, projects, tasks) {
 /**
  * Liste compacte de ressources déjà liées, avec un bouton "Délier" optionnel — utilisée
  * depuis la fiche projet et la fiche tâche pour afficher §41 sans dupliquer la ressource.
+ *
+ * Retour de Charles-Henri : pas besoin de voir l'URL complète ici, juste pouvoir cliquer sur
+ * le titre pour ouvrir la ressource et un bouton pour copier le lien si besoin (ex. le coller
+ * ailleurs) — l'URL brute n'apporte rien à l'affichage une fois qu'on peut faire les deux.
  */
 export function renderResourceList(container, resources, { onUnlink } = {}) {
   if (!resources.length) {
@@ -338,12 +344,28 @@ export function renderResourceList(container, resources, { onUnlink } = {}) {
     const info = resourcesApi.typeInfo(r.type);
     const row = document.createElement("div");
     row.className = "item-row";
-    row.innerHTML = `
-      <div class="item-main">
-        <div class="item-title">${info.emoji} ${escapeHtml(r.title)}</div>
-        ${r.url ? `<div class="item-meta">${escapeHtml(r.url)}</div>` : ""}
-      </div>
-    `;
+    const main = document.createElement("div");
+    main.className = "item-main";
+    main.innerHTML = r.url
+      ? `<a href="${escapeAttr(r.url)}" target="_blank" rel="noopener" class="item-title" style="text-decoration:none;">${info.emoji} ${escapeHtml(r.title)}</a>`
+      : `<div class="item-title">${info.emoji} ${escapeHtml(r.title)}</div>`;
+    row.appendChild(main);
+    if (r.url) {
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "btn btn-ghost btn-sm";
+      copyBtn.textContent = "📋 Copier";
+      copyBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        try {
+          await navigator.clipboard.writeText(r.url);
+          showToast("Lien copié");
+        } catch {
+          showToast("Impossible de copier le lien");
+        }
+      });
+      row.appendChild(copyBtn);
+    }
     if (onUnlink) {
       const btn = document.createElement("button");
       btn.className = "btn btn-ghost btn-sm";
@@ -358,24 +380,71 @@ export function renderResourceList(container, resources, { onUnlink } = {}) {
   }
 }
 
-/** Petite modale de sélection pour lier une ressource déjà existante (Règle 8 : jamais de duplication). */
+/**
+ * Petite modale de sélection pour lier une ressource déjà existante (Règle 8 : jamais de
+ * duplication) — recherche texte + filtre par type (retour de Charles-Henri : utile dès que
+ * la bibliothèque de ressources grandit).
+ */
 export function openResourcePickerModal(candidates, onPick, onCancel) {
   const body = document.createElement("div");
-  const list = document.createElement("div");
-  list.className = "card";
-  for (const r of candidates) {
-    const info = resourcesApi.typeInfo(r.type);
-    const row = document.createElement("div");
-    row.className = "item-row";
-    row.style.cursor = "pointer";
-    row.innerHTML = `<div class="item-main"><div class="item-title">${info.emoji} ${escapeHtml(r.title)}</div></div>`;
-    row.addEventListener("click", async () => {
-      await onPick(r);
-      close();
+  body.innerHTML = `
+    <div class="field">
+      <input id="res-picker-search" type="text" placeholder="Rechercher par titre..." />
+    </div>
+    <div class="chip-row" id="res-picker-types" style="flex-wrap:wrap;"></div>
+    <div class="card" id="res-picker-list"></div>
+  `;
+  const searchEl = body.querySelector("#res-picker-search");
+  const typesEl = body.querySelector("#res-picker-types");
+  const listEl = body.querySelector("#res-picker-list");
+
+  const availableTypes = [...new Set(candidates.map((r) => r.type))];
+  let activeType = "all";
+  let query = "";
+
+  typesEl.innerHTML = [`<button type="button" class="chip active" data-type="all">Tous</button>`]
+    .concat(availableTypes.map((t) => `<button type="button" class="chip" data-type="${t}">${resourcesApi.typeInfo(t).emoji} ${resourcesApi.typeInfo(t).label}</button>`))
+    .join("");
+
+  function renderList() {
+    const filtered = candidates.filter((r) => {
+      if (activeType !== "all" && r.type !== activeType) return false;
+      if (query && !r.title.toLowerCase().includes(query)) return false;
+      return true;
     });
-    list.appendChild(row);
+    if (!filtered.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ne correspond.</div>`;
+      return;
+    }
+    listEl.innerHTML = "";
+    for (const r of filtered) {
+      const info = resourcesApi.typeInfo(r.type);
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `<div class="item-main"><div class="item-title">${info.emoji} ${escapeHtml(r.title)}</div></div>`;
+      row.addEventListener("click", async () => {
+        await onPick(r);
+        close();
+      });
+      listEl.appendChild(row);
+    }
   }
-  body.appendChild(list);
+
+  searchEl.addEventListener("input", () => {
+    query = searchEl.value.trim().toLowerCase();
+    renderList();
+  });
+  typesEl.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      activeType = chip.dataset.type;
+      typesEl.querySelectorAll(".chip").forEach((c) => c.classList.toggle("active", c === chip));
+      renderList();
+    });
+  });
+
+  renderList();
+
   const { close } = openModal({
     title: "Lier une ressource",
     body,

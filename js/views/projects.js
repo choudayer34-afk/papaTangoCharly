@@ -8,11 +8,16 @@ import * as followUpsApi from "../domain/followups.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
+import { renderCanevas } from "../components/canevas.js";
+import { openCreateTaskModal, openTaskDetail } from "./kanban.js";
+import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
+import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
 
 export function renderProjects(container) {
   container.innerHTML = `
@@ -23,18 +28,64 @@ export function renderProjects(container) {
       </div>
       <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
     </div>
-    <div class="view"><div id="projects-list"></div></div>
+    <div class="view">
+      <div class="chip-row" id="sort-toggle">
+        <button type="button" class="chip" data-sort="manual">✋ Ordre manuel</button>
+        <button type="button" class="chip" data-sort="progress">📊 Avancement</button>
+      </div>
+      <div class="chip-row" id="category-filters" style="flex-wrap:wrap;"></div>
+      <div id="projects-list"></div>
+    </div>
   `;
 
   const listEl = container.querySelector("#projects-list");
   const subtitleEl = container.querySelector("#projects-subtitle");
+  const sortToggleEl = container.querySelector("#sort-toggle");
+  const categoryFiltersEl = container.querySelector("#category-filters");
   container.querySelector("#new-project-btn").addEventListener("click", () => openCreateProjectModal());
 
   let projects = [];
   let tasks = [];
+  let sortMode = "manual";
+  let categories = {};
+  let categoryFilter = "all";
+
+  preferencesApi.getPreferences().then((prefs) => {
+    sortMode = prefs.projectSort || "manual";
+    categories = prefs.categories || {};
+    updateSortToggle();
+    render();
+  });
+
+  function updateSortToggle() {
+    sortToggleEl.querySelectorAll("[data-sort]").forEach((chip) => chip.classList.toggle("active", chip.dataset.sort === sortMode));
+  }
+  sortToggleEl.querySelectorAll("[data-sort]").forEach((chip) => {
+    chip.addEventListener("click", async () => {
+      sortMode = chip.dataset.sort;
+      updateSortToggle();
+      await preferencesApi.setProjectSort(sortMode);
+      render();
+    });
+  });
 
   function render() {
     subtitleEl.textContent = projects.length ? `${projects.length} projet(s)` : "Aucun projet";
+
+    const availableCategories = [...new Set(projects.map((p) => p.category).filter(Boolean))];
+    categoryFiltersEl.innerHTML = [`<button type="button" class="chip${categoryFilter === "all" ? " active" : ""}" data-cat="all">Toutes</button>`]
+      .concat(
+        availableCategories.map(
+          (c) => `<button type="button" class="chip${categoryFilter === c ? " active" : ""}" data-cat="${escapeAttr(c)}">${preferencesApi.categoryIcon(categories, c)} ${escapeHtml(c)}</button>`
+        )
+      )
+      .join("");
+    categoryFiltersEl.querySelectorAll("[data-cat]").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        categoryFilter = chip.dataset.cat;
+        render();
+      });
+    });
 
     if (!projects.length) {
       listEl.innerHTML = `
@@ -45,18 +96,27 @@ export function renderProjects(container) {
       return;
     }
 
+    const filtered = categoryFilter === "all" ? projects : projects.filter((p) => p.category === categoryFilter);
+    const tasksByProject = new Map();
+    for (const project of filtered) tasksByProject.set(project.id, tasks.filter((t) => t.projectId === project.id));
+    const ordered = projectsApi.sortProjects(filtered, sortMode, tasksByProject);
+    const orderedIds = ordered.map((p) => p.id);
+
     listEl.innerHTML = "";
-    for (const project of projects) {
-      const projectTasks = tasks.filter((t) => t.projectId === project.id);
+    for (const project of ordered) {
+      const projectTasks = tasksByProject.get(project.id) || [];
       const progress = projectsApi.computeProgress(projectTasks);
+      const icon = preferencesApi.categoryIcon(categories, project.category);
 
       const card = document.createElement("div");
       card.className = "card";
       card.style.marginBottom = "12px";
       card.style.cursor = "pointer";
+      card.draggable = sortMode === "manual";
+      if (sortMode === "manual") card.style.cursor = "grab";
       card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <div class="item-title">${escapeHtml(project.name)}</div>
+          <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}</div>
           <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
         </div>
         ${project.objective ? `<div class="item-meta" style="margin-bottom:8px;">${escapeHtml(project.objective)}</div>` : ""}
@@ -71,7 +131,36 @@ export function renderProjects(container) {
           <span>⚪ ${progress.todo + progress.follow_up} reste</span>
         </div>
       `;
-      card.addEventListener("click", () => openProjectDetail(project, projectTasks));
+      card.addEventListener("click", (e) => {
+        // Un glisser-déposer qui se termine peut déclencher un click parasite — sortMode
+        // "manual" est le seul cas où draggable est vrai, donc le seul où ça peut arriver.
+        if (card.dataset.justDragged) return;
+        openProjectDetail(project, projectTasks);
+      });
+      card.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/project-id", project.id);
+      });
+      card.addEventListener("dragover", (e) => {
+        if (sortMode !== "manual") return;
+        e.preventDefault();
+        card.classList.add("drag-over");
+      });
+      card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
+      card.addEventListener("drop", async (e) => {
+        if (sortMode !== "manual") return;
+        e.preventDefault();
+        card.classList.remove("drag-over");
+        const draggedId = e.dataTransfer.getData("text/project-id");
+        if (!draggedId || draggedId === project.id) return;
+        const ids = [...orderedIds];
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(project.id);
+        if (from < 0 || to < 0) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        card.dataset.justDragged = "1";
+        await projectsApi.reorderProjects(ids);
+        setTimeout(() => delete card.dataset.justDragged, 300);
+      });
       listEl.appendChild(card);
     }
   }
@@ -94,14 +183,26 @@ export function renderProjects(container) {
 /**
  * Exportée pour être réutilisée depuis la qualification Inbox (§13) avec un titre
  * pré-rempli à partir de la capture brute, sans dupliquer ce formulaire — même pattern
- * que openCreateResourceModal côté Ressources.
+ * que openCreateResourceModal côté Ressources. Asynchrone (retour de Charles-Henri, champ
+ * Catégorie) : le champ propose les catégories déjà utilisées via une datalist, il faut donc
+ * les charger avant de construire le formulaire.
  */
-export function openCreateProjectModal(prefill = {}) {
+export async function openCreateProjectModal(prefill = {}) {
+  const prefs = await preferencesApi.getPreferences();
+  const categoryNames = Object.keys(prefs.categories || {});
+
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
       <label for="project-name">Nom</label>
       <input id="project-name" type="text" placeholder="Ex. Communication Agro" value="${escapeAttr(prefill.name || "")}" />
+    </div>
+    <div class="field">
+      <label for="project-category">Catégorie (optionnel — CSE, Modernisation...)</label>
+      <input id="project-category" type="text" list="project-category-options" placeholder="Choisir ou créer une catégorie" />
+      <datalist id="project-category-options">
+        ${categoryNames.map((c) => `<option value="${escapeAttr(c)}"></option>`).join("")}
+      </datalist>
     </div>
     <div class="field">
       <label for="project-objective">Objectif (optionnel)</label>
@@ -120,8 +221,11 @@ export function openCreateProjectModal(prefill = {}) {
         onClick: async () => {
           const name = bodyEl.querySelector("#project-name").value.trim();
           if (!name) return;
+          const category = bodyEl.querySelector("#project-category").value.trim();
+          if (category) await preferencesApi.registerCategory(category);
           const project = await projectsApi.createProject({
             name,
+            category: category || null,
             objective: bodyEl.querySelector("#project-objective").value.trim(),
           });
           close();
@@ -135,18 +239,21 @@ export function openCreateProjectModal(prefill = {}) {
 
 export async function openProjectDetail(project, tasks) {
   const progress = projectsApi.computeProgress(tasks);
-  const [allResources, allFollowUps, allMeetings, allDecisions, allHistory] = await Promise.all([
+  const [allProjects, allResources, allFollowUps, allMeetings, allDecisions, allHistory, prefs] = await Promise.all([
+    projectsApi.listAll(),
     resourcesApi.listAll(),
     followUpsApi.listAll(),
     meetingsApi.listAll(),
     decisionsApi.listAll(),
     historyApi.listAll(),
+    preferencesApi.getPreferences(),
   ]);
   const linkedResources = allResources.filter((r) => (r.projectIds || []).includes(project.id));
   const unlinkedResources = allResources.filter((r) => !(r.projectIds || []).includes(project.id));
   const linkedFollowUps = allFollowUps.filter((f) => f.projectId === project.id);
   const linkedMeetings = allMeetings.filter((m) => m.projectId === project.id);
   const linkedDecisions = allDecisions.filter((d) => d.projectId === project.id);
+  const parts = project.parts || [];
 
   // §46 : l'historique d'un projet n'est pas que le sien — c'est le fil de tout ce qui lui
   // est rattaché (tâches, suivis, réunions, décisions, ressources), exactement comme
@@ -171,6 +278,13 @@ export async function openProjectDetail(project, tasks) {
       <input id="detail-name" type="text" value="${escapeAttr(project.name)}" />
     </div>
     <div class="field">
+      <label for="detail-category">Catégorie (optionnel)</label>
+      <input id="detail-category" type="text" list="detail-category-options" value="${escapeAttr(project.category || "")}" placeholder="Choisir ou créer une catégorie" />
+      <datalist id="detail-category-options">
+        ${Object.keys(prefs.categories || {}).map((c) => `<option value="${escapeAttr(c)}"></option>`).join("")}
+      </datalist>
+    </div>
+    <div class="field">
       <label for="detail-objective">Objectif</label>
       <textarea id="detail-objective">${escapeHtml(project.objective || "")}</textarea>
     </div>
@@ -178,13 +292,34 @@ export async function openProjectDetail(project, tasks) {
       <label for="detail-criteria">Critère de réussite</label>
       <textarea id="detail-criteria" placeholder="Comment saurai-je que ce projet est réussi ?">${escapeHtml(project.successCriteria || "")}</textarea>
     </div>
-    <div class="section-title" style="margin-top:0;">Tâches (${progress.total})</div>
+    <div id="detail-canevas"></div>
+    <div class="section-header-row">
+      <div class="section-title">🧩 Sous-parties (${parts.length})</div>
+    </div>
+    <div class="card" id="detail-parts" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input id="new-part-label" type="text" placeholder="Ex. Traduction" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+      <button id="add-part-btn" type="button" class="btn btn-secondary btn-sm">+ Sous-partie</button>
+    </div>
+    <div class="section-header-row">
+      <div class="section-title">Tâches (${progress.total})</div>
+      <button type="button" id="add-task-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+    </div>
     <div class="card" id="detail-tasks" style="margin-bottom:16px;"></div>
-    <div class="section-title">👀 Suivis (${linkedFollowUps.length})</div>
+    <div class="section-header-row">
+      <div class="section-title">👀 Suivis (${linkedFollowUps.length})</div>
+      <button type="button" id="add-followup-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+    </div>
     <div class="card" id="detail-followups" style="margin-bottom:16px;"></div>
-    <div class="section-title">🗓️ Réunions (${linkedMeetings.length})</div>
+    <div class="section-header-row">
+      <div class="section-title">🗓️ Réunions (${linkedMeetings.length})</div>
+      <button type="button" id="add-meeting-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+    </div>
     <div class="card" id="detail-meetings" style="margin-bottom:16px;"></div>
-    <div class="section-title">🗳️ Décisions (${linkedDecisions.length})</div>
+    <div class="section-header-row">
+      <div class="section-title">🗳️ Décisions (${linkedDecisions.length})</div>
+      <button type="button" id="add-decision-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+    </div>
     <div class="card" id="detail-decisions" style="margin-bottom:16px;"></div>
     <div class="section-title">📎 Ressources (${linkedResources.length})</div>
     <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
@@ -192,8 +327,10 @@ export async function openProjectDetail(project, tasks) {
       <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
       <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
     </div>
-    <div class="section-title">🕒 Historique (${projectHistory.length})</div>
-    <div class="card" id="detail-history" style="margin-bottom:16px;"></div>
+    <details ${projectHistory.length > 6 ? "" : "open"}>
+      <summary class="section-title" style="cursor:pointer;">🕒 Historique (${projectHistory.length})</summary>
+      <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
+    </details>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -202,6 +339,17 @@ export async function openProjectDetail(project, tasks) {
     </div>
   `;
 
+  // "+ Ajouter" par bloc (retour de Charles-Henri : pouvoir créer directement depuis la
+  // fiche projet, pour chaque type, sans passer par le fil conducteur générique) — réutilise
+  // les mêmes modales de création que partout ailleurs, préremplies avec ce projet.
+  // Va rechercher les tâches à jour plutôt que de réutiliser le tableau `tasks` reçu en
+  // paramètre (un instantané figé au moment de l'ouverture) : sinon une tâche tout juste
+  // créée depuis ce même "+ Ajouter" n'apparaîtrait pas en rouvrant la fiche.
+  const reopenProject = async () => {
+    const freshTasks = (await tasksApi.listAll()).filter((t) => t.projectId === project.id);
+    openProjectDetail(project, freshTasks);
+  };
+
   const tasksEl = body.querySelector("#detail-tasks");
   if (!tasks.length) {
     tasksEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune tâche liée pour l'instant.</div>`;
@@ -209,12 +357,20 @@ export async function openProjectDetail(project, tasks) {
     for (const task of tasks) {
       const row = document.createElement("div");
       row.className = "item-row";
+      row.style.cursor = "pointer";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(task.title)}</div>
         </div>
         <span class="badge badge-${task.status}">${tasksApi.STATUS_LABELS[task.status]}</span>
       `;
+      // Retour de Charles-Henri : pouvoir cliquer sur un sous-élément pour "aller dedans" —
+      // `onClose` ramène ici (fiche projet) plutôt que de révéler l'écran du dessous une fois
+      // la fiche tâche fermée, puisqu'on est arrivé sur cette tâche depuis une autre modale.
+      row.addEventListener("click", () => {
+        closeModal();
+        openTaskDetail(task, allProjects, { onClose: reopenProject });
+      });
       tasksEl.appendChild(row);
     }
   }
@@ -226,6 +382,7 @@ export async function openProjectDetail(project, tasks) {
     for (const f of linkedFollowUps) {
       const row = document.createElement("div");
       row.className = "item-row";
+      row.style.cursor = "pointer";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(f.title)}</div>
@@ -233,6 +390,10 @@ export async function openProjectDetail(project, tasks) {
         </div>
         <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
       `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openEditFollowUpModal(f, { onDone: reopenProject });
+      });
       followUpsEl.appendChild(row);
     }
   }
@@ -244,12 +405,17 @@ export async function openProjectDetail(project, tasks) {
     for (const m of linkedMeetings) {
       const row = document.createElement("div");
       row.className = "item-row";
+      row.style.cursor = "pointer";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(m.title)}</div>
           <div class="item-meta">${m.date ? formatDate(m.date) : "Pas de date"}${m.objective ? " · " + escapeHtml(m.objective) : ""}</div>
         </div>
       `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openRecentDetail({ kind: "meeting", emoji: "🗓️", data: m }, allProjects, { onClose: reopenProject });
+      });
       meetingsEl.appendChild(row);
     }
   }
@@ -261,12 +427,17 @@ export async function openProjectDetail(project, tasks) {
     for (const d of linkedDecisions) {
       const row = document.createElement("div");
       row.className = "item-row";
+      row.style.cursor = "pointer";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(d.title)}</div>
           <div class="item-meta">${escapeHtml(d.decision)}</div>
         </div>
       `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openRecentDetail({ kind: "decision", emoji: "🗳️", data: d }, allProjects, { onClose: reopenProject });
+      });
       decisionsEl.appendChild(row);
     }
   }
@@ -277,6 +448,77 @@ export async function openProjectDetail(project, tasks) {
   });
 
   renderHistoryTimeline(body.querySelector("#detail-history"), projectHistory);
+
+  renderCanevas(body.querySelector("#detail-canevas"), project.steps, async (stepKey, done) => {
+    await projectsApi.toggleStep(project.id, stepKey, done);
+  });
+
+  // Sous-parties (§ retour de Charles-Henri) : avancement d'un bloc de l'équipe sans passer
+  // par une Tâche — un clic cycle le statut ⚪ → 🔵 → 🟢 → ⚪.
+  const partsEl = body.querySelector("#detail-parts");
+  function renderParts() {
+    const currentParts = project.parts || [];
+    if (!currentParts.length) {
+      partsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune sous-partie pour l'instant.</div>`;
+      return;
+    }
+    partsEl.innerHTML = "";
+    for (const part of currentParts) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.innerHTML = `<div class="item-main"><div class="item-title">${escapeHtml(part.label)}</div></div>`;
+      const cycleBtn = document.createElement("button");
+      cycleBtn.type = "button";
+      cycleBtn.className = "btn btn-secondary btn-sm";
+      cycleBtn.textContent = `${projectsApi.PART_STATUS_ICONS[part.status]} ${projectsApi.PART_STATUS_LABELS[part.status]}`;
+      cycleBtn.addEventListener("click", async () => {
+        const idx = projectsApi.PART_STATUSES.indexOf(part.status);
+        const nextStatus = projectsApi.PART_STATUSES[(idx + 1) % projectsApi.PART_STATUSES.length];
+        await projectsApi.updatePartStatus(project.id, part.id, nextStatus);
+        part.status = nextStatus;
+        renderParts();
+      });
+      row.appendChild(cycleBtn);
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-ghost btn-sm";
+      removeBtn.textContent = "Retirer";
+      removeBtn.addEventListener("click", async () => {
+        await projectsApi.removePart(project.id, part.id);
+        project.parts = (project.parts || []).filter((p) => p.id !== part.id);
+        renderParts();
+      });
+      row.appendChild(removeBtn);
+      partsEl.appendChild(row);
+    }
+  }
+  renderParts();
+  body.querySelector("#add-part-btn").addEventListener("click", async () => {
+    const input = body.querySelector("#new-part-label");
+    const label = input.value.trim();
+    if (!label) return;
+    const updated = await projectsApi.addPart(project.id, label);
+    project.parts = updated.parts;
+    input.value = "";
+    renderParts();
+  });
+
+  body.querySelector("#add-task-inline").addEventListener("click", () => {
+    closeModal();
+    openCreateTaskModal({ projectId: project.id, onCreated: reopenProject, onCancel: reopenProject });
+  });
+  body.querySelector("#add-followup-inline").addEventListener("click", () => {
+    closeModal();
+    openCreateFollowUpModal({ projectId: project.id, onCreated: reopenProject, onCancel: reopenProject });
+  });
+  body.querySelector("#add-meeting-inline").addEventListener("click", () => {
+    closeModal();
+    openCreateMeetingModal({ projectId: project.id, onCreated: reopenProject, onCancel: reopenProject });
+  });
+  body.querySelector("#add-decision-inline").addEventListener("click", () => {
+    closeModal();
+    openCreateDecisionModal({ projectId: project.id, onCreated: reopenProject, onCancel: reopenProject });
+  });
 
   const linkRef = { type: "Project", id: project.id };
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
@@ -352,8 +594,11 @@ export async function openProjectDetail(project, tasks) {
         onClick: async () => {
           const name = bodyEl.querySelector("#detail-name").value.trim();
           if (!name) return;
+          const category = bodyEl.querySelector("#detail-category").value.trim();
+          if (category) await preferencesApi.registerCategory(category);
           await projectsApi.updateProject(project.id, {
             name,
+            category: category || null,
             objective: bodyEl.querySelector("#detail-objective").value.trim(),
             successCriteria: bodyEl.querySelector("#detail-criteria").value.trim(),
           });

@@ -9,11 +9,19 @@ import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
 import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import { openPersonDetail } from "./people.js";
+import { openProjectDetail } from "./projects.js";
+import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
+import { renderCanevas } from "../components/canevas.js";
+import { openWeeklyReview } from "../components/weeklyReview.js";
+import { openQualifyChoice } from "./inbox.js";
+
+const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
 export function renderDashboard(container) {
   container.innerHTML = `
@@ -22,17 +30,24 @@ export function renderDashboard(container) {
         <h1>Mon pilotage</h1>
         <div class="subtitle">${formatToday()}</div>
       </div>
+      <button id="weekly-review-btn" class="btn btn-secondary btn-sm">🧭 Revue hebdo</button>
     </div>
     <div class="view">
       <div class="stat-grid" id="stat-grid"></div>
+      <div id="due-soon-section"></div>
       <div id="followups-section"></div>
+      <div id="kept-section"></div>
       <div id="projects-section"></div>
       <div id="recent-section"></div>
     </div>
   `;
 
+  container.querySelector("#weekly-review-btn").addEventListener("click", () => openWeeklyReview());
+
   const statGrid = container.querySelector("#stat-grid");
+  const dueSoonSection = container.querySelector("#due-soon-section");
   const followUpsSection = container.querySelector("#followups-section");
+  const keptSection = container.querySelector("#kept-section");
   const projectsSection = container.querySelector("#projects-section");
   const recentSection = container.querySelector("#recent-section");
 
@@ -43,35 +58,196 @@ export function renderDashboard(container) {
   let decisions = [];
   let people = [];
   let followUps = [];
+  let keptItems = [];
+  let projectSortMode = "manual";
+  let categories = {};
+
+  preferencesApi.getPreferences().then((prefs) => {
+    projectSortMode = prefs.projectSort || "manual";
+    categories = prefs.categories || {};
+    renderProjectsSection();
+  });
+
+  /** Liste cliquable réutilisée par chaque carte chiffrée (retour de Charles-Henri : les
+   *  cartes >0 doivent pouvoir s'ouvrir pour voir le détail) — un même petit gabarit pour les
+   *  tâches, qu'il s'agisse de retards (avec la durée du retard), d'aujourd'hui, ou des
+   *  statuts À suivre/En attente. */
+  function openTaskListModal(title, list) {
+    const body = document.createElement("div");
+    const listEl = document.createElement("div");
+    listEl.className = "card";
+    if (!list.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici. 🎉</div>`;
+    } else {
+      for (const t of list) {
+        const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+        const late = tasksApi.isLate(t);
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.style.cursor = "pointer";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${t.isBlocked ? "🔴 " : ""}${escapeHtml(t.title)}</div>
+            <div class="item-meta">
+              ${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}${late ? ` · <strong style="color:var(--color-danger);">en retard depuis ${daysLate(t.dueDate)} j</strong>` : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
+            </div>
+          </div>
+          <span class="badge badge-${t.status}">${tasksApi.STATUS_LABELS[t.status]}</span>
+        `;
+        row.addEventListener("click", () => {
+          closeModal();
+          openTaskDetail(t, projects);
+        });
+        listEl.appendChild(row);
+      }
+    }
+    body.appendChild(listEl);
+    openModal({ title, body, actions: [{ label: "Fermer", variant: "ghost" }] });
+  }
+
+  function openFollowUpListModal(title, list) {
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    const body = document.createElement("div");
+    const listEl = document.createElement("div");
+    listEl.className = "card";
+    if (!list.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici. 🎉</div>`;
+    } else {
+      for (const f of list) {
+        const person = peopleById.get(f.personId);
+        const isToTell = f.direction === "to_tell";
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.style.cursor = person ? "pointer" : "default";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${isToTell ? "📣 " : ""}${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
+            <div class="item-meta">${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
+          </div>
+        `;
+        if (person) {
+          row.addEventListener("click", () => {
+            closeModal();
+            openPersonDetail(person, followUps);
+          });
+        }
+        listEl.appendChild(row);
+      }
+    }
+    body.appendChild(listEl);
+    openModal({ title, body, actions: [{ label: "Fermer", variant: "ghost" }] });
+  }
 
   function renderStats() {
-    const late = tasks.filter(tasksApi.isLate).length;
-    const followUp = tasks.filter((t) => t.status === "follow_up").length;
-    const waiting = tasks.filter((t) => t.status === "waiting").length;
-    const overdueFollowUps = followUps.filter(followUpsApi.isControlDue).length;
+    const lateList = tasks.filter(tasksApi.isLate);
+    const followUpList = tasks.filter((t) => t.status === "follow_up");
+    const waitingList = tasks.filter((t) => t.status === "waiting");
+    const todayList = tasks.filter(isDueToday);
+    const overdueFollowUpsList = followUps.filter(followUpsApi.isControlDue);
 
     statGrid.innerHTML = `
-      <div class="stat-tile stat-danger">
-        <div class="stat-value">${late}</div>
+      <div class="stat-tile stat-danger" id="stat-late" style="cursor:pointer;">
+        <div class="stat-value">${lateList.length}</div>
         <div class="stat-label">🔴 En retard</div>
       </div>
-      <div class="stat-tile">
+      <div class="stat-tile" id="stat-inbox" style="cursor:pointer;">
         <div class="stat-value">${inboxPendingCount}</div>
         <div class="stat-label">📥 À traiter</div>
       </div>
-      <div class="stat-tile stat-warning">
-        <div class="stat-value">${followUp}</div>
+      <div class="stat-tile" id="stat-today" style="cursor:pointer;">
+        <div class="stat-value">${todayList.length}</div>
+        <div class="stat-label">📅 Aujourd'hui</div>
+      </div>
+      <div class="stat-tile stat-warning" id="stat-followup" style="cursor:pointer;">
+        <div class="stat-value">${followUpList.length}</div>
         <div class="stat-label">👀 À suivre</div>
       </div>
-      <div class="stat-tile">
-        <div class="stat-value">${waiting}</div>
+      <div class="stat-tile" id="stat-waiting" style="cursor:pointer;">
+        <div class="stat-value">${waitingList.length}</div>
         <div class="stat-label">⏳ En attente</div>
       </div>
-      <div class="stat-tile ${overdueFollowUps ? "stat-danger" : ""}">
-        <div class="stat-value">${overdueFollowUps}</div>
+      <div class="stat-tile ${overdueFollowUpsList.length ? "stat-danger" : ""}" id="stat-relances" style="cursor:pointer;">
+        <div class="stat-value">${overdueFollowUpsList.length}</div>
         <div class="stat-label">📣 Relances dues</div>
       </div>
     `;
+    statGrid.querySelector("#stat-late").addEventListener("click", () => openTaskListModal("🔴 En retard", lateList));
+    statGrid.querySelector("#stat-inbox").addEventListener("click", () => {
+      location.hash = "#/inbox";
+    });
+    statGrid.querySelector("#stat-today").addEventListener("click", () => openTaskListModal("📅 Échéances d'aujourd'hui", todayList));
+    statGrid.querySelector("#stat-followup").addEventListener("click", () => openTaskListModal("👀 À suivre", followUpList));
+    statGrid.querySelector("#stat-waiting").addEventListener("click", () => openTaskListModal("⏳ En attente", waitingList));
+    statGrid.querySelector("#stat-relances").addEventListener("click", () => openFollowUpListModal("📣 Relances dues", overdueFollowUpsList));
+  }
+
+  /**
+   * Rubrique pliable/dépliable (retour de Charles-Henri) : les tâches non terminées dont
+   * l'échéance tombe dans les 7 prochains jours — distinct du retard (déjà couvert par la
+   * carte 🔴) et distinct d'"Aujourd'hui" (déjà sa propre carte), la vraie question ici est
+   * "qu'est-ce qui arrive cette semaine ?".
+   */
+  function renderDueSoonSection() {
+    const dueSoon = tasks.filter((t) => t.status !== "done" && t.dueDate && daysFromToday(t.dueDate) > 0 && daysFromToday(t.dueDate) <= 7);
+    dueSoonSection.innerHTML = `
+      <details ${dueSoon.length ? "open" : ""}>
+        <summary class="section-title" style="margin-top:0;cursor:pointer;">🗓️ À échéance dans les 7 jours (${dueSoon.length})</summary>
+        <div class="card" id="due-soon-list" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+    `;
+    const listEl = dueSoonSection.querySelector("#due-soon-list");
+    if (!dueSoon.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien cette semaine. 🎉</div>`;
+      return;
+    }
+    for (const t of [...dueSoon].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(t.title)}</div>
+          <div class="item-meta">${formatDate(t.dueDate)}</div>
+        </div>
+      `;
+      row.addEventListener("click", () => openTaskDetail(t, projects));
+      listEl.appendChild(row);
+    }
+  }
+
+  /**
+   * §47 "information de contexte" : retour de Charles-Henri, les Informations/Idées
+   * qualifiées depuis l'Inbox ne remontaient nulle part une fois traitées. Lecture simple,
+   * avec un raccourci pour les archiver directement d'ici si elles ne servent plus.
+   */
+  function renderKeptSection() {
+    if (!keptItems.length) {
+      keptSection.innerHTML = "";
+      return;
+    }
+    keptSection.innerHTML = `<div class="section-title">🧠 Informations & idées (${keptItems.length})</div>`;
+    const list = document.createElement("div");
+    list.className = "card";
+    for (const item of [...keptItems].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8)) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(item.rawContent)}</div>
+          <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}</div>
+        </div>
+      `;
+      const btn = document.createElement("button");
+      btn.className = "btn btn-ghost btn-sm";
+      btn.textContent = "Archiver";
+      btn.addEventListener("click", async () => {
+        await inboxApi.qualify(item.id, "archived");
+        showToast("Archivé");
+      });
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+    keptSection.appendChild(list);
   }
 
   /**
@@ -88,18 +264,19 @@ export function renderDashboard(container) {
       return;
     }
     const peopleById = new Map(people.map((p) => [p.id, p]));
-    followUpsSection.innerHTML = `<div class="section-title" style="margin-top:0;">📣 Suivis à relancer (${overdue.length})</div>`;
+    followUpsSection.innerHTML = `<div class="section-title" style="margin-top:0;">📣 Suivis en retard (${overdue.length})</div>`;
     const list = document.createElement("div");
     list.className = "card";
     for (const f of overdue) {
       const person = peopleById.get(f.personId);
+      const isToTell = f.direction === "to_tell";
       const row = document.createElement("div");
       row.className = "item-row";
       row.style.cursor = person ? "pointer" : "default";
       row.innerHTML = `
         <div class="item-main">
-          <div class="item-title">${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
-          <div class="item-meta">Contrôle prévu : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
+          <div class="item-title">${isToTell ? "📣 " : ""}${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
+          <div class="item-meta">${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
         </div>
         <span class="badge badge-late">🔴</span>
       `;
@@ -109,6 +286,11 @@ export function renderDashboard(container) {
     followUpsSection.appendChild(list);
   }
 
+  /**
+   * L'ordre des projets ici reprend celui de l'onglet Projets (retour de Charles-Henri) —
+   * même fonction de tri (`projectsApi.sortProjects`), même mode (avancement ou manuel) lu
+   * depuis les préférences, pour ne jamais avoir deux logiques d'ordonnancement qui divergent.
+   */
   function renderProjectsSection() {
     projectsSection.innerHTML = `<div class="section-title">📦 Mes projets</div>`;
     const active = projects.filter((p) => p.status === "active");
@@ -120,22 +302,29 @@ export function renderDashboard(container) {
         </div>`;
       return;
     }
+    const tasksByProject = new Map();
+    for (const project of active) tasksByProject.set(project.id, tasks.filter((t) => t.projectId === project.id));
+    const ordered = projectsApi.sortProjects(active, projectSortMode, tasksByProject);
+
     const list = document.createElement("div");
     list.className = "card";
-    for (const project of active) {
-      const projectTasks = tasks.filter((t) => t.projectId === project.id);
+    for (const project of ordered) {
+      const projectTasks = tasksByProject.get(project.id) || [];
       const progress = projectsApi.computeProgress(projectTasks);
+      const icon = preferencesApi.categoryIcon(categories, project.category);
       const row = document.createElement("div");
       row.className = "item-row";
+      row.style.cursor = "pointer";
       row.innerHTML = `
         <div class="item-main">
-          <div class="item-title">${escapeHtml(project.name)}</div>
+          <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}</div>
           <div style="height:5px;background:var(--color-surface-alt);border-radius:var(--radius-pill);overflow:hidden;margin-top:6px;">
             <div style="height:100%;width:${progress.percent}%;background:var(--color-primary);"></div>
           </div>
         </div>
         <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
       `;
+      row.addEventListener("click", () => openProjectDetail(project, projectTasks));
       list.appendChild(row);
     }
     projectsSection.appendChild(list);
@@ -192,11 +381,16 @@ export function renderDashboard(container) {
   const unsubTasks = tasksApi.subscribe((items) => {
     tasks = items;
     renderStats();
+    renderDueSoonSection();
     renderProjectsSection();
   });
   const unsubInbox = inboxApi.subscribePending((items) => {
     inboxPendingCount = items.length;
     renderStats();
+  });
+  const unsubKept = inboxApi.subscribeKept((items) => {
+    keptItems = items;
+    renderKeptSection();
   });
   const unsubProjects = projectsApi.subscribe((items) => {
     projects = items;
@@ -224,6 +418,7 @@ export function renderDashboard(container) {
   return function cleanup() {
     unsubTasks();
     unsubInbox();
+    unsubKept();
     unsubProjects();
     unsubMeetings();
     unsubDecisions();
@@ -269,6 +464,12 @@ export function openCreateMeetingModal(prefill = {}) {
       <label for="new-meeting-date">Date</label>
       <input id="new-meeting-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
     </div>
+    <div class="field">
+      <label for="new-meeting-canevas">Canevas (optionnel)</label>
+      <select id="new-meeting-canevas">
+        ${meetingsApi.CANEVAS_OPTIONS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
+      </select>
+    </div>
   `;
   const { bodyEl, close } = openModal({
     title: "Nouvelle réunion",
@@ -285,6 +486,7 @@ export function openCreateMeetingModal(prefill = {}) {
           const meeting = await meetingsApi.createMeeting({
             title,
             date: bodyEl.querySelector("#new-meeting-date").value || null,
+            canevasKey: bodyEl.querySelector("#new-meeting-canevas").value,
             projectId: prefill.projectId || null,
           });
           close();
@@ -344,7 +546,12 @@ export function openCreateDecisionModal(prefill = {}) {
  * spécifiques (objectif/notes vs décision/contexte) changeant selon item.kind ; le déroulé
  * complet Avant/Pendant/Après viendra avec les canevas pilotés par données (§14-19).
  */
-export function openRecentDetail(item, projects) {
+/**
+ * `onClose` (optionnel) : voir la même logique côté openTaskDetail (kanban.js) — nécessaire
+ * pour que cliquer sur une réunion/décision depuis le bloc correspondant de la fiche projet
+ * ramène à cette fiche projet en fermant/enregistrant plutôt que de révéler l'écran du dessous.
+ */
+export function openRecentDetail(item, projects, { onClose } = {}) {
   const isMeeting = item.kind === "meeting";
   const data = item.data;
 
@@ -386,6 +593,7 @@ export function openRecentDetail(item, projects) {
         ${projects.map((p) => `<option value="${p.id}" ${p.id === data.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
+    ${isMeeting ? `<div id="rd-canevas"></div>` : ""}
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -394,20 +602,26 @@ export function openRecentDetail(item, projects) {
     </div>
   `;
 
+  if (isMeeting) {
+    renderCanevas(body.querySelector("#rd-canevas"), data.steps, async (stepKey, done) => {
+      await meetingsApi.toggleStep(data.id, stepKey, done);
+    });
+  }
+
   const linkRef = { type: isMeeting ? "Meeting" : "Decision", id: data.id };
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();
     linkedItemsApi.openLinkPickerModal(linkRef, data.title, {
-      onLinked: () => openRecentDetail(item, projects),
-      onCancel: () => openRecentDetail(item, projects),
+      onLinked: () => openRecentDetail(item, projects, { onClose }),
+      onCancel: () => openRecentDetail(item, projects, { onClose }),
     });
   });
   body.querySelector("#create-linked-btn").addEventListener("click", () => {
     closeModal();
     linkedItemsApi.openCreateAndLinkModal(linkRef, data.title, {
-      onLinked: () => openRecentDetail(item, projects),
-      onCancel: () => openRecentDetail(item, projects),
+      onLinked: () => openRecentDetail(item, projects, { onClose }),
+      onCancel: () => openRecentDetail(item, projects, { onClose }),
     });
   });
 
@@ -415,7 +629,7 @@ export function openRecentDetail(item, projects) {
     title: `${item.emoji} ${data.title}`,
     body,
     actions: [
-      { label: "Fermer", variant: "ghost" },
+      { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
       {
         label: "🗑️ Supprimer",
         variant: "danger",
@@ -429,8 +643,9 @@ export function openRecentDetail(item, projects) {
               if (isMeeting) await meetingsApi.removeMeeting(data.id);
               else await decisionsApi.removeDecision(data.id);
               showToast(isMeeting ? "Réunion supprimée" : "Décision supprimée");
+              onClose?.();
             },
-            onCancel: () => openRecentDetail(item, projects),
+            onCancel: () => openRecentDetail(item, projects, { onClose }),
           });
         },
       },
@@ -457,10 +672,28 @@ export function openRecentDetail(item, projects) {
           }
           close();
           showToast(isMeeting ? "Réunion mise à jour" : "Décision mise à jour");
+          onClose?.();
         },
       },
     ],
   });
+}
+
+function isDueToday(task) {
+  if (!task.dueDate || task.status === "done") return false;
+  return daysFromToday(task.dueDate) === 0;
+}
+
+function daysLate(dateStr) {
+  return -daysFromToday(dateStr);
+}
+
+function daysFromToday(dateStr) {
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d.getTime() - today.getTime()) / 86400000);
 }
 
 function formatToday() {
