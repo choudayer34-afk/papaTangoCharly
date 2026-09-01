@@ -168,6 +168,41 @@ a { color: inherit; }
 }
 .search-fab:active { transform: scale(0.94); }
 
+/* ---------- Mini-minuteur Pomodoro persistant (🍅, js/components/pomodoroWidget.js) ----------
+   Empilé au-dessus du FAB de capture, même logique d'empilement que le bouton Aide/Recherche
+   à gauche — invisible tant qu'aucune session n'est active (demande explicite du 02/09/2026 :
+   le minuteur doit continuer d'exister même quand Charles-Henri change d'écran pour aller
+   travailler, sinon l'outil ne sert à rien pour son usage réel). */
+.pomodoro-widget {
+  position: fixed;
+  right: var(--space-4);
+  bottom: calc(var(--nav-height) + var(--space-4) + 68px);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: 6px 8px 6px 14px;
+  box-shadow: var(--shadow-md);
+  z-index: 25;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pomodoro-widget.visible { display: flex; }
+.pomodoro-widget-time { color: var(--color-text); white-space: nowrap; text-decoration: none; }
+.pomodoro-widget-toggle {
+  border: none;
+  background: var(--color-surface-alt);
+  border-radius: 50%;
+  width: 28px; height: 28px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
+
 /* ---------- Badge ---------- */
 .badge {
   display: inline-flex;
