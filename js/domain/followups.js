@@ -15,11 +15,43 @@
 
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
-import { STATUSES, STATUS_LABELS } from "./tasks.js";
 
 const COLLECTION = "followUps";
 
-export { STATUSES, STATUS_LABELS };
+// Statut d'un Suivi — simplifié à 3 états le 02/09/2026 (piste TDAH, audit de simplification
+// demandé par Charles-Henri : "un suivi est plus naturellement binaire" que le pipeline à 5
+// statuts des Tâches, qu'il réutilisait tel quel jusqu'ici sans jamais avoir de "à faire"/
+// "en cours" qui fasse vraiment sens pour un suivi). `done` garde exactement le même nom
+// qu'avant (voir isControlDue() plus bas, et tous les `f.status !== "done"` déjà semés dans
+// l'app) — seule la distinction "en attente" vs "déjà relancé" est nouvelle.
+export const STATUSES = ["waiting", "relaunched", "done"];
+export const STATUS_LABELS = { waiting: "⏳ En attente", relaunched: "🔁 Relancé", done: "✅ Réglé" };
+export const STATUS_ICONS = { waiting: "⏳", relaunched: "🔁", done: "✅" };
+
+// Légende ⓘ (audit de simplification du 02/09/2026) : le statut d'un Suivi et celui d'une Tâche
+// (js/domain/tasks.js) partagent tous les deux une valeur "en attente" avec la même icône ⏳
+// mais un sens différent — ce texte lève l'ambiguïté sur Équipe, où seul le vocabulaire Suivi
+// est visible.
+export const STATUS_INFO_HTML =
+  "Statut d'un <strong>Suivi</strong> — différent de celui d'une Tâche (onglet Pilotage), qui utilise aussi ⏳ mais avec un sens propre : ⏳ En attente (tu n'as encore rien relancé) · 🔁 Relancé (tu as déjà relancé, tu attends la réponse) · ✅ Réglé.";
+
+/**
+ * Ramène une valeur de statut — potentiellement encore un des 5 anciens statuts Tâche
+ * (todo/in_progress/waiting/follow_up/done) posés sur un Suivi créé avant ce round — vers l'un
+ * des 3 nouveaux. Appliquée à la lecture (listAll/subscribe ci-dessous) plutôt qu'en réécrivant
+ * chaque document existant : aucune migration risquée à lancer, chaque suivi se normalise tout
+ * seul dès qu'il est relu, sans écriture supplémentaire tant qu'on n'y touche pas soi-même.
+ */
+const LEGACY_STATUS_MAP = { todo: "waiting", in_progress: "waiting", waiting: "waiting", follow_up: "relaunched", done: "done" };
+
+export function normalizeStatus(status) {
+  return LEGACY_STATUS_MAP[status] || "waiting";
+}
+
+function normalize(followUp) {
+  const status = normalizeStatus(followUp.status);
+  return status === followUp.status ? followUp : { ...followUp, status };
+}
 
 export const DIRECTIONS = ["waiting_on", "to_tell"];
 export const DIRECTION_LABELS = {
@@ -86,12 +118,13 @@ export async function setStatus(id, status) {
   return updateFollowUp(id, { status });
 }
 
-export function listAll() {
-  return storage.listAll(COLLECTION);
+export async function listAll() {
+  const items = await storage.listAll(COLLECTION);
+  return items.map(normalize);
 }
 
 export function subscribe(callback) {
-  return storage.subscribe(COLLECTION, callback);
+  return storage.subscribe(COLLECTION, (items) => callback(items.map(normalize)));
 }
 
 export async function removeFollowUp(id) {

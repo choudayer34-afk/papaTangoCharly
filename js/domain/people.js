@@ -31,6 +31,24 @@ export async function addNote(id, text) {
   return updated.notesLog;
 }
 
+/**
+ * Migration one-shot (vague 19, audit de simplification demandé par Charles-Henri) : le champ
+ * "Notes" simple et le "Journal de notes" horodaté cohabitaient sans raison claire sur cette
+ * fiche — seul endroit de l'app avec ce doublon (voir createPerson ci-dessus). Le texte déjà
+ * écrit dans "Notes" devient la première entrée du Journal, puis le champ simple est vidé —
+ * rien n'est perdu. Idempotente : ne fait rien si `notes` est déjà vide (donc sans effet une
+ * fois la migration faite, ou sur une personne créée après ce round).
+ */
+export async function migrateLegacyNotes(id) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current || !(current.notes || "").trim()) return current;
+  const text = current.notes.trim();
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text, createdAt: current.createdAt || Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notes: "", notesLog });
+  await storage.logHistory("Person", id, "note_added", { text });
+  return updated;
+}
+
 export async function updatePerson(id, patch) {
   const current = await storage.get(COLLECTION, id);
   if (!current) throw new Error("Personne introuvable : " + id);

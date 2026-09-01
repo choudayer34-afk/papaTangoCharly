@@ -63,6 +63,7 @@ export async function getPreferences() {
     projectSort: "manual",
     casquette: "all",
     dashboardHidden: [],
+    dashboardHiddenMigratedV19: false,
     seenHints: {},
     lastWeeklyReviewAt: null,
     focusOverride: { date: null, taskIds: [] },
@@ -115,6 +116,19 @@ export async function setCasquette(hatId) {
 export async function setDashboardHidden(keys) {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, dashboardHidden: keys });
+}
+
+/**
+ * Bascule one-shot (audit de simplification du 02/09/2026, retour de Charles-Henri : "on fait
+ * l'ensemble des modifications suggérées") — force le nouveau profil "épuré" de l'Accueil
+ * (voir js/views/dashboard.js) la toute première fois que ce round tourne, plutôt que de
+ * laisser la nouvelle valeur par défaut sans effet tant que Charles-Henri ne rouvre pas lui-même
+ * les réglages. Ne se redéclenche jamais ensuite : une fois ce drapeau posé, toute
+ * personnalisation faite après (y compris "tout réafficher") est respectée.
+ */
+export async function markDashboardHiddenMigratedV19() {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, dashboardHiddenMigratedV19: true });
 }
 
 /** Marque un bandeau d'aide contextuelle (js/components/hint.js) comme déjà vu — ne

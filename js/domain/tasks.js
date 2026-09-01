@@ -30,6 +30,13 @@ export const STATUS_ICONS = {
   done: "🟢",
 };
 
+// Légende ⓘ (audit de simplification du 02/09/2026) : le statut d'une Tâche et celui d'un Suivi
+// (js/domain/followups.js) partagent tous les deux une valeur "en attente" avec la même icône
+// ⏳ mais un sens différent — ce texte lève l'ambiguïté sur Pilotage, où seul le vocabulaire
+// Tâche est visible.
+export const STATUS_INFO_HTML =
+  "Statut d'une <strong>Tâche</strong> : ⚪ À faire · 🔵 En cours · ⏳ En attente (bloquée par quelqu'un ou quelque chose d'extérieur) · 👀 À suivre (à relancer) · 🟢 Terminé. Différent du statut d'un Suivi (onglet Équipe), qui utilise aussi ⏳ mais avec un sens propre.";
+
 export async function createTask(data) {
   // Canevas Communication (§18, §78.9) : activé volontairement (case à cocher à la création),
   // pas déduit automatiquement du type — "communication" n'est pas l'un des types d'exemple

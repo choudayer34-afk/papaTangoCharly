@@ -24,7 +24,12 @@ import { buildSteps } from "./templates.js";
 const COLLECTION = "projects";
 
 export const PART_STATUSES = ["not_started", "in_progress", "done"];
-export const PART_STATUS_ICONS = { not_started: "⚪", in_progress: "🔵", done: "🟢" };
+// Icônes volontairement distinctes de celles du statut Tâche (⚪🔵🟢, voir domain/tasks.js) —
+// audit de simplification du 02/09/2026 (retour de Charles-Henri) : les Sous-parties restent un
+// système à part entière (décision explicite de garder cette distinction), mais réutiliser les
+// mêmes ronds de couleur qu'une Tâche pour une notion différente prêtait à confusion au premier
+// coup d'œil. Le système lui-même (3 états, notes, modale dédiée) est inchangé.
+export const PART_STATUS_ICONS = { not_started: "◻️", in_progress: "🔶", done: "✅" };
 export const PART_STATUS_LABELS = { not_started: "Pas commencé", in_progress: "En cours", done: "Terminé" };
 
 export async function createProject(data) {

@@ -22,6 +22,13 @@ export const HATS = [
 
 export const HAT_BY_ID = Object.fromEntries(HATS.map((h) => [h.id, h]));
 
+// Texte de la légende ⓘ affichée à côté du filtre casquette (audit de simplification du
+// 02/09/2026 — l'aide "au premier usage" (js/components/hint.js) disparaît pour toujours une
+// fois fermée ; ceci reste accessible en permanence via js/components/infoTip.js, sur Accueil
+// et Pilotage, les deux écrans qui affichent ce filtre).
+export const HAT_INFO_HTML =
+  "La casquette ne se choisit jamais à la main : elle se <strong>déduit</strong> de ce qui est déjà renseigné. 🧑‍💻 Toi : rien de rattaché à un projet transverse. 📦 Projets / 🏛️ CSE : déduit du projet lié (catégorie « CSE » ou non). 👥 Équipe / 👔 Manager : pour un Suivi sans projet, déduit du type de la personne visée.";
+
 /**
  * Casquette d'un Projet lui-même : un projet de catégorie contenant "CSE" (insensible à la
  * casse — la catégorie est un texte libre, voir js/domain/preferences.js) devient la
