@@ -240,6 +240,7 @@ export async function openCreateProjectModal(prefill = {}) {
 }
 
 export async function openProjectDetail(project, tasks) {
+  preferencesApi.recordRecentlyViewed("Project", project.id).catch(() => {});
   const progress = projectsApi.computeProgress(tasks);
   const [allProjects, allResources, allFollowUps, allMeetings, allDecisions, allHistory, prefs] = await Promise.all([
     projectsApi.listAll(),

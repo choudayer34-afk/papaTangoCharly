@@ -35,6 +35,7 @@ const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 // n'y figure pas volontairement : c'est le seul repère qui doit toujours rester visible.
 const DASHBOARD_SECTIONS = [
   { key: "dueSoon", label: "🗓️ À échéance dans les 7 jours" },
+  { key: "stalled", label: "⏸️ En pause depuis un moment" },
   { key: "followups", label: "📣 Suivis en retard" },
   { key: "kept", label: "🧠 Informations & idées" },
   { key: "projects", label: "📦 Mes projets" },
@@ -56,9 +57,12 @@ export function renderDashboard(container) {
     </div>
     <div class="view">
       <div id="review-reminder"></div>
+      <div id="notif-optin"></div>
       <div class="chip-row" id="hat-filter"></div>
       <div class="stat-grid" id="stat-grid"></div>
+      <div id="recent-viewed-section"></div>
       <div id="focus-section"></div>
+      <div id="stalled-section"></div>
       <div id="due-soon-section"></div>
       <div id="followups-section"></div>
       <div id="kept-section"></div>
@@ -77,9 +81,12 @@ export function renderDashboard(container) {
   );
 
   const reviewReminderEl = container.querySelector("#review-reminder");
+  const notifOptInEl = container.querySelector("#notif-optin");
   const hatFilterEl = container.querySelector("#hat-filter");
   const statGrid = container.querySelector("#stat-grid");
+  const recentViewedSection = container.querySelector("#recent-viewed-section");
   const focusSection = container.querySelector("#focus-section");
+  const stalledSection = container.querySelector("#stalled-section");
   const dueSoonSection = container.querySelector("#due-soon-section");
   const followUpsSection = container.querySelector("#followups-section");
   const keptSection = container.querySelector("#kept-section");
@@ -99,6 +106,7 @@ export function renderDashboard(container) {
   let activeHat = "all";
   let hiddenSections = new Set();
   let focusOverride = { date: null, taskIds: [] };
+  let recentlyViewed = [];
 
   preferencesApi.getPreferences().then((prefs) => {
     projectSortMode = prefs.projectSort || "manual";
@@ -106,10 +114,14 @@ export function renderDashboard(container) {
     activeHat = prefs.casquette || "all";
     hiddenSections = new Set(prefs.dashboardHidden || []);
     focusOverride = prefs.focusOverride || { date: null, taskIds: [] };
+    recentlyViewed = prefs.recentlyViewed || [];
     renderHatFilter();
     renderReviewReminder(prefs.lastWeeklyReviewAt);
+    renderNotifOptIn(prefs.notifOptIn);
     renderStats();
+    renderRecentlyViewedSection();
     renderFocusSection();
+    renderStalledSection();
     renderDueSoonSection();
     renderKeptSection();
     renderProjectsSection();
@@ -123,12 +135,132 @@ export function renderDashboard(container) {
       renderHatFilter();
       renderStats();
       renderFocusSection();
+      renderStalledSection();
       renderDueSoonSection();
       renderProjectsSection();
       renderFollowUpsSection();
       renderRecentSection();
       await preferencesApi.setCasquette(hatId);
     });
+  }
+
+  /**
+   * Bandeau d'opt-in pour l'alerte au démarrage (piste TDAH du 01/09/2026, discussion
+   * permanence/repérage — "rappels programmés", version retenue : notification navigateur
+   * uniquement app ouverte, sans infrastructure serveur). Proposé une seule fois : une fois
+   * `notifOptIn` tranché (true ou false), ce bandeau ne réapparaît jamais.
+   */
+  function renderNotifOptIn(notifOptIn) {
+    if (notifOptIn !== null || typeof Notification === "undefined") {
+      notifOptInEl.innerHTML = "";
+      return;
+    }
+    notifOptInEl.innerHTML = `
+      <div class="review-banner">
+        <span>🔔 Être alerté dès l'ouverture de l'app s'il y a du retard ou des tâches en pause ?</span>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="notif-optin-yes" class="btn btn-primary btn-sm">Activer</button>
+          <button type="button" id="notif-optin-no" class="btn btn-secondary btn-sm">Non merci</button>
+        </div>
+      </div>
+    `;
+    notifOptInEl.querySelector("#notif-optin-yes").addEventListener("click", async () => {
+      const permission = await Notification.requestPermission();
+      await preferencesApi.setNotifOptIn(permission === "granted");
+      notifOptInEl.innerHTML = "";
+      showToast(permission === "granted" ? "Alerte activée" : "Autorisation refusée par le navigateur");
+    });
+    notifOptInEl.querySelector("#notif-optin-no").addEventListener("click", async () => {
+      await preferencesApi.setNotifOptIn(false);
+      notifOptInEl.innerHTML = "";
+    });
+  }
+
+  /**
+   * "🔄 Reprendre où j'en étais" (piste TDAH du 01/09/2026, discussion permanence/repérage —
+   * "je ne sais plus où j'en suis ni comment retrouver mes éléments") : les dernières fiches
+   * consultées, tous types confondus, résolues via la même mécanique que le lien profond du
+   * .ics (`fetchBundle`/`resolveRef`, js/components/linkedItems.js) — aucune nouvelle logique
+   * d'ouverture, juste un nouveau point d'entrée. Une fiche supprimée depuis disparaît
+   * simplement de la liste plutôt que de planter (résolution à `null`, filtrée).
+   */
+  async function renderRecentlyViewedSection() {
+    if (!recentlyViewed.length) {
+      recentViewedSection.innerHTML = "";
+      return;
+    }
+    const bundle = await linkedItemsApi.fetchBundle();
+    const resolved = recentlyViewed
+      .map((entry) => {
+        const r = linkedItemsApi.resolveRef(bundle, { type: entry.type, id: entry.id });
+        return r && { ...r, viewedAt: entry.viewedAt };
+      })
+      .filter(Boolean);
+    if (!resolved.length) {
+      recentViewedSection.innerHTML = "";
+      return;
+    }
+    recentViewedSection.innerHTML = `
+      <div class="section-title" style="margin-top:0;">🔄 Reprendre où j'en étais</div>
+      <div class="card" id="recent-viewed-list" style="margin-bottom:16px;"></div>
+    `;
+    const listEl = recentViewedSection.querySelector("#recent-viewed-list");
+    for (const item of resolved) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${item.emoji} ${escapeHtml(item.title)}</div>
+          <div class="item-meta">${timeAgoLabel(item.viewedAt)}</div>
+        </div>
+      `;
+      row.addEventListener("click", () => item.onOpen());
+      listEl.appendChild(row);
+    }
+  }
+
+  /**
+   * "⏸️ En pause depuis un moment" (piste TDAH du 01/09/2026, discussion permanence/repérage —
+   * "je commence un truc mais ne le finis pas") : tâches commencées (pas "à faire") mais non
+   * retouchées depuis plusieurs jours (`tasksApi.isStalled`, seuil de 5 jours) — distinct du
+   * retard (qui dépend d'une échéance, souvent absente sur une tâche abandonnée) et du Focus
+   * (qui est une question de priorité, pas d'abandon). Rubrique repliable comme les autres,
+   * jamais un ton culpabilisant (piste TDAH : "traitement du retard sans honte").
+   */
+  function renderStalledSection() {
+    if (hiddenSections.has("stalled")) {
+      stalledSection.innerHTML = "";
+      return;
+    }
+    const stalled = hatFilterTasks(tasks).filter(tasksApi.isStalled);
+    if (!stalled.length) {
+      stalledSection.innerHTML = "";
+      return;
+    }
+    const sorted = [...stalled].sort((a, b) => (a.updatedAt || a.createdAt || 0) - (b.updatedAt || b.createdAt || 0));
+    stalledSection.innerHTML = `
+      <details open>
+        <summary class="section-title" style="margin-top:0;cursor:pointer;">⏸️ En pause depuis un moment (${stalled.length})</summary>
+        <div class="card" id="stalled-list" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+    `;
+    const listEl = stalledSection.querySelector("#stalled-list");
+    for (const t of sorted) {
+      const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+      const days = Math.floor((Date.now() - (t.updatedAt || t.createdAt || 0)) / 86400000);
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(t.title)}</div>
+          <div class="item-meta">⏸️ pas retouchée depuis ${days} j${project ? " · 📦 " + escapeHtml(project.name) : ""}</div>
+        </div>
+      `;
+      row.addEventListener("click", () => openTaskDetail(t, projects));
+      listEl.appendChild(row);
+    }
   }
 
   /** Filtre une liste de Tâches/Suivis sur la casquette active — "all" = pas de filtre.
@@ -200,6 +332,7 @@ export function renderDashboard(container) {
             await preferencesApi.setDashboardHidden(hidden);
             closeModal();
             renderDueSoonSection();
+            renderStalledSection();
             renderKeptSection();
             renderProjectsSection();
             renderFollowUpsSection();
@@ -695,6 +828,7 @@ export function renderDashboard(container) {
     tasks = items;
     renderStats();
     renderFocusSection();
+    renderStalledSection();
     renderDueSoonSection();
     renderProjectsSection();
   });
@@ -884,6 +1018,7 @@ export function openCreateDecisionModal(prefill = {}) {
 export function openRecentDetail(item, projects, { onClose } = {}) {
   const isMeeting = item.kind === "meeting";
   const data = item.data;
+  preferencesApi.recordRecentlyViewed(isMeeting ? "Meeting" : "Decision", data.id).catch(() => {});
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -1064,6 +1199,20 @@ function formatToday() {
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+/** Étiquette relative pour "🔄 Reprendre où j'en étais" — une échelle grossière suffit ici,
+ *  ce n'est qu'un repère de fraîcheur, pas une donnée à lire précisément. */
+function timeAgoLabel(ts) {
+  const diffMs = Date.now() - ts;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "à l'instant";
+  if (mins < 60) return `il y a ${mins} min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "hier";
+  return `il y a ${days} j`;
 }
 
 function escapeHtml(str) {

@@ -8,6 +8,7 @@ import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
@@ -417,6 +418,7 @@ async function openDecisionFromInboxModal(item) {
  * archiver (même chemin que le bouton "Archiver" déjà existant au Dashboard).
  */
 export function openKeptItemDetail(item, { onClose } = {}) {
+  preferencesApi.recordRecentlyViewed("Kept", item.id).catch(() => {});
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">

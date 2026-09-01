@@ -5,6 +5,7 @@ import * as resourcesApi from "../domain/resources.js";
 import * as projectsApi from "../domain/projects.js";
 import * as tasksApi from "../domain/tasks.js";
 import * as historyApi from "../domain/history.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
@@ -209,6 +210,7 @@ function openCreateResourceModal(prefill = {}) {
 }
 
 export async function openResourceDetail(resource, projects, tasks) {
+  preferencesApi.recordRecentlyViewed("Resource", resource.id).catch(() => {});
   const allHistory = await historyApi.listAll();
   const resourceHistory = allHistory
     .filter((h) => h.entityType === "Resource" && h.entityId === resource.id)

@@ -345,6 +345,7 @@ export function openCreateTaskModal(prefill = {}) {
  * utilisé pour les créations depuis la fiche projet (§ round D).
  */
 export async function openTaskDetail(task, projects, { onClose } = {}) {
+  preferencesApi.recordRecentlyViewed("Task", task.id).catch(() => {});
   const [allResources, allHistory] = await Promise.all([resourcesApi.listAll(), historyApi.listAll()]);
   const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
   const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));

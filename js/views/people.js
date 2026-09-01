@@ -5,6 +5,7 @@ import * as followUpsApi from "../domain/followups.js";
 import * as projectsApi from "../domain/projects.js";
 import * as historyApi from "../domain/history.js";
 import * as objectivesApi from "../domain/objectives.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
@@ -142,6 +143,7 @@ export function openCreatePersonModal(prefill = {}) {
 }
 
 export async function openPersonDetail(person, allFollowUps) {
+  preferencesApi.recordRecentlyViewed("Person", person.id).catch(() => {});
   const own = sortByCreatedDesc(allFollowUps.filter((f) => f.personId === person.id));
   const active = own.filter((f) => f.status !== "done" && f.direction !== "to_tell");
   const toTell = own.filter((f) => f.status !== "done" && f.direction === "to_tell");
@@ -795,6 +797,7 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
 }
 
 export async function openEditFollowUpModal(followUp, { onDone } = {}) {
+  preferencesApi.recordRecentlyViewed("FollowUp", followUp.id).catch(() => {});
   const [projects, person] = await Promise.all([
     projectsApi.listAll(),
     followUp.personId ? peopleApi.getPerson(followUp.personId) : Promise.resolve(null),
