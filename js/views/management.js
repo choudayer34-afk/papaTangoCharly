@@ -1,7 +1,15 @@
-// Vue Management — §34/§35. Distinct de "Préparer un point collaborateur" (§33, people.js) :
-// ici, ce n'est pas moi qui suis quelqu'un, c'est moi qui dois faire remonter des sujets à
-// mon propre manager (une personne de type 👔, déjà supporté par Équipe) et préparer mon
-// propre point avec lui.
+// Section Management — §34/§35. Distinct de "Préparer un point collaborateur" (§33,
+// people.js) : ici, ce n'est pas moi qui suis quelqu'un, c'est moi qui dois faire remonter des
+// sujets à mon propre manager (une personne de type 👔, déjà supporté par Équipe) et préparer
+// mon propre point avec lui.
+//
+// Fusionné dans l'onglet Équipe le 02/09/2026 (retour de Charles-Henri : "traiter les onglets
+// comme des filtres d'un même flux") — ce n'était déjà qu'une recomposition des mêmes
+// Personnes/Suivis qu'Équipe, donc la fusion la plus naturelle plutôt qu'un onglet séparé.
+// `renderManagerSection` est maintenant appelée par `js/views/people.js` (filtre "👔 Mon
+// manager") plutôt que d'être une route à part entière : elle ne gère plus ses propres
+// abonnements ni son propre topbar, elle reçoit `people`/`followUps` déjà à jour et se
+// contente de dessiner dans le conteneur fourni.
 //
 // Réutilise entièrement l'objet Suivi plutôt que d'inventer une nouvelle entité (retour de
 // Charles-Henri sur le "push d'info", voir js/domain/followups.js) :
@@ -13,112 +21,70 @@
 // existantes, exactement comme §33 recompose depuis les Suivis — aucune nouvelle donnée
 // stockée pour ces sections-là.
 
-import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as tasksApi from "../domain/tasks.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openPersonDetail, openCreatePersonModal, openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
 
-export function renderManagement(container) {
-  container.innerHTML = `
-    <div class="topbar">
-      <div>
-        <h1>Management</h1>
-        <div class="subtitle" id="management-subtitle">—</div>
-      </div>
-    </div>
-    <div class="view"><div id="management-list"></div></div>
-  `;
+export function renderManagerSection(container, people, followUps) {
+  const managers = people.filter((p) => p.type === "manager");
 
-  const listEl = container.querySelector("#management-list");
-  const subtitleEl = container.querySelector("#management-subtitle");
+  container.innerHTML = "";
 
-  let people = [];
-  let followUps = [];
-  let tasks = [];
-
-  function render() {
-    const managers = people.filter((p) => p.type === "manager");
-    subtitleEl.textContent = managers.length
-      ? `${managers.length} manager${managers.length > 1 ? "s" : ""}`
-      : "Pas encore de manager renseigné";
-
-    listEl.innerHTML = "";
-
-    if (!managers.length) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      empty.innerHTML = `<span class="emoji">👔</span>Ajoute ton manager pour préparer tes points avec lui et faire remonter tes sujets.`;
-      listEl.appendChild(empty);
-      const btn = document.createElement("button");
-      btn.className = "btn btn-primary btn-block";
-      btn.textContent = "+ Ajouter mon manager";
-      btn.addEventListener("click", () => {
-        openCreatePersonModal({ type: "manager", onCreated: () => showToast("Manager ajouté") });
-      });
-      listEl.appendChild(btn);
-      return;
-    }
-
-    for (const manager of managers) {
-      const own = followUps.filter((f) => f.personId === manager.id && f.status !== "done");
-      const decisionsAwaited = own.filter((f) => f.direction !== "to_tell");
-      const toTell = own.filter((f) => f.direction === "to_tell");
-      const topics = toTell.filter((f) => !f.category || f.category === "topic");
-      const difficulties = toTell.filter((f) => f.category === "difficulty");
-      const achievements = toTell.filter((f) => f.category === "achievement");
-
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.marginBottom = "16px";
-      card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
-          <div class="item-title" style="cursor:pointer;">👔 ${escapeHtml(manager.name)}</div>
-        </div>
-        <div class="kanban-card-meta" style="margin-bottom:12px;">
-          <span>🗳️ ${decisionsAwaited.length} décision(s) attendue(s)</span>
-          <span>📌 ${topics.length} sujet(s)</span>
-          ${difficulties.length ? `<span class="badge badge-late">⚠️ ${difficulties.length} difficulté(s)</span>` : ""}
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn btn-secondary btn-sm add-topic-btn">+ Sujet</button>
-          <button type="button" class="btn btn-primary btn-sm prep-btn">🗒️ Préparer le point</button>
-        </div>
-      `;
-      card.querySelector(".item-title").addEventListener("click", () => openPersonDetail(manager, followUps));
-      card.querySelector(".add-topic-btn").addEventListener("click", () => {
-        openCreateFollowUpModal({
-          person: manager,
-          defaultDirection: "to_tell",
-          onCreated: () => showToast("Sujet ajouté"),
-        });
-      });
-      card.querySelector(".prep-btn").addEventListener("click", () => {
-        openManagerPrepModal(manager);
-      });
-      listEl.appendChild(card);
-    }
+  if (!managers.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML = `<span class="emoji">👔</span>Ajoute ton manager pour préparer tes points avec lui et faire remonter tes sujets.`;
+    container.appendChild(empty);
+    const btn = document.createElement("button");
+    btn.className = "btn btn-primary btn-block";
+    btn.textContent = "+ Ajouter mon manager";
+    btn.addEventListener("click", () => {
+      openCreatePersonModal({ type: "manager", onCreated: () => showToast("Manager ajouté") });
+    });
+    container.appendChild(btn);
+    return;
   }
 
-  const unsubPeople = peopleApi.subscribe((items) => {
-    people = items;
-    render();
-  });
-  const unsubFollowUps = followUpsApi.subscribe((items) => {
-    followUps = items;
-    render();
-  });
-  const unsubTasks = tasksApi.subscribe((items) => {
-    tasks = items;
-    render();
-  });
+  for (const manager of managers) {
+    const own = followUps.filter((f) => f.personId === manager.id && f.status !== "done");
+    const decisionsAwaited = own.filter((f) => f.direction !== "to_tell");
+    const toTell = own.filter((f) => f.direction === "to_tell");
+    const topics = toTell.filter((f) => !f.category || f.category === "topic");
+    const difficulties = toTell.filter((f) => f.category === "difficulty");
+    const achievements = toTell.filter((f) => f.category === "achievement");
 
-  return function cleanup() {
-    unsubPeople();
-    unsubFollowUps();
-    unsubTasks();
-  };
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.marginBottom = "16px";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <div class="item-title" style="cursor:pointer;">👔 ${escapeHtml(manager.name)}</div>
+      </div>
+      <div class="kanban-card-meta" style="margin-bottom:12px;">
+        <span>🗳️ ${decisionsAwaited.length} décision(s) attendue(s)</span>
+        <span>📌 ${topics.length} sujet(s)</span>
+        ${difficulties.length ? `<span class="badge badge-late">⚠️ ${difficulties.length} difficulté(s)</span>` : ""}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary btn-sm add-topic-btn">+ Sujet</button>
+        <button type="button" class="btn btn-primary btn-sm prep-btn">🗒️ Préparer le point</button>
+      </div>
+    `;
+    card.querySelector(".item-title").addEventListener("click", () => openPersonDetail(manager, followUps));
+    card.querySelector(".add-topic-btn").addEventListener("click", () => {
+      openCreateFollowUpModal({
+        person: manager,
+        defaultDirection: "to_tell",
+        onCreated: () => showToast("Sujet ajouté"),
+      });
+    });
+    card.querySelector(".prep-btn").addEventListener("click", () => {
+      openManagerPrepModal(manager);
+    });
+    container.appendChild(card);
+  }
 }
 
 /**
@@ -128,8 +94,8 @@ export function renderManagement(container) {
  * "depuis le dernier point" est approximé par une fenêtre glissante de 7 jours pour les
  * tâches terminées, faute d'un vrai horodatage de "dernier point" pour l'instant.
  * Récupère ses propres données fraîches (plutôt que de recevoir les groupes déjà calculés
- * par renderManagement) pour pouvoir se rouvrir elle-même après une action menée depuis une
- * modale imbriquée (modifier un suivi) — même principe que openPrepModal (people.js).
+ * par renderManagerSection) pour pouvoir se rouvrir elle-même après une action menée depuis
+ * une modale imbriquée (modifier un suivi) — même principe que openPrepModal (people.js).
  */
 async function openManagerPrepModal(manager) {
   const [allFollowUps, tasks] = await Promise.all([followUpsApi.listAll(), tasksApi.listAll()]);

@@ -243,7 +243,7 @@ export async function openResourceDetail(resource, projects, tasks) {
     <div id="res-tasks-links"></div>
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
-    <details ${resourceHistory.length > 6 ? "" : "open"}>
+    <details>
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${resourceHistory.length})</summary>
       <div class="card" id="res-history" style="margin-top:8px;margin-bottom:16px;"></div>
     </details>

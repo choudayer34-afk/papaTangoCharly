@@ -13,6 +13,7 @@ import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
+import { renderManagerSection } from "./management.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -22,6 +23,14 @@ function sortByCreatedDesc(list) {
   return [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
+/**
+ * Vue Équipe + Management fusionnés en un seul onglet (retour de Charles-Henri, 02/09/2026 :
+ * "traiter les onglets comme des filtres d'un même flux" — Management était déjà une simple
+ * recomposition des mêmes Personnes/Suivis qu'Équipe, donc la fusion la plus naturelle parmi
+ * les onglets). Le filtre "👥 Tous" / "👔 Mon manager" bascule entre la liste habituelle et le
+ * tableau de bord manager (`renderManagerSection`, js/views/management.js) — rien n'a
+ * disparu, juste regroupé sous un seul onglet plutôt que deux.
+ */
 export function renderPeople(container) {
   container.innerHTML = `
     <div class="topbar">
@@ -31,17 +40,46 @@ export function renderPeople(container) {
       </div>
       <button id="new-person-btn" class="btn btn-primary btn-sm">+ Personne</button>
     </div>
-    <div class="view"><div id="people-list"></div></div>
+    <div class="view">
+      <div class="chip-row" id="people-mode-toggle">
+        <button type="button" class="chip" data-mode="all">👥 Tous</button>
+        <button type="button" class="chip" data-mode="manager">👔 Mon manager</button>
+      </div>
+      <div id="people-list"></div>
+    </div>
   `;
 
   const listEl = container.querySelector("#people-list");
   const subtitleEl = container.querySelector("#people-subtitle");
+  const modeToggleEl = container.querySelector("#people-mode-toggle");
   container.querySelector("#new-person-btn").addEventListener("click", openCreatePersonModal);
 
   let people = [];
   let followUps = [];
+  let mode = "all";
+
+  function updateModeToggle() {
+    modeToggleEl.querySelectorAll("[data-mode]").forEach((chip) => chip.classList.toggle("active", chip.dataset.mode === mode));
+  }
+  modeToggleEl.querySelectorAll("[data-mode]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      mode = chip.dataset.mode;
+      updateModeToggle();
+      render();
+    });
+  });
+  updateModeToggle();
 
   function render() {
+    if (mode === "manager") {
+      const managers = people.filter((p) => p.type === "manager");
+      subtitleEl.textContent = managers.length
+        ? `${managers.length} manager${managers.length > 1 ? "s" : ""}`
+        : "Pas encore de manager renseigné";
+      renderManagerSection(listEl, people, followUps);
+      return;
+    }
+
     subtitleEl.textContent = people.length ? `${people.length} personne(s)` : "Personne pour l'instant";
 
     if (!people.length) {
@@ -95,8 +133,9 @@ export function renderPeople(container) {
   };
 }
 
-/** `prefill.type` préselectionne Collaborateur/Manager — utilisé par l'écran Management
- *  (js/views/management.js) pour "+ Ajouter mon manager" sans repasser par Équipe. */
+/** `prefill.type` préselectionne Collaborateur/Manager — utilisé par le filtre "👔 Mon manager"
+ *  d'Équipe (`renderManagerSection`, js/views/management.js) pour "+ Ajouter mon manager"
+ *  sans changer de filtre. */
 export function openCreatePersonModal(prefill = {}) {
   const body = document.createElement("div");
   body.innerHTML = `
@@ -198,7 +237,7 @@ export async function openPersonDetail(person, allFollowUps) {
     </div>
     <div class="section-title">🗒️ Journal de notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
-    <details ${personHistory.length > 6 ? "" : "open"}>
+    <details>
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${personHistory.length})</summary>
       <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
     </details>

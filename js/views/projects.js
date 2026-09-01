@@ -332,7 +332,7 @@ export async function openProjectDetail(project, tasks) {
       <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
       <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
     </div>
-    <details ${projectHistory.length > 6 ? "" : "open"}>
+    <details>
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${projectHistory.length})</summary>
       <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
     </details>

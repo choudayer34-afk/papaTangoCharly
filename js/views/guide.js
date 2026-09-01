@@ -33,8 +33,7 @@ const TABS_REF = [
   ["📥 Inbox", "Sas d'attente de tout ce que tu as capturé mais pas encore qualifié.", "Une fois par jour, ou pendant la Revue hebdomadaire."],
   ["📋 Pilotage", "Le Kanban de tes Tâches (ce que TOI tu dois faire), triées par échéance.", "Pour avancer concrètement sur ta liste du jour."],
   ["📦 Projets", "Vue d'ensemble de chaque projet : avancement, sous-parties, tout ce qui y est rattaché.", "Pour un point d'étape ou avant une réunion de suivi projet."],
-  ["👥 Équipe", "Une fiche par personne : Suivis (attentes/transmissions), Objectifs, historique.", "Avant un 1:1, ou pour noter un engagement pris à la volée."],
-  ["👔 Management", "Ce que TOI tu dois remonter à ton propre manager.", "Avant ton propre point avec ton manager."],
+  ["👥 Équipe", "Une fiche par personne : Suivis (attentes/transmissions), Objectifs, historique. Le filtre « 👔 Mon manager » y bascule vers ce que TOI tu dois remonter à ton propre manager.", "Avant un 1:1, pour noter un engagement pris à la volée, ou avant ton propre point avec ton manager."],
   ["📅 Calendrier", "Vue mois/semaine agrégeant échéances de tâches, réunions, décisions et suivis.", "Pour visualiser une période plutôt qu'une liste."],
   ["📎 Ressources", "Bibliothèque de liens/emplacements réutilisables sans duplication.", "Avant de recréer un lien — vérifie qu'il n'existe pas déjà."],
   ["🤖 Prompts IA", "Tes prompts réutilisables, copiables en un clic.", "Quand tu retombes sur un prompt déjà écrit."],
@@ -486,7 +485,7 @@ function renderHatManager() {
       "Préparer ton propre point avec ton manager",
       "",
       [
-        "Onglet Management : ajoute au fil de l'eau les sujets à discuter, décisions attendues, difficultés.",
+        "Filtre « 👔 Mon manager » (dans l'onglet Équipe) : ajoute au fil de l'eau les sujets à discuter, décisions attendues, difficultés.",
         "Avant le point, bouton dédié pour composer Réalisé / En cours / Difficultés / Décisions attendues / Sujets à discuter / Prochaines étapes.",
       ],
       "tu arrives avec un ordre du jour déjà structuré, sans le refaire à la main."
