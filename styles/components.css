@@ -402,6 +402,137 @@ a { color: inherit; }
   white-space: nowrap;
 }
 
+/* ---------- Pilotage : vue Tableau (façon Monday) ----------
+   Retour de Charles-Henri, 02/09/2026 : pouvoir basculer Pilotage entre la vue Trello
+   existante et une vue tableau groupable/triable/éditable en ligne. Premier <table> de
+   l'appli — repris des mêmes tokens que les cartes Kanban voisines plutôt qu'un nouveau
+   langage visuel (surface/surface-alt pour les groupes, mêmes rayons/ombres que .card). */
+.pilotage-table-group + .pilotage-table-group {
+  margin-top: var(--space-4);
+}
+.pilotage-table-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding: 0 var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.pilotage-table-group-header .count {
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.pilotage-table-wrap {
+  overflow-x: auto;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.pilotage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.pilotage-table th,
+.pilotage-table td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.pilotage-table thead th {
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  font-weight: 700;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  user-select: none;
+}
+.pilotage-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.pilotage-table-th-pinned,
+.pilotage-table-td-pinned {
+  position: sticky;
+  left: 0;
+  background: var(--color-surface);
+  z-index: 1;
+  white-space: normal;
+  min-width: 180px;
+}
+thead .pilotage-table-th-pinned {
+  background: var(--color-surface-alt);
+}
+.pilotage-table-td-pinned {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.pilotage-table-title-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+.pilotage-table-title-input:hover,
+.pilotage-table-title-input:focus {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+}
+.pilotage-table-open-btn {
+  flex: none;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-primary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-sm);
+}
+.pilotage-table td select,
+.pilotage-table td input[type="date"] {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+.pilotage-table-td-type {
+  text-align: center;
+  font-size: var(--font-size-md);
+}
+.pilotage-table-quickadd-row .pilotage-table-td-pinned {
+  background: var(--color-surface-alt);
+}
+.pilotage-table-quickadd-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px dashed var(--color-border);
+  background: transparent;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+.pilotage-table-quickadd-input:focus {
+  color: var(--color-text);
+  border-style: solid;
+  background: var(--color-surface);
+}
+
 /* ---------- Modal ---------- */
 .modal-overlay {
   position: fixed; inset: 0;
