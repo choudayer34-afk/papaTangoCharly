@@ -107,6 +107,7 @@ function openHelpModal() {
     <p>Chaque fiche garde son 🕒 Historique. Le bouton 🕒 Tout l'historique sur l'Accueil ouvre le fil complet, tous types confondus.</p>
 
     <a id="full-guide-link" href="#/guide" class="btn btn-secondary btn-block" style="margin-top:8px;text-decoration:none;">📖 Ouvrir le guide complet</a>
+    <a id="whatsnew-link" href="#/whatsnew" class="btn btn-secondary btn-block" style="margin-top:8px;text-decoration:none;">🆕 Voir les nouveautés</a>
     <button id="replay-tour-btn" class="btn btn-secondary btn-block" style="margin-top:8px;">🧭 Revoir la visite guidée</button>
   `;
 
@@ -120,6 +121,7 @@ function openHelpModal() {
   // Charles-Henri) plutôt que sur une page externe : un simple changement de hash suffit,
   // pas besoin d'ouvrir un nouvel onglet ni de perdre la connexion pour y accéder.
   body.querySelector("#full-guide-link").addEventListener("click", () => closeModal());
+  body.querySelector("#whatsnew-link").addEventListener("click", () => closeModal());
   body.querySelector("#replay-tour-btn").addEventListener("click", () => {
     closeModal();
     openTour();
