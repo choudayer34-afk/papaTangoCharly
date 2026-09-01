@@ -10,9 +10,13 @@ let activeOverlay = null;
  * @param {HTMLElement|string} opts.body - noeud DOM ou HTML à insérer dans le corps.
  * @param {Array<{label:string, variant?:string, onClick?:Function, closesModal?:boolean}>} opts.actions
  * @param {boolean} [opts.dismissible=true]
+ * @param {Function} [opts.onClose] - appelé une seule fois, quel que soit le chemin de
+ *   fermeture (clic en dehors, Échap, ou n'importe quelle action) — utile pour un appelant qui
+ *   doit rafraîchir un affichage derrière la modale sans avoir à dupliquer la logique sur
+ *   chaque action (voir "✏️ Saisie laissée en cours", js/views/dashboard.js).
  * @returns {{close: Function, bodyEl: HTMLElement}}
  */
-export function openModal({ title, body, actions = [], dismissible = true }) {
+export function openModal({ title, body, actions = [], dismissible = true, onClose }) {
   closeModal(); // une seule modale à la fois
 
   const overlay = document.createElement("div");
@@ -65,10 +69,14 @@ export function openModal({ title, body, actions = [], dismissible = true }) {
   }
   document.addEventListener("keydown", onKeydown);
 
+  let closed = false;
   function close() {
+    if (closed) return;
+    closed = true;
     document.removeEventListener("keydown", onKeydown);
     overlay.remove();
     if (activeOverlay === overlay) activeOverlay = null;
+    onClose?.();
   }
 
   document.body.appendChild(overlay);
