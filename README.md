@@ -193,8 +193,25 @@ service cloud.firestore {
   disponible (contrairement au bandeau d'aide au premier usage, qui disparaît pour toujours),
   posé sur le canevas piloté par données et sur la Revue hebdomadaire — explique ce que fait
   la fonction sans imposer de le lire, et sans jamais fermer la fiche en cours
+- ✅ Recherche dans le Guide (`js/views/guide.js`, 01/09/2026) : un champ 🔎 dédié au Guide
+  (`#/guide`), distinct de la loupe globale de l'Accueil, avec une nouvelle section "Fonctions
+  transverses" qui explique en clair Canevas, Revue hebdomadaire, Journal de notes, Aide à la
+  demande, Recettes de démarrage, Suggestions de prochaine étape et Filtre par casquette. La
+  recherche filtre ligne par ligne la boussole/les onglets/ces fonctions, et bloc entier
+  (ouvert automatiquement) pour chaque casquette et pour "Il y a du retard partout"
+- ✅ Créer une réunion depuis une Tâche/un Suivi (`js/components/meetingLauncher.js`,
+  01/09/2026) : un titre composé "Catégorie - Projet - Intitulé - Personne" (chaque partie
+  omise si absente), copiable en un clic pour coller dans Outlook. Le bouton "🗓️ Créer une
+  réunion (.ics)" va plus loin : télécharge un fichier .ics à la date/l'heure du moment (30
+  minutes par défaut) avec ce titre et un petit lien de retour vers la fiche exacte dans la
+  description, PUIS ouvre directement le formulaire de création de Réunion de l'app, déjà
+  prérempli avec ce titre et lié à la fiche d'origine. Nécessite un nouveau mécanisme de lien
+  profond (`js/services/deeplink.js`, format `#/route?open=Type:id`) : cliquer ce lien depuis
+  n'importe où rouvre directement la bonne fiche, pas seulement le bon onglet — reste une
+  référence manuelle comme le reste de l'intégration Outlook, pas une vraie API Microsoft Graph
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés, statut de projet
   (clôturer/rouvrir/archiver), horodatage réel du "dernier point manager", vraie intégration
   Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle ; le
   filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage ; les recettes de
-  démarrage se limitent à 2 scénarios pour l'instant
+  démarrage se limitent à 2 scénarios pour l'instant ; "Créer une réunion" ne couvre pour
+  l'instant que Tâches et Suivis, pas les autres fiches liables
