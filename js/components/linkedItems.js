@@ -277,12 +277,16 @@ export function openCreateAndLinkModal(ref, currentLabel, { onLinked, onCancel }
  * type pertinent est déjà connu (§ suggestions de prochaine étape du 31/08/2026, voir
  * js/components/suggestNextStep.js : après avoir coché "Créer les actions" sur un canevas, ou
  * après avoir enregistré une Décision, inutile de repasser par la grille des 7 types).
+ *
+ * `defaults` (01/09/2026, voir js/components/meetingLauncher.js) préremplit le formulaire de
+ * création — ex. un titre déjà composé — sans changer le comportement par défaut (`{}` ne
+ * préremplit rien, comme avant).
  */
-export function openCreateAndLinkDirect(type, ref, currentLabel, { onLinked, onCancel } = {}) {
-  openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel });
+export function openCreateAndLinkDirect(type, ref, currentLabel, { onLinked, onCancel, defaults } = {}) {
+  openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel, defaults });
 }
 
-function openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel }) {
+function openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel, defaults = {} }) {
   const link = async (created, titleField) => {
     await linksApi.createLink(
       { type: ref.type, id: ref.id, label: currentLabel },
@@ -292,6 +296,7 @@ function openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel }) {
   };
 
   const prefill = {
+    ...defaults,
     onCancel: () => onCancel?.(),
   };
 
