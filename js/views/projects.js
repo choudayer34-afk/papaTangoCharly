@@ -31,6 +31,10 @@ export function renderProjects(container) {
       <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
     </div>
     <div class="view">
+      <div class="chip-row" id="status-filter">
+        <button type="button" class="chip active" data-status="active">🟢 Actifs</button>
+        <button type="button" class="chip" data-status="archived">🗄️ Fermés</button>
+      </div>
       <div class="chip-row" id="sort-toggle">
         <button type="button" class="chip" data-sort="manual">✋ Ordre manuel</button>
         <button type="button" class="chip" data-sort="progress">📊 Avancement</button>
@@ -42,15 +46,34 @@ export function renderProjects(container) {
 
   const listEl = container.querySelector("#projects-list");
   const subtitleEl = container.querySelector("#projects-subtitle");
+  const statusFilterEl = container.querySelector("#status-filter");
   const sortToggleEl = container.querySelector("#sort-toggle");
   const categoryFiltersEl = container.querySelector("#category-filters");
   container.querySelector("#new-project-btn").addEventListener("click", () => openCreateProjectModal());
 
+  let rawProjects = [];
   let projects = [];
   let tasks = [];
   let sortMode = "manual";
   let categories = {};
   let categoryFilter = "all";
+  // "Fermés" (retour de Charles-Henri, 02/09/2026 — clôture de projet) : un filtre chip de
+  // plus dans cet onglet existant plutôt qu'un nouvel écran d'archive dédié — même principe
+  // que les autres filtres de cet onglet (catégorie, tri).
+  let statusFilter = "active";
+
+  function applyStatusFilter() {
+    projects = statusFilter === "archived" ? rawProjects.filter((p) => p.status === "archived") : rawProjects.filter((p) => p.status !== "archived");
+  }
+
+  statusFilterEl.querySelectorAll("[data-status]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      statusFilter = chip.dataset.status;
+      statusFilterEl.querySelectorAll("[data-status]").forEach((c) => c.classList.toggle("active", c.dataset.status === statusFilter));
+      applyStatusFilter();
+      render();
+    });
+  });
 
   preferencesApi.getPreferences().then((prefs) => {
     sortMode = prefs.projectSort || "manual";
@@ -90,7 +113,14 @@ export function renderProjects(container) {
     });
 
     if (!projects.length) {
-      listEl.innerHTML = `
+      listEl.innerHTML =
+        statusFilter === "archived"
+          ? `
+        <div class="empty-state">
+          <span class="emoji">🗄️</span>
+          Aucun projet fermé pour l'instant.
+        </div>`
+          : `
         <div class="empty-state">
           <span class="emoji">📦</span>
           Pas encore de projet. Crée le premier avec le bouton « + Projet ».
@@ -110,15 +140,17 @@ export function renderProjects(container) {
       const progress = projectsApi.computeProgress(projectTasks);
       const icon = preferencesApi.categoryIcon(categories, project.category);
 
+      const isArchived = projectsApi.isArchived(project);
+      const draggable = sortMode === "manual" && !isArchived;
       const card = document.createElement("div");
       card.className = "card";
       card.style.marginBottom = "12px";
       card.style.cursor = "pointer";
-      card.draggable = sortMode === "manual";
-      if (sortMode === "manual") card.style.cursor = "grab";
+      card.draggable = draggable;
+      if (draggable) card.style.cursor = "grab";
       card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}</div>
+          <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}</div>
           <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
         </div>
         ${project.objective ? `<div class="item-meta" style="margin-bottom:8px;">${escapeHtml(project.objective)}</div>` : ""}
@@ -133,6 +165,21 @@ export function renderProjects(container) {
           <span>⚪ ${progress.todo + progress.follow_up} reste</span>
         </div>
       `;
+      // Réouverture rapide directement depuis la carte (retour de Charles-Henri) — pas besoin
+      // d'ouvrir toute la fiche juste pour rouvrir un projet fermé qu'on repère dans la liste.
+      if (isArchived) {
+        const reopenBtn = document.createElement("button");
+        reopenBtn.type = "button";
+        reopenBtn.className = "btn btn-secondary btn-sm";
+        reopenBtn.style.marginTop = "8px";
+        reopenBtn.textContent = "↩️ Rouvrir";
+        reopenBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          await projectsApi.reopenProject(project.id);
+          showToast("Projet rouvert");
+        });
+        card.appendChild(reopenBtn);
+      }
       card.addEventListener("click", (e) => {
         // Un glisser-déposer qui se termine peut déclencher un click parasite — sortMode
         // "manual" est le seul cas où draggable est vrai, donc le seul où ça peut arriver.
@@ -143,13 +190,13 @@ export function renderProjects(container) {
         e.dataTransfer.setData("text/project-id", project.id);
       });
       card.addEventListener("dragover", (e) => {
-        if (sortMode !== "manual") return;
+        if (sortMode !== "manual" || isArchived) return;
         e.preventDefault();
         card.classList.add("drag-over");
       });
       card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
       card.addEventListener("drop", async (e) => {
-        if (sortMode !== "manual") return;
+        if (sortMode !== "manual" || isArchived) return;
         e.preventDefault();
         card.classList.remove("drag-over");
         const draggedId = e.dataTransfer.getData("text/project-id");
@@ -168,7 +215,8 @@ export function renderProjects(container) {
   }
 
   const unsubProjects = projectsApi.subscribe((items) => {
-    projects = items.filter((p) => p.status !== "archived");
+    rawProjects = items;
+    applyStatusFilter();
     render();
   });
   const unsubTasks = tasksApi.subscribe((items) => {
@@ -608,11 +656,55 @@ export async function openProjectDetail(project, tasks) {
     });
   });
 
+  const isArchived = projectsApi.isArchived(project);
+
   const { bodyEl, close } = openModal({
-    title: project.name,
+    title: project.name + (isArchived ? " 🗄️" : ""),
     body,
     actions: [
       { label: "Fermer", variant: "ghost" },
+      isArchived
+        ? {
+            label: "↩️ Rouvrir le projet",
+            variant: "secondary",
+            closesModal: false,
+            onClick: async () => {
+              await projectsApi.reopenProject(project.id);
+              close();
+              showToast("Projet rouvert");
+            },
+          }
+        : {
+            label: "🗄️ Clôturer le projet",
+            variant: "secondary",
+            closesModal: false,
+            onClick: () => {
+              closeModal();
+              // Pas une suppression (Règle 3 : rien n'est jamais perdu) — juste une bascule
+              // réversible, mais avec la même mise en garde qu'une confirmDelete (via un
+              // openModal dédié plutôt que confirmDelete() elle-même, dont le bouton de
+              // confirmation dit toujours "Supprimer" — inexact ici) puisque l'effet
+              // (disparition du projet ET de tout ce qui lui est lié des outils de pilotage)
+              // est large et pas forcément évident au premier abord.
+              const confirmBody = document.createElement("div");
+              confirmBody.textContent = `« ${project.name} » et tout ce qui lui est rattaché (tâches, suivis, réunions, décisions, ressources) disparaîtront des outils de pilotage (Accueil, Pilotage, Calendrier, Revue hebdomadaire). Rien n'est supprimé : tu retrouveras tout via le filtre « 🗄️ Fermés » de cet onglet, et pourras rouvrir le projet à tout moment.`;
+              openModal({
+                title: "Fermer ce projet ?",
+                body: confirmBody,
+                actions: [
+                  { label: "Annuler", variant: "ghost", onClick: () => openProjectDetail(project, tasks) },
+                  {
+                    label: "🗄️ Fermer le projet",
+                    variant: "danger",
+                    onClick: async () => {
+                      await projectsApi.closeProject(project.id);
+                      showToast("Projet fermé");
+                    },
+                  },
+                ],
+              });
+            },
+          },
       {
         label: "🗑️ Supprimer",
         variant: "danger",

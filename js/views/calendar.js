@@ -55,10 +55,20 @@ export function renderCalendar(container) {
   let cursor = startOfDay(new Date());
   let mode = "month"; // "month" | "week"
 
+  /** Exclut tout élément rattaché à un projet fermé (retour de Charles-Henri, 02/09/2026 —
+   *  fermeture de projet : "faire que les éléments sous-jacents et le projet n'apparaissent
+   *  plus dans les outils de pilotage") — même principe que hatFilterTasks() côté Dashboard
+   *  et applyFilters() côté Kanban. */
+  function isProjectVisible(projectId) {
+    if (!projectId) return true;
+    const project = projects.find((p) => p.id === projectId);
+    return !projectsApi.isArchived(project);
+  }
+
   function allItems() {
     const items = [];
     for (const t of tasks) {
-      if (!t.dueDate) continue;
+      if (!t.dueDate || !isProjectVisible(t.projectId)) continue;
       items.push({
         type: "Task",
         id: t.id,
@@ -70,7 +80,7 @@ export function renderCalendar(container) {
       });
     }
     for (const m of meetings) {
-      if (!m.date) continue;
+      if (!m.date || !isProjectVisible(m.projectId)) continue;
       items.push({
         type: "Meeting",
         id: m.id,
@@ -82,7 +92,7 @@ export function renderCalendar(container) {
       });
     }
     for (const d of decisions) {
-      if (!d.date) continue;
+      if (!d.date || !isProjectVisible(d.projectId)) continue;
       items.push({
         type: "Decision",
         id: d.id,
@@ -94,7 +104,7 @@ export function renderCalendar(container) {
       });
     }
     for (const f of followUps) {
-      if (!f.controlDate || f.status === "done") continue;
+      if (!f.controlDate || f.status === "done" || !isProjectVisible(f.projectId)) continue;
       items.push({
         type: "FollowUp",
         id: f.id,

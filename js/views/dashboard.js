@@ -234,13 +234,44 @@ export function renderDashboard(container) {
    * d'ouverture, juste un nouveau point d'entrée. Une fiche supprimée depuis disparaît
    * simplement de la liste plutôt que de planter (résolution à `null`, filtrée).
    */
+  /**
+   * Exclut du "🔄 Reprendre où j'en étais" tout ce qui pointe vers un projet fermé (retour de
+   * Charles-Henri, 02/09/2026 — fermeture de projet) : c'est un raccourci vers l'Accueil au
+   * même titre que les autres sections de cette page, donc soumis à la même règle. Une
+   * Ressource (liée à plusieurs projets à la fois via `projectIds`) et une Personne/Information
+   * n'ont pas de projet unique à vérifier — laissées telles quelles, pas de règle simple et non
+   * ambiguë à leur appliquer ici.
+   */
+  function isRecentlyViewedEntryVisible(entry) {
+    const projectsById = new Map(projects.map((p) => [p.id, p]));
+    if (entry.type === "Project") return !projectsApi.isArchived(projectsById.get(entry.id));
+    if (entry.type === "Task") {
+      const t = tasks.find((x) => x.id === entry.id);
+      return !t || !t.projectId || !projectsApi.isArchived(projectsById.get(t.projectId));
+    }
+    if (entry.type === "FollowUp") {
+      const f = followUps.find((x) => x.id === entry.id);
+      return !f || !f.projectId || !projectsApi.isArchived(projectsById.get(f.projectId));
+    }
+    if (entry.type === "Meeting") {
+      const m = meetings.find((x) => x.id === entry.id);
+      return !m || !m.projectId || !projectsApi.isArchived(projectsById.get(m.projectId));
+    }
+    if (entry.type === "Decision") {
+      const d = decisions.find((x) => x.id === entry.id);
+      return !d || !d.projectId || !projectsApi.isArchived(projectsById.get(d.projectId));
+    }
+    return true;
+  }
+
   async function renderRecentlyViewedSection() {
-    if (!recentlyViewed.length) {
+    const visibleEntries = recentlyViewed.filter(isRecentlyViewedEntryVisible);
+    if (!visibleEntries.length) {
       recentViewedSection.innerHTML = "";
       return;
     }
     const bundle = await linkedItemsApi.fetchBundle();
-    const resolved = recentlyViewed
+    const resolved = visibleEntries
       .map((entry) => {
         const r = linkedItemsApi.resolveRef(bundle, { type: entry.type, id: entry.id });
         return r && { ...r, viewedAt: entry.viewedAt };
@@ -315,18 +346,25 @@ export function renderDashboard(container) {
 
   /** Filtre une liste de Tâches/Suivis sur la casquette active — "all" = pas de filtre.
    *  Cartes projets/réunions/décisions ont chacune leur propre variante (voir plus bas), le
-   *  besoin de map projets/personnes n'étant pas le même. */
+   *  besoin de map projets/personnes n'étant pas le même.
+   *
+   *  Exclut aussi systématiquement (retour de Charles-Henri, 02/09/2026 — fermeture de projet)
+   *  tout élément rattaché à un projet fermé : un projet clôturé doit disparaître, lui ET tout
+   *  ce qui lui est lié, des outils de pilotage — même principe que `applyFilters()` côté
+   *  Kanban (js/views/kanban.js). Toujours appliqué, y compris quand activeHat === "all". */
   function hatFilterTasks(list) {
-    if (activeHat === "all") return list;
     const projectsById = new Map(projects.map((p) => [p.id, p]));
-    return list.filter((t) => casquettesApi.taskHat(t, projectsById) === activeHat);
+    let result = list.filter((t) => !t.projectId || !projectsApi.isArchived(projectsById.get(t.projectId)));
+    if (activeHat !== "all") result = result.filter((t) => casquettesApi.taskHat(t, projectsById) === activeHat);
+    return result;
   }
 
   function hatFilterFollowUps(list) {
-    if (activeHat === "all") return list;
     const projectsById = new Map(projects.map((p) => [p.id, p]));
     const peopleById = new Map(people.map((p) => [p.id, p]));
-    return list.filter((f) => casquettesApi.followUpHat(f, projectsById, peopleById) === activeHat);
+    let result = list.filter((f) => !f.projectId || !projectsApi.isArchived(projectsById.get(f.projectId)));
+    if (activeHat !== "all") result = result.filter((f) => casquettesApi.followUpHat(f, projectsById, peopleById) === activeHat);
+    return result;
   }
 
   /**
@@ -575,7 +613,7 @@ export function renderDashboard(container) {
           <div class="item-main" style="cursor:pointer;">
             <div class="item-title">${t.isBlocked ? "🔴 " : ""}${escapeHtml(t.title)}</div>
             <div class="item-meta">
-              ${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}${late ? ` · <strong style="color:var(--color-danger);">en retard</strong>` : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
+              ${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}${late ? ` · <strong style="color:var(--color-danger);">en retard</strong>` : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
             </div>
           </div>
         `;
@@ -663,7 +701,7 @@ export function renderDashboard(container) {
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(t.title)}</div>
-          <div class="item-meta">${formatDate(t.dueDate)}</div>
+          <div class="item-meta">${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${formatDate(t.dueDate)}</div>
         </div>
       `;
       row.addEventListener("click", () => openTaskDetail(t, projects));
@@ -827,6 +865,9 @@ export function renderDashboard(container) {
       ...meetings.map((m) => ({ kind: "meeting", emoji: "🗓️", label: "Réunion", date: m.date || m.createdAt, data: m })),
       ...decisions.map((d) => ({ kind: "decision", emoji: "🗳️", label: "Décision", date: d.date || d.createdAt, data: d })),
     ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    // Même exclusion des projets fermés que hatFilterTasks/hatFilterFollowUps ci-dessus —
+    // une réunion/décision rattachée à un projet clôturé ne doit plus apparaître ici non plus.
+    items = items.filter((item) => !item.data.projectId || !projectsApi.isArchived(projectById.get(item.data.projectId)));
     if (activeHat !== "all") items = items.filter((item) => casquettesApi.itemHat(item.data, projectById) === activeHat);
     // Retour de Charles-Henri du 31/08 : garder "Récemment" naturellement court, même
     // traitement dans l'esprit que l'auto-archivage des Informations/Idées après 15 jours —
@@ -902,8 +943,18 @@ export function renderDashboard(container) {
   });
   const unsubProjects = projectsApi.subscribe((items) => {
     projects = items;
+    // Fermer/rouvrir un projet ne touche que la collection Projets — mais change ce que
+    // hatFilterTasks()/hatFilterFollowUps() laissent passer (retour de Charles-Henri,
+    // 02/09/2026). Sans ça, l'Accueil resterait affiché avec des Tâches/Suivis d'un projet
+    // qu'on vient pourtant de fermer, jusqu'au prochain changement de tâche/suivi.
+    renderStats();
+    renderFocusSection();
+    renderStalledSection();
+    renderDueSoonSection();
+    renderFollowUpsSection();
     renderProjectsSection();
     renderRecentSection();
+    renderRecentlyViewedSection();
   });
   const unsubMeetings = meetingsApi.subscribe((items) => {
     meetings = items;

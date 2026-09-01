@@ -93,6 +93,7 @@ export function renderKanban(container) {
   let filterWindow = "all";
   let filterProjectId = "all";
   let activeHat = "all";
+  let hideDone = false;
 
   // Vue Trello/Tableau (02/09/2026) : préférence propre à l'appareil (localStorage), pas
   // besoin d'attendre les préférences Firestore pour l'afficher — contrairement à la
@@ -120,24 +121,40 @@ export function renderKanban(container) {
     tableEl.style.display = viewMode === "table" ? "" : "none";
   }
 
+  // Pilotage ne montre que des Tâches, qui ne peuvent jamais être "Équipe" ni "Manager" (voir
+  // taskHat() dans casquettes.js) — restreindre les chips affichées évite un board vide et
+  // confus au clic sur ces deux-là (retour de Charles-Henri, 02/09/2026).
+  const PILOTAGE_HATS = ["toi", "projets", "cse"];
+
   preferencesApi.getPreferences().then((prefs) => {
-    activeHat = prefs.casquette || "all";
+    // La préférence de casquette est partagée avec l'Accueil (qui, lui, montre aussi des
+    // Suivis et peut légitimement être sur "Équipe"/"Manager") — si Pilotage en hérite une
+    // valeur qu'il ne peut pas afficher comme chip, revenir à "Toutes" plutôt que de filtrer
+    // silencieusement sur une casquette invisible.
+    const casquette = prefs.casquette || "all";
+    activeHat = casquette === "all" || PILOTAGE_HATS.includes(casquette) ? casquette : "all";
     renderHatFilter();
     renderBoard();
   });
 
   function renderHatFilter() {
-    casquettesApi.renderHatChipRow(hatFilterEl, activeHat, async (hatId) => {
-      activeHat = hatId;
-      renderHatFilter();
-      renderBoard();
-      await preferencesApi.setCasquette(hatId);
-    });
+    casquettesApi.renderHatChipRow(
+      hatFilterEl,
+      activeHat,
+      async (hatId) => {
+        activeHat = hatId;
+        renderHatFilter();
+        renderBoard();
+        await preferencesApi.setCasquette(hatId);
+      },
+      PILOTAGE_HATS
+    );
   }
 
   filtersEl.insertAdjacentHTML(
     "afterbegin",
-    DUE_WINDOWS.map((w) => `<button type="button" class="chip${w.key === "all" ? " active" : ""}" data-window="${w.key}">${w.label}</button>`).join("")
+    DUE_WINDOWS.map((w) => `<button type="button" class="chip${w.key === "all" ? " active" : ""}" data-window="${w.key}">${w.label}</button>`).join("") +
+      `<button type="button" class="chip" id="kanban-hide-done">🙈 Masquer terminées</button>`
   );
   filtersEl.querySelectorAll("[data-window]").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -146,15 +163,26 @@ export function renderKanban(container) {
       renderBoard();
     });
   });
+  // "Masquer terminées" (retour de Charles-Henri, 02/09/2026) : filtre en plus des autres,
+  // jamais persisté d'une visite à l'autre (même traitement que filterWindow/filterProjectId
+  // ci-dessus) — s'applique aussi bien au Trello (la colonne "Terminé" se vide) qu'au Tableau.
+  filtersEl.querySelector("#kanban-hide-done").addEventListener("click", (e) => {
+    hideDone = !hideDone;
+    e.currentTarget.classList.toggle("active", hideDone);
+    renderBoard();
+  });
   projectFilterEl.addEventListener("change", () => {
     filterProjectId = projectFilterEl.value;
     renderBoard();
   });
 
   function applyFilters(tasks) {
-    let list = tasks;
+    const projectsById = new Map(latestProjects.map((p) => [p.id, p]));
+    // Un projet fermé sort des outils de pilotage avec tout ce qui lui est rattaché (retour de
+    // Charles-Henri, 02/09/2026) — voir projectsApi.closeProject(). Reste consultable via le
+    // filtre "Fermés" de l'onglet Projets ou la recherche globale, jamais ici.
+    let list = tasks.filter((t) => !t.projectId || !projectsApi.isArchived(projectsById.get(t.projectId)));
     if (activeHat !== "all") {
-      const projectsById = new Map(latestProjects.map((p) => [p.id, p]));
       list = list.filter((t) => casquettesApi.taskHat(t, projectsById) === activeHat);
     }
     if (filterProjectId !== "all") list = list.filter((t) => t.projectId === filterProjectId);
@@ -163,6 +191,7 @@ export function renderKanban(container) {
       const horizon = Number(filterWindow);
       list = list.filter((t) => t.dueDate && daysFromToday(t.dueDate) >= 0 && daysFromToday(t.dueDate) <= horizon);
     }
+    if (hideDone) list = list.filter((t) => t.status !== "done");
     return list;
   }
 
@@ -179,6 +208,8 @@ export function renderKanban(container) {
   }
 
   function render(tasks, projects) {
+    // `projects` est déjà filtré aux projets actifs par renderBoard() — un projet fermé ne doit
+    // même pas apparaître comme choix de filtre ici.
     projectFilterEl.innerHTML =
       `<option value="all">Tous les projets</option>` +
       projects.map((p) => `<option value="${p.id}" ${p.id === filterProjectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
@@ -235,10 +266,11 @@ export function renderKanban(container) {
 
   function renderBoard() {
     updateViewToggle();
+    const activeProjects = latestProjects.filter((p) => !projectsApi.isArchived(p));
     if (viewMode === "table") {
-      renderTableView(tableEl, applyFilters(latestTasks), latestProjects, renderBoard);
+      renderTableView(tableEl, applyFilters(latestTasks), activeProjects, renderBoard);
     } else {
-      render(latestTasks, latestProjects);
+      render(latestTasks, activeProjects);
     }
   }
 
@@ -289,7 +321,7 @@ function triggerCompletionAnimation() {
   setTimeout(() => burst.remove(), 900);
 }
 
-const TABLE_COLUMN_LABELS = { type: "Type", status: "Statut", project: "Projet", dueDate: "Échéance" };
+const TABLE_COLUMN_LABELS = { type: "Type", status: "Statut", project: "Projet", dueDate: "Échéance", notes: "Notes", description: "Description" };
 
 /**
  * Vue "📊 Tableau" façon Monday (02/09/2026). `tasks` est déjà filtré (casquette, projet,
@@ -316,6 +348,11 @@ function renderTableView(container, tasks, projects, onChange) {
       return p ? p.name.toLowerCase() : null;
     }
     if (col === "dueDate") return task.dueDate ? new Date(task.dueDate).getTime() : null;
+    if (col === "description") return (task.description || "").toLowerCase() || null;
+    if (col === "notes") {
+      const log = task.notesLog || [];
+      return log.length ? log[log.length - 1].createdAt : null;
+    }
     return null;
   }
 
@@ -380,11 +417,45 @@ function renderTableView(container, tasks, projects, onChange) {
     table.appendChild(renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange));
     const tbody = document.createElement("tbody");
     for (const task of group.items) {
-      tbody.appendChild(renderTableRow(task, projects, visibleColumns, onChange));
+      tbody.appendChild(renderTableRow(task, projects, visibleColumns, onChange, groupBy));
     }
     tbody.appendChild(renderQuickAddRow(visibleColumns, group, groupBy));
     table.appendChild(tbody);
     wrap.appendChild(table);
+
+    // Glisser une ligne vers un autre groupe pour changer sa valeur (retour de Charles-Henri,
+    // 02/09/2026 : "basculer par glisser une tâche ailleurs", façon Monday) — n'a de sens que
+    // quand un regroupement structure les lignes (Statut/Projet) ; en "Aucun", il n'y a qu'un
+    // seul groupe, glisser une ligne dedans ne changerait jamais rien.
+    if (groupBy !== "none") {
+      tbody.addEventListener("dragover", (e) => {
+        if (!e.dataTransfer.types.includes("text/pilotage-row-task")) return;
+        e.preventDefault();
+        tbody.classList.add("drag-over-group");
+      });
+      tbody.addEventListener("dragleave", () => tbody.classList.remove("drag-over-group"));
+      tbody.addEventListener("drop", async (e) => {
+        const taskId = e.dataTransfer.getData("text/pilotage-row-task");
+        if (!taskId) return;
+        e.preventDefault();
+        tbody.classList.remove("drag-over-group");
+        const dragged = tasks.find((t) => t.id === taskId);
+        if (!dragged) return;
+        if (groupBy === "status" && dragged.status !== group.key) {
+          const prevStatus = dragged.status;
+          await tasksApi.setStatus(taskId, group.key);
+          celebrateIfJustDone(prevStatus, group.key);
+          onChange();
+        } else if (groupBy === "project") {
+          const targetProjectId = group.key === "__none__" ? null : group.key;
+          if (targetProjectId !== dragged.projectId) {
+            await tasksApi.updateTask(taskId, { projectId: targetProjectId });
+            onChange();
+          }
+        }
+      });
+    }
+
     section.appendChild(wrap);
     container.appendChild(section);
   }
@@ -434,12 +505,29 @@ function renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onCha
   return thead;
 }
 
-function renderTableRow(task, projects, visibleColumns, onChange) {
+function renderTableRow(task, projects, visibleColumns, onChange, groupBy) {
   const tr = document.createElement("tr");
   tr.className = "pilotage-table-row";
 
   const tdTitle = document.createElement("td");
   tdTitle.className = "pilotage-table-td-pinned";
+
+  // Poignée de glisser-déposer (retour de Charles-Henri, 02/09/2026 : "basculer par glisser
+  // une tâche ailleurs") — un élément dédié plutôt que toute la ligne, pour ne jamais gêner la
+  // sélection/l'édition de texte dans les champs de la ligne (titre, notes...). N'a de sens que
+  // si un regroupement structure les lignes (voir la logique de drop dans renderTableView).
+  if (groupBy !== "none") {
+    const handle = document.createElement("span");
+    handle.className = "pilotage-table-drag-handle";
+    handle.textContent = "⠿";
+    handle.title = "Glisser vers un autre groupe";
+    handle.draggable = true;
+    handle.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/pilotage-row-task", task.id);
+    });
+    tdTitle.appendChild(handle);
+  }
+
   const titleInput = document.createElement("input");
   titleInput.type = "text";
   titleInput.value = task.title;
@@ -493,10 +581,75 @@ function renderTableRow(task, projects, visibleColumns, onChange) {
         onChange();
       });
       td.appendChild(input);
+    } else if (col === "description") {
+      // Lecture seule + clic pour ouvrir la fiche complète (retour de Charles-Henri, 02/09/2026 :
+      // "afficher aussi la description") — jamais éditée en ligne dans la cellule, un texte
+      // potentiellement long se prête mal à ça (contrairement au Titre, toujours court).
+      td.className = "pilotage-table-td-description";
+      const text = (task.description || "").trim();
+      td.textContent = text ? truncateText(text, 60) : "—";
+      if (text) td.title = text;
+      td.addEventListener("click", () => openTaskDetail(task, projects));
+    } else if (col === "notes") {
+      renderNotesCell(td, task, onChange);
     }
     tr.appendChild(td);
   }
   return tr;
+}
+
+function truncateText(text, max) {
+  return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+}
+
+/**
+ * Colonne "Notes" du Tableau (retour de Charles-Henri, 02/09/2026 : "une colonne pour Notes
+ * avec la dernière note, je peux en ajouter et ça complète") — réutilise le même journal
+ * horodaté que le reste de l'app (`tasksApi.addNote`, `js/components/notesBlock.js`),
+ * additif uniquement, jamais d'édition ni de suppression d'une note existante depuis ici.
+ */
+function renderNotesCell(td, task, onChange) {
+  td.className = "pilotage-table-td-notes";
+  const log = task.notesLog || [];
+  const last = log[log.length - 1];
+
+  const preview = document.createElement("span");
+  preview.className = "pilotage-table-notes-preview";
+  if (last) {
+    preview.textContent = truncateText(last.text, 36);
+    preview.title = `${last.text}\n${formatDate(new Date(last.createdAt).toISOString())}`;
+  } else {
+    preview.textContent = "—";
+  }
+  td.appendChild(preview);
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "pilotage-table-notes-add-btn";
+  addBtn.textContent = "+";
+  addBtn.title = "Ajouter une note";
+  td.appendChild(addBtn);
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "pilotage-table-notes-input";
+  input.placeholder = "Nouvelle note, puis Entrée";
+  input.style.display = "none";
+  td.appendChild(input);
+
+  addBtn.addEventListener("click", () => {
+    const showing = input.style.display !== "none";
+    input.style.display = showing ? "none" : "inline-block";
+    if (!showing) input.focus();
+  });
+  input.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter") return;
+    const text = input.value.trim();
+    if (!text) return;
+    input.disabled = true;
+    await tasksApi.addNote(task.id, text);
+    onChange();
+  });
 }
 
 /** Une ligne "+ Ajouter" par groupe (retour de Charles-Henri : "ajouter les éléments dans les
@@ -541,6 +694,12 @@ function renderQuickAddRow(visibleColumns, group, groupBy) {
  * Charles-Henri). Les boutons ‹ › offrent un chemin qui ne dépend jamais du scroll ni du
  * drag : changer de statut reste possible même quand une seule colonne tient à l'écran.
  */
+// Cartes dont la checklist est actuellement dépliée (retour de Charles-Henri, 02/09/2026 :
+// "afficher les sous-étapes en dessous, en décalé, mode réduit/déplier"). Au niveau du module
+// (pas de renderKanban) pour survivre aux redessins complets du board déclenchés par toute
+// mutation de tâche (storage.subscribe) — replié par défaut, comme l'historique des fiches.
+const expandedChecklists = new Set();
+
 function renderCard(task, projects) {
   const card = document.createElement("div");
   card.className = "kanban-card";
@@ -557,19 +716,41 @@ function renderCard(task, projects) {
   const nextStatus = statusIndex < tasksApi.STATUSES.length - 1 ? tasksApi.STATUSES[statusIndex + 1] : null;
   const checklist = task.checklist || [];
   const checklistDone = checklist.filter((c) => c.done).length;
+  const hasChecklist = checklist.length > 0;
+  const isExpanded = expandedChecklists.has(task.id);
+  // "⏳ En attente de..." (retour de Charles-Henri, 02/09/2026) : n'a de sens que sur ces deux
+  // statuts (voir tasksApi.updateTask, qui l'efface automatiquement en sortant) — jamais
+  // affiché ailleurs, pour ne pas laisser un champ vide et sans objet sur une tâche "à faire".
+  const showWaiting = task.status === "waiting" || task.status === "follow_up";
 
   card.innerHTML = `
     <div class="kanban-card-title">${task.isBlocked ? "🔴 " : ""}${escapeHtml(task.title)}</div>
     <div class="kanban-card-meta">
       ${project ? `<span>📦 ${escapeHtml(project.name)}</span>` : ""}
       ${task.dueDate ? `<span class="${late ? "badge badge-late" : ""}">📅 ${formatDate(task.dueDate)}</span>` : ""}
-      ${checklist.length ? `<span>☑️ ${checklistDone}/${checklist.length}</span>` : ""}
+      ${hasChecklist ? `<button type="button" class="kanban-checklist-toggle" data-checklist-toggle>${isExpanded ? "▾" : "▸"} ☑️ ${checklistDone}/${checklist.length}</button>` : ""}
     </div>
+    ${showWaiting ? `
+      <div class="kanban-card-waiting">
+        <label>⏳ En attente de</label>
+        <input type="text" class="kanban-waiting-input" placeholder="Qui, ou quoi ?" value="${escapeAttr(task.waitingOn || "")}" />
+      </div>
+    ` : ""}
     <div class="kanban-card-move">
       <button type="button" class="kanban-move-btn" data-dir="prev" aria-label="Statut précédent" ${prevStatus ? "" : "disabled"}>‹</button>
       <span class="kanban-move-label">${tasksApi.STATUS_LABELS[task.status]}</span>
       <button type="button" class="kanban-move-btn" data-dir="next" aria-label="Statut suivant" ${nextStatus ? "" : "disabled"}>›</button>
     </div>
+    ${hasChecklist ? `
+      <div class="kanban-card-checklist" data-checklist-body style="display:${isExpanded ? "block" : "none"};">
+        ${checklist.map((c) => `
+          <label class="kanban-checklist-item">
+            <input type="checkbox" data-checklist-id="${c.id}" ${c.done ? "checked" : ""} />
+            <span class="${c.done ? "done" : ""}">${escapeHtml(c.text)}</span>
+          </label>
+        `).join("")}
+      </div>
+    ` : ""}
   `;
 
   card.querySelector('[data-dir="prev"]').addEventListener("click", (e) => {
@@ -583,6 +764,33 @@ function renderCard(task, projects) {
       celebrateIfJustDone(task.status, nextStatus);
     }
   });
+
+  if (hasChecklist) {
+    const toggleBtn = card.querySelector("[data-checklist-toggle]");
+    const body = card.querySelector("[data-checklist-body]");
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const expanded = !expandedChecklists.has(task.id);
+      if (expanded) expandedChecklists.add(task.id);
+      else expandedChecklists.delete(task.id);
+      body.style.display = expanded ? "block" : "none";
+      toggleBtn.textContent = `${expanded ? "▾" : "▸"} ☑️ ${checklistDone}/${checklist.length}`;
+    });
+    card.querySelectorAll("[data-checklist-id]").forEach((input) => {
+      input.addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("change", () => {
+        tasksApi.toggleChecklistItem(task.id, input.dataset.checklistId, input.checked);
+      });
+    });
+  }
+
+  if (showWaiting) {
+    const waitingInput = card.querySelector(".kanban-waiting-input");
+    waitingInput.addEventListener("click", (e) => e.stopPropagation());
+    waitingInput.addEventListener("change", () => {
+      tasksApi.setWaitingNote(task.id, waitingInput.value);
+    });
+  }
 
   return card;
 }
