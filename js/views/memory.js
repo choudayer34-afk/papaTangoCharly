@@ -2,18 +2,25 @@
 // discussion sur la mémoire de travail et l'immédiateté du quotidien) : "une rubrique pour
 // travailler sur les éléments du TDAH ou la mémoire avec des exercices ou des trucs ludiques".
 // Cadrage posé avant construction (AskUserQuestion) : un MÉLANGE varié plutôt qu'un seul type
-// d'exercice — trois formats courts, volontairement différents : un jeu de mémoire (paires),
-// un exercice d'attention/concentration (respiration guidée), un entraînement de mémoire de
+// d'exercice — formats courts, volontairement différents : un jeu de mémoire (paires), un
+// exercice d'attention/concentration (respiration guidée), un entraînement de mémoire de
 // travail (rappel de séquence). Pas un programme d'entraînement sérieux avec suivi de
 // progression — juste une pause ludique, cohérent avec "pas de nouvelle décision à prendre
 // pour que ça marche" : rien n'est enregistré d'une visite à l'autre (pas de score persistant,
 // volontairement, pour rester léger — voir doc de suivi si Charles-Henri en redemande).
+//
+// Ajout du 02/09/2026 (demande explicite : "un petit pomodoro") : 🍅 Pomodoro, un vrai
+// minuteur de concentration — différent des trois exercices ci-dessus (qui sont des pauses),
+// c'est un outil utilisé PENDANT le travail. Vit ici plutôt qu'ailleurs par cohérence avec le
+// reste de cette rubrique (TDAH/attention), mais continue de tourner même après avoir quitté
+// cette vue (voir js/components/pomodoroWidget.js).
 //
 // Accessible depuis un bouton sur l'Accueil (pas depuis ❓ Aide, qui est réservé aux pages de
 // référence Guide/Nouveautés) — cohérent avec le principe "réduire les silos de navigation" :
 // ça vit là où Charles-Henri regarde déjà tous les jours plutôt que dans un endroit à retenir.
 
 import { showToast } from "../components/toast.js";
+import * as pomodoroStore from "../services/pomodoroStore.js";
 
 const PAIR_EMOJIS = ["🍎", "🚗", "🎈", "🐳", "⭐", "🎧", "🌵", "🍩", "🎲", "🦊"];
 const SEQUENCE_EMOJIS = ["🔵", "🟢", "🟡", "🟣", "🔴", "🟠"];
@@ -39,6 +46,7 @@ const EXERCISES = [
   { id: "pairs", icon: "🧩", title: "Jeu des paires", desc: "Un petit memory classique — retrouve les paires d'emojis cachées." },
   { id: "breathing", icon: "🌬️", title: "Respiration guidée", desc: "4 secondes pour inspirer, 4 pour retenir, 4 pour expirer, 4 pour retenir — le temps de souffler entre deux tâches." },
   { id: "sequence", icon: "🔢", title: "Rappel de séquence", desc: "Une suite de couleurs s'affiche brièvement — reproduis-la dans le bon ordre. La longueur augmente à chaque réussite." },
+  { id: "pomodoro", icon: "🍅", title: "Pomodoro", desc: "Un minuteur de concentration (25/5 ou 15/5) qui continue de tourner même si tu changes d'écran pour aller travailler — repère-le en bas à droite une fois lancé." },
 ];
 
 export function renderMemoryTraining(container) {
@@ -47,7 +55,7 @@ export function renderMemoryTraining(container) {
     <div class="topbar">
       <div>
         <h1>🧠 Mémoire &amp; TDAH</h1>
-        <div class="subtitle">Trois pauses courtes et ludiques, à faire quand tu en as besoin</div>
+        <div class="subtitle">Des pauses courtes et ludiques, et un minuteur pour t'aider à te concentrer</div>
       </div>
       <a href="#/dashboard" class="btn btn-secondary btn-sm">← Retour</a>
     </div>
@@ -85,6 +93,7 @@ export function renderMemoryTraining(container) {
       if (ex.id === "pairs") renderPairsGame(playArea);
       else if (ex.id === "breathing") renderBreathingExercise(playArea);
       else if (ex.id === "sequence") renderSequenceGame(playArea);
+      else if (ex.id === "pomodoro") renderPomodoroPanel(playArea);
     });
     picker.appendChild(row);
   }
@@ -353,4 +362,85 @@ function renderSequenceGame(container) {
   }
 
   startBtn.addEventListener("click", () => startRound());
+}
+
+// ============================================================
+// --- 🍅 Pomodoro ---
+// ============================================================
+// Le minuteur lui-même vit dans js/services/pomodoroStore.js + js/components/
+// pomodoroWidget.js (monté une seule fois pour toute la session, comme le bouton ❓ Aide) —
+// c'est le widget, pas cette vue, qui fait avancer les phases, pour que le minuteur continue
+// de tourner même après avoir quitté #/memory pour aller travailler ailleurs (demande
+// explicite du 02/09/2026 : "un petit pomodoro"). Ce panneau ne fait que lire l'état pour
+// s'afficher en grand et proposer les actions — jamais de transition déclenchée d'ici, pour ne
+// jamais doubler un toast/une notification avec le widget.
+//
+// L'intervalle de rafraîchissement d'affichage ci-dessous est stocké dans le même
+// `activeInterval` que la respiration : il est nettoyé au changement d'exercice et à la sortie
+// de la vue (même contrat), ce qui est le comportement voulu ici aussi — arrêter de redessiner
+// un écran qui n'est plus visible, sans jamais arrêter le minuteur lui-même (propriété du
+// widget global, indépendant de cette vue).
+
+function renderPomodoroPanel(container) {
+  function draw() {
+    const state = pomodoroStore.getState();
+    if (!state) {
+      container.innerHTML = `
+        <div class="card">
+          <div class="item-title" style="margin-bottom:8px;">🍅 Pomodoro</div>
+          <div class="item-meta" style="margin-bottom:12px;">
+            Une fois lancé, le minuteur continue de tourner même si tu changes d'écran pour
+            aller travailler — repère-le en bas à droite de l'écran (⏸️/▶️ pour le mettre en
+            pause sans revenir ici).
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${Object.entries(pomodoroStore.PRESETS)
+              .map(([key, preset]) => `<button type="button" class="btn btn-secondary" data-preset="${key}">▶️ ${preset.label}</button>`)
+              .join("")}
+          </div>
+        </div>
+      `;
+      container.querySelectorAll("[data-preset]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          pomodoroStore.start(btn.dataset.preset);
+          showToast("🎯 Pomodoro lancé — va travailler, il te rattrapera");
+          draw();
+        });
+      });
+      return;
+    }
+
+    const remaining = pomodoroStore.remainingMs(state);
+    const label = pomodoroStore.PHASE_LABELS[state.phase] || state.phase;
+    container.innerHTML = `
+      <div class="card" style="text-align:center;">
+        <div class="item-title" style="margin-bottom:8px;">🍅 Pomodoro</div>
+        <div class="item-meta" style="margin-bottom:8px;">Cycle ${state.cycleCount + 1} · ${pomodoroStore.PRESETS[state.presetKey]?.label || ""}</div>
+        <div style="font-size:32px;font-weight:700;margin:8px 0;">${label}</div>
+        <div style="font-size:40px;font-variant-numeric:tabular-nums;margin-bottom:16px;">${pomodoroStore.formatMs(remaining)}</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          <button type="button" id="pomo-toggle" class="btn btn-primary">${state.isPaused ? "▶️ Reprendre" : "⏸️ Pause"}</button>
+          <button type="button" id="pomo-skip" class="btn btn-secondary">⏭️ Passer</button>
+          <button type="button" id="pomo-stop" class="btn btn-ghost">⏹️ Arrêter</button>
+        </div>
+      </div>
+    `;
+    container.querySelector("#pomo-toggle").addEventListener("click", () => {
+      if (state.isPaused) pomodoroStore.resume();
+      else pomodoroStore.pause();
+      draw();
+    });
+    container.querySelector("#pomo-skip").addEventListener("click", () => {
+      pomodoroStore.skip();
+      draw();
+    });
+    container.querySelector("#pomo-stop").addEventListener("click", () => {
+      pomodoroStore.stop();
+      showToast("Pomodoro arrêté");
+      draw();
+    });
+  }
+
+  draw();
+  activeInterval = setInterval(draw, 1000);
 }

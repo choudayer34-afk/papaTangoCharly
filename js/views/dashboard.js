@@ -25,6 +25,8 @@ import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { openWeeklyReview } from "../components/weeklyReview.js";
 import { openQualifyChoice, openKeptItemDetail } from "./inbox.js";
+import { openCaptureModal } from "../components/capture.js";
+import { getDraft, clearDraft } from "../services/draftStore.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -57,6 +59,7 @@ export function renderDashboard(container) {
       </div>
     </div>
     <div class="view">
+      <div id="capture-draft-banner"></div>
       <div id="review-reminder"></div>
       <div id="notif-optin"></div>
       <div class="chip-row" id="hat-filter"></div>
@@ -81,6 +84,7 @@ export function renderDashboard(container) {
     "Le filtre <strong>Toutes / Toi / Équipe / Projets / Manager / CSE</strong> ci-dessous limite l'Accueil à une seule casquette à la fois — il est déduit automatiquement du projet ou de la personne concernée. Le bouton ⚙️ permet de replier les sections dont tu ne te sers pas."
   );
 
+  const captureDraftBannerEl = container.querySelector("#capture-draft-banner");
   const reviewReminderEl = container.querySelector("#review-reminder");
   const notifOptInEl = container.querySelector("#notif-optin");
   const hatFilterEl = container.querySelector("#hat-filter");
@@ -108,6 +112,10 @@ export function renderDashboard(container) {
   let hiddenSections = new Set();
   let focusOverride = { date: null, taskIds: [] };
   let recentlyViewed = [];
+
+  // Lecture locale (localStorage), synchrone — pas besoin d'attendre les préférences
+  // Firestore pour afficher ce bandeau, qui doit apparaître le plus tôt possible.
+  renderCaptureDraftBanner();
 
   preferencesApi.getPreferences().then((prefs) => {
     projectSortMode = prefs.projectSort || "manual";
@@ -142,6 +150,47 @@ export function renderDashboard(container) {
       renderFollowUpsSection();
       renderRecentSection();
       await preferencesApi.setCasquette(hatId);
+    });
+  }
+
+  /**
+   * "✏️ Saisie laissée en cours" (piste TDAH du 02/09/2026, retour de Charles-Henri — ses
+   * propres exemples du quotidien : reposer un yaourt pour passer l'aspirateur et ne s'en
+   * souvenir qu'en entendant le camion de recyclage ; demander un café et l'oublier
+   * complètement, absorbé ailleurs. Le point commun : une interruption efface totalement ce
+   * qui était en cours, et rien ne le fait remonter sans un signal extérieur). Le brouillon
+   * lui-même est sauvegardé automatiquement pendant la frappe dans Capturer
+   * (js/components/capture.js, js/services/draftStore.js) ; ce bandeau EST le signal
+   * extérieur — affiché en tout premier sur l'Accueil, l'endroit que Charles-Henri regarde
+   * déjà tous les jours, plutôt que de compter sur lui pour penser à rouvrir Capturer tout
+   * seul. Volontairement hors de `DASHBOARD_SECTIONS` (non repliable/masquable) : un
+   * brouillon oublié ne doit jamais pouvoir disparaître silencieusement parce que la section a
+   * été repliée un jour — même traitement que le bandeau d'opt-in de notification ci-dessous.
+   */
+  function renderCaptureDraftBanner() {
+    const draft = getDraft("capture");
+    if (!draft || !draft.value || !draft.value.trim()) {
+      captureDraftBannerEl.innerHTML = "";
+      return;
+    }
+    const trimmed = draft.value.trim();
+    const preview = trimmed.length > 80 ? trimmed.slice(0, 80) + "…" : trimmed;
+    captureDraftBannerEl.innerHTML = `
+      <div class="review-banner">
+        <span>✏️ Saisie laissée en cours : « ${escapeHtml(preview)} »</span>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="capture-draft-resume" class="btn btn-primary btn-sm">Reprendre</button>
+          <button type="button" id="capture-draft-discard" class="btn btn-secondary btn-sm">Abandonner</button>
+        </div>
+      </div>
+    `;
+    captureDraftBannerEl.querySelector("#capture-draft-resume").addEventListener("click", () => {
+      openCaptureModal({ onClose: () => renderCaptureDraftBanner() });
+    });
+    captureDraftBannerEl.querySelector("#capture-draft-discard").addEventListener("click", () => {
+      clearDraft("capture");
+      renderCaptureDraftBanner();
+      showToast("Brouillon abandonné");
     });
   }
 
@@ -825,6 +874,16 @@ export function renderDashboard(container) {
     bodyWrap.appendChild(list);
   }
 
+  // Rafraîchit le bandeau "✏️ Saisie laissée en cours" au retour sur l'app (onglet/fenêtre qui
+  // reprend le focus) — le cas le plus fréquent d'une saisie interrompue via le FAB de capture
+  // (accessible depuis n'importe quel écran) : Charles-Henri part complètement ailleurs
+  // (change d'onglet, d'appli, verrouille son téléphone — exactement le schéma du yaourt/
+  // aspirateur) puis revient, sans forcément changer d'onglet Pilotage entre-temps pour
+  // déclencher un nouveau rendu de l'Accueil par un autre moyen.
+  const refreshCaptureDraftBanner = () => renderCaptureDraftBanner();
+  document.addEventListener("visibilitychange", refreshCaptureDraftBanner);
+  window.addEventListener("focus", refreshCaptureDraftBanner);
+
   const unsubTasks = tasksApi.subscribe((items) => {
     tasks = items;
     renderStats();
@@ -865,6 +924,8 @@ export function renderDashboard(container) {
   });
 
   return function cleanup() {
+    document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
+    window.removeEventListener("focus", refreshCaptureDraftBanner);
     unsubTasks();
     unsubInbox();
     unsubKept();
