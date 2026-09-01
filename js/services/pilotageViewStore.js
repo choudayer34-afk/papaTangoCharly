@@ -19,8 +19,9 @@ function defaultState() {
       sortColumn: null, // "type" | "status" | "project" | "dueDate" | null
       sortDir: "asc", // "asc" | "desc"
       // Le Titre reste toujours la première colonne, épinglée — seules ces colonnes-ci sont
-      // réordonnables/masquées selon le regroupement actif (voir js/views/kanban.js).
-      columnOrder: ["type", "status", "project", "dueDate"],
+      // réordonnables/masquées selon le regroupement actif (voir js/views/kanban.js). "notes"
+      // et "description" ajoutées le 02/09/2026 (retour de Charles-Henri).
+      columnOrder: ["type", "status", "project", "dueDate", "notes", "description"],
     },
   };
 }
@@ -31,7 +32,14 @@ export function getViewState() {
     if (!raw) return defaultState();
     const parsed = JSON.parse(raw);
     const base = defaultState();
-    return { ...base, ...parsed, table: { ...base.table, ...(parsed.table || {}) } };
+    const table = { ...base.table, ...(parsed.table || {}) };
+    // Migration (02/09/2026, ajout des colonnes Notes/Description) : un `columnOrder` déjà
+    // enregistré sur cet appareil (depuis avant cette vague) ne les contient pas encore —
+    // les ajouter à la fin plutôt que de les cacher silencieusement, sans perdre un ordre déjà
+    // personnalisé par ailleurs.
+    const missing = base.table.columnOrder.filter((c) => !table.columnOrder.includes(c));
+    if (missing.length) table.columnOrder = [...table.columnOrder, ...missing];
+    return { ...base, ...parsed, table };
   } catch {
     return defaultState();
   }
