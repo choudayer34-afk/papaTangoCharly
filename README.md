@@ -235,6 +235,19 @@ service cloud.firestore {
   notification navigateur résumant le retard et les tâches "en pause" à l'ouverture de l'app —
   jamais un vrai push (rien si l'app est fermée), une seule fois par jour, jamais reproposée
   une fois la réponse donnée
+- ✅ "🆕 Nouveautés" (`js/views/whatsnew.js`, route cachée `#/whatsnew`, accessible depuis
+  ❓ Aide → "🆕 Voir les nouveautés") : un historique rédigé à la main de ce qui a été ajouté à
+  l'app, du plus récent au plus ancien, regroupé par vague — répond à "où est-ce que je
+  retrouve tout ce qu'on a ajouté ?" (piste TDAH — repérage). Distinct du Guide (qui explique
+  comment utiliser une fonction) : ici on retrace quand et pourquoi. Fonctionne hors ligne
+  comme le Guide ; seule la vague la plus récente est dépliée par défaut
+- ✅ "🧠 Mémoire & TDAH" (`js/views/memory.js`, route cachée `#/memory`, bouton "🧠 Pause
+  mémoire" sur l'Accueil, 01/09/2026) : demande explicite de Charles-Henri, cadrée avant
+  construction (mélange varié plutôt qu'un seul type d'exercice) — trois exercices courts et
+  ludiques, sans suivi de score ni de progression d'une visite à l'autre : 🧩 jeu des paires
+  (memory), 🌬️ respiration guidée (4-4-4-4), 🔢 rappel de séquence de longueur croissante.
+  Volontairement accessible depuis l'Accueil plutôt que depuis ❓ Aide (réservé aux pages de
+  référence Guide/Nouveautés) — ça vit là où Charles-Henri regarde déjà tous les jours
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
   fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
   démarrage ci-dessus comme version app-ouverte-uniquement), statut de projet
