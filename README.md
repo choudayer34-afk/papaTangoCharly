@@ -321,6 +321,69 @@ service cloud.firestore {
 - ✅ Vue calendrier dans Pilotage (clarification, 02/09/2026) : ce que Charles-Henri visait en
   en parlant était l'onglet Calendrier déjà existant (`#/calendar`) — aucune bascule
   supplémentaire à construire dans Pilotage
+- ✅ Audit de simplification "TDAH, écran par écran" (02/09/2026, demande explicite de
+  Charles-Henri — checkup complet pour épurer l'app, sa saisie et son pilotage) : toutes les
+  suggestions de l'audit ont été mises en œuvre, à l'exception explicite du système "Sous-
+  parties" du Projet, gardé volontairement différencié de la checklist des Tâches (deux
+  besoins réels : avancement d'un bloc de l'équipe vs sous-étapes personnelles d'une tâche).
+  Détail des changements ci-dessous
+- ✅ Statut d'un Suivi réduit à 3 états (`js/domain/followups.js`, 02/09/2026) : `waiting`/
+  `relaunched`/`done` remplacent le pipeline à 5 statuts des Tâches, réutilisé tel quel jusqu'ici
+  sans jamais avoir de "à faire"/"en cours" qui fasse vraiment sens pour un suivi. Les anciennes
+  valeurs (`todo`/`in_progress`/`follow_up`) sont ramenées aux nouvelles à la lecture
+  (`normalizeStatus()`, appliqué par `listAll`/`subscribe`) — aucune migration risquée à lancer,
+  chaque suivi se normalise tout seul dès qu'il est relu
+- ✅ Fusion des deux "Notes" d'une Personne (`js/domain/people.js`, `js/views/people.js`,
+  02/09/2026) : le champ de contexte libre `notes` disparaît, absorbé dans le Journal de notes
+  horodaté comme première entrée (`migrateLegacyNotes()`, appliqué à l'ouverture de la fiche) —
+  un seul endroit pour tout ce qui se note sur une personne plutôt que deux qui se ressemblaient
+- ✅ Icônes des "Sous-parties" différenciées de celles des Tâches (`js/domain/projects.js`,
+  02/09/2026) : ◻️🔶✅ au lieu de ⚪🔵🟢 — seul changement visuel, le système (statut à 3 états,
+  notes, modale dédiée) reste intentionnellement distinct de la checklist des Tâches (décision
+  explicite de Charles-Henri, malgré la suggestion initiale de l'audit de le fusionner)
+- ✅ Profil "épuré" de l'Accueil par défaut (`js/domain/preferences.js`, `js/views/dashboard.js`,
+  02/09/2026) : Focus du jour, la nouvelle section fusionnée "⚠️ Ça a besoin de toi" et les
+  chiffres-clés restent visibles d'emblée ; "Mes projets", "Récemment", "Reprendre où j'en
+  étais" et "Informations & idées" passent masqués par défaut (toujours réactivables via ⚙️).
+  Une bascule one-shot (`dashboardHiddenMigratedV19`) applique ce nouveau profil immédiatement
+  sans attendre que Charles-Henri rouvre lui-même les réglages, sans jamais écraser une
+  personnalisation faite depuis
+- ✅ Fusion des 3 sections "a besoin d'attention" de l'Accueil (`js/views/dashboard.js`,
+  02/09/2026) : "En pause", "À échéance 7 jours" et "Suivis en retard" deviennent une seule
+  section "⚠️ Ça a besoin de toi", triée par urgence (retard d'abord)
+- ✅ Formulaires de création unifiés entre l'Inbox et le reste de l'app (`js/views/kanban.js`,
+  `js/views/dashboard.js`, `js/views/inbox.js`, 02/09/2026) : Tâche, Réunion et Décision
+  n'existent plus qu'en un seul formulaire chacun (celui, déjà le plus complet, utilisé par
+  Pilotage/l'Accueil), au lieu d'une version Inbox légèrement différente qui avait fini par
+  diverger (champ Projet manquant, notamment). La qualification Inbox reste garantie (Règle 3,
+  `sourceInboxItemId`) via un point d'injection (`prefill.createFn` pour la Tâche, `onCreated`
+  pour Réunion/Décision) plutôt qu'une copie du formulaire
+- ✅ Qualification Inbox simplifiée à 3 choix + "Autre" (`js/views/inbox.js`, 02/09/2026) :
+  Action/Suivi/Information, qui couvrent l'essentiel des captures, restent seuls visibles
+  d'emblée ; les 6 autres issues (Projet, Réunion, Décision, Ressource, Idée, Archiver) passent
+  sous un repli "Autre" — rien n'est supprimé, juste à un clic de plus
+- ✅ Filtres casquette + projet regroupés dans un menu "🔧 Filtrer" à Pilotage (`js/views/
+  kanban.js`, 02/09/2026) : ces deux filtres secondaires n'ont plus besoin d'occuper deux
+  rangées de chips en permanence — un badge sur le bouton indique en un coup d'œil qu'un filtre
+  est actif sans avoir à ouvrir le menu. Les chips d'échéance, "🙈 Masquer terminées" et la
+  bascule Trello/Tableau restent directement accessibles, inchangés
+- ✅ Blocs secondaires repliés par défaut sur les fiches Tâche et Projet (`js/views/kanban.js`,
+  `js/views/projects.js`, 02/09/2026) : Ressources, Réunions Outlook associées et Notes (Tâche) ;
+  Ressources et Notes (Projet) passent en `<details>` repliés — même mécanique déjà utilisée pour
+  l'Historique. Titre/Description/Critère/Échéance/Statut/Projet/Bloqué/Sous-étapes (Tâche) et
+  Nom/Catégorie/Objectif/Critère/Sous-parties/Tâches/Suivis/Réunions/Décisions (Projet) restent
+  visibles sans avoir à déplier
+- ✅ Légendes ⓘ permanentes (`js/components/infoTip.js`, `js/domain/casquettes.js`,
+  `js/domain/tasks.js`, `js/domain/followups.js`, `js/views/projects.js`, 02/09/2026) : un petit
+  ⓘ à côté du filtre casquette (Accueil, Pilotage) explique la règle de déduction ; à côté du
+  vocabulaire de statut sur Pilotage (Tâches), Équipe (Suivis) et la fiche Projet (les trois
+  vocabulaires y coexistent) — Tâche et Suivi partagent tous deux une valeur "en attente" avec
+  la même icône ⏳ mais un sens différent, source de confusion identifiée par l'audit
+- ✅ Bouton d'action dans les toasts + annulation d'un déplacement au Calendrier
+  (`js/components/toast.js`, `js/views/calendar.js`, 02/09/2026) : `showToast()` accepte
+  désormais un `actionLabel`/`onAction` optionnel (durée d'affichage allongée automatiquement) ;
+  glisser une échéance vers un autre jour au Calendrier propose "Annuler" directement dans le
+  toast de confirmation, pour rattraper un glisser-déposer accidentel sans rouvrir la fiche
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
   fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
   démarrage ci-dessus comme version app-ouverte-uniquement), horodatage réel du "dernier point
