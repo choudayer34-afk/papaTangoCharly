@@ -50,7 +50,7 @@ async function runSearch(query) {
     }
   }
   for (const person of people) {
-    if (haystack(person.name, person.role, person.notes).includes(q)) {
+    if (haystack(person.name, person.role).includes(q)) {
       results.push({
         type: "Personne",
         emoji: person.type === "manager" ? "👔" : "👤",
