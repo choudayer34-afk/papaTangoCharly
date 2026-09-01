@@ -37,8 +37,14 @@ export async function openWeeklyReview() {
     resourcesApi.listAll(),
   ]);
 
-  const late = tasks.filter(tasksApi.isLate);
-  const dueFollowUps = followUps.filter(followUpsApi.isControlDue);
+  // Projet fermé = lui et tout ce qui lui est lié disparaît des outils de pilotage (retour de
+  // Charles-Henri, 02/09/2026) — la Revue hebdomadaire en fait partie, même principe que
+  // hatFilterTasks()/hatFilterFollowUps() côté Dashboard et applyFilters() côté Kanban.
+  const projectsById = new Map(projects.map((p) => [p.id, p]));
+  const isProjectVisible = (projectId) => !projectId || !projectsApi.isArchived(projectsById.get(projectId));
+
+  const late = tasks.filter((t) => tasksApi.isLate(t) && isProjectVisible(t.projectId));
+  const dueFollowUps = followUps.filter((f) => followUpsApi.isControlDue(f) && isProjectVisible(f.projectId));
   const activeProjects = projects.filter((p) => p.status === "active");
   const activeStatuses = new Set(["todo", "in_progress", "waiting", "follow_up"]);
   const projectsWithoutNextAction = activeProjects.filter(
@@ -46,11 +52,11 @@ export async function openWeeklyReview() {
   );
   const weekEnd = Date.now() + 7 * 24 * 60 * 60 * 1000;
   const teamThisWeek = followUps.filter(
-    (f) => f.status !== "done" && f.controlDate && new Date(f.controlDate).getTime() <= weekEnd
+    (f) => f.status !== "done" && f.controlDate && new Date(f.controlDate).getTime() <= weekEnd && isProjectVisible(f.projectId)
   );
   const managers = people.filter((p) => p.type === "manager");
   const managementTopics = followUps.filter(
-    (f) => f.status !== "done" && f.direction === "to_tell" && managers.some((m) => m.id === f.personId)
+    (f) => f.status !== "done" && f.direction === "to_tell" && managers.some((m) => m.id === f.personId) && isProjectVisible(f.projectId)
   );
   const unclassifiedResources = resources.filter(resourcesApi.isUnclassified);
 
