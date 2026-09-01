@@ -18,6 +18,18 @@ export const STATUS_LABELS = {
   done: "Terminé",
 };
 
+// Retour de Charles-Henri, 02/09/2026 : afficher le statut sur "🗓️ À échéance dans les 7
+// jours" et "🎯 Focus du jour" (Dashboard) — un badge icône + libellé plutôt que le seul
+// libellé texte déjà utilisé ailleurs (ex. le Kanban), pour rester repérable au coup d'œil
+// dans une liste qui mélange plusieurs tâches.
+export const STATUS_ICONS = {
+  todo: "⚪",
+  in_progress: "🔵",
+  waiting: "⏳",
+  follow_up: "👀",
+  done: "🟢",
+};
+
 export async function createTask(data) {
   // Canevas Communication (§18, §78.9) : activé volontairement (case à cocher à la création),
   // pas déduit automatiquement du type — "communication" n'est pas l'un des types d'exemple
@@ -40,6 +52,7 @@ export async function createTask(data) {
     outlookMeetings: [], // référence manuelle (pas de vraie intégration Outlook, voir plus bas)
     notesLog: [], // journal de notes horodaté, voir addNote() plus bas
     checklist: [], // sous-étapes courtes libres, voir addChecklistItem() plus bas
+    waitingOn: "", // "⏳ En attente de..." — voir setWaitingNote() plus bas
   });
   await storage.logHistory("Task", task.id, "created", { title: task.title });
   return task;
@@ -95,6 +108,20 @@ export async function removeChecklistItem(id, itemId) {
   return updated.checklist;
 }
 
+/**
+ * "⏳ En attente de..." (retour de Charles-Henri, 02/09/2026) : une information libre affichée
+ * bien en évidence sur la carte Kanban tant qu'une Tâche est "En attente"/"À suivre" — ce
+ * qu'on attend, et de qui. S'efface automatiquement dès que la tâche change de statut (voir
+ * `updateTask` ci-dessous), pour ne jamais laisser un texte périmé sur une tâche qui a avancé
+ * depuis. Volontairement sans historique dédié, même principe que la checklist ci-dessus —
+ * une information qu'on ajuste au fil de l'eau, pas un événement à journaliser.
+ */
+export async function setWaitingNote(id, text) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  return storage.put(COLLECTION, { ...current, waitingOn: (text || "").trim() });
+}
+
 /** Coche/décoche une étape du canevas Communication — même principe que projects.js/meetings.js.
  *  `doneAt` horodate la coche (retour de Charles-Henri : voir à quel moment un point de la
  *  checklist a été traité), affiché par js/components/canevas.js à côté de l'étape cochée. */
@@ -140,6 +167,8 @@ export function subscribe(callback) {
  * chemin par lequel le statut change (Kanban, fiche détail, etc.), pas seulement
  * setStatus(). Une seule règle, un seul endroit.
  */
+const WAITING_NOTE_STATUSES = ["waiting", "follow_up"];
+
 export async function updateTask(id, patch) {
   const current = await storage.get(COLLECTION, id);
   if (!current) throw new Error("Tâche introuvable : " + id);
@@ -147,6 +176,11 @@ export async function updateTask(id, patch) {
   const finalPatch = { ...patch };
   if (patch.status && patch.status !== current.status) {
     finalPatch.completedAt = patch.status === "done" ? Date.now() : null;
+    // "⏳ En attente de..." ne vaut que pendant En attente/À suivre — effacé automatiquement
+    // dès qu'on en sort, sauf si ce même appel fixe volontairement une nouvelle valeur.
+    if (!WAITING_NOTE_STATUSES.includes(patch.status) && !("waitingOn" in patch)) {
+      finalPatch.waitingOn = "";
+    }
   }
 
   const updated = await storage.put(COLLECTION, { ...current, ...finalPatch });

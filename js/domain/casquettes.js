@@ -70,11 +70,20 @@ export function itemHat(item, projectsById) {
  * Bandeau de chips "Toutes / Toi / Équipe / Projets / Manager / CSE", réutilisé identique sur
  * l'Accueil et Pilotage (retour de Charles-Henri : le même filtre doit se retrouver partout,
  * pas une logique par écran). `activeId` = "all" ou un id de HATS.
+ *
+ * `onlyIds` (optionnel, retour de Charles-Henri, 02/09/2026 : "je comprend pas trop le filtre
+ * équipe/toi/projets/manager" dans Pilotage) restreint les chips affichées à ce sous-ensemble.
+ * Pilotage ne montre jamais que des Tâches, et `taskHat()` ci-dessus ne peut renvoyer que
+ * "toi"/"projets"/"cse" (une Tâche n'a pas d'assignee, donc jamais "equipe" ni "manager") —
+ * afficher ces deux chips-là dans Pilotage n'aboutissait qu'à un board vide et confus au clic.
+ * L'Accueil, qui agrège aussi des Suivis (via `followUpHat()`, qui lui peut renvoyer ces deux
+ * valeurs), continue d'afficher les 6 chips en omettant ce paramètre.
  */
-export function renderHatChipRow(container, activeId, onSelect) {
+export function renderHatChipRow(container, activeId, onSelect, onlyIds = null) {
+  const hats = onlyIds ? HATS.filter((h) => onlyIds.includes(h.id)) : HATS;
   container.innerHTML =
     `<button type="button" class="chip${activeId === "all" ? " active" : ""}" data-hat="all">Toutes</button>` +
-    HATS.map(
+    hats.map(
       (h) => `<button type="button" class="chip${activeId === h.id ? " active" : ""}" data-hat="${h.id}">${h.icon} ${h.label}</button>`
     ).join("");
   container.querySelectorAll("[data-hat]").forEach((chip) => {

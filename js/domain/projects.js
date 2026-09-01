@@ -119,6 +119,38 @@ export async function updateProject(id, patch) {
   return updated;
 }
 
+/**
+ * Clôturer/rouvrir un projet (retour de Charles-Henri, 02/09/2026 : "je dois pouvoir néanmoins
+ * le retrouver dans une espèce d'archive"). Réutilise le champ `status` déjà présent depuis le
+ * round E (`active | done | archived`), jusqu'ici jamais modifié depuis l'UI. Clôturer un
+ * projet ne supprime ni ne déplace rien (même principe que `removeProject` ci-dessus) — il
+ * fait juste sortir le projet ET tout ce qui lui est rattaché (Tâches/Suivis/Réunions/
+ * Décisions/Ressources, via leur `projectId`) des écrans de pilotage actifs (Dashboard,
+ * Pilotage, Calendrier, Revue hebdomadaire) — voir `isArchived()` ci-dessous, seul point de
+ * vérité consommé par ces écrans. La recherche globale reste volontairement inchangée : c'est
+ * elle qui sert de "retrouver dans une espèce d'archive" pour le contenu, en plus du filtre
+ * dédié dans l'onglet Projets.
+ */
+export async function closeProject(id) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Projet introuvable : " + id);
+  const updated = await storage.put(COLLECTION, { ...current, status: "archived" });
+  await storage.logHistory("Project", id, "closed", {});
+  return updated;
+}
+
+export async function reopenProject(id) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Projet introuvable : " + id);
+  const updated = await storage.put(COLLECTION, { ...current, status: "active" });
+  await storage.logHistory("Project", id, "reopened", {});
+  return updated;
+}
+
+export function isArchived(project) {
+  return !!project && project.status === "archived";
+}
+
 export function getProject(id) {
   return storage.get(COLLECTION, id);
 }
