@@ -14,6 +14,7 @@
 // reste facultatif pour un "to_tell" ordinaire vers un collaborateur ou l'équipe.
 
 import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
 import { STATUSES, STATUS_LABELS } from "./tasks.js";
 
 const COLLECTION = "followUps";
@@ -54,9 +55,23 @@ export async function createFollowUp(data) {
     status: data.status || "waiting",
     successCriteria: data.successCriteria || "",
     projectId: data.projectId || null,
+    notesLog: [], // journal de notes horodaté, voir addNote() plus bas
   });
   await storage.logHistory("FollowUp", followUp.id, "created", { title: followUp.title });
   return followUp;
+}
+
+/** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
+ *  domain/tasks.js pour le principe complet (additif uniquement). */
+export async function addNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Suivi introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("FollowUp", id, "note_added", { text: trimmed });
+  return updated.notesLog;
 }
 
 export async function updateFollowUp(id, patch) {

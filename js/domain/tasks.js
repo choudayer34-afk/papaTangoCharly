@@ -38,9 +38,27 @@ export async function createTask(data) {
     steps: useCommunicationCanevas ? buildSteps("communication") : [],
     completedAt: null,
     outlookMeetings: [], // référence manuelle (pas de vraie intégration Outlook, voir plus bas)
+    notesLog: [], // journal de notes horodaté, voir addNote() plus bas
   });
   await storage.logHistory("Task", task.id, "created", { title: task.title });
   return task;
+}
+
+/**
+ * Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir
+ * js/components/notesBlock.js. Additif uniquement, jamais d'édition ni de suppression d'une
+ * note existante. Renvoie le tableau à jour pour que le composant puisse se rafraîchir sans
+ * recharger toute la tâche.
+ */
+export async function addNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("Task", id, "note_added", { text: trimmed });
+  return updated.notesLog;
 }
 
 /** Coche/décoche une étape du canevas Communication — même principe que projects.js/meetings.js.

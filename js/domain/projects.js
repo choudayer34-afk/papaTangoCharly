@@ -38,6 +38,7 @@ export async function createProject(data) {
     steps: buildSteps("project"), // canevas Projet (§17, §78.9) — cochable depuis la fiche
     parts: [],
     order: data.order ?? Date.now(),
+    notesLog: [], // journal de notes horodaté du projet, voir addNote() plus bas
   });
   await storage.logHistory("Project", project.id, "created", { name: project.name });
   return project;
@@ -56,7 +57,7 @@ export async function toggleStep(id, stepKey, done) {
 export async function addPart(id, label) {
   const current = await storage.get(COLLECTION, id);
   if (!current) throw new Error("Projet introuvable : " + id);
-  const parts = [...(current.parts || []), { id: generateId(), label, status: "not_started" }];
+  const parts = [...(current.parts || []), { id: generateId(), label, status: "not_started", notesLog: [] }];
   return storage.put(COLLECTION, { ...current, parts });
 }
 
@@ -72,6 +73,42 @@ export async function removePart(id, partId) {
   if (!current) throw new Error("Projet introuvable : " + id);
   const parts = (current.parts || []).filter((p) => p.id !== partId);
   return storage.put(COLLECTION, { ...current, parts });
+}
+
+/**
+ * Journal de notes horodaté du PROJET lui-même (voir addNote() dans domain/tasks.js pour le
+ * principe complet). Distinct de addPartNote() ci-dessous, qui note une sous-partie précise.
+ */
+export async function addNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Projet introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("Project", id, "note_added", { text: trimmed });
+  return updated.notesLog;
+}
+
+/**
+ * Journal de notes horodaté d'une SOUS-PARTIE (retour de Charles-Henri, 01/09/2026 : pouvoir
+ * suivre "où en est l'équipe" sur un bloc avec un complément daté, pas juste un statut à trois
+ * états). Le tableau vit sur le sous-objet `part.notesLog`, jamais sur le projet directement —
+ * même principe d'embarquement que `parts` lui-même (une fiche projet possède ses sous-parties,
+ * jamais partagées). Ne journalise pas dans l'Historique global du projet (bruit trop fin pour
+ * un fil déjà partagé avec Tâches/Suivis/Réunions/Décisions) — la fiche affiche directement la
+ * dernière note + son historique complet sur la ligne de la sous-partie concernée.
+ */
+export async function addPartNote(id, partId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Projet introuvable : " + id);
+  const parts = (current.parts || []).map((p) =>
+    p.id === partId ? { ...p, notesLog: [...(p.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] } : p
+  );
+  const updated = await storage.put(COLLECTION, { ...current, parts });
+  return updated.parts.find((p) => p.id === partId)?.notesLog || [];
 }
 
 export async function updateProject(id, patch) {

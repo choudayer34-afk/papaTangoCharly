@@ -4,6 +4,7 @@
 // Le contenu brut original est toujours conservé, quoi qu'il arrive (Règle 3).
 
 import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
 import { createTask } from "./tasks.js";
 
 const COLLECTION = "inboxItems";
@@ -58,6 +59,24 @@ export async function autoArchiveStaleKept() {
   const stale = kept.filter((item) => (item.createdAt || 0) < cutoff);
   await Promise.all(stale.map((item) => qualify(item.id, "archived")));
   return stale.length;
+}
+
+/**
+ * Journal de notes horodaté sur une Information/Idée "gardée" (retour de Charles-Henri,
+ * 01/09/2026, généralisé à "tout les éléments") — même principe que addNote() dans
+ * domain/tasks.js (additif uniquement), mais posé directement ici plutôt que via une fonction
+ * updateXxx générique : un InboxItem n'en a pas, ses différents statuts se posent chacun via
+ * leur propre chemin dédié (qualify(), capture()...) plutôt qu'un patch libre.
+ */
+export async function addKeptNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Élément Inbox introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("InboxItem", id, "note_added", { text: trimmed });
+  return updated.notesLog;
 }
 
 // Pour ces issues, l'entité résultante est déjà créée par la vue (js/views/inbox.js), qui

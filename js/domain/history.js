@@ -49,6 +49,12 @@ for (const type of ["Task", "Project", "Person", "FollowUp", "Resource", "Meetin
   ACTION_META[`${type}:unlinked`] = { emoji: "🔗", label: "Lien retiré" };
 }
 
+// Journal de notes (§ retour de Charles-Henri, 01/09/2026) — une note ajoutée sur n'importe
+// quel type de fiche apparaît aussi dans son historique, comme n'importe quel autre événement.
+for (const type of ["Task", "Project", "Person", "FollowUp", "Resource", "Meeting", "Decision", "InboxItem"]) {
+  ACTION_META[`${type}:note_added`] = { emoji: "🗒️", label: "Note ajoutée" };
+}
+
 export function listAll() {
   return storage.listAll(COLLECTION);
 }
@@ -69,6 +75,9 @@ export function describe(entry) {
     label: `${entry.entityType} — ${entry.action}`,
   };
   let detail = entry.metadata?.title || entry.metadata?.name || "";
+  if (!detail && entry.action === "note_added" && entry.metadata?.text) {
+    detail = entry.metadata.text.length > 60 ? entry.metadata.text.slice(0, 60) + "…" : entry.metadata.text;
+  }
   if (!detail && entry.action === "status_changed" && entry.metadata?.from && entry.metadata?.to) {
     detail = `${entry.metadata.from} → ${entry.metadata.to}`;
   }

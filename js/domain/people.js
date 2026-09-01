@@ -1,6 +1,7 @@
 // Personnes — §31, §32. Collaborateurs suivis ou manager(s) avec qui on a des sujets.
 
 import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
 
 const COLLECTION = "people";
 
@@ -11,9 +12,23 @@ export async function createPerson(data) {
     team: data.team || "",
     type: data.type || "collaborateur", // collaborateur | manager
     notes: data.notes || "",
+    notesLog: [], // journal de notes horodaté, voir addNote() plus bas — distinct de `notes` (contexte libre non daté)
   });
   await storage.logHistory("Person", person.id, "created", { name: person.name });
   return person;
+}
+
+/** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
+ *  domain/tasks.js pour le principe complet (additif uniquement). */
+export async function addNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Personne introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("Person", id, "note_added", { text: trimmed });
+  return updated.notesLog;
 }
 
 export async function updatePerson(id, patch) {

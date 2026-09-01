@@ -4,6 +4,7 @@
 // plusieurs projets/tâches via projectIds/taskIds, jamais recréée pour chaque contexte.
 
 import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
 
 const COLLECTION = "resources";
 
@@ -56,9 +57,23 @@ export async function createResource(data) {
     projectIds: data.projectIds || [],
     taskIds: data.taskIds || [],
     lastUsedAt: null,
+    notesLog: [], // journal de notes horodaté, voir addNote() plus bas
   });
   await storage.logHistory("Resource", resource.id, "created", { title: resource.title });
   return resource;
+}
+
+/** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
+ *  domain/tasks.js pour le principe complet (additif uniquement). */
+export async function addNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Ressource introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("Resource", id, "note_added", { text: trimmed });
+  return updated.notesLog;
 }
 
 export async function updateResource(id, patch) {

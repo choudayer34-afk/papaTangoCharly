@@ -6,6 +6,7 @@
 // §78.9) plutôt que d'être codé en dur ici.
 
 import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
 import { buildSteps } from "./templates.js";
 
 const COLLECTION = "meetings";
@@ -30,9 +31,23 @@ export async function createMeeting(data) {
     projectId: data.projectId || null,
     canevasKey,
     steps: canevasKey ? buildSteps(canevasKey) : [],
+    notesLog: [], // journal de notes horodaté, voir addNote() plus bas — distinct du champ `notes` (contexte libre non daté)
   });
   await storage.logHistory("Meeting", meeting.id, "created", { title: meeting.title });
   return meeting;
+}
+
+/** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
+ *  domain/tasks.js pour le principe complet (additif uniquement). */
+export async function addNote(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Réunion introuvable : " + id);
+  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
+  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  await storage.logHistory("Meeting", id, "note_added", { text: trimmed });
+  return updated.notesLog;
 }
 
 /** Coche/décoche une étape du canevas — voir le même principe côté projects.js (jamais un
