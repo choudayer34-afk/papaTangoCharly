@@ -7,7 +7,6 @@ import { renderInbox } from "./views/inbox.js";
 import { renderKanban } from "./views/kanban.js";
 import { renderProjects } from "./views/projects.js";
 import { renderPeople } from "./views/people.js";
-import { renderManagement } from "./views/management.js";
 import { renderCalendar } from "./views/calendar.js";
 import { renderResources } from "./views/resources.js";
 import { renderPrompts } from "./views/prompts.js";
@@ -31,8 +30,11 @@ const ROUTES = {
   "#/inbox": { render: renderInbox, label: "Inbox", icon: "📥" },
   "#/kanban": { render: renderKanban, label: "Pilotage", icon: "📋" },
   "#/projects": { render: renderProjects, label: "Projets", icon: "📦" },
+  // Management (§34/§35) a été fusionné dans cet onglet le 02/09/2026 (retour de
+  // Charles-Henri : "traiter les onglets comme des filtres d'un même flux") — le filtre
+  // "👔 Mon manager" à l'intérieur d'Équipe couvre désormais ce qui vivait sur sa propre
+  // route ; voir js/views/people.js et js/views/management.js#renderManagerSection.
   "#/people": { render: renderPeople, label: "Équipe", icon: "👥" },
-  "#/management": { render: renderManagement, label: "Management", icon: "👔" },
   "#/calendar": { render: renderCalendar, label: "Calendrier", icon: "📅" },
   "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
   "#/prompts": { render: renderPrompts, label: "Prompts", icon: "🤖" },
