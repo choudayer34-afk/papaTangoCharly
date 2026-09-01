@@ -333,8 +333,16 @@ export async function openPersonDetail(person, allFollowUps) {
  * Purement une lecture recomposée des mêmes suivis déjà présents sur la fiche (retard de
  * contrôle en premier, puis le reste par date de contrôle, puis les derniers terminés) :
  * aucune nouvelle donnée, aucun nouveau champ.
+ *
+ * "🎯 À aborder" est en plus regroupé par projet (fil rouge par sujet plutôt que des lignes
+ * isolées — retour de Charles-Henri du 02/09/2026 : "les deux", projet ET date). Le
+ * regroupement est volontairement limité à cette seule section : c'est précisément celle
+ * visée par sa question, et "🔴 En retard" / "📣 À transmettre" restent des listes courtes où
+ * un fil rouge par projet ajouterait plus de bruit que de lisibilité.
  */
-function openPrepModal(person, own, { onDone } = {}) {
+async function openPrepModal(person, own, { onDone } = {}) {
+  const projects = await projectsApi.listAll();
+
   const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => {
     const da = a.controlDate ? new Date(a.controlDate).getTime() : Infinity;
     const db = b.controlDate ? new Date(b.controlDate).getTime() : Infinity;
@@ -347,6 +355,11 @@ function openPrepModal(person, own, { onDone } = {}) {
   const recentlyDone = [...own.filter((f) => f.status === "done")]
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .slice(0, 5);
+  // `upcoming` est déjà trié par date de contrôle croissante (cf. `active` ci-dessus) : le
+  // regroupement par projet hérite donc de cet ordre à l'intérieur de chaque groupe, et les
+  // groupes eux-mêmes s'enchaînent dans l'ordre d'apparition de leur premier sujet — donc du
+  // plus urgent au moins urgent, y compris pour les sujets sans projet.
+  const upcomingGroups = groupByProject(upcoming, projects);
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -367,7 +380,7 @@ function openPrepModal(person, own, { onDone } = {}) {
   };
   renderFollowUpList(body.querySelector("#prep-overdue"), overdue, { onOpen: openFromPrep });
   renderFollowUpList(body.querySelector("#prep-to-tell"), toTell, { onOpen: openFromPrep });
-  renderFollowUpList(body.querySelector("#prep-upcoming"), upcoming, { onOpen: openFromPrep });
+  renderGroupedFollowUpList(body.querySelector("#prep-upcoming"), upcomingGroups, { onOpen: openFromPrep });
   renderFollowUpList(body.querySelector("#prep-done"), recentlyDone, { onOpen: openFromPrep });
 
   openModal({
@@ -377,11 +390,27 @@ function openPrepModal(person, own, { onDone } = {}) {
   });
 }
 
-function renderFollowUpList(container, followUps, { onOpen } = {}) {
-  if (!followUps.length) {
-    container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
-    return;
+/** Regroupe une liste de suivis par projet lié, en conservant l'ordre d'apparition (voir
+ *  commentaire dans `openPrepModal`). Les suivis sans `projectId` sont réunis dans un groupe
+ *  "Sans projet" plutôt qu'isolés un par un. */
+function groupByProject(items, projects) {
+  const groups = [];
+  const indexByKey = new Map();
+  for (const f of items) {
+    const key = f.projectId || "__none__";
+    let index = indexByKey.get(key);
+    if (index === undefined) {
+      const project = f.projectId ? projects.find((p) => p.id === f.projectId) : null;
+      index = groups.length;
+      indexByKey.set(key, index);
+      groups.push({ label: project ? project.name : "Sans projet", items: [] });
+    }
+    groups[index].items.push(f);
   }
+  return groups;
+}
+
+function appendFollowUpRows(container, followUps, onOpen) {
   for (const f of followUps) {
     const isToTell = f.direction === "to_tell";
     const row = document.createElement("div");
@@ -404,6 +433,35 @@ function renderFollowUpList(container, followUps, { onOpen } = {}) {
     `;
     row.addEventListener("click", () => (onOpen ? onOpen(f) : openEditFollowUpModal(f)));
     container.appendChild(row);
+  }
+}
+
+function renderFollowUpList(container, followUps, { onOpen } = {}) {
+  if (!followUps.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
+    return;
+  }
+  appendFollowUpRows(container, followUps, onOpen);
+}
+
+/** Variante groupée de `renderFollowUpList` : un sous-titre par groupe (ex. nom de projet),
+ *  puis ses suivis dans l'ordre déjà trié — voir `groupByProject`. */
+function renderGroupedFollowUpList(container, groups, { onOpen } = {}) {
+  if (!groups.some((g) => g.items.length)) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
+    return;
+  }
+  container.innerHTML = "";
+  for (const group of groups) {
+    if (!group.items.length) continue;
+    const groupEl = document.createElement("div");
+    groupEl.className = "prep-group";
+    const label = document.createElement("div");
+    label.className = "prep-group-label";
+    label.textContent = group.label;
+    groupEl.appendChild(label);
+    appendFollowUpRows(groupEl, group.items, onOpen);
+    container.appendChild(groupEl);
   }
 }
 

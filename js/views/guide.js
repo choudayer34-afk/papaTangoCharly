@@ -74,6 +74,10 @@ const TOPICS_REF = [
     title: "🎭 Filtre par casquette",
     text: "Chips Toutes / Toi / Équipe / Projets / Manager / CSE sur l'Accueil et Pilotage. La casquette n'est jamais saisie à la main : déduite du projet lié (catégorie contenant CSE → CSE, sinon → Projets) ou, pour un Suivi, du type de la personne visée (manager → Manager, collaborateur → Équipe).",
   },
+  {
+    title: "🗂️ Où classer / retrouver quelque chose ?",
+    text: "Pas de vrais dossiers dans Pilotage — le classement se fait par type d'élément et par rattachement, pas par un emplacement à choisir. Un lien, un fichier ou un document externe → une Ressource (le type est détecté automatiquement), rattachée au Projet et/ou à la Tâche concernés plutôt que rangée à part. Une information à garder sans action à mener → Information/Idée depuis l'Inbox (🧠 Garder). Un sujet qui concerne une personne (tu attends quelque chose d'elle, ou tu dois lui dire quelque chose) → un Suivi sur sa fiche, jamais une Tâche. La catégorie d'un Projet (ex. Modernisation, CSE) sert de repère transverse — garde toujours la même orthographe d'une fois sur l'autre, sinon deux catégories presque identiques cohabitent sans se regrouper. Pour retrouver quelque chose ensuite, trois réflexes valent mieux qu'un rangement précis à retenir : la loupe 🔎 (recherche dans tout, tous types confondus), la fiche du Projet concerné (tout ce qui y est rattaché apparaît dessus), et « 🔄 Reprendre où j'en étais » sur l'Accueil pour ce que tu as consulté récemment.",
+  },
 ];
 
 export function renderGuide(container) {
