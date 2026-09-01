@@ -178,6 +178,20 @@ export function isLate(task) {
   return new Date(task.dueDate).getTime() < startOfToday();
 }
 
+// "En pause" (piste TDAH du 01/09/2026, discussion permanence/repérage) : une tâche
+// commencée (donc pas "todo") mais pas retouchée depuis un moment, distincte du retard (qui
+// dépend d'une échéance — beaucoup de tâches abandonnées n'en ont pas). `updatedAt` est déjà
+// posé par storage.put() à CHAQUE mutation (statut, note, sous-étape, édition...), donc aucun
+// nouveau champ à ajouter : "dernière touche" existe déjà de fait, il suffisait de la lire.
+const STALLED_ACTIVE_STATUSES = ["in_progress", "waiting", "follow_up"];
+const STALLED_THRESHOLD_MS = 5 * 24 * 60 * 60 * 1000; // 5 jours
+
+export function isStalled(task) {
+  if (!STALLED_ACTIVE_STATUSES.includes(task.status)) return false;
+  const lastTouch = task.updatedAt || task.createdAt || 0;
+  return Date.now() - lastTouch > STALLED_THRESHOLD_MS;
+}
+
 function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);

@@ -29,6 +29,19 @@
 //    d'abord, puis échéance la plus proche), mais restent modifiables par Charles-Henri d'un
 //    clic — `taskIds` ne vaut que pour `date` (au format YYYY-MM-DD) : dès le lendemain, la
 //    sélection automatique reprend la main sans rien à réinitialiser explicitement.
+//
+// Deuxième discussion TDAH du 01/09/2026 (permanence/repérage — "je commence un truc mais ne
+// le finis pas et ne sais plus où j'en suis ni comment retrouver mes éléments") :
+//  - `recentlyViewed` : les dernières fiches *consultées* (pas créées), tous types confondus
+//    (`{type, id, viewedAt}`, le plus récent en tête, plafonné à 6) — alimente "🔄 Reprendre où
+//    j'en étais" sur l'Accueil. Volontairement pas de `title` mémorisé : résolu à l'affichage
+//    via `resolveRef()` (comme le lien profond du .ics) pour ne jamais afficher un titre
+//    devenu obsolète si la fiche a été renommée depuis.
+//  - `notifOptIn` : `null` tant que Charles-Henri n'a pas répondu à la proposition d'alerte au
+//    démarrage (voir le bandeau sur l'Accueil), `true`/`false` ensuite — jamais reproposé une
+//    fois tranché.
+//  - `lastNotifShownDate` : évite de répéter l'alerte plusieurs fois le même jour à chaque
+//    ouverture de l'app (YYYY-MM-DD, même principe que `focusOverride.date`).
 
 import * as storage from "../services/storage.js";
 
@@ -52,6 +65,9 @@ export async function getPreferences() {
     seenHints: {},
     lastWeeklyReviewAt: null,
     focusOverride: { date: null, taskIds: [] },
+    recentlyViewed: [],
+    notifOptIn: null,
+    lastNotifShownDate: null,
     ...current,
   };
 }
@@ -120,4 +136,32 @@ export async function markWeeklyReviewDone() {
 export async function setFocusOverride(date, taskIds) {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, focusOverride: { date, taskIds } });
+}
+
+const RECENTLY_VIEWED_MAX = 6;
+
+/** Enregistre l'ouverture d'une fiche pour "🔄 Reprendre où j'en étais" (js/views/
+ *  dashboard.js) — déplace l'entrée en tête si elle existe déjà plutôt que de la dupliquer,
+ *  plafonné à `RECENTLY_VIEWED_MAX`. Appelé depuis chaque fonction "ouvrir le détail de..."
+ *  des 7 types de fiches consultables (Tâche, Suivi, Projet, Personne, Ressource, Réunion,
+ *  Décision, Information/Idée). */
+export async function recordRecentlyViewed(type, id) {
+  const current = await getPreferences();
+  const withoutThis = (current.recentlyViewed || []).filter((e) => !(e.type === type && e.id === id));
+  const recentlyViewed = [{ type, id, viewedAt: Date.now() }, ...withoutThis].slice(0, RECENTLY_VIEWED_MAX);
+  return storage.put(COLLECTION, { ...current, recentlyViewed });
+}
+
+/** Réponse (une seule fois) à la proposition d'alerte au démarrage — voir le bandeau sur
+ *  l'Accueil. `true`/`false`, jamais re-proposé une fois tranché. */
+export async function setNotifOptIn(value) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, notifOptIn: value });
+}
+
+/** Marque l'alerte de démarrage comme déjà montrée aujourd'hui (YYYY-MM-DD) — évite de la
+ *  répéter à chaque ouverture de l'app dans la même journée. */
+export async function markNotifShown(dateKey) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, lastNotifShownDate: dateKey });
 }
