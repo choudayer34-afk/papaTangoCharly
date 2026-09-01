@@ -18,6 +18,8 @@ import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.
 import { mountGlobalSearch } from "./components/search.js";
 import { onAuthChange } from "./services/firebase.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
+import { fetchBundle, resolveRef } from "./components/linkedItems.js";
+import { parseOpenParam } from "./services/deeplink.js";
 
 const ROUTES = {
   "#/dashboard": { render: renderDashboard, label: "Accueil", icon: "🏠" },
@@ -63,14 +65,38 @@ function updateNavActive(hash) {
   nav?.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.hash === hash));
 }
 
+// Lien profond vers une fiche précise (retour de Charles-Henri, 01/09/2026 : le lien collé
+// dans un .ics généré depuis une Tâche/un Suivi doit rouvrir directement cette fiche-là, pas
+// juste l'onglet). Format `#/route?open=Type:id` (js/services/deeplink.js) — résolu via la
+// même fonction `resolveRef` que le fil conducteur (js/components/linkedItems.js), qui sait
+// déjà ouvrir n'importe laquelle des fiches liables. Jamais bloquant : un lien cassé (fiche
+// supprimée depuis, id invalide) laisse simplement l'onglet ouvert normalement.
+async function maybeOpenDeepLink(queryString) {
+  const target = parseOpenParam(queryString);
+  if (!target) return;
+  try {
+    const bundle = await fetchBundle();
+    const resolved = resolveRef(bundle, target);
+    resolved?.onOpen();
+  } catch {
+    // silencieux — voir commentaire ci-dessus.
+  }
+}
+
 function renderRoute() {
-  const known = ROUTES[location.hash] || HIDDEN_ROUTES[location.hash];
-  const hash = known ? location.hash : "#/dashboard";
-  if (location.hash !== hash) history.replaceState(null, "", hash);
+  const [path, queryString] = (location.hash || "").split("?");
+  const known = ROUTES[path] || HIDDEN_ROUTES[path];
+  if (!known) {
+    if (location.hash !== "#/dashboard") history.replaceState(null, "", "#/dashboard");
+    currentCleanup?.();
+    currentCleanup = ROUTES["#/dashboard"].render(appRoot) || null;
+    updateNavActive("#/dashboard");
+    return;
+  }
   currentCleanup?.();
-  const route = ROUTES[hash] || HIDDEN_ROUTES[hash];
-  currentCleanup = route.render(appRoot) || null;
-  updateNavActive(hash);
+  currentCleanup = known.render(appRoot) || null;
+  updateNavActive(path);
+  maybeOpenDeepLink(queryString);
 }
 
 function mountApp() {
