@@ -218,6 +218,9 @@ a { color: inherit; }
 .badge-waiting { background: var(--color-waiting-bg); color: var(--color-waiting); }
 .badge-follow_up { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-done { background: var(--color-success-bg); color: var(--color-success); }
+/* Statut Suivi "🔁 Relancé" (vague 19, simplification à 3 états) — même teinte que
+   l'ancien badge-follow_up qu'il remplace pour ce type d'entité, aucune nouvelle couleur. */
+.badge-relaunched { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-late { background: var(--color-danger-bg); color: var(--color-danger); }
 /* Projet fermé (retour de Charles-Henri, 02/09/2026) — neutre, volontairement distinct des
    badges de statut ci-dessus : une fermeture n'est ni un succès ni un retard. */
@@ -738,6 +741,14 @@ tbody.drag-over-group {
   grid-template-columns: repeat(2, 1fr);
   gap: var(--space-2);
 }
+
+/* ---------- "Autre" repliable de la qualification Inbox (audit du 02/09/2026) ---------- */
+.qualify-other {
+  margin-top: var(--space-3);
+}
+.qualify-other > .choice-grid {
+  margin-top: var(--space-2);
+}
 .choice-btn {
   display: flex;
   align-items: center;
@@ -777,6 +788,69 @@ tbody.drag-over-group {
   background: var(--color-primary);
   color: var(--color-text-inverse);
   border-color: var(--color-primary);
+}
+
+/* ---------- Menu "🔧 Filtrer" (Pilotage — audit de simplification du 02/09/2026) ----------
+   Regroupe casquette + projet, deux filtres secondaires qui n'ont pas besoin d'occuper deux
+   rangées de chips en permanence, dans un menu replié par défaut — même mécanique <details>
+   que js/components/infoTip.js, avec un panneau flottant plutôt qu'une simple expansion
+   inline puisqu'il s'agit ici d'une barre d'outils, pas d'une fiche. */
+.filter-popover {
+  position: relative;
+  flex: 0 0 auto;
+}
+.filter-popover > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.filter-popover > summary::-webkit-details-marker,
+.filter-popover > summary::marker { display: none; content: ""; }
+.filter-popover[open] > summary { border-color: var(--color-primary); color: var(--color-primary); }
+.filter-popover-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  font-size: 11px;
+  line-height: 16px;
+}
+.filter-popover-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 240px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.filter-popover-label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+.filter-popover-panel select {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+.filter-popover-panel .chip-row {
+  flex-wrap: wrap;
+  margin-bottom: 0;
 }
 
 /* Variante "radio" du chip — même look, mais wrap un <input type="radio"/checkbox"> plutôt
@@ -883,6 +957,9 @@ tbody.drag-over-group {
   left: 50%;
   bottom: calc(var(--nav-height) + var(--space-4));
   transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
   background: var(--color-text);
   color: var(--color-text-inverse);
   padding: 10px 18px;
@@ -893,6 +970,17 @@ tbody.drag-over-group {
   animation: toastIn var(--transition);
 }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.toast-action {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--color-text-inverse);
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--font-size-sm);
+}
 
 /* ---------- Retour positif à la clôture d'une tâche (piste TDAH du 01/09/2026, retour de
    Charles-Henri : un signal immédiat et visible plutôt qu'un chiffre qui change en silence
