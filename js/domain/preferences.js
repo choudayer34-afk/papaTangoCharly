@@ -33,8 +33,9 @@
 // Deuxième discussion TDAH du 01/09/2026 (permanence/repérage — "je commence un truc mais ne
 // le finis pas et ne sais plus où j'en suis ni comment retrouver mes éléments") :
 //  - `recentlyViewed` : les dernières fiches *consultées* (pas créées), tous types confondus
-//    (`{type, id, viewedAt}`, le plus récent en tête, plafonné à 6) — alimente "🔄 Reprendre où
-//    j'en étais" sur l'Accueil. Volontairement pas de `title` mémorisé : résolu à l'affichage
+//    (`{type, id, viewedAt}`, le plus récent en tête, plafonné à 3 — réduit de 6 à 3 le
+//    02/09/2026 à la demande de Charles-Henri) — alimente "🔄 Reprendre où j'en étais" sur
+//    l'Accueil. Volontairement pas de `title` mémorisé : résolu à l'affichage
 //    via `resolveRef()` (comme le lien profond du .ics) pour ne jamais afficher un titre
 //    devenu obsolète si la fiche a été renommée depuis.
 //  - `notifOptIn` : `null` tant que Charles-Henri n'a pas répondu à la proposition d'alerte au
@@ -138,7 +139,7 @@ export async function setFocusOverride(date, taskIds) {
   return storage.put(COLLECTION, { ...current, focusOverride: { date, taskIds } });
 }
 
-const RECENTLY_VIEWED_MAX = 6;
+const RECENTLY_VIEWED_MAX = 3;
 
 /** Enregistre l'ouverture d'une fiche pour "🔄 Reprendre où j'en étais" (js/views/
  *  dashboard.js) — déplace l'entrée en tête si elle existe déjà plutôt que de la dupliquer,
