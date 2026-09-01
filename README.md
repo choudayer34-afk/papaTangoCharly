@@ -281,12 +281,52 @@ service cloud.firestore {
   ligne "+ Ajouter une tâche" par groupe, préremplie avec le Statut ou le Projet du groupe ;
   colonne Type en lecture seule (champ jamais édité ailleurs dans l'app). La vue calendrier
   également évoquée par Charles-Henri n'a pas été construite, faute de détail fourni
+- ✅ Sous-étapes repliables et cochables sur la carte Trello (`js/views/kanban.js`, 02/09/2026,
+  retour de Charles-Henri) : un bouton "▸ ☑️ x/y" affiche/masque la checklist directement sous
+  la carte (état de dépli non persisté, propre à la session) ; cocher une case appelle la même
+  fonction que la fiche détail (`tasksApi.toggleChecklistItem`), donc toujours la même donnée
+- ✅ "⏳ En attente de..." (`js/domain/tasks.js`, `js/views/kanban.js`, 02/09/2026, retour de
+  Charles-Henri) : un champ libre sur la carte Trello, visible et modifiable uniquement tant
+  que la Tâche est "En attente" ou "À suivre" — ce qu'on attend, et de qui. Effacé
+  automatiquement dès que le statut change vers autre chose (même mécanique que
+  `completedAt`), pour ne jamais laisser un texte périmé sur une tâche qui a avancé depuis
+- ✅ "🙈 Masquer terminées" (`js/views/kanban.js`, 02/09/2026) : un filtre de plus, commun au
+  Trello et au Tableau, jamais persisté d'une visite à l'autre
+- ✅ Colonnes "Notes" et "Description" dans la vue Tableau (`js/views/kanban.js`, 02/09/2026,
+  retour de Charles-Henri) : Notes affiche la dernière note du journal horodaté et permet d'en
+  ajouter une directement en ligne (additif, jamais d'édition ni de suppression) ; Description
+  est en lecture seule (clic pour ouvrir la fiche complète, un texte long se prêtant mal à
+  l'édition en cellule)
+- ✅ Glisser une ligne du Tableau vers un autre groupe (`js/views/kanban.js`, 02/09/2026, retour
+  de Charles-Henri — façon Monday) : une poignée dédiée par ligne (n'affecte jamais la
+  sélection/l'édition des champs de la ligne elle-même), active seulement quand un
+  regroupement (Statut ou Projet) structure les lignes — glisser une tâche dans un autre
+  groupe change directement le champ correspondant
+- ✅ Casquettes affichées dans Pilotage restreintes à Toi/Projets/CSE (`js/domain/casquettes.js`,
+  02/09/2026, correction — retour de Charles-Henri : "je comprend pas trop le filtre") :
+  Pilotage ne montre que des Tâches, qui ne peuvent jamais être "Équipe" ni "Manager" (pas
+  d'assignee) — ces deux chips y produisaient un board vide et confus au clic. L'Accueil, qui
+  agrège aussi des Suivis, continue d'afficher les 6 chips
+- ✅ Clôturer/rouvrir un projet (`js/domain/projects.js`, `js/views/projects.js`, 02/09/2026,
+  retour de Charles-Henri) : un projet fermé, et tout ce qui lui est rattaché (Tâches, Suivis,
+  Réunions, Décisions), disparaît des outils de pilotage (Accueil — y compris "🔄 Reprendre où
+  j'en étais" —, Pilotage, Calendrier, Revue hebdomadaire) sans que rien ne soit supprimé
+  (réutilise le champ `Project.status` existant). Reste retrouvable via un filtre "🗄️ Fermés"
+  dans l'onglet Projets existant (pas un nouvel écran d'archive séparé), avec réouverture en un
+  clic depuis la fiche ou directement la carte. La recherche globale n'est volontairement pas
+  filtrée : elle reste un moyen de retrouver un sujet fermé
+- ✅ Statut affiché sur "🗓️ À échéance dans les 7 jours" et "🎯 Focus du jour" (`js/views/
+  dashboard.js`, 02/09/2026, retour de Charles-Henri) : icône + libellé (mêmes que
+  `tasksApi.STATUS_ICONS`/`STATUS_LABELS`) pour repérer où en est chaque tâche sans l'ouvrir
+- ✅ Vue calendrier dans Pilotage (clarification, 02/09/2026) : ce que Charles-Henri visait en
+  en parlant était l'onglet Calendrier déjà existant (`#/calendar`) — aucune bascule
+  supplémentaire à construire dans Pilotage
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
   fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
-  démarrage ci-dessus comme version app-ouverte-uniquement), statut de projet
-  (clôturer/rouvrir/archiver), horodatage réel du "dernier point manager", vraie intégration
-  Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle ; le
-  filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage ; les recettes de
-  démarrage se limitent à 2 scénarios pour l'instant ; "Créer une réunion" ne couvre pour
-  l'instant que Tâches et Suivis, pas les autres fiches liables ; une vue calendrier dans
-  Pilotage, mentionnée par Charles-Henri mais pas encore précisée
+  démarrage ci-dessus comme version app-ouverte-uniquement), horodatage réel du "dernier point
+  manager", vraie intégration Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence
+  manuelle actuelle ; le filtre par casquette ne couvre pour l'instant que l'Accueil et
+  Pilotage ; les recettes de démarrage se limitent à 2 scénarios pour l'instant ; "Créer une
+  réunion" ne couvre pour l'instant que Tâches et Suivis, pas les autres fiches liables ; la
+  fermeture de projet ne masque pas les Ressources liées (`projectIds` peut viser plusieurs
+  projets à la fois, pas de règle simple et non ambiguë à leur appliquer pour l'instant)
