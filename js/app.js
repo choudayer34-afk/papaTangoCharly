@@ -18,6 +18,7 @@ import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountGlobalSearch } from "./components/search.js";
+import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
 import { onAuthChange } from "./services/firebase.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
@@ -112,6 +113,7 @@ function mountApp() {
   mountCaptureFab();
   mountHelpButton();
   mountGlobalSearch();
+  mountPomodoroWidget();
   window.addEventListener("hashchange", renderRoute);
   renderRoute();
   maybeShowFirstRunTour();
@@ -164,6 +166,7 @@ function unmountApp() {
   document.querySelector(".fab")?.remove();
   document.querySelector(".help-fab")?.remove();
   document.querySelector(".search-fab")?.remove();
+  unmountPomodoroWidget();
   window.removeEventListener("hashchange", renderRoute);
 }
 
