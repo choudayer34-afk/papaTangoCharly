@@ -12,6 +12,8 @@ import { renderCalendar } from "./views/calendar.js";
 import { renderResources } from "./views/resources.js";
 import { renderPrompts } from "./views/prompts.js";
 import { renderGuide } from "./views/guide.js";
+import { renderWhatsNew } from "./views/whatsnew.js";
+import { renderMemoryTraining } from "./views/memory.js";
 import { renderLogin } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
@@ -42,6 +44,8 @@ const ROUTES = {
 // itère ROUTES), ce qui aurait ajouté un dixième onglet permanent pour un besoin occasionnel.
 const HIDDEN_ROUTES = {
   "#/guide": { render: renderGuide },
+  "#/whatsnew": { render: renderWhatsNew },
+  "#/memory": { render: renderMemoryTraining },
 };
 
 const appRoot = document.getElementById("app");
