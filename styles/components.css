@@ -630,3 +630,43 @@ a { color: inherit; }
   font-weight: 600;
 }
 .review-banner button { flex: none; }
+
+/* ---------- Aide à la demande (js/components/infoTip.js) ---------- */
+.info-tip {
+  display: inline-block;
+  margin-left: var(--space-2);
+  vertical-align: middle;
+}
+.info-tip > summary {
+  cursor: pointer;
+  list-style: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  color: var(--color-info);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+.info-tip > summary::-webkit-details-marker,
+.info-tip > summary::marker { display: none; content: ""; }
+.info-tip > summary:hover { border-color: var(--color-info); }
+.info-tip-body {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+}
+
+/* ---------- Journal de notes horodaté (js/components/notesBlock.js) ---------- */
+.notes-entry {
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.notes-entry-text { white-space: pre-wrap; margin-top: 2px; }
