@@ -14,6 +14,7 @@ import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderManagerSection } from "./management.js";
+import { renderInfoTip } from "../components/infoTip.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -38,7 +39,10 @@ export function renderPeople(container) {
         <h1>Équipe</h1>
         <div class="subtitle" id="people-subtitle">—</div>
       </div>
-      <button id="new-person-btn" class="btn btn-primary btn-sm">+ Personne</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="people-status-info"></span>
+        <button id="new-person-btn" class="btn btn-primary btn-sm">+ Personne</button>
+      </div>
     </div>
     <div class="view">
       <div class="chip-row" id="people-mode-toggle">
@@ -53,6 +57,7 @@ export function renderPeople(container) {
   const subtitleEl = container.querySelector("#people-subtitle");
   const modeToggleEl = container.querySelector("#people-mode-toggle");
   container.querySelector("#new-person-btn").addEventListener("click", openCreatePersonModal);
+  renderInfoTip(container.querySelector("#people-status-info"), followUpsApi.STATUS_INFO_HTML);
 
   let people = [];
   let followUps = [];
@@ -96,8 +101,8 @@ export function renderPeople(container) {
     card.className = "card";
     for (const person of people) {
       const own = followUps.filter((f) => f.personId === person.id);
-      const inProgress = own.filter((f) => f.status === "in_progress").length;
       const waiting = own.filter((f) => f.status === "waiting").length;
+      const relaunched = own.filter((f) => f.status === "relaunched").length;
       const late = own.filter(followUpsApi.isControlDue).length;
 
       const row = document.createElement("div");
@@ -107,7 +112,7 @@ export function renderPeople(container) {
         <div class="item-main">
           <div class="item-title">${person.type === "manager" ? "👔" : "👤"} ${escapeHtml(person.name)}</div>
           <div class="item-meta">
-            ${inProgress} en cours · ${waiting} en attente
+            ${waiting} en attente · ${relaunched} relancé(s)
             ${late ? ` · <span style="color:var(--color-danger);font-weight:600;">${late} à relancer</span>` : ""}
           </div>
         </div>
@@ -183,6 +188,8 @@ export function openCreatePersonModal(prefill = {}) {
 
 export async function openPersonDetail(person, allFollowUps) {
   preferencesApi.recordRecentlyViewed("Person", person.id).catch(() => {});
+  // Fusion des deux "Notes" (vague 19, audit de simplification) — voir peopleApi.migrateLegacyNotes.
+  person = (await peopleApi.migrateLegacyNotes(person.id)) || person;
   const own = sortByCreatedDesc(allFollowUps.filter((f) => f.personId === person.id));
   const active = own.filter((f) => f.status !== "done" && f.direction !== "to_tell");
   const toTell = own.filter((f) => f.status !== "done" && f.direction === "to_tell");
@@ -231,10 +238,6 @@ export async function openPersonDetail(person, allFollowUps) {
       <button type="button" id="add-objective-btn" class="btn btn-ghost btn-sm">+ Ajouter</button>
     </div>
     <div class="card" id="person-objectives" style="margin-bottom:16px;"></div>
-    <div class="field">
-      <label for="person-notes">Notes</label>
-      <textarea id="person-notes" placeholder="Contexte, points d'attention...">${escapeHtml(person.notes || "")}</textarea>
-    </div>
     <div class="section-title">🗒️ Journal de notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
     <details>
@@ -356,7 +359,6 @@ export async function openPersonDetail(person, allFollowUps) {
             name,
             type: bodyEl.querySelector("#person-detail-type").value,
             role: bodyEl.querySelector("#person-detail-role").value.trim(),
-            notes: bodyEl.querySelector("#person-notes").value,
           });
           close();
           showToast("Personne mise à jour");
@@ -402,7 +404,6 @@ async function openPrepModal(person, own, { onDone } = {}) {
 
   const body = document.createElement("div");
   body.innerHTML = `
-    ${person.notes ? `<div class="section-title" style="margin-top:0;">📝 Notes</div><div class="card" style="margin-bottom:16px;padding:12px 16px;white-space:pre-wrap;">${escapeHtml(person.notes)}</div>` : ""}
     <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
     <div class="card" id="prep-overdue" style="margin-bottom:16px;"></div>
     <div class="section-title">📣 À transmettre (${toTell.length})</div>

@@ -20,6 +20,14 @@ import { renderNotesBlock } from "../components/notesBlock.js";
 import { openCreateTaskModal, openTaskDetail } from "./kanban.js";
 import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
 import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
+import { renderInfoTip } from "../components/infoTip.js";
+
+// Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
+// trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
+// un rappel explicite évite de les confondre, contrairement à Pilotage ou Équipe qui n'en
+// affichent chacun qu'un seul (voir tasksApi.STATUS_INFO_HTML / followUpsApi.STATUS_INFO_HTML).
+const PROJECT_STATUS_INFO_HTML =
+  "Cette fiche mélange volontairement trois vocabulaires de statut distincts : les <strong>Tâches</strong> (⚪🔵⏳👀🟢, le pipeline de travail), les <strong>Suivis</strong> (⏳🔁✅, attendre une personne) et les <strong>Sous-parties</strong> (◻️🔶✅, avancement d'un bloc sans créer de tâche dédiée).";
 
 export function renderProjects(container) {
   container.innerHTML = `
@@ -344,10 +352,16 @@ export async function openProjectDetail(project, tasks) {
       <textarea id="detail-criteria" placeholder="Comment saurai-je que ce projet est réussi ?">${escapeHtml(project.successCriteria || "")}</textarea>
     </div>
     <div id="detail-canevas"></div>
-    <div class="section-title">🗒️ Notes</div>
-    <div id="detail-notes" style="margin-bottom:16px;"></div>
+    <!-- Notes : bloc secondaire replié par défaut (audit de simplification du 02/09/2026 —
+         "trop de blocs ouverts en permanence sur une fiche déjà longue") ; le compte dans le
+         résumé garde l'information visible sans avoir à déplier. -->
+    <details class="fiche-section">
+      <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(project.notesLog || []).length})</summary>
+      <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
+    </details>
     <div class="section-header-row">
       <div class="section-title">🧩 Sous-parties (${parts.length})</div>
+      <span id="project-status-info"></span>
     </div>
     <div class="card" id="detail-parts" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -374,13 +388,15 @@ export async function openProjectDetail(project, tasks) {
       <button type="button" id="add-decision-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
     </div>
     <div class="card" id="detail-decisions" style="margin-bottom:16px;"></div>
-    <div class="section-title">📎 Ressources (${linkedResources.length})</div>
-    <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
-      <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
-    </div>
-    <details>
+    <details class="fiche-section">
+      <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
+      <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
+        <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+      </div>
+    </details>
+    <details class="fiche-section">
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${projectHistory.length})</summary>
       <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
     </details>
@@ -391,6 +407,8 @@ export async function openProjectDetail(project, tasks) {
       <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
+
+  renderInfoTip(body.querySelector("#project-status-info"), PROJECT_STATUS_INFO_HTML);
 
   // "+ Ajouter" par bloc (retour de Charles-Henri : pouvoir créer directement depuis la
   // fiche projet, pour chaque type, sans passer par le fil conducteur générique) — réutilise

@@ -266,7 +266,7 @@ function renderWeek(container, cursor, items) {
         row.draggable = true;
         row.innerHTML = `<div class="item-main"><div class="item-title">${item.icon} ${escapeHtml(item.title)}</div></div>`;
         row.addEventListener("click", () => item.onOpen());
-        row.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/cal-item", JSON.stringify({ type: item.type, id: item.id })));
+        row.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/cal-item", JSON.stringify({ type: item.type, id: item.id, fromDate: item.date })));
         card.appendChild(row);
       }
     }
@@ -289,14 +289,28 @@ function renderPill(item) {
   });
   pill.addEventListener("dragstart", (e) => {
     e.stopPropagation();
-    e.dataTransfer.setData("text/cal-item", JSON.stringify({ type: item.type, id: item.id }));
+    e.dataTransfer.setData("text/cal-item", JSON.stringify({ type: item.type, id: item.id, fromDate: item.date }));
   });
   return pill;
 }
 
+/** Champ de date à mettre à jour selon le type d'entité — un seul endroit pour le déplacement
+ *  initial (glisser-déposer) et son annulation (voir showToast plus bas), pour ne jamais les
+ *  laisser diverger. */
+async function moveItemDate(type, id, dateValue) {
+  if (type === "Task") return tasksApi.updateTask(id, { dueDate: dateValue });
+  if (type === "Meeting") return meetingsApi.updateMeeting(id, { date: dateValue });
+  if (type === "Decision") return decisionsApi.updateDecision(id, { date: dateValue });
+  if (type === "FollowUp") return followUpsApi.updateFollowUp(id, { controlDate: dateValue });
+}
+
 /** Glisser une pastille vers un autre jour change directement sa date (§26) — retrouve
  *  l'item par type+id à l'intérieur de `allItems()` recalculé au moment du drop pour ne
- *  jamais agir sur des données périmées (drag potentiellement long sur mobile). */
+ *  jamais agir sur des données périmées (drag potentiellement long sur mobile).
+ *  `fromDate` (audit de simplification du 02/09/2026, retour de Charles-Henri : un
+ *  glisser-déposer accidentel doit pouvoir se rattraper immédiatement) voyage avec l'item dès
+ *  le dragstart — un bouton "Annuler" sur le toast de confirmation remet la date d'origine sans
+ *  devoir rouvrir la fiche. */
 function wireDropTarget(el, iso) {
   el.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -308,13 +322,19 @@ function wireDropTarget(el, iso) {
     el.classList.remove("cal-drop-target");
     const raw = e.dataTransfer.getData("text/cal-item");
     if (!raw) return;
-    const { type, id } = JSON.parse(raw);
+    const { type, id, fromDate } = JSON.parse(raw);
+    if (fromDate === iso) return; // déposé sur son jour d'origine : rien à faire, rien à annuler
     try {
-      if (type === "Task") await tasksApi.updateTask(id, { dueDate: iso });
-      else if (type === "Meeting") await meetingsApi.updateMeeting(id, { date: iso });
-      else if (type === "Decision") await decisionsApi.updateDecision(id, { date: iso });
-      else if (type === "FollowUp") await followUpsApi.updateFollowUp(id, { controlDate: iso });
-      showToast("Date déplacée");
+      await moveItemDate(type, id, iso);
+      showToast("Date déplacée", {
+        actionLabel: fromDate ? "Annuler" : undefined,
+        onAction: fromDate
+          ? async () => {
+              await moveItemDate(type, id, fromDate);
+              showToast("Déplacement annulé");
+            }
+          : undefined,
+      });
     } catch {
       showToast("Impossible de déplacer cet élément");
     }

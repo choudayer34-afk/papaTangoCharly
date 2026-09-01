@@ -3,21 +3,18 @@
 // juste un compteur neutre.
 
 import * as inboxApi from "../domain/inbox.js";
-import * as projectsApi from "../domain/projects.js";
 import * as peopleApi from "../domain/people.js";
-import * as followUpsApi from "../domain/followups.js";
-import * as meetingsApi from "../domain/meetings.js";
-import * as decisionsApi from "../domain/decisions.js";
 import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
-import { suggestNextStep } from "../components/suggestNextStep.js";
-import * as linkedItemsApi from "../components/linkedItems.js";
 import { openCreateProjectModal } from "./projects.js";
 import { openCreateResourceModal } from "./resources.js";
 import { openCreateFollowUpModal } from "./people.js";
+import { openCreateTaskModal } from "./kanban.js";
+import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
@@ -25,13 +22,18 @@ const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 // chacune crée sa vraie entité (Task / FollowUp / Project / Meeting / Decision / Resource)
 // au lieu de retomber en "Information" générique — la Règle 3 (ne jamais perdre la capture)
 // reste garantie par inboxApi.qualify(), qui journalise toujours le lien vers l'objet créé.
+//
+// `primary` (audit de simplification du 02/09/2026, retour de Charles-Henri : "9 choix d'un
+// coup à la qualification, c'est trop") : Action/Suivi/Information couvrent l'essentiel des
+// captures et restent seuls visibles d'emblée ; les 6 autres issues, plus rares, passent sous
+// "Autre" (voir openQualifyModal) — jamais supprimées, juste à un clic de plus.
 const QUALIFY_CHOICES = [
-  { key: "task", emoji: "✅", label: "Action" },
-  { key: "followup", emoji: "👀", label: "Suivi" },
+  { key: "task", emoji: "✅", label: "Action", primary: true },
+  { key: "followup", emoji: "👀", label: "Suivi", primary: true },
+  { key: "kept", emoji: "🧠", label: "Information", primary: true },
   { key: "project", emoji: "📦", label: "Projet" },
   { key: "meeting", emoji: "📅", label: "Réunion" },
   { key: "decision", emoji: "🗳️", label: "Décision" },
-  { key: "kept", emoji: "🧠", label: "Information" },
   { key: "resource", emoji: "📎", label: "Ressource" },
   { key: "idea", emoji: "💡", label: "Idée", mapsTo: "kept" },
   { key: "archived", emoji: "🗑️", label: "Archiver" },
@@ -115,17 +117,29 @@ export function openQualifyModal(item) {
   label.textContent = "Qu'est-ce que c'est ?";
   body.appendChild(label);
 
-  const grid = document.createElement("div");
-  grid.className = "choice-grid";
-  for (const choice of QUALIFY_CHOICES) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "choice-btn";
-    btn.innerHTML = `<span class="emoji">${choice.emoji}</span> ${choice.label}`;
-    btn.addEventListener("click", () => handleChoice(item, choice));
-    grid.appendChild(btn);
+  function buildChoiceGrid(choices) {
+    const grid = document.createElement("div");
+    grid.className = "choice-grid";
+    for (const choice of choices) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "choice-btn";
+      btn.innerHTML = `<span class="emoji">${choice.emoji}</span> ${choice.label}`;
+      btn.addEventListener("click", () => handleChoice(item, choice));
+      grid.appendChild(btn);
+    }
+    return grid;
   }
-  body.appendChild(grid);
+
+  body.appendChild(buildChoiceGrid(QUALIFY_CHOICES.filter((c) => c.primary)));
+
+  // "Autre" (audit de simplification du 02/09/2026) : replié par défaut, mêmes <details>
+  // natifs qu'ailleurs dans l'app (ex. "🕒 Historique" des fiches) plutôt qu'un composant dédié.
+  const other = document.createElement("details");
+  other.className = "qualify-other";
+  other.innerHTML = `<summary class="section-title" style="cursor:pointer;">Autre</summary>`;
+  other.appendChild(buildChoiceGrid(QUALIFY_CHOICES.filter((c) => !c.primary)));
+  body.appendChild(other);
 
   openModal({ title: "Traiter", body, actions: [{ label: "Plus tard", variant: "ghost" }] });
 }
@@ -175,58 +189,19 @@ async function handleChoice(item, choice) {
   showToast(outcome === "archived" ? "Archivé" : "Conservé comme information");
 }
 
-async function openTaskFromInboxModal(item) {
-  const projects = await projectsApi.listAll();
-
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="field">
-      <label for="task-title">Titre</label>
-      <input id="task-title" type="text" value="${escapeAttr(item.rawContent.slice(0, 80))}" />
-    </div>
-    <div class="field">
-      <label for="task-description">Description</label>
-      <textarea id="task-description" placeholder="Le détail — la capture d'origine part ici par défaut, rien n'est perdu">${escapeHtml(item.rawContent)}</textarea>
-    </div>
-    <div class="field">
-      <label for="task-due">Pour quand ? (optionnel)</label>
-      <input id="task-due" type="date" />
-    </div>
-    <div class="field">
-      <label for="task-project">Projet (optionnel)</label>
-      <select id="task-project">
-        <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
-      </select>
-    </div>
-    <div class="field" style="display:flex;align-items:center;gap:8px;">
-      <input id="task-communication" type="checkbox" style="width:auto;" />
-      <label for="task-communication" style="margin:0;">📣 C'est une communication (article, message) — activer son canevas de production</label>
-    </div>
-  `;
-
-  const { bodyEl, close } = openModal({
-    title: "Nouvelle action",
-    body,
-    actions: [
-      { label: "Annuler", variant: "ghost" },
-      {
-        label: "Créer",
-        variant: "primary",
-        closesModal: false,
-        onClick: async () => {
-          const title = bodyEl.querySelector("#task-title").value.trim();
-          if (!title) return;
-          const description = bodyEl.querySelector("#task-description").value.trim();
-          const dueDate = bodyEl.querySelector("#task-due").value || null;
-          const projectId = bodyEl.querySelector("#task-project").value || null;
-          const type = bodyEl.querySelector("#task-communication").checked ? "communication" : "action";
-          await inboxApi.qualify(item.id, "task", { title, description, dueDate, projectId, type });
-          close();
-          showToast("Action créée");
-        },
-      },
-    ],
+/**
+ * "Action" (vague 19, unification des formulaires de création, audit de simplification) :
+ * réutilise désormais le même formulaire que le "+" du Pilotage (js/views/kanban.js) au lieu
+ * d'en maintenir une copie légèrement différente ici — seule différence de comportement gardée,
+ * via `prefill.createFn` : la tâche est créée par `inboxApi.qualify()` plutôt que directement,
+ * pour que le lien avec la capture d'origine (Règle 3, `sourceInboxItemId`) ne se perde jamais.
+ */
+function openTaskFromInboxModal(item) {
+  openCreateTaskModal({
+    title: item.rawContent.slice(0, 80),
+    description: item.rawContent,
+    createdToast: "Action créée",
+    createFn: (payload) => inboxApi.qualify(item.id, "task", payload).then((r) => r.task),
   });
 }
 
@@ -276,135 +251,27 @@ function openResourceFromInboxModal(item) {
   });
 }
 
-/** "Réunion" (§49) : version simplifiée pour l'instant — le déroulé Avant/Pendant/Après
- *  complet viendra avec les canevas (§14-19). */
-async function openMeetingFromInboxModal(item) {
-  const projects = await projectsApi.listAll();
-
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="field">
-      <label for="mt-title">Sujet de la réunion</label>
-      <input id="mt-title" type="text" value="${escapeAttr(item.rawContent.slice(0, 120))}" />
-    </div>
-    <div class="field">
-      <label for="mt-date">Date (optionnel)</label>
-      <input id="mt-date" type="date" />
-    </div>
-    <div class="field">
-      <label for="mt-objective">Objectif (optionnel)</label>
-      <textarea id="mt-objective" placeholder="Qu'est-ce qu'on cherche à obtenir de cette réunion ?"></textarea>
-    </div>
-    <div class="field">
-      <label for="mt-canevas">Canevas (optionnel)</label>
-      <select id="mt-canevas">
-        ${meetingsApi.CANEVAS_OPTIONS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
-      </select>
-    </div>
-    <div class="field">
-      <label for="mt-project">Projet (optionnel)</label>
-      <select id="mt-project">
-        <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
-      </select>
-    </div>
-  `;
-
-  const { bodyEl, close } = openModal({
-    title: "Nouvelle réunion",
-    body,
-    actions: [
-      { label: "Annuler", variant: "ghost" },
-      {
-        label: "Créer",
-        variant: "primary",
-        closesModal: false,
-        onClick: async () => {
-          const title = bodyEl.querySelector("#mt-title").value.trim();
-          if (!title) return;
-          const meeting = await meetingsApi.createMeeting({
-            title,
-            date: bodyEl.querySelector("#mt-date").value || null,
-            objective: bodyEl.querySelector("#mt-objective").value.trim(),
-            canevasKey: bodyEl.querySelector("#mt-canevas").value,
-            projectId: bodyEl.querySelector("#mt-project").value || null,
-          });
-          await inboxApi.qualify(item.id, "meeting", { id: meeting.id });
-          close();
-          showToast("Réunion créée");
-        },
-      },
-    ],
+/**
+ * "Réunion" (vague 19, unification des formulaires de création) : réutilise désormais le
+ * formulaire canonique de js/views/dashboard.js (Objectif, Canevas, Projet) au lieu d'une
+ * version séparée qui avait fini par diverger — même toast déjà géré par la modale canonique.
+ */
+function openMeetingFromInboxModal(item) {
+  openCreateMeetingModal({
+    title: item.rawContent.slice(0, 120),
+    onCreated: (meeting) => inboxApi.qualify(item.id, "meeting", { id: meeting.id }),
   });
 }
 
-/** "Décision" (§48). */
-async function openDecisionFromInboxModal(item) {
-  const projects = await projectsApi.listAll();
-
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="field">
-      <label for="dc-title">Sujet</label>
-      <input id="dc-title" type="text" value="${escapeAttr(item.rawContent.slice(0, 120))}" />
-    </div>
-    <div class="field">
-      <label for="dc-decision">Qu'est-ce qui a été décidé ?</label>
-      <textarea id="dc-decision"></textarea>
-    </div>
-    <div class="field">
-      <label for="dc-context">Contexte (optionnel)</label>
-      <textarea id="dc-context"></textarea>
-    </div>
-    <div class="field">
-      <label for="dc-date">Date (optionnel)</label>
-      <input id="dc-date" type="date" />
-    </div>
-    <div class="field">
-      <label for="dc-project">Projet (optionnel)</label>
-      <select id="dc-project">
-        <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
-      </select>
-    </div>
-  `;
-
-  const { bodyEl, close } = openModal({
-    title: "Nouvelle décision",
-    body,
-    actions: [
-      { label: "Annuler", variant: "ghost" },
-      {
-        label: "Créer",
-        variant: "primary",
-        closesModal: false,
-        onClick: async () => {
-          const title = bodyEl.querySelector("#dc-title").value.trim();
-          const decisionText = bodyEl.querySelector("#dc-decision").value.trim();
-          if (!title || !decisionText) return;
-          const decision = await decisionsApi.createDecision({
-            title,
-            decision: decisionText,
-            context: bodyEl.querySelector("#dc-context").value.trim(),
-            date: bodyEl.querySelector("#dc-date").value || null,
-            projectId: bodyEl.querySelector("#dc-project").value || null,
-          });
-          await inboxApi.qualify(item.id, "decision", { id: decision.id });
-          close();
-          // Suggestion de prochaine étape (§ 31/08/2026, retour de Charles-Henri : mieux se
-          // souvenir des enchaînements) : une Décision entraîne souvent une Tâche — proposer
-          // de la créer, déjà liée, tout de suite plutôt que de compter sur la Revue hebdo
-          // pour s'en souvenir plus tard.
-          suggestNextStep({
-            title: "Créer une action ?",
-            message: `Décision enregistrée : « ${decision.title} ». Cette décision entraîne-t-elle une action ? Tu peux créer une Tâche liée tout de suite.`,
-            acceptLabel: "+ Créer la tâche",
-            onAccept: () => linkedItemsApi.openCreateAndLinkDirect("Task", { type: "Decision", id: decision.id }, decision.title),
-            onDecline: () => showToast("Décision enregistrée"),
-          });
-        },
-      },
-    ],
+/**
+ * "Décision" (vague 19, unification des formulaires de création) : réutilise le formulaire
+ * canonique de js/views/dashboard.js, qui propose déjà la suggestion "Créer une action ?"
+ * après l'enregistrement — plus besoin de la dupliquer ici.
+ */
+function openDecisionFromInboxModal(item) {
+  openCreateDecisionModal({
+    title: item.rawContent.slice(0, 120),
+    onCreated: (decision) => inboxApi.qualify(item.id, "decision", { id: decision.id }),
   });
 }
 

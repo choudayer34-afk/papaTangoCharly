@@ -26,6 +26,7 @@ import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
+import { renderInfoTip } from "../components/infoTip.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -51,13 +52,25 @@ export function renderKanban(container) {
       </div>
     </div>
     <div class="view">
-      <div class="chip-row" id="kanban-hat-filter"></div>
       <div class="chip-row" id="kanban-filters" style="flex-wrap:wrap;">
-        <select id="kanban-project-filter" class="chip" style="border-radius:var(--radius-sm);"></select>
+        <details class="filter-popover" id="kanban-filter-popover">
+          <summary class="chip">🔧 Filtrer<span class="filter-popover-badge" id="kanban-filter-badge" hidden></span></summary>
+          <div class="filter-popover-panel">
+            <div class="filter-popover-group">
+              <div class="filter-popover-label" style="display:flex;align-items:center;gap:6px;">Casquette<span id="kanban-hat-info"></span></div>
+              <div class="chip-row" id="kanban-hat-filter"></div>
+            </div>
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Projet</div>
+              <select id="kanban-project-filter"></select>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="chip-row" id="kanban-view-toggle">
         <button type="button" class="chip" data-view="trello">🗂️ Trello</button>
         <button type="button" class="chip" data-view="table">📊 Tableau</button>
+        <span id="kanban-status-info"></span>
       </div>
       <div class="chip-row" id="kanban-table-controls" style="display:none;">
         <label style="display:flex;align-items:center;gap:8px;font-size:var(--font-size-sm);color:var(--color-text-muted);">
@@ -79,11 +92,15 @@ export function renderKanban(container) {
     "kanban-intro-v1",
     "Ici, seulement <strong>tes</strong> tâches — pas de collaborateur à choisir, tout ce qui s'y trouve est déjà à toi. Ce qu'un collaborateur doit faire, c'est un Suivi sur sa fiche (onglet Équipe). Le filtre par casquette est le même qu'à l'Accueil."
   );
+  renderInfoTip(container.querySelector("#kanban-hat-info"), casquettesApi.HAT_INFO_HTML);
+  renderInfoTip(container.querySelector("#kanban-status-info"), tasksApi.STATUS_INFO_HTML);
 
   const board = container.querySelector("#kanban-board");
   const tableEl = container.querySelector("#kanban-table");
   const hatFilterEl = container.querySelector("#kanban-hat-filter");
   const filtersEl = container.querySelector("#kanban-filters");
+  const filterPopoverEl = container.querySelector("#kanban-filter-popover");
+  const filterBadgeEl = container.querySelector("#kanban-filter-badge");
   const projectFilterEl = container.querySelector("#kanban-project-filter");
   const viewToggleEl = container.querySelector("#kanban-view-toggle");
   const tableControlsEl = container.querySelector("#kanban-table-controls");
@@ -134,6 +151,7 @@ export function renderKanban(container) {
     const casquette = prefs.casquette || "all";
     activeHat = casquette === "all" || PILOTAGE_HATS.includes(casquette) ? casquette : "all";
     renderHatFilter();
+    updateFilterBadge();
     renderBoard();
   });
 
@@ -144,6 +162,7 @@ export function renderKanban(container) {
       async (hatId) => {
         activeHat = hatId;
         renderHatFilter();
+        updateFilterBadge();
         renderBoard();
         await preferencesApi.setCasquette(hatId);
       },
@@ -151,8 +170,22 @@ export function renderKanban(container) {
     );
   }
 
+  // "🔧 Filtrer" (audit de simplification du 02/09/2026 : "regrouper casquette + projet, deux
+  // façons de restreindre la même liste, dans un même menu plutôt que deux rangées de chips en
+  // permanence à l'écran") — un badge sur le bouton donne l'état d'un coup d'œil sans avoir à
+  // ouvrir le menu, pour ne jamais laisser un filtre actif oublié invisible.
+  function updateFilterBadge() {
+    const count = (activeHat !== "all" ? 1 : 0) + (filterProjectId !== "all" ? 1 : 0);
+    filterBadgeEl.textContent = count ? String(count) : "";
+    filterBadgeEl.hidden = count === 0;
+  }
+  function closeFilterPopoverOnOutsideClick(e) {
+    if (filterPopoverEl.open && !filterPopoverEl.contains(e.target)) filterPopoverEl.open = false;
+  }
+  document.addEventListener("click", closeFilterPopoverOnOutsideClick);
+
   filtersEl.insertAdjacentHTML(
-    "afterbegin",
+    "beforeend",
     DUE_WINDOWS.map((w) => `<button type="button" class="chip${w.key === "all" ? " active" : ""}" data-window="${w.key}">${w.label}</button>`).join("") +
       `<button type="button" class="chip" id="kanban-hide-done">🙈 Masquer terminées</button>`
   );
@@ -173,6 +206,7 @@ export function renderKanban(container) {
   });
   projectFilterEl.addEventListener("change", () => {
     filterProjectId = projectFilterEl.value;
+    updateFilterBadge();
     renderBoard();
   });
 
@@ -285,6 +319,7 @@ export function renderKanban(container) {
 
   return function cleanup() {
     container.classList.remove("app-wide");
+    document.removeEventListener("click", closeFilterPopoverOnOutsideClick);
     unsubTasks();
     unsubProjects();
   };
@@ -798,10 +833,19 @@ function renderCard(task, projects) {
 /**
  * Création autonome d'une tâche, hors du parcours Inbox → qualification — utilisée par le
  * "fil conducteur" (components/linkedItems.js) pour "créer à la volée" une tâche liée à une
- * autre fiche. Même pattern prefill/onCreated/onCancel que openCreateProjectModal et
- * openCreateResourceModal.
+ * autre fiche, et par la fiche Projet ("+ Ajouter"). Même pattern prefill/onCreated/onCancel
+ * que openCreateProjectModal et openCreateResourceModal.
+ *
+ * `prefill.createFn` (vague 19, unification des formulaires de création, audit de
+ * simplification) : par défaut la tâche est créée directement via `tasksApi.createTask()`,
+ * mais l'Inbox (js/views/inbox.js) a besoin que la création passe par
+ * `inboxApi.qualify(item.id, "task", ...)` pour ne jamais perdre le lien vers la capture
+ * d'origine (Règle 3) ni le rattachement `sourceInboxItemId` — `createFn`, quand fourni, reçoit
+ * exactement le même objet de champs et doit renvoyer la tâche créée, pour que ce formulaire
+ * n'existe qu'à un seul endroit tout en gardant ce comportement spécifique à l'Inbox.
  */
-export function openCreateTaskModal(prefill = {}) {
+export async function openCreateTaskModal(prefill = {}) {
+  const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -815,6 +859,13 @@ export function openCreateTaskModal(prefill = {}) {
     <div class="field">
       <label for="new-task-due">Échéance (optionnel)</label>
       <input id="new-task-due" type="date" />
+    </div>
+    <div class="field">
+      <label for="new-task-project">Projet (optionnel)</label>
+      <select id="new-task-project">
+        <option value="">— Aucun —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${p.id === prefill.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px;">
       <input id="new-task-communication" type="checkbox" style="width:auto;" />
@@ -834,15 +885,16 @@ export function openCreateTaskModal(prefill = {}) {
           const title = bodyEl.querySelector("#new-task-title").value.trim();
           if (!title) return;
           const isCommunication = bodyEl.querySelector("#new-task-communication").checked;
-          const task = await tasksApi.createTask({
+          const payload = {
             title,
             description: bodyEl.querySelector("#new-task-description").value.trim(),
             dueDate: bodyEl.querySelector("#new-task-due").value || null,
-            projectId: prefill.projectId || null,
+            projectId: bodyEl.querySelector("#new-task-project").value || null,
             type: isCommunication ? "communication" : "action",
-          });
+          };
+          const task = prefill.createFn ? await prefill.createFn(payload) : await tasksApi.createTask(payload);
           close();
-          showToast("Tâche créée");
+          showToast(prefill.createdToast || "Tâche créée");
           prefill.onCreated?.(task);
         },
       },
@@ -915,19 +967,6 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     <div id="detail-canevas"></div>
     <div class="section-title" id="checklist-title">☑️ Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</div>
     <div id="detail-checklist" style="margin-bottom:16px;"></div>
-    <div class="section-title">📎 Ressources (${linkedResources.length})</div>
-    <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
-      <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
-    </div>
-    <div class="section-title">📅 Réunions Outlook associées (${(task.outlookMeetings || []).length})</div>
-    <div class="card" id="detail-outlook" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-      <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
-    </div>
     <div class="section-title">🗓️ Réunion</div>
     <div class="field" style="margin-bottom:8px;">
       <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
@@ -936,9 +975,31 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
       <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
     </div>
-    <div class="section-title">🗒️ Notes</div>
-    <div id="detail-notes" style="margin-bottom:16px;"></div>
-    <details>
+    <!-- Ressources / Réunions Outlook / Notes : blocs secondaires repliés par défaut (audit de
+         simplification du 02/09/2026 — "trop de blocs ouverts en permanence sur une fiche déjà
+         longue") ; le compte dans le résumé garde l'information visible sans avoir à déplier. -->
+    <details class="fiche-section">
+      <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
+      <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
+        <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+      </div>
+    </details>
+    <details class="fiche-section">
+      <summary class="section-title" style="cursor:pointer;">📅 Réunions Outlook associées (${(task.outlookMeetings || []).length})</summary>
+      <div class="card" id="detail-outlook" style="margin-top:8px;margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
+      </div>
+    </details>
+    <details class="fiche-section">
+      <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(task.notesLog || []).length})</summary>
+      <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
+    </details>
+    <details class="fiche-section">
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${taskHistory.length})</summary>
       <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
     </details>

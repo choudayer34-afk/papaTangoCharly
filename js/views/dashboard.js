@@ -27,6 +27,7 @@ import { openWeeklyReview } from "../components/weeklyReview.js";
 import { openQualifyChoice, openKeptItemDetail } from "./inbox.js";
 import { openCaptureModal } from "../components/capture.js";
 import { getDraft, clearDraft } from "../services/draftStore.js";
+import { renderInfoTip } from "../components/infoTip.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -35,14 +36,26 @@ const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 // se rallonge avec les éléments qui prennent de l'ampleur") — chaque section connaît sa propre
 // clé de préférence (js/domain/preferences.js#dashboardHidden) ; le bloc chiffré (stat-grid)
 // n'y figure pas volontairement : c'est le seul repère qui doit toujours rester visible.
+//
+// Audit de simplification du 02/09/2026 (retour de Charles-Henri : "on fait l'ensemble des
+// modifications suggérées") — "À échéance dans les 7 jours", "En pause depuis un moment" et
+// "Suivis en retard" répondaient toutes les trois à la même question de fond ("qu'est-ce qui a
+// besoin de moi ?"), calculées indépendamment : fusionnées en une seule section "needsAttention"
+// (voir renderNeedsAttentionSection). "recentlyViewed" ("🔄 Reprendre où j'en étais") devient
+// masquable pour la première fois — elle ne l'était pas avant ce round.
 const DASHBOARD_SECTIONS = [
-  { key: "dueSoon", label: "🗓️ À échéance dans les 7 jours" },
-  { key: "stalled", label: "⏸️ En pause depuis un moment" },
-  { key: "followups", label: "📣 Suivis en retard" },
+  { key: "needsAttention", label: "⚠️ Ça a besoin de toi" },
   { key: "kept", label: "🧠 Informations & idées" },
   { key: "projects", label: "📦 Mes projets" },
+  { key: "recentlyViewed", label: "🔄 Reprendre où j'en étais" },
   { key: "recent", label: "🧠 Récemment" },
 ];
+
+// Profil "épuré" (audit de simplification du 02/09/2026, choix retenu avec Charles-Henri :
+// "Minimal") — appliqué une seule fois, la toute première fois que ce round tourne (voir
+// preferencesApi.markDashboardHiddenMigratedV19), pour que la simplification prenne effet tout
+// de suite plutôt que de rester une option qu'il faudrait aller cocher soi-même dans ⚙️.
+const DEFAULT_HIDDEN_V19 = ["kept", "projects", "recentlyViewed", "recent"];
 
 export function renderDashboard(container) {
   container.innerHTML = `
@@ -62,13 +75,14 @@ export function renderDashboard(container) {
       <div id="capture-draft-banner"></div>
       <div id="review-reminder"></div>
       <div id="notif-optin"></div>
-      <div class="chip-row" id="hat-filter"></div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="chip-row" id="hat-filter" style="margin-bottom:0;flex:1;min-width:0;"></div>
+        <span id="hat-filter-info"></span>
+      </div>
       <div class="stat-grid" id="stat-grid"></div>
       <div id="recent-viewed-section"></div>
       <div id="focus-section"></div>
-      <div id="stalled-section"></div>
-      <div id="due-soon-section"></div>
-      <div id="followups-section"></div>
+      <div id="needs-attention-section"></div>
       <div id="kept-section"></div>
       <div id="projects-section"></div>
       <div id="recent-section"></div>
@@ -83,6 +97,7 @@ export function renderDashboard(container) {
     "dashboard-hats-v1",
     "Le filtre <strong>Toutes / Toi / Équipe / Projets / Manager / CSE</strong> ci-dessous limite l'Accueil à une seule casquette à la fois — il est déduit automatiquement du projet ou de la personne concernée. Le bouton ⚙️ permet de replier les sections dont tu ne te sers pas."
   );
+  renderInfoTip(container.querySelector("#hat-filter-info"), casquettesApi.HAT_INFO_HTML);
 
   const captureDraftBannerEl = container.querySelector("#capture-draft-banner");
   const reviewReminderEl = container.querySelector("#review-reminder");
@@ -91,9 +106,7 @@ export function renderDashboard(container) {
   const statGrid = container.querySelector("#stat-grid");
   const recentViewedSection = container.querySelector("#recent-viewed-section");
   const focusSection = container.querySelector("#focus-section");
-  const stalledSection = container.querySelector("#stalled-section");
-  const dueSoonSection = container.querySelector("#due-soon-section");
-  const followUpsSection = container.querySelector("#followups-section");
+  const needsAttentionSection = container.querySelector("#needs-attention-section");
   const keptSection = container.querySelector("#kept-section");
   const projectsSection = container.querySelector("#projects-section");
   const recentSection = container.querySelector("#recent-section");
@@ -121,7 +134,15 @@ export function renderDashboard(container) {
     projectSortMode = prefs.projectSort || "manual";
     categories = prefs.categories || {};
     activeHat = prefs.casquette || "all";
-    hiddenSections = new Set(prefs.dashboardHidden || []);
+    if (!prefs.dashboardHiddenMigratedV19) {
+      // Bascule one-shot vers le profil "épuré" (voir DEFAULT_HIDDEN_V19 ci-dessus) — jamais
+      // répétée ensuite, pour respecter toute personnalisation faite après par Charles-Henri.
+      hiddenSections = new Set(DEFAULT_HIDDEN_V19);
+      preferencesApi.setDashboardHidden(DEFAULT_HIDDEN_V19).catch(() => {});
+      preferencesApi.markDashboardHiddenMigratedV19().catch(() => {});
+    } else {
+      hiddenSections = new Set(prefs.dashboardHidden || []);
+    }
     focusOverride = prefs.focusOverride || { date: null, taskIds: [] };
     recentlyViewed = prefs.recentlyViewed || [];
     renderHatFilter();
@@ -130,11 +151,9 @@ export function renderDashboard(container) {
     renderStats();
     renderRecentlyViewedSection();
     renderFocusSection();
-    renderStalledSection();
-    renderDueSoonSection();
+    renderNeedsAttentionSection();
     renderKeptSection();
     renderProjectsSection();
-    renderFollowUpsSection();
     renderRecentSection();
   });
 
@@ -144,10 +163,8 @@ export function renderDashboard(container) {
       renderHatFilter();
       renderStats();
       renderFocusSection();
-      renderStalledSection();
-      renderDueSoonSection();
+      renderNeedsAttentionSection();
       renderProjectsSection();
-      renderFollowUpsSection();
       renderRecentSection();
       await preferencesApi.setCasquette(hatId);
     });
@@ -265,6 +282,10 @@ export function renderDashboard(container) {
   }
 
   async function renderRecentlyViewedSection() {
+    if (hiddenSections.has("recentlyViewed")) {
+      recentViewedSection.innerHTML = "";
+      return;
+    }
     const visibleEntries = recentlyViewed.filter(isRecentlyViewedEntryVisible);
     if (!visibleEntries.length) {
       recentViewedSection.innerHTML = "";
@@ -302,44 +323,87 @@ export function renderDashboard(container) {
   }
 
   /**
-   * "⏸️ En pause depuis un moment" (piste TDAH du 01/09/2026, discussion permanence/repérage —
-   * "je commence un truc mais ne le finis pas") : tâches commencées (pas "à faire") mais non
-   * retouchées depuis plusieurs jours (`tasksApi.isStalled`, seuil de 5 jours) — distinct du
-   * retard (qui dépend d'une échéance, souvent absente sur une tâche abandonnée) et du Focus
-   * (qui est une question de priorité, pas d'abandon). Rubrique repliable comme les autres,
-   * jamais un ton culpabilisant (piste TDAH : "traitement du retard sans honte").
+   * "⚠️ Ça a besoin de toi" (audit de simplification du 02/09/2026, retour de Charles-Henri) :
+   * fusionne ce qui vivait avant dans trois rubriques séparées — "En pause depuis un moment",
+   * "À échéance dans les 7 jours" et "Suivis en retard" — qui répondaient toutes les trois à la
+   * même question de fond ("qu'est-ce qui a besoin de moi ?"), calculées indépendamment. Le
+   * risque avec trois listes distinctes : en vérifier une et oublier les deux autres, ou croire
+   * l'Accueil à jour alors qu'une seule des trois a été relue. Ici, une seule liste, triée par
+   * urgence (suivi déjà en retard de contrôle d'abord, puis échéance qui approche par date
+   * croissante, puis tâche à l'arrêt depuis le plus longtemps) — chaque ligne garde son icône de
+   * raison pour ne perdre aucune information, jamais un ton culpabilisant (piste TDAH :
+   * "traitement du retard sans honte").
    */
-  function renderStalledSection() {
-    if (hiddenSections.has("stalled")) {
-      stalledSection.innerHTML = "";
+  function renderNeedsAttentionSection() {
+    if (hiddenSections.has("needsAttention")) {
+      needsAttentionSection.innerHTML = "";
       return;
     }
-    const stalled = hatFilterTasks(tasks).filter(tasksApi.isStalled);
-    if (!stalled.length) {
-      stalledSection.innerHTML = "";
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    const overdueFollowUps = hatFilterFollowUps(followUps)
+      .filter(followUpsApi.isControlDue)
+      .map((f) => ({ kind: "followup", urgency: 0, sortKey: f.controlDate ? new Date(f.controlDate).getTime() : 0, data: f }));
+    const dueSoonTasks = hatFilterTasks(tasks)
+      .filter((t) => t.status !== "done" && t.dueDate && daysFromToday(t.dueDate) > 0 && daysFromToday(t.dueDate) <= 7)
+      .map((t) => ({ kind: "dueSoon", urgency: 1, sortKey: new Date(t.dueDate).getTime(), data: t }));
+    const stalledTasks = hatFilterTasks(tasks)
+      .filter(tasksApi.isStalled)
+      .map((t) => ({ kind: "stalled", urgency: 2, sortKey: t.updatedAt || t.createdAt || 0, data: t }));
+
+    const items = [...overdueFollowUps, ...dueSoonTasks, ...stalledTasks].sort(
+      (a, b) => a.urgency - b.urgency || a.sortKey - b.sortKey
+    );
+
+    if (!items.length) {
+      needsAttentionSection.innerHTML = "";
       return;
     }
-    const sorted = [...stalled].sort((a, b) => (a.updatedAt || a.createdAt || 0) - (b.updatedAt || b.createdAt || 0));
-    stalledSection.innerHTML = `
+
+    needsAttentionSection.innerHTML = `
       <details open>
-        <summary class="section-title" style="margin-top:0;cursor:pointer;">⏸️ En pause depuis un moment (${stalled.length})</summary>
-        <div class="card" id="stalled-list" style="margin-top:8px;margin-bottom:16px;"></div>
+        <summary class="section-title" style="margin-top:0;cursor:pointer;">⚠️ Ça a besoin de toi (${items.length})</summary>
+        <div class="card" id="needs-attention-list" style="margin-top:8px;margin-bottom:16px;"></div>
       </details>
     `;
-    const listEl = stalledSection.querySelector("#stalled-list");
-    for (const t of sorted) {
-      const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
-      const days = Math.floor((Date.now() - (t.updatedAt || t.createdAt || 0)) / 86400000);
+    const listEl = needsAttentionSection.querySelector("#needs-attention-list");
+    for (const entry of items) {
       const row = document.createElement("div");
       row.className = "item-row";
       row.style.cursor = "pointer";
-      row.innerHTML = `
-        <div class="item-main">
-          <div class="item-title">${escapeHtml(t.title)}</div>
-          <div class="item-meta">⏸️ pas retouchée depuis ${days} j${project ? " · 📦 " + escapeHtml(project.name) : ""}</div>
-        </div>
-      `;
-      row.addEventListener("click", () => openTaskDetail(t, projects));
+      if (entry.kind === "followup") {
+        const f = entry.data;
+        const person = peopleById.get(f.personId);
+        const isToTell = f.direction === "to_tell";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${isToTell ? "📣 " : "👀 "}${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
+            <div class="item-meta">Suivi en retard · ${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
+          </div>
+          <span class="badge badge-late">🔴</span>
+        `;
+        if (person) row.addEventListener("click", () => openPersonDetail(person, followUps));
+        else row.style.cursor = "default";
+      } else if (entry.kind === "dueSoon") {
+        const t = entry.data;
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">🗓️ ${escapeHtml(t.title)}</div>
+            <div class="item-meta">Échéance proche · ${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${formatDate(t.dueDate)}</div>
+          </div>
+        `;
+        row.addEventListener("click", () => openTaskDetail(t, projects));
+      } else {
+        const t = entry.data;
+        const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+        const days = Math.floor((Date.now() - (t.updatedAt || t.createdAt || 0)) / 86400000);
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">⏸️ ${escapeHtml(t.title)}</div>
+            <div class="item-meta">En pause depuis ${days} j${project ? " · 📦 " + escapeHtml(project.name) : ""}</div>
+          </div>
+        `;
+        row.addEventListener("click", () => openTaskDetail(t, projects));
+      }
       listEl.appendChild(row);
     }
   }
@@ -419,11 +483,10 @@ export function renderDashboard(container) {
             hiddenSections = new Set(hidden);
             await preferencesApi.setDashboardHidden(hidden);
             closeModal();
-            renderDueSoonSection();
-            renderStalledSection();
+            renderNeedsAttentionSection();
             renderKeptSection();
             renderProjectsSection();
-            renderFollowUpsSection();
+            renderRecentlyViewedSection();
             renderRecentSection();
             showToast("Accueil mis à jour");
           },
@@ -670,46 +733,6 @@ export function renderDashboard(container) {
   }
 
   /**
-   * Rubrique pliable/dépliable (retour de Charles-Henri) : les tâches non terminées dont
-   * l'échéance tombe dans les 7 prochains jours — distinct du retard (déjà couvert par la
-   * carte 🔴) et distinct d'"Aujourd'hui" (déjà sa propre carte), la vraie question ici est
-   * "qu'est-ce qui arrive cette semaine ?".
-   */
-  function renderDueSoonSection() {
-    if (hiddenSections.has("dueSoon")) {
-      dueSoonSection.innerHTML = "";
-      return;
-    }
-    const dueSoon = hatFilterTasks(tasks).filter(
-      (t) => t.status !== "done" && t.dueDate && daysFromToday(t.dueDate) > 0 && daysFromToday(t.dueDate) <= 7
-    );
-    dueSoonSection.innerHTML = `
-      <details ${dueSoon.length ? "open" : ""}>
-        <summary class="section-title" style="margin-top:0;cursor:pointer;">🗓️ À échéance dans les 7 jours (${dueSoon.length})</summary>
-        <div class="card" id="due-soon-list" style="margin-top:8px;margin-bottom:16px;"></div>
-      </details>
-    `;
-    const listEl = dueSoonSection.querySelector("#due-soon-list");
-    if (!dueSoon.length) {
-      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien cette semaine. 🎉</div>`;
-      return;
-    }
-    for (const t of [...dueSoon].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))) {
-      const row = document.createElement("div");
-      row.className = "item-row";
-      row.style.cursor = "pointer";
-      row.innerHTML = `
-        <div class="item-main">
-          <div class="item-title">${escapeHtml(t.title)}</div>
-          <div class="item-meta">${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${formatDate(t.dueDate)}</div>
-        </div>
-      `;
-      row.addEventListener("click", () => openTaskDetail(t, projects));
-      listEl.appendChild(row);
-    }
-  }
-
-  /**
    * §47 "information de contexte" : retour de Charles-Henri, les Informations/Idées
    * qualifiées depuis l'Inbox ne remontaient nulle part une fois traitées. Lecture simple,
    * avec un raccourci pour les archiver directement d'ici si elles ne servent plus.
@@ -762,38 +785,6 @@ export function renderDashboard(container) {
    * quotidien se passe, c'est ce qui permet de répondre à "ai-je bien relancé les bonnes
    * personnes ?" sans avoir à s'en souvenir soi-même.
    */
-  function renderFollowUpsSection() {
-    const overdue = hatFilterFollowUps(followUps).filter(followUpsApi.isControlDue);
-    if (hiddenSections.has("followups") || !overdue.length) {
-      followUpsSection.innerHTML = "";
-      return;
-    }
-    const peopleById = new Map(people.map((p) => [p.id, p]));
-    followUpsSection.innerHTML = `
-      <details open>
-        <summary class="section-title" style="margin-top:0;cursor:pointer;">📣 Suivis en retard (${overdue.length})</summary>
-        <div class="card" id="followups-list" style="margin-top:8px;margin-bottom:16px;"></div>
-      </details>
-    `;
-    const list = followUpsSection.querySelector("#followups-list");
-    for (const f of overdue) {
-      const person = peopleById.get(f.personId);
-      const isToTell = f.direction === "to_tell";
-      const row = document.createElement("div");
-      row.className = "item-row";
-      row.style.cursor = person ? "pointer" : "default";
-      row.innerHTML = `
-        <div class="item-main">
-          <div class="item-title">${isToTell ? "📣 " : ""}${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
-          <div class="item-meta">${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
-        </div>
-        <span class="badge badge-late">🔴</span>
-      `;
-      if (person) row.addEventListener("click", () => openPersonDetail(person, followUps));
-      list.appendChild(row);
-    }
-  }
-
   /**
    * L'ordre des projets ici reprend celui de l'onglet Projets (retour de Charles-Henri) —
    * même fonction de tri (`projectsApi.sortProjects`), même mode (avancement ou manuel) lu
@@ -929,8 +920,7 @@ export function renderDashboard(container) {
     tasks = items;
     renderStats();
     renderFocusSection();
-    renderStalledSection();
-    renderDueSoonSection();
+    renderNeedsAttentionSection();
     renderProjectsSection();
   });
   const unsubInbox = inboxApi.subscribePending((items) => {
@@ -949,9 +939,7 @@ export function renderDashboard(container) {
     // qu'on vient pourtant de fermer, jusqu'au prochain changement de tâche/suivi.
     renderStats();
     renderFocusSection();
-    renderStalledSection();
-    renderDueSoonSection();
-    renderFollowUpsSection();
+    renderNeedsAttentionSection();
     renderProjectsSection();
     renderRecentSection();
     renderRecentlyViewedSection();
@@ -966,12 +954,12 @@ export function renderDashboard(container) {
   });
   const unsubPeople = peopleApi.subscribe((items) => {
     people = items;
-    renderFollowUpsSection();
+    renderNeedsAttentionSection();
   });
   const unsubFollowUps = followUpsApi.subscribe((items) => {
     followUps = items;
     renderStats();
-    renderFollowUpsSection();
+    renderNeedsAttentionSection();
   });
 
   return function cleanup() {
@@ -1014,7 +1002,17 @@ async function openGlobalHistory() {
  * "+ Créer et lier" (fil conducteur, components/linkedItems.js) pour une Réunion. Formulaire
  * minimal — titre + date — le reste (objectif, notes) se complète en rouvrant la fiche.
  */
-export function openCreateMeetingModal(prefill = {}) {
+/**
+ * Formulaire canonique de création d'une Réunion — vague 19 (audit de simplification, retour
+ * de Charles-Henri : "on fait l'ensemble des modifications suggérées") : jusqu'ici ce
+ * formulaire existait en 3 versions légèrement différentes (ici, "+ Ajouter" côté fiche Projet
+ * qui appelait déjà celui-ci, et une version séparée dans l'Inbox avec Objectif/Projet en plus)
+ * — désormais un seul formulaire, appelé partout, avec le sur-ensemble des champs. Le sélecteur
+ * Projet est toujours affiché (jamais cachée selon d'où on vient, même principe que le Suivi
+ * dans js/views/people.js) : préremplit `prefill.projectId` sans empêcher de le changer.
+ */
+export async function openCreateMeetingModal(prefill = {}) {
+  const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -1026,9 +1024,20 @@ export function openCreateMeetingModal(prefill = {}) {
       <input id="new-meeting-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
     </div>
     <div class="field">
+      <label for="new-meeting-objective">Objectif (optionnel)</label>
+      <textarea id="new-meeting-objective" placeholder="Qu'est-ce qu'on cherche à obtenir de cette réunion ?">${escapeHtml(prefill.objective || "")}</textarea>
+    </div>
+    <div class="field">
       <label for="new-meeting-canevas">Canevas (optionnel)</label>
       <select id="new-meeting-canevas">
         ${meetingsApi.CANEVAS_OPTIONS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label for="new-meeting-project">Projet (optionnel)</label>
+      <select id="new-meeting-project">
+        <option value="">— Aucun —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${p.id === prefill.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
   `;
@@ -1047,8 +1056,9 @@ export function openCreateMeetingModal(prefill = {}) {
           const meeting = await meetingsApi.createMeeting({
             title,
             date: bodyEl.querySelector("#new-meeting-date").value || null,
+            objective: bodyEl.querySelector("#new-meeting-objective").value.trim(),
             canevasKey: bodyEl.querySelector("#new-meeting-canevas").value,
-            projectId: prefill.projectId || null,
+            projectId: bodyEl.querySelector("#new-meeting-project").value || null,
           });
           close();
           showToast("Réunion créée");
@@ -1060,10 +1070,11 @@ export function openCreateMeetingModal(prefill = {}) {
 }
 
 /**
- * "+ Créer et lier" pour une Décision. Formulaire minimal — sujet + ce qui a été décidé —
- * le contexte détaillé se complète en rouvrant la fiche.
+ * Formulaire canonique de création d'une Décision — même principe et même historique que
+ * openCreateMeetingModal ci-dessus (vague 19, unification des 3 formulaires en un seul).
  */
-export function openCreateDecisionModal(prefill = {}) {
+export async function openCreateDecisionModal(prefill = {}) {
+  const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -1073,6 +1084,21 @@ export function openCreateDecisionModal(prefill = {}) {
     <div class="field">
       <label for="new-decision-decision">Ce qui a été décidé</label>
       <textarea id="new-decision-decision"></textarea>
+    </div>
+    <div class="field">
+      <label for="new-decision-context">Contexte (optionnel)</label>
+      <textarea id="new-decision-context"></textarea>
+    </div>
+    <div class="field">
+      <label for="new-decision-date">Date</label>
+      <input id="new-decision-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
+    </div>
+    <div class="field">
+      <label for="new-decision-project">Projet (optionnel)</label>
+      <select id="new-decision-project">
+        <option value="">— Aucun —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${p.id === prefill.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
     </div>
   `;
   const { bodyEl, close } = openModal({
@@ -1090,8 +1116,9 @@ export function openCreateDecisionModal(prefill = {}) {
           const decision = await decisionsApi.createDecision({
             title,
             decision: bodyEl.querySelector("#new-decision-decision").value.trim(),
-            date: new Date().toISOString().slice(0, 10),
-            projectId: prefill.projectId || null,
+            context: bodyEl.querySelector("#new-decision-context").value.trim(),
+            date: bodyEl.querySelector("#new-decision-date").value || null,
+            projectId: bodyEl.querySelector("#new-decision-project").value || null,
           });
           close();
           // Suggestion de prochaine étape (§ 31/08/2026, retour de Charles-Henri : mieux se
