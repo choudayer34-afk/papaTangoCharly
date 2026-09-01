@@ -51,6 +51,7 @@ export function renderDashboard(container) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button id="recipes-btn" class="btn btn-secondary btn-sm">🧩 Recettes</button>
+        <a href="#/memory" class="btn btn-secondary btn-sm" style="text-decoration:none;">🧠 Pause mémoire</a>
         <button id="weekly-review-btn" class="btn btn-secondary btn-sm">🧭 Revue hebdo</button>
         <button id="dashboard-settings-btn" class="btn btn-secondary btn-sm" aria-label="Personnaliser l'accueil">⚙️</button>
       </div>
