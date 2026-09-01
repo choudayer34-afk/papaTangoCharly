@@ -248,6 +248,20 @@ service cloud.firestore {
   (memory), 🌬️ respiration guidée (4-4-4-4), 🔢 rappel de séquence de longueur croissante.
   Volontairement accessible depuis l'Accueil plutôt que depuis ❓ Aide (réservé aux pages de
   référence Guide/Nouveautés) — ça vit là où Charles-Henri regarde déjà tous les jours
+- ✅ "✏️ Saisie laissée en cours" (`js/services/draftStore.js`, `js/components/capture.js`,
+  02/09/2026, piste TDAH — persister l'état d'un geste interrompu) : la modale Capturer
+  sauvegarde automatiquement ce qui est en train d'être tapé (débattu à 400ms), sans geste
+  explicite. Si Charles-Henri est interrompu avant d'enregistrer, un bandeau apparaît en tout
+  premier sur l'Accueil au retour — l'équivalent du camion de recyclage qui passe — avec un
+  aperçu du texte laissé en plan et deux boutons, Reprendre (rouvre Capturer, prérempli) ou
+  Abandonner. Le brouillon n'est jamais perdu par un clic en dehors de la modale ou par Échap ;
+  seuls Annuler ou Enregistrer le résolvent pour de bon
+- ✅ "🍅 Pomodoro" (`js/services/pomodoroStore.js`, `js/components/pomodoroWidget.js`,
+  02/09/2026, demande explicite) : un vrai minuteur de concentration dans "🧠 Mémoire & TDAH"
+  (25/5 ou 15/5, pause longue après 4 cycles), qui continue de tourner même après avoir quitté
+  cette vue pour aller travailler ailleurs — un mini-minuteur toujours visible (⏸️/▶️) suit sa
+  progression depuis n'importe quel écran, avec toast + changement du titre de l'onglet (si en
+  arrière-plan) + notification navigateur (si déjà autorisée) à chaque changement de phase
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
   fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
   démarrage ci-dessus comme version app-ouverte-uniquement), statut de projet
