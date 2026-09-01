@@ -588,6 +588,43 @@ a { color: inherit; }
 }
 @keyframes toastIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* ---------- Retour positif à la clôture d'une tâche (piste TDAH du 01/09/2026, retour de
+   Charles-Henri : un signal immédiat et visible plutôt qu'un chiffre qui change en silence
+   quelque part) — toast (voir showToast ci-dessus) + petite animation, js/views/kanban.js. */
+.completion-burst {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.4);
+  font-size: 64px;
+  z-index: 70;
+  pointer-events: none;
+  animation: completionBurst 0.85s ease-out forwards;
+}
+@keyframes completionBurst {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  25% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+  70% { transform: translate(-50%, -60%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -80%) scale(0.9); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .completion-burst { animation: none; opacity: 0; }
+}
+
+/* ---------- Sous-étapes courtes (checklist libre par Tâche, piste TDAH du 01/09/2026, retour
+   de Charles-Henri) — js/components/checklist.js. ---------- */
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.checklist-item:last-child { border-bottom: none; }
+.checklist-item input[type="checkbox"] { width: auto; flex: none; }
+.checklist-item-text { flex: 1; min-width: 0; }
+.checklist-item-text.done { text-decoration: line-through; color: var(--color-text-muted); }
+
 /* ---------- Aide contextuelle (js/components/hint.js) ---------- */
 .hint-banner {
   display: flex;
