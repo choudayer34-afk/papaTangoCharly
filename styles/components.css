@@ -219,6 +219,9 @@ a { color: inherit; }
 .badge-follow_up { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-done { background: var(--color-success-bg); color: var(--color-success); }
 .badge-late { background: var(--color-danger-bg); color: var(--color-danger); }
+/* Projet fermé (retour de Charles-Henri, 02/09/2026) — neutre, volontairement distinct des
+   badges de statut ci-dessus : une fermeture n'est ni un succès ni un retard. */
+.badge-archived { background: var(--color-surface-alt); color: var(--color-text-muted); }
 
 /* ---------- Empty state ---------- */
 .empty-state {
@@ -402,6 +405,70 @@ a { color: inherit; }
   white-space: nowrap;
 }
 
+/* Sous-étapes repliables sur la carte (retour de Charles-Henri, 02/09/2026 : "afficher les
+   sous-étapes en dessous, en décalé, mode réduit/déplier et pouvoir cocher"). Le bouton vit
+   dans .kanban-card-meta, au milieu des autres pastilles d'info — même famille visuelle,
+   juste cliquable. */
+.kanban-checklist-toggle {
+  border: none;
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.kanban-checklist-toggle:hover { color: var(--color-primary); }
+.kanban-card-checklist {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kanban-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.kanban-checklist-item input[type="checkbox"] { width: auto; margin-top: 2px; }
+.kanban-checklist-item span.done {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+/* "⏳ En attente de..." (retour de Charles-Henri, 02/09/2026) — en évidence sur la carte tant
+   que la tâche est En attente/À suivre (voir showWaiting dans kanban.js), jamais un simple
+   champ de plus perdu parmi les autres : fond distinct, avant le bloc de statut. */
+.kanban-card-waiting {
+  margin-top: var(--space-2);
+  padding: var(--space-2);
+  background: var(--color-waiting-bg);
+  border-radius: var(--radius-sm);
+}
+.kanban-card-waiting label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--color-waiting);
+  margin-bottom: 4px;
+}
+.kanban-waiting-input {
+  width: 100%;
+  border: 1px solid transparent;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+.kanban-waiting-input:hover,
+.kanban-waiting-input:focus {
+  border-color: var(--color-border);
+}
+
 /* ---------- Pilotage : vue Tableau (façon Monday) ----------
    Retour de Charles-Henri, 02/09/2026 : pouvoir basculer Pilotage entre la vue Trello
    existante et une vue tableau groupable/triable/éditable en ligne. Premier <table> de
@@ -531,6 +598,66 @@ thead .pilotage-table-th-pinned {
   color: var(--color-text);
   border-style: solid;
   background: var(--color-surface);
+}
+/* Glisser une ligne vers un autre groupe (retour de Charles-Henri, 02/09/2026 : "basculer par
+   glisser une tâche ailleurs", façon Monday) — poignée dédiée plutôt que toute la ligne, pour
+   ne jamais gêner la sélection/l'édition des champs de la ligne elle-même. */
+.pilotage-table-drag-handle {
+  flex: none;
+  cursor: grab;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-md);
+  line-height: 1;
+  padding: 0 2px;
+}
+.pilotage-table-drag-handle:active { cursor: grabbing; }
+/* Surbrillance du groupe cible pendant le survol (tbody entier, pas la ligne survolée — le
+   dépôt change l'appartenance au groupe, pas la position dans la liste). */
+tbody.drag-over-group {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
+}
+.pilotage-table-td-description {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.pilotage-table-td-description:hover { color: var(--color-text); }
+.pilotage-table-td-notes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 220px;
+}
+.pilotage-table-notes-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+.pilotage-table-notes-add-btn {
+  flex: none;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-primary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--font-size-sm);
+  line-height: 1;
+}
+.pilotage-table-notes-input {
+  flex: 1;
+  min-width: 120px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  padding: 4px 6px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text);
 }
 
 /* ---------- Modal ---------- */
