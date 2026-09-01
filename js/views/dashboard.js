@@ -22,6 +22,7 @@ import { openProjectDetail } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
 import { openWeeklyReview } from "../components/weeklyReview.js";
 import { openQualifyChoice, openKeptItemDetail } from "./inbox.js";
 
@@ -798,6 +799,8 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
       </select>
     </div>
     ${isMeeting ? `<div id="rd-canevas"></div>` : ""}
+    <div class="section-title">🗒️ Notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -833,6 +836,14 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
       }
     });
   }
+
+  renderNotesBlock(body.querySelector("#detail-notes"), data.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = isMeeting ? await meetingsApi.addNote(data.id, text) : await decisionsApi.addNote(data.id, text);
+      data.notesLog = updated;
+      return updated;
+    },
+  });
 
   const linkRef = { type: isMeeting ? "Meeting" : "Decision", id: data.id };
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);

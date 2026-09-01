@@ -15,6 +15,8 @@ import { suggestNextStep } from "../components/suggestNextStep.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { openCreateProjectModal } from "./projects.js";
 import { openCreateResourceModal } from "./resources.js";
+import { openCreateFollowUpModal } from "./people.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
@@ -228,72 +230,25 @@ async function openTaskFromInboxModal(item) {
 }
 
 /**
- * "Suivi" (§29) : contrairement à Action/Projet/Ressource, il n'existe pas de modale de
- * création réutilisable côté Équipe — celle-là (people.js) part toujours d'une personne déjà
- * connue. Depuis l'Inbox on ne sait pas encore qui, donc on ajoute un sélecteur de personne
- * ici plutôt que de complexifier people.js pour un usage qui ne s'y prête pas vraiment.
+ * "Suivi" (§29) : réutilise directement la modale complète de people.js (retour de
+ * Charles-Henri, 01/09/2026 : le "sens" — j'attends / je dois transmettre — n'apparaissait pas
+ * directement à la qualification depuis l'Inbox). Cette modale gère déjà le cas "on ne sait pas
+ * encore qui" (sélecteur de personne affiché quand `person` n'est pas fourni) — plus besoin
+ * d'une seconde version simplifiée ici, qui avait fini par diverger de la vraie (sens, catégorie,
+ * notable manquants).
  */
 async function openFollowUpFromInboxModal(item) {
-  const [people, projects] = await Promise.all([peopleApi.listAll(), projectsApi.listAll()]);
+  const people = await peopleApi.listAll();
   if (!people.length) {
     showToast("Ajoute d'abord une personne dans l'onglet Équipe pour créer un suivi");
     return;
   }
-
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="field">
-      <label for="fu-person">Qui s'engage ?</label>
-      <select id="fu-person">
-        ${people.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
-      </select>
-    </div>
-    <div class="field">
-      <label for="fu-title">Sur quoi ?</label>
-      <input id="fu-title" type="text" value="${escapeAttr(item.rawContent.slice(0, 120))}" />
-    </div>
-    <div class="field">
-      <label for="fu-due">Échéance de la personne (optionnel)</label>
-      <input id="fu-due" type="date" />
-    </div>
-    <div class="field">
-      <label for="fu-control">Quand dois-je contrôler / relancer ? (optionnel)</label>
-      <input id="fu-control" type="date" />
-    </div>
-    <div class="field">
-      <label for="fu-project">Projet (optionnel)</label>
-      <select id="fu-project">
-        <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
-      </select>
-    </div>
-  `;
-
-  const { bodyEl, close } = openModal({
-    title: "Nouveau suivi",
-    body,
-    actions: [
-      { label: "Annuler", variant: "ghost" },
-      {
-        label: "Créer",
-        variant: "primary",
-        closesModal: false,
-        onClick: async () => {
-          const title = bodyEl.querySelector("#fu-title").value.trim();
-          if (!title) return;
-          const followUp = await followUpsApi.createFollowUp({
-            title,
-            personId: bodyEl.querySelector("#fu-person").value,
-            dueDate: bodyEl.querySelector("#fu-due").value || null,
-            controlDate: bodyEl.querySelector("#fu-control").value || null,
-            projectId: bodyEl.querySelector("#fu-project").value || null,
-          });
-          await inboxApi.qualify(item.id, "followup", { id: followUp.id });
-          close();
-          showToast("Suivi créé");
-        },
-      },
-    ],
+  openCreateFollowUpModal({
+    defaultTitle: item.rawContent.slice(0, 120),
+    onCreated: async (followUp) => {
+      await inboxApi.qualify(item.id, "followup", { id: followUp.id });
+      showToast("Suivi créé");
+    },
   });
 }
 
@@ -469,6 +424,8 @@ export function openKeptItemDetail(item, { onClose } = {}) {
       <p style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(item.rawContent)}</p>
     </div>
     <div class="item-meta" style="margin-bottom:16px;">Capturé le ${formatDate(item.createdAt)}</div>
+    <div class="section-title">🗒️ Notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -479,6 +436,13 @@ export function openKeptItemDetail(item, { onClose } = {}) {
 
   const ref = { type: "Kept", id: item.id };
   const shortLabel = item.rawContent.slice(0, 60);
+  renderNotesBlock(body.querySelector("#detail-notes"), item.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = await inboxApi.addKeptNote(item.id, text);
+      item.notesLog = updated;
+      return updated;
+    },
+  });
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), ref);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();

@@ -16,6 +16,7 @@ import { openCreateResourceModal, renderResourceList, openResourcePickerModal } 
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
 import { openCreateTaskModal, openTaskDetail } from "./kanban.js";
 import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
 import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
@@ -294,6 +295,8 @@ export async function openProjectDetail(project, tasks) {
       <textarea id="detail-criteria" placeholder="Comment saurai-je que ce projet est réussi ?">${escapeHtml(project.successCriteria || "")}</textarea>
     </div>
     <div id="detail-canevas"></div>
+    <div class="section-title">🗒️ Notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-header-row">
       <div class="section-title">🧩 Sous-parties (${parts.length})</div>
     </div>
@@ -450,6 +453,14 @@ export async function openProjectDetail(project, tasks) {
 
   renderHistoryTimeline(body.querySelector("#detail-history"), projectHistory);
 
+  renderNotesBlock(body.querySelector("#detail-notes"), project.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = await projectsApi.addNote(project.id, text);
+      project.notesLog = updated;
+      return updated;
+    },
+  });
+
   renderCanevas(body.querySelector("#detail-canevas"), project.steps, async (stepKey, done) => {
     await projectsApi.toggleStep(project.id, stepKey, done);
     // Suggestion de prochaine étape (§ 31/08/2026, retour de Charles-Henri : mieux se souvenir
@@ -479,9 +490,25 @@ export async function openProjectDetail(project, tasks) {
     }
     partsEl.innerHTML = "";
     for (const part of currentParts) {
+      const partNotes = part.notesLog || [];
+      const lastNote = partNotes.length ? [...partNotes].sort((a, b) => b.createdAt - a.createdAt)[0] : null;
       const row = document.createElement("div");
       row.className = "item-row";
-      row.innerHTML = `<div class="item-main"><div class="item-title">${escapeHtml(part.label)}</div></div>`;
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(part.label)}</div>
+          ${lastNote ? `<div class="item-meta">🗒️ ${escapeHtml(lastNote.text)} · ${formatDateTime(lastNote.createdAt)}</div>` : ""}
+        </div>
+      `;
+      const noteBtn = document.createElement("button");
+      noteBtn.type = "button";
+      noteBtn.className = "btn btn-ghost btn-sm";
+      noteBtn.textContent = partNotes.length ? `🗒️ Notes (${partNotes.length})` : "🗒️ Note";
+      noteBtn.addEventListener("click", () => {
+        closeModal();
+        openPartNotesModal(project, part, reopenProject);
+      });
+      row.appendChild(noteBtn);
       const cycleBtn = document.createElement("button");
       cycleBtn.type = "button";
       cycleBtn.className = "btn btn-secondary btn-sm";
@@ -627,6 +654,33 @@ export async function openProjectDetail(project, tasks) {
 
 function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+}
+
+function formatDateTime(ts) {
+  return new Date(ts).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * Notes d'une sous-partie (retour de Charles-Henri, 01/09/2026) : la fiche projet n'affiche
+ * que la dernière (voir renderParts ci-dessus) — l'historique complet s'ouvre ici, à la
+ * demande, dans une petite modale dédiée plutôt que d'alourdir la ligne de la sous-partie en
+ * permanence. `onDone` rouvre la fiche projet (une seule modale à la fois, voir modal.js).
+ */
+function openPartNotesModal(project, part, onDone) {
+  const body = document.createElement("div");
+  body.innerHTML = `<div id="part-notes"></div>`;
+  renderNotesBlock(body.querySelector("#part-notes"), part.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = await projectsApi.addPartNote(project.id, part.id, text);
+      part.notesLog = updated;
+      return updated;
+    },
+  });
+  openModal({
+    title: `🗒️ Notes — ${part.label}`,
+    body,
+    actions: [{ label: "Fermer", variant: "ghost", onClick: () => onDone?.() }],
+  });
 }
 
 function escapeHtml(str) {

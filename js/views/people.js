@@ -10,6 +10,7 @@ import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -192,6 +193,8 @@ export async function openPersonDetail(person, allFollowUps) {
       <label for="person-notes">Notes</label>
       <textarea id="person-notes" placeholder="Contexte, points d'attention...">${escapeHtml(person.notes || "")}</textarea>
     </div>
+    <div class="section-title">🗒️ Journal de notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
     <details ${personHistory.length > 6 ? "" : "open"}>
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${personHistory.length})</summary>
       <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
@@ -233,6 +236,13 @@ export async function openPersonDetail(person, allFollowUps) {
     },
   });
   renderHistoryTimeline(body.querySelector("#person-history"), personHistory);
+  renderNotesBlock(body.querySelector("#detail-notes"), person.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = await peopleApi.addNote(person.id, text);
+      person.notesLog = updated;
+      return updated;
+    },
+  });
 
   const linkRef = { type: "Person", id: person.id };
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
@@ -660,8 +670,14 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
  * sens — soit j'attends quelque chose de la personne (comportement historique), soit c'est
  * moi qui dois lui dire/transmettre quelque chose. `category` ne compte que pour ce second
  * sens, et seulement quand la personne est de type Manager (§34/§35, voir management.js).
+ *
+ * `defaultTitle` (retour de Charles-Henri, 01/09/2026 : qualifier une capture Inbox en Suivi
+ * n'affichait pas le sens directement) — l'Inbox (js/views/inbox.js) appelle désormais cette
+ * même modale complète plutôt que sa propre version simplifiée, pour ne jamais avoir deux
+ * formulaires de création de Suivi qui divergent. Préremplit juste le champ "Sur quoi ?" avec
+ * le début de la capture brute.
  */
-export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", onCreated, onCancel } = {}) {
+export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", onCreated, onCancel } = {}) {
   const [projects, people] = await Promise.all([
     projectsApi.listAll(),
     person ? Promise.resolve(null) : peopleApi.listAll(),
@@ -689,7 +705,7 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
     </div>
     <div class="field">
       <label for="fu-title" id="fu-title-label">Qu'est-ce que ${person ? escapeHtml(person.name) : "la personne"} s'engage à faire ?</label>
-      <input id="fu-title" type="text" placeholder="Ex. Terminer la migration" />
+      <input id="fu-title" type="text" placeholder="Ex. Terminer la migration" value="${escapeAttr(defaultTitle)}" />
     </div>
     <div class="field" id="fu-category-field" style="display:none;">
       <label for="fu-category">Catégorie (pour le point manager, optionnel)</label>
@@ -829,6 +845,8 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="negative" ${followUp.notable === "negative" ? "checked" : ""} /> 👎 Négatif</label>
       </div>
     </div>
+    <div class="section-title">🗒️ Notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -836,6 +854,14 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
+
+  renderNotesBlock(body.querySelector("#detail-notes"), followUp.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = await followUpsApi.addNote(followUp.id, text);
+      followUp.notesLog = updated;
+      return updated;
+    },
+  });
 
   body.querySelectorAll('input[name="fu-edit-direction"]').forEach((r) =>
     r.addEventListener("change", () => {

@@ -14,6 +14,7 @@ import { openCreateResourceModal, renderResourceList, openResourcePickerModal } 
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -365,6 +366,8 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
     </div>
+    <div class="section-title">🗒️ Notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
     <details ${taskHistory.length > 6 ? "" : "open"}>
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${taskHistory.length})</summary>
       <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
@@ -379,6 +382,13 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
 
   renderCanevas(body.querySelector("#detail-canevas"), task.steps, async (stepKey, done) => {
     await tasksApi.toggleStep(task.id, stepKey, done);
+  });
+  renderNotesBlock(body.querySelector("#detail-notes"), task.notesLog || [], {
+    onAdd: async (text) => {
+      const updated = await tasksApi.addNote(task.id, text);
+      task.notesLog = updated;
+      return updated;
+    },
   });
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), { type: "Task", id: task.id });
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
