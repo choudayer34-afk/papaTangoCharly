@@ -11,6 +11,7 @@ import { showHintOnce } from "../components/hint.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
+import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -794,7 +795,22 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
 }
 
 export async function openEditFollowUpModal(followUp, { onDone } = {}) {
-  const projects = await projectsApi.listAll();
+  const [projects, person] = await Promise.all([
+    projectsApi.listAll(),
+    followUp.personId ? peopleApi.getPerson(followUp.personId) : Promise.resolve(null),
+  ]);
+
+  // Titre de réunion composé (retour de Charles-Henri, 01/09/2026, voir
+  // js/components/meetingLauncher.js) : Catégorie du projet - Projet - Intitulé du suivi -
+  // Personne, chaque partie omise si absente.
+  const followUpProject = projects.find((p) => p.id === followUp.projectId) || null;
+  const meetingTitle = buildMeetingTitle({
+    category: followUpProject?.category || "",
+    projectName: followUpProject?.name || "",
+    itemTitle: followUp.title,
+    personName: person?.name || "",
+  });
+
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -845,6 +861,14 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="negative" ${followUp.notable === "negative" ? "checked" : ""} /> 👎 Négatif</label>
       </div>
     </div>
+    <div class="section-title">🗓️ Réunion</div>
+    <div class="field" style="margin-bottom:8px;">
+      <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
+      <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
+    </div>
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
@@ -861,6 +885,19 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       followUp.notesLog = updated;
       return updated;
     },
+  });
+  body.querySelector("#copy-meeting-title-btn").addEventListener("click", () => {
+    copyMeetingTitle(meetingTitle);
+  });
+  body.querySelector("#create-meeting-btn").addEventListener("click", () => {
+    closeModal();
+    launchMeetingFromEntity({
+      ref: { type: "FollowUp", id: followUp.id },
+      routeHash: "#/people",
+      title: meetingTitle,
+      onLinked: () => openEditFollowUpModal(followUp, { onDone }),
+      onCancel: () => openEditFollowUpModal(followUp, { onDone }),
+    });
   });
 
   body.querySelectorAll('input[name="fu-edit-direction"]').forEach((r) =>

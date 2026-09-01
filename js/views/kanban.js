@@ -15,6 +15,7 @@ import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
+import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -317,6 +318,17 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     .filter((h) => h.entityType === "Task" && h.entityId === task.id)
     .sort((a, b) => a.date - b.date);
 
+  // Titre de réunion composé (retour de Charles-Henri, 01/09/2026, voir
+  // js/components/meetingLauncher.js) : Catégorie du projet - Projet - Titre de la tâche —
+  // une Tâche n'a jamais de personne assignée (voir le Guide, "Tâche ou Suivi ?"), donc ce
+  // 4e segment reste toujours vide ici.
+  const taskProject = projects.find((p) => p.id === task.projectId) || null;
+  const meetingTitle = buildMeetingTitle({
+    category: taskProject?.category || "",
+    projectName: taskProject?.name || "",
+    itemTitle: task.title,
+  });
+
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -366,6 +378,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
     </div>
+    <div class="section-title">🗓️ Réunion</div>
+    <div class="field" style="margin-bottom:8px;">
+      <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
+      <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
+    </div>
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
     <details ${taskHistory.length > 6 ? "" : "open"}>
@@ -389,6 +409,19 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       task.notesLog = updated;
       return updated;
     },
+  });
+  body.querySelector("#copy-meeting-title-btn").addEventListener("click", () => {
+    copyMeetingTitle(meetingTitle);
+  });
+  body.querySelector("#create-meeting-btn").addEventListener("click", () => {
+    closeModal();
+    launchMeetingFromEntity({
+      ref: { type: "Task", id: task.id },
+      routeHash: "#/kanban",
+      title: meetingTitle,
+      onLinked: () => openTaskDetail(task, projects, { onClose }),
+      onCancel: () => openTaskDetail(task, projects, { onClose }),
+    });
   });
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), { type: "Task", id: task.id });
   body.querySelector("#link-existing-btn").addEventListener("click", () => {

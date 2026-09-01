@@ -40,6 +40,42 @@ const TABS_REF = [
   ["🤖 Prompts IA", "Tes prompts réutilisables, copiables en un clic.", "Quand tu retombes sur un prompt déjà écrit."],
 ];
 
+// Mécanismes transverses (retour de Charles-Henri, 01/09/2026 : pouvoir chercher "comment
+// utiliser les canevas, à quoi ça sert" et retrouver une vraie réponse) — les fonctions qui ne
+// vivent pas dans un seul écran/casquette, et qui n'avaient donc pas leur place naturelle
+// ailleurs dans ce guide. Ce guide restant un instantané non régénéré automatiquement (voir
+// doc de suivi), ces entrées demandent une mise à jour manuelle si le comportement change.
+const TOPICS_REF = [
+  {
+    title: "📋 Canevas piloté par données",
+    text: "Une checklist toute prête pour une situation récurrente (Réunion, Point collaborateur, Projet, Communication) — enregistrée comme un modèle réutilisable, pas codée en dur pour chaque écran. Une Tâche/Réunion/Projet reçoit son canevas à la création ; tu coches les étapes au fur et à mesure, la date de la coche reste affichée. Certaines étapes précises (« Créer les actions », « Planifier les suivis », « Actions ») proposent aussitôt de créer la Tâche ou le Suivi qui suit. Il n'y a pas encore d'éditeur pour créer ses propres canevas — ces 4 modèles sont fixes pour l'instant. Un petit ⓘ à côté du titre du canevas redonne cette explication directement sur la fiche.",
+  },
+  {
+    title: "🧭 Revue hebdomadaire guidée",
+    text: "Bouton 🧭 sur l'Accueil : une seule modale qui recompose en une fois 7 catégories dispersées ailleurs — Inbox non qualifiée, Retards, Suivis à contrôler, Projets sans prochaine action, Équipe cette semaine, Management, Ressources non classées. Chaque ligne ouvre la vraie fiche pour la traiter. Rien n'est mémorisé comme « revue en cours » : chaque ouverture recalcule tout depuis les données actuelles.",
+  },
+  {
+    title: "🗒️ Journal de notes horodaté",
+    text: "Un bloc « Notes » sur presque toutes les fiches (Tâche, Suivi, Projet — y compris chaque sous-partie individuellement —, Réunion, Décision, Ressource, Personne, Information/Idée) : ajoute une note, la date et l'heure se posent automatiquement. Additif uniquement, comme l'Historique — pas d'édition ni de suppression d'une note existante ; si tu te trompes, ajoute une note suivante. Distinct du champ « Notes » de contexte sur Personne/Réunion, qui reste inchangé.",
+  },
+  {
+    title: "ⓘ Aide à la demande",
+    text: "Un petit bouton ⓘ toujours disponible (contrairement au bandeau d'aide au premier usage, qui disparaît pour toujours une fois fermé) — pour l'instant sur le canevas et sur la Revue hebdomadaire. Clique pour dérouler une explication courte, sans jamais fermer la fiche en cours.",
+  },
+  {
+    title: "🧩 Recettes de démarrage",
+    text: "Bouton « 🧩 Recettes » sur l'Accueil : enchaîne automatiquement des formulaires de création déjà existants pour deux cas récurrents — « Nouveau projet transverse » (projet puis suivi lié), « Plusieurs suivis pour la même personne » (suivis en série sans repasser par sa fiche à chaque fois).",
+  },
+  {
+    title: "💡 Suggestions de prochaine étape",
+    text: "Après avoir coché « Créer les actions »/« Planifier les suivis »/« Actions » sur un canevas, ou après avoir enregistré une Décision, une invite — jamais automatique, toujours refusable via « Plus tard » — propose de créer tout de suite la Tâche ou le Suivi logiquement lié.",
+  },
+  {
+    title: "🎭 Filtre par casquette",
+    text: "Chips Toutes / Toi / Équipe / Projets / Manager / CSE sur l'Accueil et Pilotage. La casquette n'est jamais saisie à la main : déduite du projet lié (catégorie contenant CSE → CSE, sinon → Projets) ou, pour un Suivi, du type de la personne visée (manager → Manager, collaborateur → Équipe).",
+  },
+];
+
 export function renderGuide(container) {
   container.innerHTML = `
     <div class="topbar">
@@ -59,7 +95,15 @@ export function renderGuide(container) {
       semaine. Ce guide fonctionne aussi hors connexion, il vit dans l'app.
     </p>
 
-    <div class="section-title" style="margin-top:0;">🧭 La boussole</div>
+    <div class="field" style="margin-bottom:8px;">
+      <input id="guide-search" type="text" placeholder="🔎 Rechercher dans le guide — ex. « canevas », « revue hebdomadaire », « sens d'un suivi »" />
+    </div>
+    <div class="empty-state" id="guide-search-empty" style="display:none;padding:16px;margin-bottom:16px;">
+      Aucun résultat. Essaie un autre mot — ex. « canevas », « note », « casquette », « retard ».
+    </div>
+
+    <div id="guide-searchable">
+    <div class="section-title" id="guide-compass-title" style="margin-top:0;">🧭 La boussole</div>
     <div class="card" id="guide-compass" style="margin-bottom:16px;"></div>
 
     <div class="section-title">Tâche ou Suivi ? La question qui débloque tout</div>
@@ -86,10 +130,13 @@ export function renderGuide(container) {
 
     <div id="guide-hats"></div>
 
-    <div class="section-title">Chaque onglet, en une phrase</div>
+    <div class="section-title" id="guide-tabs-title">Chaque onglet, en une phrase</div>
     <div class="card" id="guide-tabs" style="margin-bottom:16px;"></div>
 
-    <details>
+    <div class="section-title" id="guide-topics-title">🧩 Fonctions transverses — comment ça marche, à quoi ça sert</div>
+    <div id="guide-topics" style="margin-bottom:16px;"></div>
+
+    <details id="guide-retard">
       <summary class="section-title" style="cursor:pointer;">🔴 Il y a du retard partout — par où commencer ?</summary>
       <div class="card" style="margin-top:8px;margin-bottom:16px;">
         <p style="margin-top:0;">Le réflexe naturel est de tout relire depuis le début — c'est justement ce qui rallonge l'Accueil et donne l'impression que l'outil échappe. La bonne méthode : ne jamais tout lire, seulement trier.</p>
@@ -100,6 +147,7 @@ export function renderGuide(container) {
         <p class="item-meta" style="margin-bottom:0;margin-top:12px;">Le retard qui s'accumule n'est pas un échec de l'outil ni le tien — un signal que le rythme de revue n'a pas suivi le volume.</p>
       </div>
     </details>
+    </div>
   `;
 
   // Boussole : chaque ligne ouvre + scrolle vers la bonne casquette (les casquettes sont
@@ -142,12 +190,109 @@ export function renderGuide(container) {
     tabsEl.appendChild(row);
   }
 
+  const topicsEl = body.querySelector("#guide-topics");
+  for (const topic of TOPICS_REF) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.marginBottom = "10px";
+    card.innerHTML = `
+      <div class="item-title" style="margin-bottom:4px;">${escapeHtml(topic.title)}</div>
+      <div class="item-meta">${escapeHtml(topic.text)}</div>
+    `;
+    topicsEl.appendChild(card);
+  }
+
   function openHat(id) {
     const el = document.getElementById(id);
     if (!el) return;
     el.open = true;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // Recherche dans le guide (retour de Charles-Henri, 01/09/2026 : "une espèce de recherche
+  // rapide comme la loupe sur l'accueil mais intégré à l'aide ici uniquement") — même logique
+  // de correspondance simple (.toLowerCase().includes(...)) que js/components/search.js, pour
+  // rester cohérent avec le reste de l'app plutôt que d'introduire une normalisation différente.
+  // Granularité volontairement mixte : fin pour la boussole/les onglets/les fonctions
+  // transverses (une ligne ou une carte à la fois), grossier pour chaque casquette et pour le
+  // bloc retard (bloc entier montré/masqué, ouvert automatiquement s'il contient une
+  // correspondance) — un dépliant entier n'a pas besoin d'être découpé phrase par phrase pour
+  // qu'on retrouve "canevas" dedans.
+  const searchInput = body.querySelector("#guide-search");
+  const searchEmpty = body.querySelector("#guide-search-empty");
+  const compassTitle = body.querySelector("#guide-compass-title");
+  const tabsTitle = body.querySelector("#guide-tabs-title");
+  const topicsTitle = body.querySelector("#guide-topics-title");
+  const hatBlocks = Array.from(hatsEl.children);
+  const hatDefaultOpen = new Map(hatBlocks.map((h) => [h, h.open]));
+  const retardDetails = body.querySelector("#guide-retard");
+  const retardDefaultOpen = retardDetails.open;
+
+  function setTitleVisible(titleEl, containerEl) {
+    const anyVisible = Array.from(containerEl.children).some((c) => c.style.display !== "none");
+    titleEl.style.display = anyVisible ? "" : "none";
+  }
+
+  function resetSearch() {
+    for (const row of [...compassEl.children, ...tabsEl.children, ...topicsEl.children]) {
+      row.style.display = "";
+    }
+    compassTitle.style.display = "";
+    tabsTitle.style.display = "";
+    topicsTitle.style.display = "";
+    for (const h of hatBlocks) {
+      h.style.display = "";
+      h.open = hatDefaultOpen.get(h);
+    }
+    retardDetails.style.display = "";
+    retardDetails.open = retardDefaultOpen;
+    searchEmpty.style.display = "none";
+  }
+
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (!q) {
+      resetSearch();
+      return;
+    }
+
+    let anyMatch = false;
+
+    for (const row of compassEl.children) {
+      const match = row.textContent.toLowerCase().includes(q);
+      row.style.display = match ? "" : "none";
+      anyMatch = anyMatch || match;
+    }
+    setTitleVisible(compassTitle, compassEl);
+
+    for (const row of tabsEl.children) {
+      const match = row.textContent.toLowerCase().includes(q);
+      row.style.display = match ? "" : "none";
+      anyMatch = anyMatch || match;
+    }
+    setTitleVisible(tabsTitle, tabsEl);
+
+    for (const card of topicsEl.children) {
+      const match = card.textContent.toLowerCase().includes(q);
+      card.style.display = match ? "" : "none";
+      anyMatch = anyMatch || match;
+    }
+    setTitleVisible(topicsTitle, topicsEl);
+
+    for (const h of hatBlocks) {
+      const match = h.textContent.toLowerCase().includes(q);
+      h.style.display = match ? "" : "none";
+      h.open = match;
+      anyMatch = anyMatch || match;
+    }
+
+    const retardMatch = retardDetails.textContent.toLowerCase().includes(q);
+    retardDetails.style.display = retardMatch ? "" : "none";
+    retardDetails.open = retardMatch;
+    anyMatch = anyMatch || retardMatch;
+
+    searchEmpty.style.display = anyMatch ? "none" : "";
+  });
 
   return function cleanup() {};
 }
