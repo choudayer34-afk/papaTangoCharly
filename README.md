@@ -163,7 +163,38 @@ service cloud.firestore {
 - ✅ Aide contextuelle au premier usage (`js/components/hint.js`) : un bandeau discret
   explique Accueil, Pilotage, Inbox et la création d'un Suivi la première fois qu'on les
   ouvre, puis ne revient jamais
+- ✅ Information/Idée devenue une vraie fiche (correction) : clic depuis l'Accueil, section
+  "🔗 Lié", résolution correcte dans le fil conducteur — comme les 7 autres types liables
+- ✅ Recettes de démarrage (`js/components/recipes.js`, bouton 🧩 sur l'Accueil) : enchaîne
+  automatiquement les formulaires de création déjà existants pour deux cas récurrents
+  ("Nouveau projet transverse" → projet puis suivi ; "Plusieurs suivis pour la même
+  personne" → suivis en série sans repasser par la fiche à chaque fois)
+- ✅ Suggestions de prochaine étape (`js/components/suggestNextStep.js`) : après avoir coché
+  "Créer les actions"/"Planifier les suivis" sur un canevas, ou après avoir enregistré une
+  Décision, une invite (jamais automatique) propose de créer tout de suite la fiche liée
+- ✅ Rubriques de l'Accueil repliables/dépliables (Suivis en retard, Informations & idées,
+  Mes projets, Récemment), comme "À échéance" l'était déjà
+- ✅ Auto-archivage des Informations/Idées après 15 jours ; "Récemment" applique la même
+  coupure à 15 jours (les éléments restent retrouvables via leur fiche, la recherche globale
+  ou "🕒 Tout l'historique")
+- ✅ Sens du Suivi visible dès la qualification Inbox → Suivi (correction, 01/09/2026) :
+  l'Inbox réutilise directement la modale complète de création de Suivi (chip "Sens",
+  catégorie, notable) au lieu d'une seconde version simplifiée qui avait fini par diverger
+- ✅ Journal de notes horodaté (`js/components/notesBlock.js`, 01/09/2026) : un bloc "🗒️
+  Notes" additif (jamais d'édition ni de suppression) sur Tâches, Suivis, Projets, Réunions,
+  Décisions, Ressources, Personnes et Informations/Idées — la date et l'heure s'alimentent
+  automatiquement à l'ajout ; chaque note ajoutée apparaît aussi dans l'Historique de la fiche.
+  Distinct du champ "Notes" existant sur Personne/Réunion (un contexte libre non daté, qui
+  reste inchangé) — les deux coexistent
+- ✅ Notes par sous-partie de projet (01/09/2026) : chaque sous-partie a son propre journal de
+  notes ; la fiche projet n'affiche que la dernière (texte + date) directement sur la ligne,
+  l'historique complet s'ouvre à la demande via le bouton "🗒️ Notes"
+- ✅ Aide à la demande (`js/components/infoTip.js`, 01/09/2026) : un petit ⓘ, toujours
+  disponible (contrairement au bandeau d'aide au premier usage, qui disparaît pour toujours),
+  posé sur le canevas piloté par données et sur la Revue hebdomadaire — explique ce que fait
+  la fonction sans imposer de le lire, et sans jamais fermer la fiche en cours
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés, statut de projet
   (clôturer/rouvrir/archiver), horodatage réel du "dernier point manager", vraie intégration
   Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle ; le
-  filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage
+  filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage ; les recettes de
+  démarrage se limitent à 2 scénarios pour l'instant
