@@ -130,8 +130,8 @@ service cloud.firestore {
   scroller jusqu'en bas du contenu
 - ✅ Onglet Projets : tri par avancement ou ordre manuel (glisser-déposer), repris à
   l'identique par l'ordre des projets sur le Dashboard
-- ✅ Dashboard : 6 cartes chiffrées cliquables (retard, à traiter, aujourd'hui, à suivre, en
-  attente, relances dues) ouvrant la liste sous-jacente ; rubrique pliable "à échéance dans
+- ✅ Dashboard : 5 cartes chiffrées cliquables (retard, à traiter, à suivre, en attente,
+  relances dues) ouvrant la liste sous-jacente ; rubrique pliable "à échéance dans
   les 7 jours" ; section "Informations & idées" pour les captures qualifiées comme telles
   (elles ne disparaissaient plus nulle part auparavant) ; clic direct sur un projet listé
 - ✅ Capture express : bouton "+ Préciser maintenant" optionnel pour choisir le type et sauter
@@ -140,6 +140,20 @@ service cloud.firestore {
   affichées par titre cliquable + bouton copier plutôt que l'URL brute ; recherche/filtre par
   type dans le sélecteur de ressource existante ; association manuelle à une ou plusieurs
   réunions Outlook (référence simple, pas d'intégration Microsoft Graph)
+- ✅ Sous-étapes courtes (`js/components/checklist.js`, 01/09/2026, piste TDAH) : sur toute
+  Tâche, une checklist libre distincte du canevas Communication — Charles-Henri tape lui-même
+  chaque petit pas, coche au fur et à mesure, un compteur "N/M" apparaît sur la fiche et sur la
+  carte Kanban correspondante
+- ✅ Focus du jour (`js/views/dashboard.js`, 01/09/2026, piste TDAH) : remplace la tuile
+  "Aujourd'hui" du Dashboard par une sélection plafonnée à 3 tâches (en retard d'abord, puis
+  échéance la plus proche), modifiable d'un clic (🔀) si Charles-Henri préfère travailler sur
+  autre chose — l'échange ne vaut que pour la journée en cours, la sélection automatique
+  reprend la main le lendemain sans rien à réinitialiser ; la liste complète des échéances du
+  jour reste accessible juste en dessous, rien n'est masqué
+- ✅ Petit retour positif à la clôture d'une tâche (`js/views/kanban.js`, 01/09/2026, piste
+  TDAH) : toast "🎉 Terminé !" + courte animation, déclenchés une seule fois par vraie
+  transition vers "Terminé", quel que soit le chemin (glisser-déposer, boutons ‹ ›, fiche
+  détail) — jamais sur les autres changements de statut
 - ✅ Kanban : tri par défaut par échéance croissante (sans date en dernier), filtres projet /
   ≤7 jours / ≤15 jours / en retard, pleine largeur en mode web desktop (comportement mobile
   inchangé), colonnes à défilement indépendant pour garder les en-têtes visibles au scroll
