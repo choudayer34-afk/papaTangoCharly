@@ -223,7 +223,21 @@ service cloud.firestore {
   profond (`js/services/deeplink.js`, format `#/route?open=Type:id`) : cliquer ce lien depuis
   n'importe où rouvre directement la bonne fiche, pas seulement le bon onglet — reste une
   référence manuelle comme le reste de l'intégration Outlook, pas une vraie API Microsoft Graph
-- ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés, statut de projet
+- ✅ "🔄 Reprendre où j'en étais" (01/09/2026, piste TDAH — permanence/repérage) : l'Accueil
+  affiche désormais les dernières fiches consultées, tous types confondus (Tâche, Suivi,
+  Projet, Personne, Ressource, Réunion, Décision, Information/Idée), la plus récente en tête —
+  un clic rouvre directement la bonne fiche, via le même mécanisme que le lien profond du .ics
+- ✅ "⏸️ En pause depuis un moment" (01/09/2026, piste TDAH) : nouvelle rubrique repliable sur
+  l'Accueil listant les tâches commencées (pas "à faire") mais non retouchées depuis 5 jours —
+  distinct du retard (qui dépend d'une échéance) et du Focus (une question de priorité, pas
+  d'abandon), sans ton culpabilisant
+- ✅ Alerte de démarrage optionnelle (01/09/2026, piste TDAH) : un bandeau propose une
+  notification navigateur résumant le retard et les tâches "en pause" à l'ouverture de l'app —
+  jamais un vrai push (rien si l'app est fermée), une seule fois par jour, jamais reproposée
+  une fois la réponse donnée
+- ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
+  fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
+  démarrage ci-dessus comme version app-ouverte-uniquement), statut de projet
   (clôturer/rouvrir/archiver), horodatage réel du "dernier point manager", vraie intégration
   Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle ; le
   filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage ; les recettes de
