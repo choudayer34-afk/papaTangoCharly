@@ -104,17 +104,19 @@ service cloud.firestore {
   (`js/domain/templates.js`) — chaque Projet a son propre canevas, une Réunion peut activer
   celui du point collaborateur, une Tâche marquée "communication" active le sien ; l'éditeur
   de canevas personnalisé (§19) n'est pas encore construit
-- ✅ Espace Management dédié (§34/§35) : écran "👔 Management" pour faire remonter des sujets
-  à son propre manager (décisions attendues, sujets à discuter, difficultés) et préparer son
-  propre "Point manager" (🟢 Réalisé / 🔵 En cours / ⚠️ Difficultés / 🗳️ Décisions attendues /
-  📌 Sujets à discuter / 🎯 Prochaines étapes) — le "depuis le dernier point" est pour
-  l'instant approximé par une fenêtre glissante de 7 jours, faute d'horodatage dédié
+- ✅ Filtre "👔 Mon manager" (§34/§35, dans l'onglet Équipe depuis le 02/09/2026) : pour faire
+  remonter des sujets à son propre manager (décisions attendues, sujets à discuter,
+  difficultés) et préparer son propre "Point manager" (🟢 Réalisé / 🔵 En cours / ⚠️
+  Difficultés / 🗳️ Décisions attendues / 📌 Sujets à discuter / 🎯 Prochaines étapes) — le
+  "depuis le dernier point" est pour l'instant approximé par une fenêtre glissante de 7 jours,
+  faute d'horodatage dédié. Anciennement un onglet "👔 Management" séparé, fusionné dans
+  Équipe (voir "onglets comme filtres" plus bas)
 - ✅ Calendrier (§26) : vues mois/semaine agrégeant échéances de tâches, réunions, décisions
   et suivis, glisser-déposer pour reporter une échéance ; le clic sur un jour ouvre son agenda
   (pas de troisième vue "Jour" séparée)
 - ✅ Revue hebdomadaire guidée (§51) : une modale qui rassemble Inbox, Retards, Suivis à
-  contrôler, Projets sans prochaine action, Équipe, Management et Ressources non classées,
-  chaque ligne ouvrant la vraie fiche pour la traiter
+  contrôler, Projets sans prochaine action, Équipe (dont le point avec son propre manager) et
+  Ressources non classées, chaque ligne ouvrant la vraie fiche pour la traiter
 - ✅ Synchro multi-appareils (Firestore, offline-first)
 - ✅ Catégories de projet (ex. CSE, Modernisation) avec icône assignée automatiquement au
   premier usage (`js/domain/preferences.js`) et filtre dédié dans l'onglet Projets
@@ -124,8 +126,9 @@ service cloud.firestore {
 - ✅ Fiche Projet : chaque bloc (Tâches, Suivis, Réunions, Décisions, Ressources) est
   entièrement cliquable — un clic ouvre la fiche détaillée du sous-élément et la referme
   ramène à la fiche projet plutôt que de révéler l'écran du dessous
-- ✅ Historique replié par défaut dès qu'il dépasse 6 entrées (`<details>/<summary>`, sur
-  Projet/Tâche/Personne/Ressource) pour ne pas allonger indéfiniment les fiches
+- ✅ Historique toujours replié par défaut (`<details>/<summary>`, sur Projet/Tâche/Personne/
+  Ressource) pour ne pas allonger les fiches — replié même en dessous de 6 entrées depuis le
+  02/09/2026 (auparavant ouvert tant qu'il y avait 6 entrées ou moins)
 - ✅ Boutons Fermer/Supprimer/Enregistrer toujours visibles en bas de modale, sans avoir à
   scroller jusqu'en bas du contenu
 - ✅ Onglet Projets : tri par avancement ou ordre manuel (glisser-déposer), repris à
@@ -164,9 +167,10 @@ service cloud.firestore {
 - ✅ Bibliothèque de prompts IA (`#/prompts`) : titre/description/texte, recherche, copier en
   un clic — version simple sans catégorisation ni rattachement au fil conducteur
 - ✅ Guide utilisateur intégré à l'app (`#/guide`, accessible depuis le bouton ❓ Aide) :
-  casquette par casquette (Toi, Équipe, Projets, Manager, CSE), cas d'usage détaillés avec le
-  gain et la fonction à utiliser — vit dans le code, mis en cache par le service worker,
-  consultable sans connexion (pas une page hébergée à part)
+  casquette par casquette (Toi, Équipe — qui inclut le point avec son propre manager —,
+  Projets, CSE), cas d'usage détaillés avec le gain et la fonction à utiliser — vit dans le
+  code, mis en cache par le service worker, consultable sans connexion (pas une page hébergée
+  à part)
 - ✅ Casquettes (`js/domain/casquettes.js`) : filtre Toutes/Toi/Équipe/Projets/Manager/CSE
   partagé entre l'Accueil et Pilotage, déduit automatiquement du projet lié ou du type de
   personne — aucun nouveau champ à saisir sur les Tâches/Suivis/Réunions/Décisions
@@ -262,6 +266,21 @@ service cloud.firestore {
   cette vue pour aller travailler ailleurs — un mini-minuteur toujours visible (⏸️/▶️) suit sa
   progression depuis n'importe quel écran, avec toast + changement du titre de l'onglet (si en
   arrière-plan) + notification navigateur (si déjà autorisée) à chaque changement de phase
+- ✅ Onglets comme filtres — fusion Équipe/Management (02/09/2026, piste TDAH — permanence/
+  repérage) : dernière des 5 pistes de cette discussion, laissée de côté un temps sans
+  confirmation explicite, reprise à la demande de Charles-Henri. L'onglet "👔 Management"
+  n'était déjà qu'une recomposition des mêmes Personnes/Suivis qu'Équipe — fusionné comme
+  filtre "👔 Mon manager" dans l'onglet Équipe plutôt que gardé séparé. La barre de navigation
+  du bas passe de 9 à 8 onglets
+- ✅ Vue "📊 Tableau" dans Pilotage (`js/views/kanban.js`, `js/services/pilotageViewStore.js`,
+  02/09/2026) : à côté du Trello existant, une vue façon Monday du même flux de Tâches déjà
+  filtré (casquette/projet/échéance) — jamais une seconde donnée. Regroupement par Statut,
+  Projet ou aucun (le regroupement masque la colonne correspondante) ; tri par clic sur un
+  en-tête ; colonnes réordonnables par glisser-déposer ; édition en ligne du Titre, Statut,
+  Projet et Échéance sans ouvrir la fiche complète (bouton "↗" pour l'ouvrir quand même) ; une
+  ligne "+ Ajouter une tâche" par groupe, préremplie avec le Statut ou le Projet du groupe ;
+  colonne Type en lecture seule (champ jamais édité ailleurs dans l'app). La vue calendrier
+  également évoquée par Charles-Henri n'a pas été construite, faute de détail fourni
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
   fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
   démarrage ci-dessus comme version app-ouverte-uniquement), statut de projet
@@ -269,4 +288,5 @@ service cloud.firestore {
   Outlook (OAuth/Microsoft Graph) si le besoin dépasse la référence manuelle actuelle ; le
   filtre par casquette ne couvre pour l'instant que l'Accueil et Pilotage ; les recettes de
   démarrage se limitent à 2 scénarios pour l'instant ; "Créer une réunion" ne couvre pour
-  l'instant que Tâches et Suivis, pas les autres fiches liables
+  l'instant que Tâches et Suivis, pas les autres fiches liables ; une vue calendrier dans
+  Pilotage, mentionnée par Charles-Henri mais pas encore précisée
