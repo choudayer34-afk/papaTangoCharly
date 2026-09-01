@@ -14,6 +14,7 @@ import * as resourcesApi from "../domain/resources.js";
 import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal } from "./modal.js";
 import { showToast } from "./toast.js";
+import { renderInfoTip } from "./infoTip.js";
 import { openQualifyModal } from "../views/inbox.js";
 import { openTaskDetail } from "../views/kanban.js";
 import { openProjectDetail } from "../views/projects.js";
@@ -68,6 +69,7 @@ export async function openWeeklyReview() {
 
   const body = document.createElement("div");
   body.innerHTML = `
+    <div id="wr-help" style="margin-bottom:12px;"></div>
     <div class="section-title" style="margin-top:0;">📥 Inbox (${inboxPending.length})</div>
     <div class="card" id="wr-inbox" style="margin-bottom:16px;"></div>
     <div class="section-title">🔴 Retards (${late.length})</div>
@@ -84,6 +86,10 @@ export async function openWeeklyReview() {
     <div class="card" id="wr-resources" style="margin-bottom:8px;"></div>
   `;
 
+  renderInfoTip(
+    body.querySelector("#wr-help"),
+    "La revue hebdomadaire (§51) rassemble en une fois 7 catégories qui, sinon, sont dispersées dans l'app : Inbox non qualifiée, Retards, Suivis à contrôler, Projets sans prochaine action, Équipe cette semaine, Management et Ressources non classées. Rien n'est recalculé « à un instant T » puis figé : chaque ouverture recompose tout depuis les données actuelles — il n'y a pas de notion de revue « en cours » ou « terminée » à gérer. Clique une ligne pour ouvrir la vraie fiche et la traiter directement ; ferme et rouvre la revue autant de fois que nécessaire, rien n'est perdu entre-temps."
+  );
   renderRows(body.querySelector("#wr-inbox"), inboxPending, {
     label: (i) => i.rawContent,
     onOpen: (i) => {
