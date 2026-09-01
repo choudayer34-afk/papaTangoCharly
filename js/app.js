@@ -20,6 +20,8 @@ import { onAuthChange } from "./services/firebase.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
 import { parseOpenParam } from "./services/deeplink.js";
+import * as tasksApi from "./domain/tasks.js";
+import * as preferencesApi from "./domain/preferences.js";
 
 const ROUTES = {
   "#/dashboard": { render: renderDashboard, label: "Accueil", icon: "🏠" },
@@ -114,6 +116,39 @@ function mountApp() {
   // planifiée côté serveur, qui n'existe pas dans cette architecture. Jamais bloquant : erreur
   // avalée plutôt que de gêner l'ouverture de l'app pour un nettoyage secondaire.
   autoArchiveStaleKept().catch(() => {});
+  // Alerte de démarrage (piste TDAH du 01/09/2026, discussion permanence/repérage — "rappels
+  // programmés" version retenue : notification navigateur app ouverte uniquement, sans
+  // infrastructure serveur). Une fois par montage de l'app, jamais bloquant.
+  maybeNotifyStalledOrLate().catch(() => {});
+}
+
+/**
+ * Notification navigateur (pas un vrai push : ne se déclenche que si l'app est ouverte au
+ * premier plan) résumant le retard et les tâches "en pause" (js/domain/tasks.js#isStalled) —
+ * l'unique geste "pull → push" léger retenu pour cette vague, faute d'infrastructure serveur
+ * (voir claude/etat-avancement-pilotage.md, "rappels programmés"). Trois conditions avant de
+ * sonner : Charles-Henri a explicitement activé l'alerte (`notifOptIn === true`, bandeau sur
+ * l'Accueil), le navigateur a effectivement accordé la permission, et elle n'a pas déjà été
+ * montrée aujourd'hui (`lastNotifShownDate`) — pour ne jamais répéter la même alerte à chaque
+ * ouverture de l'app dans la même journée.
+ */
+async function maybeNotifyStalledOrLate() {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const prefs = await preferencesApi.getPreferences();
+  if (prefs.notifOptIn !== true) return;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (prefs.lastNotifShownDate === todayKey) return;
+
+  const tasks = await tasksApi.listAll();
+  const lateCount = tasks.filter(tasksApi.isLate).length;
+  const stalledCount = tasks.filter(tasksApi.isStalled).length;
+  if (lateCount + stalledCount === 0) return;
+
+  const parts = [];
+  if (lateCount) parts.push(`${lateCount} en retard`);
+  if (stalledCount) parts.push(`${stalledCount} en pause depuis un moment`);
+  new Notification("Pilotage", { body: parts.join(" · "), icon: "./icons/icon-192.png" });
+  await preferencesApi.markNotifShown(todayKey);
 }
 
 function unmountApp() {
