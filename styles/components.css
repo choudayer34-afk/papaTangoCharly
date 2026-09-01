@@ -273,6 +273,19 @@ a { color: inherit; }
   white-space: pre-wrap;
 }
 
+/* ---------- Fil rouge par projet ("🎯 À aborder" de la préparation de point) ---------- */
+.prep-group + .prep-group {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+.prep-group-label {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
 /* ---------- Kanban ---------- */
 .kanban-board {
   display: flex;
