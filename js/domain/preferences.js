@@ -22,6 +22,13 @@
 //  - `lastWeeklyReviewAt` : horodatage de la dernière Revue hebdomadaire lancée, pour afficher
 //    un rappel doux sur l'Accueil si le rythme de revue a été perdu (§ "il y a du retard
 //    partout").
+//
+// Piste TDAH du 01/09/2026 (retour de Charles-Henri, voir claude/etat-avancement-pilotage.md) :
+//  - `focusOverride` : les 3 tâches mises en avant aujourd'hui par la section "🎯 Focus du
+//    jour" de l'Accueil (js/views/dashboard.js) sont proposées automatiquement (en retard
+//    d'abord, puis échéance la plus proche), mais restent modifiables par Charles-Henri d'un
+//    clic — `taskIds` ne vaut que pour `date` (au format YYYY-MM-DD) : dès le lendemain, la
+//    sélection automatique reprend la main sans rien à réinitialiser explicitement.
 
 import * as storage from "../services/storage.js";
 
@@ -44,6 +51,7 @@ export async function getPreferences() {
     dashboardHidden: [],
     seenHints: {},
     lastWeeklyReviewAt: null,
+    focusOverride: { date: null, taskIds: [] },
     ...current,
   };
 }
@@ -104,4 +112,12 @@ export async function markHintSeen(key) {
 export async function markWeeklyReviewDone() {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, lastWeeklyReviewAt: Date.now() });
+}
+
+/** Sélection manuelle du "🎯 Focus du jour" (js/views/dashboard.js) — remplace toujours
+ *  l'override du jour en cours plutôt que de l'accumuler ; `date` (YYYY-MM-DD) est ce qui
+ *  rend l'override caduc tout seul le lendemain, sans action explicite de remise à zéro. */
+export async function setFocusOverride(date, taskIds) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, focusOverride: { date, taskIds } });
 }

@@ -39,6 +39,7 @@ export async function createTask(data) {
     completedAt: null,
     outlookMeetings: [], // référence manuelle (pas de vraie intégration Outlook, voir plus bas)
     notesLog: [], // journal de notes horodaté, voir addNote() plus bas
+    checklist: [], // sous-étapes courtes libres, voir addChecklistItem() plus bas
   });
   await storage.logHistory("Task", task.id, "created", { title: task.title });
   return task;
@@ -59,6 +60,39 @@ export async function addNote(id, text) {
   const updated = await storage.put(COLLECTION, { ...current, notesLog });
   await storage.logHistory("Task", id, "note_added", { text: trimmed });
   return updated.notesLog;
+}
+
+/**
+ * Sous-étapes courtes libres (retour de Charles-Henri, 01/09/2026 — piste TDAH : découper une
+ * tâche en petits pas concrets et cochables, distinct du canevas Communication à cases fixes
+ * ci-dessous). Volontairement sans historique dédié : une checklist personnelle se coche
+ * plusieurs fois par jour, journaliser chaque case ferait du bruit dans le fil d'audit sans
+ * rien apporter — même choix que toggleStep().
+ */
+export async function addChecklistItem(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const checklist = [...(current.checklist || []), { id: generateId(), text: trimmed, done: false }];
+  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  return updated.checklist;
+}
+
+export async function toggleChecklistItem(id, itemId, done) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done } : c));
+  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  return updated.checklist;
+}
+
+export async function removeChecklistItem(id, itemId) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Tâche introuvable : " + id);
+  const checklist = (current.checklist || []).filter((c) => c.id !== itemId);
+  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  return updated.checklist;
 }
 
 /** Coche/décoche une étape du canevas Communication — même principe que projects.js/meetings.js.
