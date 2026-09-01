@@ -611,6 +611,33 @@ a { color: inherit; }
   .completion-burst { animation: none; opacity: 0; }
 }
 
+/* ---------- Rubrique "🧠 Mémoire & TDAH" (demande explicite de Charles-Henri, 01/09/2026) —
+   js/views/memory.js. Le cercle grandit/rétrécit avec la phase de respiration ; en cas de
+   prefers-reduced-motion, seule l'opacité change (le texte du compte à rebours reste la
+   source d'information principale, l'animation n'est qu'un renfort visuel). ---------- */
+.breathing-circle {
+  width: 160px;
+  height: 160px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--color-primary-light);
+  border: 2px solid var(--color-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-weight: 600;
+  transform: scale(0.85);
+  transition: transform 4s ease-in-out, opacity 4s ease-in-out;
+}
+.breathing-circle.breathing-in { transform: scale(1.15); }
+.breathing-circle.breathing-out { transform: scale(0.7); }
+@media (prefers-reduced-motion: reduce) {
+  .breathing-circle { transition: opacity 4s ease-in-out; transform: none; }
+  .breathing-circle.breathing-in, .breathing-circle.breathing-out { transform: none; opacity: 0.7; }
+}
+
 /* ---------- Sous-étapes courtes (checklist libre par Tâche, piste TDAH du 01/09/2026, retour
    de Charles-Henri) — js/components/checklist.js. ---------- */
 .checklist-item {
