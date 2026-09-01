@@ -15,6 +15,7 @@ import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
+import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
@@ -167,7 +168,11 @@ export function renderKanban(container) {
         e.preventDefault();
         column.classList.remove("drag-over");
         const taskId = e.dataTransfer.getData("text/task-id");
-        if (taskId) await tasksApi.setStatus(taskId, status);
+        if (!taskId) return;
+        const dragged = latestTasks.find((t) => t.id === taskId);
+        const prevStatus = dragged ? dragged.status : null;
+        await tasksApi.setStatus(taskId, status);
+        celebrateIfJustDone(prevStatus, status);
       });
 
       board.appendChild(column);
@@ -203,6 +208,29 @@ function daysFromToday(dateStr) {
 }
 
 /**
+ * Petit retour positif à la clôture d'une tâche (retour de Charles-Henri, 01/09/2026 — piste
+ * TDAH : un signal immédiat et visible que quelque chose vient réellement d'être terminé,
+ * plutôt qu'un chiffre qui change silencieusement dans un coin). Un seul endroit pour les 3
+ * chemins qui peuvent amener une tâche à "done" (glisser-déposer, boutons ‹ ›, fiche détail) :
+ * ne se déclenche que sur une vraie *transition* vers "done", jamais si la tâche y était déjà.
+ */
+function celebrateIfJustDone(prevStatus, newStatus) {
+  if (newStatus !== "done" || prevStatus === "done") return false;
+  showToast("🎉 Terminé !");
+  triggerCompletionAnimation();
+  return true;
+}
+
+function triggerCompletionAnimation() {
+  document.querySelectorAll(".completion-burst").forEach((el) => el.remove());
+  const burst = document.createElement("div");
+  burst.className = "completion-burst";
+  burst.textContent = "🎉";
+  document.body.appendChild(burst);
+  setTimeout(() => burst.remove(), 900);
+}
+
+/**
  * Le glisser-déposer entre colonnes est peu fiable au doigt sur mobile, surtout dès que la
  * cible n'est pas visible sans scroller horizontalement (§ergonomie signalée par
  * Charles-Henri). Les boutons ‹ › offrent un chemin qui ne dépend jamais du scroll ni du
@@ -222,12 +250,15 @@ function renderCard(task, projects) {
   const statusIndex = tasksApi.STATUSES.indexOf(task.status);
   const prevStatus = statusIndex > 0 ? tasksApi.STATUSES[statusIndex - 1] : null;
   const nextStatus = statusIndex < tasksApi.STATUSES.length - 1 ? tasksApi.STATUSES[statusIndex + 1] : null;
+  const checklist = task.checklist || [];
+  const checklistDone = checklist.filter((c) => c.done).length;
 
   card.innerHTML = `
     <div class="kanban-card-title">${task.isBlocked ? "🔴 " : ""}${escapeHtml(task.title)}</div>
     <div class="kanban-card-meta">
       ${project ? `<span>📦 ${escapeHtml(project.name)}</span>` : ""}
       ${task.dueDate ? `<span class="${late ? "badge badge-late" : ""}">📅 ${formatDate(task.dueDate)}</span>` : ""}
+      ${checklist.length ? `<span>☑️ ${checklistDone}/${checklist.length}</span>` : ""}
     </div>
     <div class="kanban-card-move">
       <button type="button" class="kanban-move-btn" data-dir="prev" aria-label="Statut précédent" ${prevStatus ? "" : "disabled"}>‹</button>
@@ -242,7 +273,10 @@ function renderCard(task, projects) {
   });
   card.querySelector('[data-dir="next"]').addEventListener("click", (e) => {
     e.stopPropagation();
-    if (nextStatus) tasksApi.setStatus(task.id, nextStatus);
+    if (nextStatus) {
+      tasksApi.setStatus(task.id, nextStatus);
+      celebrateIfJustDone(task.status, nextStatus);
+    }
   });
 
   return card;
@@ -365,6 +399,8 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
     </div>
     <div id="detail-canevas"></div>
+    <div class="section-title" id="checklist-title">☑️ Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</div>
+    <div id="detail-checklist" style="margin-bottom:16px;"></div>
     <div class="section-title">📎 Ressources (${linkedResources.length})</div>
     <div class="card" id="detail-resources" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -402,6 +438,31 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
 
   renderCanevas(body.querySelector("#detail-canevas"), task.steps, async (stepKey, done) => {
     await tasksApi.toggleStep(task.id, stepKey, done);
+  });
+  const checklistTitleEl = body.querySelector("#checklist-title");
+  function updateChecklistTitle() {
+    const list = task.checklist || [];
+    checklistTitleEl.textContent = `☑️ Sous-étapes (${list.filter((c) => c.done).length}/${list.length})`;
+  }
+  renderChecklist(body.querySelector("#detail-checklist"), task.checklist || [], {
+    onAdd: async (text) => {
+      const updated = await tasksApi.addChecklistItem(task.id, text);
+      task.checklist = updated;
+      updateChecklistTitle();
+      return updated;
+    },
+    onToggle: async (itemId, done) => {
+      const updated = await tasksApi.toggleChecklistItem(task.id, itemId, done);
+      task.checklist = updated;
+      updateChecklistTitle();
+      return updated;
+    },
+    onRemove: async (itemId) => {
+      const updated = await tasksApi.removeChecklistItem(task.id, itemId);
+      task.checklist = updated;
+      updateChecklistTitle();
+      return updated;
+    },
   });
   renderNotesBlock(body.querySelector("#detail-notes"), task.notesLog || [], {
     onAdd: async (text) => {
@@ -516,17 +577,21 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         onClick: async () => {
           const title = bodyEl.querySelector("#detail-title").value.trim();
           if (!title) return;
+          const newStatus = bodyEl.querySelector("#detail-status").value;
+          const prevStatus = task.status;
           await tasksApi.updateTask(task.id, {
             title,
             description: bodyEl.querySelector("#detail-description").value,
             successCriteria: bodyEl.querySelector("#detail-criteria").value,
             dueDate: bodyEl.querySelector("#detail-due").value || null,
-            status: bodyEl.querySelector("#detail-status").value,
+            status: newStatus,
             projectId: bodyEl.querySelector("#detail-project").value || null,
             isBlocked: bodyEl.querySelector("#detail-blocked").checked,
           });
           close();
-          showToast("Tâche mise à jour");
+          // Un seul toast à la fois (voir components/toast.js) : la clôture prime sur le
+          // message générique de sauvegarde plutôt que de l'écraser silencieusement juste après.
+          if (!celebrateIfJustDone(prevStatus, newStatus)) showToast("Tâche mise à jour");
           onClose?.();
         },
       },

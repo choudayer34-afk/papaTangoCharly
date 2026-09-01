@@ -58,6 +58,7 @@ export function renderDashboard(container) {
       <div id="review-reminder"></div>
       <div class="chip-row" id="hat-filter"></div>
       <div class="stat-grid" id="stat-grid"></div>
+      <div id="focus-section"></div>
       <div id="due-soon-section"></div>
       <div id="followups-section"></div>
       <div id="kept-section"></div>
@@ -78,6 +79,7 @@ export function renderDashboard(container) {
   const reviewReminderEl = container.querySelector("#review-reminder");
   const hatFilterEl = container.querySelector("#hat-filter");
   const statGrid = container.querySelector("#stat-grid");
+  const focusSection = container.querySelector("#focus-section");
   const dueSoonSection = container.querySelector("#due-soon-section");
   const followUpsSection = container.querySelector("#followups-section");
   const keptSection = container.querySelector("#kept-section");
@@ -96,15 +98,18 @@ export function renderDashboard(container) {
   let categories = {};
   let activeHat = "all";
   let hiddenSections = new Set();
+  let focusOverride = { date: null, taskIds: [] };
 
   preferencesApi.getPreferences().then((prefs) => {
     projectSortMode = prefs.projectSort || "manual";
     categories = prefs.categories || {};
     activeHat = prefs.casquette || "all";
     hiddenSections = new Set(prefs.dashboardHidden || []);
+    focusOverride = prefs.focusOverride || { date: null, taskIds: [] };
     renderHatFilter();
     renderReviewReminder(prefs.lastWeeklyReviewAt);
     renderStats();
+    renderFocusSection();
     renderDueSoonSection();
     renderKeptSection();
     renderProjectsSection();
@@ -117,6 +122,7 @@ export function renderDashboard(container) {
       activeHat = hatId;
       renderHatFilter();
       renderStats();
+      renderFocusSection();
       renderDueSoonSection();
       renderProjectsSection();
       renderFollowUpsSection();
@@ -285,9 +291,12 @@ export function renderDashboard(container) {
     const lateList = hatTasks.filter(tasksApi.isLate);
     const followUpList = hatTasks.filter((t) => t.status === "follow_up");
     const waitingList = hatTasks.filter((t) => t.status === "waiting");
-    const todayList = hatTasks.filter(isDueToday);
     const overdueFollowUpsList = hatFollowUps.filter(followUpsApi.isControlDue);
 
+    // La tuile "📅 Aujourd'hui" a été remplacée par la section "🎯 Focus du jour" ci-dessous
+    // (piste TDAH du 01/09/2026, retour de Charles-Henri) : plafonner à 3 choses visibles vaut
+    // mieux qu'un chiffre qui peut monter sans limite — la liste complète du jour reste
+    // atteignable depuis cette même section, rien n'est masqué, seulement de-emphasé.
     statGrid.innerHTML = `
       <div class="stat-tile stat-danger" id="stat-late" style="cursor:pointer;">
         <div class="stat-value">${lateList.length}</div>
@@ -296,10 +305,6 @@ export function renderDashboard(container) {
       <div class="stat-tile" id="stat-inbox" style="cursor:pointer;">
         <div class="stat-value">${inboxPendingCount}</div>
         <div class="stat-label">📥 À traiter</div>
-      </div>
-      <div class="stat-tile" id="stat-today" style="cursor:pointer;">
-        <div class="stat-value">${todayList.length}</div>
-        <div class="stat-label">📅 Aujourd'hui</div>
       </div>
       <div class="stat-tile stat-warning" id="stat-followup" style="cursor:pointer;">
         <div class="stat-value">${followUpList.length}</div>
@@ -318,10 +323,129 @@ export function renderDashboard(container) {
     statGrid.querySelector("#stat-inbox").addEventListener("click", () => {
       location.hash = "#/inbox";
     });
-    statGrid.querySelector("#stat-today").addEventListener("click", () => openTaskListModal("📅 Échéances d'aujourd'hui", todayList));
     statGrid.querySelector("#stat-followup").addEventListener("click", () => openTaskListModal("👀 À suivre", followUpList));
     statGrid.querySelector("#stat-waiting").addEventListener("click", () => openTaskListModal("⏳ En attente", waitingList));
     statGrid.querySelector("#stat-relances").addEventListener("click", () => openFollowUpListModal("📣 Relances dues", overdueFollowUpsList));
+  }
+
+  /**
+   * "🎯 Focus du jour" (piste TDAH du 01/09/2026, retour de Charles-Henri) : au lieu d'un
+   * chiffre "📅 Aujourd'hui" qui peut grimper sans limite, 3 tâches au plus, choisies
+   * automatiquement (en retard d'abord, puis échéance la plus proche) mais modifiables d'un
+   * clic — le choix hybride retenu plutôt qu'une liste 100% automatique ou 100% manuelle.
+   * L'échéance complète du jour reste accessible juste en dessous, rien n'est masqué.
+   */
+  function focusCandidates() {
+    const notDone = hatFilterTasks(tasks).filter((t) => t.status !== "done");
+    return [...notDone].sort((a, b) => {
+      const aLate = tasksApi.isLate(a);
+      const bLate = tasksApi.isLate(b);
+      if (aLate !== bLate) return aLate ? -1 : 1;
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    });
+  }
+
+  function todayDateKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function renderFocusSection() {
+    const candidates = focusCandidates();
+    let chosen;
+    if (focusOverride.date === todayDateKey() && (focusOverride.taskIds || []).length) {
+      const byId = new Map(candidates.map((t) => [t.id, t]));
+      chosen = focusOverride.taskIds.map((id) => byId.get(id)).filter(Boolean);
+      // Complète depuis la sélection automatique si une tâche choisie a été terminée/
+      // supprimée entre-temps — jamais moins de 3 par la faute d'un id devenu invalide.
+      for (const t of candidates) {
+        if (chosen.length >= 3) break;
+        if (!chosen.some((c) => c.id === t.id)) chosen.push(t);
+      }
+    } else {
+      chosen = candidates.slice(0, 3);
+    }
+    chosen = chosen.slice(0, 3);
+
+    const todayList = hatFilterTasks(tasks).filter(isDueToday);
+
+    focusSection.innerHTML = `
+      <div class="section-title" style="margin-top:0;">🎯 Focus du jour</div>
+      <div class="card" id="focus-list" style="margin-bottom:8px;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+        <button type="button" id="focus-today-link" class="btn btn-ghost btn-sm">📅 Toutes les échéances d'aujourd'hui (${todayList.length})</button>
+      </div>
+    `;
+
+    const listEl = focusSection.querySelector("#focus-list");
+    if (!chosen.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;"><span class="emoji">🎉</span>Rien en attente. Le focus se remplira tout seul dès qu'une tâche sera à faire.</div>`;
+    } else {
+      for (const t of chosen) {
+        const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+        const late = tasksApi.isLate(t);
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.innerHTML = `
+          <div class="item-main" style="cursor:pointer;">
+            <div class="item-title">${t.isBlocked ? "🔴 " : ""}${escapeHtml(t.title)}</div>
+            <div class="item-meta">
+              ${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}${late ? ` · <strong style="color:var(--color-danger);">en retard</strong>` : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
+            </div>
+          </div>
+        `;
+        const swapBtn = document.createElement("button");
+        swapBtn.type = "button";
+        swapBtn.className = "btn btn-ghost btn-sm";
+        swapBtn.setAttribute("aria-label", "Remplacer par une autre tâche");
+        swapBtn.textContent = "🔀";
+        row.appendChild(swapBtn);
+        row.querySelector(".item-main").addEventListener("click", () => openTaskDetail(t, projects));
+        swapBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openFocusSwapModal(t, chosen, candidates);
+        });
+        listEl.appendChild(row);
+      }
+    }
+    focusSection.querySelector("#focus-today-link").addEventListener("click", () => openTaskListModal("📅 Échéances d'aujourd'hui", todayList));
+  }
+
+  /** Remplacement manuel d'une des 3 tâches du Focus du jour — persiste pour la journée en
+   *  cours uniquement (voir js/domain/preferences.js#focusOverride), jamais au-delà. */
+  function openFocusSwapModal(currentTask, chosen, candidates) {
+    const alternatives = candidates.filter((t) => !chosen.some((c) => c.id === t.id));
+    const body = document.createElement("div");
+    if (!alternatives.length) {
+      body.innerHTML = `<div class="empty-state" style="padding:16px;">Pas d'autre tâche en attente pour remplacer celle-ci.</div>`;
+    } else {
+      const list = document.createElement("div");
+      list.className = "card";
+      for (const t of alternatives) {
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.style.cursor = "pointer";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${escapeHtml(t.title)}</div>
+            <div class="item-meta">${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}</div>
+          </div>
+        `;
+        row.addEventListener("click", async () => {
+          const newIds = chosen.map((c) => (c.id === currentTask.id ? t.id : c.id));
+          focusOverride = { date: todayDateKey(), taskIds: newIds };
+          await preferencesApi.setFocusOverride(focusOverride.date, focusOverride.taskIds);
+          closeModal();
+          renderFocusSection();
+          showToast("Focus du jour mis à jour");
+        });
+        list.appendChild(row);
+      }
+      body.appendChild(list);
+    }
+    openModal({ title: `Remplacer « ${currentTask.title} »`, body, actions: [{ label: "Fermer", variant: "ghost" }] });
   }
 
   /**
@@ -570,6 +694,7 @@ export function renderDashboard(container) {
   const unsubTasks = tasksApi.subscribe((items) => {
     tasks = items;
     renderStats();
+    renderFocusSection();
     renderDueSoonSection();
     renderProjectsSection();
   });
