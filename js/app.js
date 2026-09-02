@@ -18,6 +18,7 @@ import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
+import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
 import { onAuthChange } from "./services/firebase.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
@@ -116,6 +117,10 @@ function mountApp() {
   mountHelpButton();
   mountGlobalSearch();
   mountPomodoroWidget();
+  // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
+  // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
+  // shortcuts.js. `Object.keys(ROUTES)` donne l'ordre exact des onglets pour Alt+1…Alt+8.
+  initGlobalShortcuts(Object.keys(ROUTES));
   window.addEventListener("hashchange", renderRoute);
   renderRoute();
   maybeShowFirstRunTour();
@@ -169,6 +174,7 @@ function unmountApp() {
   document.querySelector(".help-fab")?.remove();
   document.querySelector(".search-fab")?.remove();
   unmountPomodoroWidget();
+  teardownGlobalShortcuts();
   window.removeEventListener("hashchange", renderRoute);
 }
 
