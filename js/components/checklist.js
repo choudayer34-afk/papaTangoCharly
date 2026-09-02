@@ -4,9 +4,15 @@
 // aucune case n'est prédéfinie — Charles-Henri tape lui-même chaque sous-étape, sur
 // n'importe quelle Tâche, pas seulement les tâches de type "communication".
 //
-// `items` est un tableau `{id, text, done}` déjà chargé par l'appelant ; `onAdd(text)`,
+// `items` est un tableau `{id, text, done, doneAt}` déjà chargé par l'appelant ; `onAdd(text)`,
 // `onToggle(itemId, done)` et `onRemove(itemId)` doivent persister côté domaine
-// (js/domain/tasks.js) et renvoyer le tableau à jour, même principe que renderNotesBlock().
+// (js/domain/tasks.js, js/domain/followups.js) et renvoyer le tableau à jour, même principe
+// que renderNotesBlock().
+//
+// `doneAt` (retour de Charles-Henri, vague 21 : "quand je coche un élément de la checklist, la
+// date de coche doit être enregistrée... pour toutes les checklists") — horodaté par l'appelant
+// au moment du `onToggle` (même principe que `toggleStep()` dans js/domain/projects.js),
+// affiché ici à côté de chaque élément coché.
 
 export function renderChecklist(container, items, { onAdd, onToggle, onRemove, emptyLabel = "Pas encore de sous-étape." } = {}) {
   let current = items || [];
@@ -32,6 +38,7 @@ export function renderChecklist(container, items, { onAdd, onToggle, onRemove, e
       row.innerHTML = `
         <input type="checkbox" ${item.done ? "checked" : ""} aria-label="${escapeAttr(item.text)}" />
         <span class="checklist-item-text${item.done ? " done" : ""}">${escapeHtml(item.text)}</span>
+        ${item.done && item.doneAt ? `<span class="checklist-item-date">✓ ${formatDoneAt(item.doneAt)}</span>` : ""}
       `;
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
@@ -83,4 +90,8 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
+}
+
+function formatDoneAt(ts) {
+  return new Date(ts).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
 }
