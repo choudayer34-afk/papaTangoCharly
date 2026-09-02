@@ -7,12 +7,19 @@
 // ne ralentit jamais le geste normal, seulement le cas où il faut revenir en arrière. La durée
 // d'affichage s'allonge automatiquement quand une action est proposée, pour laisser le temps de
 // cliquer.
+//
+// `triggerLastUndo()` (vague 20, retour de Charles-Henri : "Annuler au clavier : Ctrl+Z") :
+// rejoue la même `onAction` que le bouton du toast, tant que sa fenêtre d'affichage est encore
+// active — voir js/services/shortcuts.js, qui l'appelle sur Ctrl+Z (jamais dans un champ de
+// texte, où Ctrl+Z reste l'annulation native du navigateur).
 
 let currentTimeout = null;
+let lastUndo = null;
 
 export function showToast(message, { duration, actionLabel, onAction } = {}) {
   document.querySelector(".toast")?.remove();
   clearTimeout(currentTimeout);
+  lastUndo = actionLabel && onAction ? onAction : null;
 
   const toast = document.createElement("div");
   toast.className = "toast";
@@ -28,6 +35,7 @@ export function showToast(message, { duration, actionLabel, onAction } = {}) {
     btn.addEventListener("click", () => {
       clearTimeout(currentTimeout);
       toast.remove();
+      lastUndo = null;
       onAction();
     });
     toast.appendChild(btn);
@@ -35,5 +43,24 @@ export function showToast(message, { duration, actionLabel, onAction } = {}) {
 
   document.body.appendChild(toast);
 
-  currentTimeout = setTimeout(() => toast.remove(), duration ?? (actionLabel ? 5000 : 2200));
+  currentTimeout = setTimeout(() => {
+    toast.remove();
+    lastUndo = null;
+  }, duration ?? (actionLabel ? 5000 : 2200));
+}
+
+/**
+ * Rejoue la dernière action "Annuler" proposée par un toast, tant qu'il est encore affiché.
+ * Retourne `true` si une action a effectivement été rejouée (pour que l'appelant sache s'il
+ * doit avaler l'événement clavier), `false` sinon — ex. aucun toast avec action en ce moment,
+ * ou sa fenêtre d'affichage est déjà passée.
+ */
+export function triggerLastUndo() {
+  if (!lastUndo) return false;
+  const fn = lastUndo;
+  lastUndo = null;
+  clearTimeout(currentTimeout);
+  document.querySelector(".toast")?.remove();
+  fn();
+  return true;
 }
