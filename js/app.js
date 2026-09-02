@@ -13,13 +13,13 @@ import { renderPrompts } from "./views/prompts.js";
 import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
-import { renderLogin } from "./views/login.js";
+import { renderLogin, renderRestricted } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
-import { onAuthChange } from "./services/firebase.js";
+import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
 import { parseOpenParam } from "./services/deeplink.js";
@@ -56,6 +56,14 @@ const appRoot = document.getElementById("app");
 let currentCleanup = null;
 let nav = null;
 let appMounted = false;
+
+// Ouverture à "quelques personnes précises que je choisis" (retour de Charles-Henri) : mémorise
+// l'email d'une personne qu'on vient de refuser (liste blanche `allowedUsers`, voir
+// js/services/firebase.js#isEmailAllowed) le temps que signOutUser() redéclenche onAuthChange
+// avec user=null ci-dessous — sans ça, cette seconde notification afficherait l'écran de
+// connexion normal au lieu du message "Accès restreint", pour une notification qu'on a
+// nous-mêmes provoquée.
+let pendingRestrictedEmail = null;
 
 function mountNav() {
   const el = document.createElement("nav");
@@ -178,12 +186,30 @@ function unmountApp() {
   window.removeEventListener("hashchange", renderRoute);
 }
 
-onAuthChange((user) => {
+onAuthChange(async (user) => {
   if (user) {
+    // Ouverture à "quelques personnes précises que je choisis" (retour de Charles-Henri, pas
+    // d'inscription libre) : on vérifie la liste blanche `allowedUsers` AVANT de monter l'app,
+    // pour quiconque s'est authentifié avec succès via Firebase (Google ou email/mot de passe)
+    // mais n'a pas été explicitement autorisé. Ce garde-fou côté client évite d'afficher l'app
+    // à la mauvaise personne, mais ne remplace pas les règles de sécurité Firestore (seul
+    // rempart réel contre quelqu'un qui interrogerait Firestore directement) — voir les
+    // instructions de configuration livrées séparément.
+    const allowed = await isEmailAllowed(user.email);
+    if (!allowed) {
+      pendingRestrictedEmail = user.email;
+      await signOutUser();
+      return;
+    }
     mountApp();
   } else {
     unmountApp();
-    renderLogin(appRoot);
+    if (pendingRestrictedEmail) {
+      renderRestricted(appRoot, pendingRestrictedEmail);
+      pendingRestrictedEmail = null;
+    } else {
+      renderLogin(appRoot);
+    }
   }
 });
 
