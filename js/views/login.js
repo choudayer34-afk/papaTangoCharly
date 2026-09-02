@@ -53,6 +53,35 @@ export function renderLogin(container) {
   return null; // rien à nettoyer
 }
 
+// Écran affiché à la place de l'app ou du login normal quand quelqu'un s'authentifie avec
+// succès via Firebase mais n'est pas sur la liste blanche `allowedUsers` (retour de
+// Charles-Henri : "quelques personnes précises que je choisis" — voir
+// js/services/firebase.js#isEmailAllowed). js/app.js a déjà déconnecté la personne avant
+// d'afficher cet écran, donc "Continuer avec Google" ci-dessus ne réapparaît pas : se
+// reconnecter avec le même compte non autorisé ramènerait immédiatement ici.
+export function renderRestricted(container, email) {
+  container.innerHTML = `
+    <div class="view" style="padding-top: 15vh;">
+      <div class="card" style="max-width:360px;margin:0 auto;text-align:center;">
+        <h1 style="margin-top:0;">Accès restreint</h1>
+        <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">
+          ${email ? `Le compte <strong>${escapeHtml(email)}</strong> n'est` : "Ce compte n'est"} pas autorisé à utiliser cette application.
+        </p>
+        <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">
+          Demande à la personne qui gère les accès de t'ajouter, puis reconnecte-toi.
+        </p>
+      </div>
+    </div>
+  `;
+  return null; // rien à nettoyer
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
+}
+
 function friendlyError(err) {
   const code = err?.code || "";
   if (code.includes("operation-not-allowed")) return "cette méthode n'est pas activée dans Firebase";
