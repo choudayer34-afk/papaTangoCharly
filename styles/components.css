@@ -292,6 +292,14 @@ a { color: inherit; }
   margin-bottom: var(--space-1);
 }
 
+/* ---------- Case "vu" pendant une préparation de point (retour de Charles-Henri, vague 21) —
+   voir js/views/people.js#openPrepModal/appendFollowUpRows. Un sujet coché s'estompe pour
+   distinguer d'un coup d'œil ce qu'il reste encore à passer. ---------- */
+.covered-check { flex: none; display: flex; align-items: center; padding-top: 2px; }
+.covered-check input { width: auto; margin: 0; }
+.item-row-covered { opacity: 0.5; }
+.item-row-covered .item-title { text-decoration: line-through; }
+
 /* ---------- Kanban ---------- */
 .kanban-board {
   display: flex;
@@ -696,7 +704,13 @@ tbody.drag-over-group {
   overflow: hidden;
 }
 @media (min-width: 640px) {
-  .modal { border-radius: var(--radius-lg); }
+  /* Modales plus larges sur PC (retour de Charles-Henri, vague 21 : "que ça prenne plus
+     d'espace") — uniquement à partir de ce palier desktop/tablette : en dessous (mobile),
+     `.modal` garde son `max-width: 520px` d'origine, inchangé. */
+  .modal { border-radius: var(--radius-lg); max-width: 760px; }
+}
+@media (min-width: 1100px) {
+  .modal { max-width: 900px; }
 }
 .modal h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); flex: none; }
 .modal .modal-body {
@@ -1050,6 +1064,7 @@ tbody.drag-over-group {
 .checklist-item input[type="checkbox"] { width: auto; flex: none; }
 .checklist-item-text { flex: 1; min-width: 0; }
 .checklist-item-text.done { text-decoration: line-through; color: var(--color-text-muted); }
+.checklist-item-date { flex: none; color: var(--color-text-muted); font-size: var(--font-size-xs); white-space: nowrap; }
 
 /* ---------- Aide contextuelle (js/components/hint.js) ---------- */
 .hint-banner {
