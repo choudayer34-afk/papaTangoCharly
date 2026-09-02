@@ -16,6 +16,7 @@ import { renderMemoryTraining } from "./views/memory.js";
 import { renderLogin, renderRestricted } from "./views/login.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
+import { mountAdminButton } from "./components/adminPanel.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
@@ -124,6 +125,10 @@ function mountApp() {
   mountCaptureFab();
   mountHelpButton();
   mountGlobalSearch();
+  // Console d'administration (retour de Charles-Henri, vague 22 quater) — le bouton lui-même
+  // décide s'il doit apparaître ou non (voir mountAdminButton) : seul son propre compte
+  // ch-houdayer@hotmail.fr le voit, jamais les autres personnes autorisées à utiliser Pilotage.
+  mountAdminButton();
   mountPomodoroWidget();
   // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
   // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
@@ -181,6 +186,7 @@ function unmountApp() {
   document.querySelector(".fab")?.remove();
   document.querySelector(".help-fab")?.remove();
   document.querySelector(".search-fab")?.remove();
+  document.querySelector(".admin-fab")?.remove();
   unmountPomodoroWidget();
   teardownGlobalShortcuts();
   window.removeEventListener("hashchange", renderRoute);
