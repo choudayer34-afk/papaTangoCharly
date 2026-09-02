@@ -3,7 +3,7 @@
 // l'application ne devrait avoir besoin de connaître Firebase Auth au-delà de ce fichier
 // et de js/app.js (qui décide d'afficher cet écran ou l'app normale).
 
-import { signInGoogle, signInEmail } from "../services/firebase.js";
+import { signInGoogle, signInEmail, ADMIN_EMAIL } from "../services/firebase.js";
 import { showToast } from "../components/toast.js";
 
 export function renderLogin(container) {
@@ -59,7 +59,17 @@ export function renderLogin(container) {
 // js/services/firebase.js#isEmailAllowed). js/app.js a déjà déconnecté la personne avant
 // d'afficher cet écran, donc "Continuer avec Google" ci-dessus ne réapparaît pas : se
 // reconnecter avec le même compte non autorisé ramènerait immédiatement ici.
+//
+// Cas vécu (retour de Charles-Henri, vague 22 quinquies) : lui-même s'est retrouvé sur cet
+// écran, alors que son compte apparaissait bien dans Firebase Authentication — confusion
+// naturelle entre DEUX listes distinctes dans Firebase (Authentication → Users : qui PEUT
+// s'authentifier ; Firestore → collection `allowedUsers` : qui est effectivement autorisé une
+// fois authentifié, la seule que vérifie isEmailAllowed()). Le message générique "demande à la
+// personne qui gère les accès" n'a aucun sens quand cette personne, c'est lui — donc pour son
+// propre email, l'écran donne directement l'étape Firestore exacte plutôt que la formule
+// générique destinée aux autres.
 export function renderRestricted(container, email) {
+  const isAdminItself = (email || "").toLowerCase() === ADMIN_EMAIL;
   container.innerHTML = `
     <div class="view" style="padding-top: 15vh;">
       <div class="card" style="max-width:360px;margin:0 auto;text-align:center;">
@@ -67,9 +77,20 @@ export function renderRestricted(container, email) {
         <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">
           ${email ? `Le compte <strong>${escapeHtml(email)}</strong> n'est` : "Ce compte n'est"} pas autorisé à utiliser cette application.
         </p>
-        <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">
-          Demande à la personne qui gère les accès de t'ajouter, puis reconnecte-toi.
-        </p>
+        ${
+          isAdminItself
+            ? `<p style="color:var(--color-text-muted);font-size:var(--font-size-sm);text-align:left;">
+                 C'est ton propre compte administrateur — ce n'est pas un blocage définitif, il te
+                 manque juste ta propre entrée dans la liste blanche. Apparaître dans
+                 <strong>Firebase → Authentication</strong> ne suffit pas : va dans
+                 <strong>Firestore Database → Data</strong>, ouvre (ou crée) la collection
+                 <strong>allowedUsers</strong>, et ajoute un document dont l'ID est
+                 <code>${escapeHtml(ADMIN_EMAIL)}</code> (en minuscules). Puis reconnecte-toi.
+               </p>`
+            : `<p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">
+                 Demande à la personne qui gère les accès de t'ajouter, puis reconnecte-toi.
+               </p>`
+        }
       </div>
     </div>
   `;
