@@ -14,9 +14,7 @@
 
 import { openModal } from "./modal.js";
 import { showToast } from "./toast.js";
-import { getCurrentUser } from "../services/firebase.js";
-
-const ADMIN_EMAIL = "ch-houdayer@hotmail.fr";
+import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js";
 
 // Une entrée par application tierce. `tutorialHtml` répond à un besoin concret et récurrent
 // pour CETTE application précise plutôt qu'à une checklist générique — pour Firebase, c'est la
