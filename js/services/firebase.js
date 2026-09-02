@@ -16,6 +16,8 @@ import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  doc,
+  getDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -53,4 +55,21 @@ export async function signInEmail(email, password) {
 
 export async function signOutUser() {
   return signOut(auth);
+}
+
+// Liste blanche (retour de Charles-Henri : "quelques personnes précises que je choisis") —
+// il ne veut pas ouvrir l'appli en libre inscription, seulement à des personnes qu'il désigne
+// lui-même. Collection Firestore top-niveau `allowedUsers`, volontairement HORS du scope
+// users/{uid} de storage.js : elle doit pouvoir être consultée dès la connexion, avant même de
+// savoir si cet uid a le droit d'avoir un espace de données. Chaque document autorisé est
+// identifié par l'email (toujours en minuscules) de la personne ; son contenu importe peu,
+// seule l'EXISTENCE du document compte. Il n'y a aucune UI dans l'app pour gérer cette liste —
+// ce n'est pas un réglage que l'app expose, c'est Charles-Henri qui ajoute/retire ces documents
+// à la main depuis la console Firebase (voir les instructions livrées à part), exactement comme
+// il l'a demandé : lui seul choisit qui entre.
+export async function isEmailAllowed(email) {
+  if (!email) return false;
+  const ref = doc(db, "allowedUsers", email.toLowerCase());
+  const snap = await getDoc(ref);
+  return snap.exists();
 }
