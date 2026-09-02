@@ -168,6 +168,14 @@ a { color: inherit; }
 }
 .search-fab:active { transform: scale(0.94); }
 
+/* ---------- Administration (empilé au-dessus d'Aide/Recherche, visible uniquement pour le
+   compte ch-houdayer@hotmail.fr — voir js/components/adminPanel.js) ---------- */
+.admin-fab {
+  bottom: calc(var(--nav-height) + var(--space-4) + 100px);
+  font-size: 16px;
+}
+.admin-fab:active { transform: scale(0.94); }
+
 /* ---------- Mini-minuteur Pomodoro persistant (🍅, js/components/pomodoroWidget.js) ----------
    Empilé au-dessus du FAB de capture, même logique d'empilement que le bouton Aide/Recherche
    à gauche — invisible tant qu'aucune session n'est active (demande explicite du 02/09/2026 :
