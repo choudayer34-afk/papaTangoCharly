@@ -27,6 +27,7 @@ import { renderNotesBlock } from "../components/notesBlock.js";
 import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderInfoTip } from "../components/infoTip.js";
+import { exportTaskOverview } from "../components/overviewExport.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -1127,6 +1128,15 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      {
+        // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
+        // parmi les 3 propositions de visualisation automatique) : une image PNG ponctuelle
+        // plutôt qu'une vue maintenue dans l'app — voir js/components/overviewExport.js.
+        label: "📄 Exporter",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => exportTaskOverview(task, { project: taskProject, statusLabel: tasksApi.STATUS_LABELS[task.status] }),
+      },
       {
         label: "🗑️ Supprimer",
         variant: "danger",

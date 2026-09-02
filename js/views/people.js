@@ -17,6 +17,7 @@ import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "..
 import { renderManagerSection } from "./management.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
+import { exportFollowUpOverview } from "../components/overviewExport.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -907,8 +908,23 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
  * même modale complète plutôt que sa propre version simplifiée, pour ne jamais avoir deux
  * formulaires de création de Suivi qui divergent. Préremplit juste le champ "Sur quoi ?" avec
  * le début de la capture brute.
+ *
+ * `defaultDueDate`/`defaultControlDate` (retour de Charles-Henri, vague 22 : "quand je clique
+ * sur oui [pour un autre suivi], j'aimerai que par défaut soit repris le projet et l'échéance
+ * de la dernière création") — préremplissent les deux champs date ; utilisés par
+ * `promptAnotherFollowUp()` ci-dessous pour reprendre les valeurs du Suivi qui vient d'être
+ * enregistré, jamais saisis directement par un appelant existant (tous omettent ce paramètre).
+ *
+ * Après un enregistrement réussi, la modale "Encore un suivi ?" s'affiche désormais
+ * systématiquement (retour de Charles-Henri, vague 22 : "j'aimerai que la modale encore un
+ * suivi s'affiche même en dehors des recettes [...] systématiquement après enregistrement du
+ * suivi") — plus seulement depuis la recette "Plusieurs suivis" (js/components/recipes.js, qui
+ * s'appuyait jusqu'ici sur sa propre boucle `promptAnotherFollowUp`, désormais superflue et
+ * simplifiée). Le `onCreated`/`onCancel` de l'appelant continue de s'exécuter normalement à
+ * chaque suivi créé (ex. `reopen()` sur la fiche Personne) ; la relance "Encore un suivi ?"
+ * vient s'ajouter par-dessus, pas à la place.
  */
-export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", onCreated, onCancel } = {}) {
+export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", defaultDueDate = "", defaultControlDate = "", onCreated, onCancel } = {}) {
   const [projects, people] = await Promise.all([
     projectsApi.listAll(),
     person ? Promise.resolve(null) : peopleApi.listAll(),
@@ -919,11 +935,19 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
       person
         ? ""
         : `
-    <div class="field">
+    <div class="field" id="fu-person-field">
       <label for="fu-person">Personne</label>
       <select id="fu-person">
         ${people.map((p) => `<option value="${p.id}">${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</option>`).join("")}
       </select>
+      <button type="button" id="fu-multi-toggle" class="btn btn-ghost btn-sm" style="padding-left:0;margin-top:6px;">👥 Assigner le même suivi à plusieurs personnes</button>
+    </div>
+    <div class="field" id="fu-multi-people-field" style="display:none;">
+      <label>À qui ?</label>
+      <div id="fu-multi-people-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);">
+        ${people.map((p) => `<label class="chip-radio" style="display:flex;"><input type="checkbox" class="fu-multi-person-cb" value="${p.id}" style="width:auto;margin-right:8px;" /> ${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</label>`).join("")}
+      </div>
+      <button type="button" id="fu-multi-toggle-back" class="btn btn-ghost btn-sm" style="padding-left:0;margin-top:6px;">← Revenir à une seule personne</button>
     </div>`
     }
     <div class="field">
@@ -947,11 +971,11 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
     </div>
     <div class="field" id="fu-due-field">
       <label for="fu-due">Échéance de la personne</label>
-      <input id="fu-due" type="date" />
+      <input id="fu-due" type="date" value="${escapeAttr(defaultDueDate)}" />
     </div>
     <div class="field">
       <label for="fu-control" id="fu-control-label">Quand dois-je contrôler / relancer ?</label>
-      <input id="fu-control" type="date" />
+      <input id="fu-control" type="date" value="${escapeAttr(defaultControlDate)}" />
     </div>
     <div class="field">
       <label for="fu-project">Projet (optionnel)</label>
@@ -1005,6 +1029,28 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
     showToast("Projet créé");
   });
 
+  // "Saisie en masse" (retour de Charles-Henri, vague 22 : "j'aimerai avoir plus de saisie en
+  // masse") — première des deux pistes qu'il a choisies parmi celles proposées : dupliquer un
+  // même engagement vers plusieurs personnes en une fois (ex. "tout le monde doit remplir le
+  // formulaire X d'ici vendredi"), plutôt que de ressaisir le même texte pour chacune. N'existe
+  // que quand le formulaire propose déjà un sélecteur de personne (`!person`) — depuis une
+  // fiche Personne déjà ouverte, il n'y a par construction qu'une seule personne possible.
+  if (!person) {
+    const multiToggleBtn = body.querySelector("#fu-multi-toggle");
+    const multiToggleBackBtn = body.querySelector("#fu-multi-toggle-back");
+    const personField = body.querySelector("#fu-person-field");
+    const multiField = body.querySelector("#fu-multi-people-field");
+    multiToggleBtn.addEventListener("click", () => {
+      personField.style.display = "none";
+      multiField.style.display = "";
+    });
+    multiToggleBackBtn.addEventListener("click", () => {
+      multiField.style.display = "none";
+      personField.style.display = "";
+      multiField.querySelectorAll(".fu-multi-person-cb").forEach((cb) => (cb.checked = false));
+    });
+  }
+
   showHintOnce(
     body,
     "followup-direction-v1",
@@ -1037,12 +1083,9 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
         onClick: async () => {
           const title = bodyEl.querySelector("#fu-title").value.trim();
           if (!title) return;
-          const personId = person ? person.id : bodyEl.querySelector("#fu-person").value;
-          if (!personId) return;
           const direction = bodyEl.querySelector('input[name="fu-direction"]:checked')?.value || "waiting_on";
-          const followUp = await followUpsApi.createFollowUp({
+          const commonFields = {
             title,
-            personId,
             direction,
             category: direction === "to_tell" ? bodyEl.querySelector("#fu-category").value || null : null,
             notable: bodyEl.querySelector('input[name="fu-notable"]:checked')?.value || null,
@@ -1050,11 +1093,92 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
             dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-due").value || null,
             controlDate: bodyEl.querySelector("#fu-control").value || null,
             projectId: bodyEl.querySelector("#fu-project").value || null,
-          });
+          };
+
+          // Mode "saisie en masse" (vague 22) : le bloc multi-personnes n'existe que quand
+          // `!person`, et n'est actif que si Charles-Henri l'a explicitement révélé via
+          // "👥 Assigner le même suivi à plusieurs personnes" (affichage encore sur "none" sinon).
+          const multiField = bodyEl.querySelector("#fu-multi-people-field");
+          const isMultiMode = multiField && multiField.style.display !== "none";
+          if (isMultiMode) {
+            const personIds = [...bodyEl.querySelectorAll(".fu-multi-person-cb:checked")].map((cb) => cb.value);
+            if (!personIds.length) return;
+            const created = [];
+            for (const personId of personIds) {
+              created.push(await followUpsApi.createFollowUp({ ...commonFields, personId }));
+            }
+            close();
+            showToast(`${created.length} suivi${created.length > 1 ? "s" : ""} créé${created.length > 1 ? "s" : ""}`);
+            // Pas de "Encore un suivi ?" ici : cette action répond déjà, en un seul geste, au
+            // besoin qui aurait autrement demandé de répéter la modale N fois pour N personnes.
+            // `onCreated` reçoit le premier suivi créé — une limite assumée pour les appelants
+            // qui l'utilisent pour rattacher un objet unique (ex. qualification Inbox, qui ne
+            // peut de toute façon référencer qu'un seul `resultFollowUpId`) — voir "Point
+            // d'attention" du doc de suivi.
+            onCreated?.(created[0]);
+            return;
+          }
+
+          const personId = person ? person.id : bodyEl.querySelector("#fu-person").value;
+          if (!personId) return;
+          const followUp = await followUpsApi.createFollowUp({ ...commonFields, personId });
           close();
           showToast("Suivi créé");
-          onCreated?.(followUp);
+          // `onCreated` n'est PAS appelé ici (retour de test, vague 22) : la plupart des
+          // appelants (fiche Personne, fiche Projet) rouvrent leur propre modale dans
+          // `onCreated` (ex. `reopen()`), et `openModal()` ferme systématiquement la modale
+          // active avant d'en ouvrir une nouvelle (une seule modale à la fois). Si `onCreated`
+          // était invoqué immédiatement ici, sa réouverture de fiche entrerait en course avec
+          // l'ouverture de "Encore un suivi ?" juste après — laquelle des deux modales reste
+          // affichée dépendrait alors uniquement de la vitesse de la promesse `reopen()`
+          // (relecture en base), parfois plus lente que l'ouverture synchrone de cette modale-ci.
+          // `onCreated` est donc différé et déclenché une seule fois, quand la série de suivis
+          // est réellement terminée (clic sur "Terminé" dans promptAnotherFollowUp), avec le
+          // DERNIER suivi créé de la série — voir promptAnotherFollowUp() ci-dessous.
+          const resolvedPerson = person || (await peopleApi.getPerson(personId).catch(() => null));
+          if (resolvedPerson) promptAnotherFollowUp(resolvedPerson, followUp, { onCreated, onCancel });
+          else onCreated?.(followUp);
         },
+      },
+    ],
+  });
+}
+
+/**
+ * "Encore un suivi ?" (retour de Charles-Henri, vague 22) — affichée systématiquement après la
+ * création d'un Suivi, quel que soit le point d'entrée (fiche Personne, qualification Inbox,
+ * recette de démarrage...). "+ Encore un suivi" rouvre la même modale pour la même personne en
+ * reprenant le projet, le sens et les deux dates du Suivi qui vient d'être créé — l'hypothèse
+ * étant qu'une série de suivis créés à la suite (ex. pendant un même point) partage
+ * généralement le même contexte, seul l'engagement individuel change.
+ *
+ * `continuation.onCreated` est délibérément déclenché ICI (au clic sur "Terminé"), pas à chaque
+ * création intermédiaire de la série (voir le commentaire dans le handler "Créer" ci-dessus) :
+ * c'est le seul moment où on sait que la série est terminée, donc le seul moment sûr pour
+ * déclencher un effet de bord qui rouvre une modale derrière (ex. `reopen()` de la fiche
+ * Personne) sans risquer que "Encore un suivi ?" ne soit jamais visible.
+ */
+function promptAnotherFollowUp(person, lastFollowUp, continuation = {}) {
+  const body = document.createElement("div");
+  body.textContent = `Ajouter un autre suivi pour ${person.name} ?`;
+  openModal({
+    title: "Encore un suivi ?",
+    body,
+    actions: [
+      { label: "Terminé", variant: "ghost", onClick: () => continuation.onCreated?.(lastFollowUp) },
+      {
+        label: "+ Encore un suivi",
+        variant: "primary",
+        onClick: () =>
+          openCreateFollowUpModal({
+            person,
+            projectId: lastFollowUp.projectId || undefined,
+            defaultDirection: lastFollowUp.direction || "waiting_on",
+            defaultDueDate: lastFollowUp.dueDate || "",
+            defaultControlDate: lastFollowUp.controlDate || "",
+            onCreated: continuation.onCreated,
+            onCancel: continuation.onCancel,
+          }),
       },
     ],
   });
@@ -1258,6 +1382,21 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
+      {
+        // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
+        // parmi les 3 propositions de visualisation automatique) — voir
+        // js/components/overviewExport.js et le même bouton sur la fiche Tâche (kanban.js).
+        label: "📄 Exporter",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () =>
+          exportFollowUpOverview(followUp, {
+            project: followUpProject,
+            person,
+            statusLabel: followUpsApi.STATUS_LABELS[followUp.status],
+            directionLabel: followUpsApi.DIRECTION_LABELS[followUp.direction || "waiting_on"],
+          }),
+      },
       {
         label: "🗑️ Supprimer",
         variant: "danger",

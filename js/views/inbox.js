@@ -148,6 +148,11 @@ export function openQualifyModal(item) {
   // partagé : cette fenêtre "Traiter" n'a aucun champ de texte, donc aucun risque de capter
   // une frappe destinée ailleurs.
   function onKeydown(e) {
+    // Garde défensive ajoutée en vague 22 (en plus de la vraie correction dans modal.js#closeModal,
+    // qui empêchait cet écouteur d'être retiré) : cette fenêtre "Traiter" n'a normalement aucun
+    // champ de texte, mais autant ne jamais capter 1/2/3/A si le focus est malgré tout dans un
+    // champ éditable, plutôt que de reposer uniquement sur cette hypothèse.
+    if (isEditableTarget(e.target)) return;
     if (e.key === "1") return act("task");
     if (e.key === "2") return act("followup");
     if (e.key === "3") return act("kept");
@@ -386,4 +391,12 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
+}
+
+// Même définition que js/services/shortcuts.js#isEditableTarget (non exportée là-bas) —
+// dupliquée ici plutôt que remontée en commun pour un helper de 4 lignes sans état partagé.
+function isEditableTarget(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
 }
