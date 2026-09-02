@@ -384,6 +384,21 @@ service cloud.firestore {
   désormais un `actionLabel`/`onAction` optionnel (durée d'affichage allongée automatiquement) ;
   glisser une échéance vers un autre jour au Calendrier propose "Annuler" directement dans le
   toast de confirmation, pour rattraper un glisser-déposer accidentel sans rouvrir la fiche
+- ✅ Raccourcis clavier (`js/services/shortcuts.js`, 03/09/2026, retour de Charles-Henri :
+  "je marche aussi beaucoup au raccourci clavier") : Ctrl+K (rechercher), Alt+N (Capturer),
+  Alt+1…8 (changer d'onglet), Ctrl+Entrée (valider la fiche ouverte), Ctrl+Z (annuler le
+  dernier toast), 1/2/3/A dans la qualification Inbox — Ctrl+N et Ctrl+1…9 étant réservés par
+  tous les navigateurs, remplacés par Alt+N et Alt+1…8 ; tous documentés dans le Guide
+  (`#/guide`). Chaque fiche Personne/Projet propose aussi un raccourci personnalisé
+  Ctrl+Alt+<touche> assignable soi-même (`js/domain/preferences.js#customShortcuts`)
+- ✅ Réordonner les personnes de l'onglet Équipe (`js/domain/people.js`, `js/views/people.js`,
+  03/09/2026, retour de Charles-Henri) : glisser-déposer, même mécanisme que le tri manuel de
+  l'onglet Projets
+- ✅ Recherche globale étendue (`js/components/search.js`, 03/09/2026, retour de Charles-Henri :
+  "la recherche doit rechercher dans tous les éléments même les notes ou autre") : le journal de
+  notes horodaté de chaque type et les Informations/Idées de l'Inbox (jusqu'ici absentes) sont
+  désormais indexés ; chaque résultat Tâche/Suivi/Projet affiche son statut ; un bandeau de
+  chips par type (Alt+1…8) permet de cibler la recherche sans la souris
 - ⏳ À venir : éditeur de canevas personnalisé (§19), rappels programmés en vrai push (app
   fermée — nécessiterait Firebase Cloud Functions, non fait pour l'instant, voir l'alerte de
   démarrage ci-dessus comme version app-ouverte-uniquement), horodatage réel du "dernier point
