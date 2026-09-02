@@ -385,7 +385,7 @@ export async function openPersonDetail(person, allFollowUps) {
   });
   body.querySelector("#prep-btn").addEventListener("click", () => {
     closeModal();
-    openPrepModal(person, { onDone: reopen });
+    openPrepMaskThenPrep(person, { onDone: reopen });
   });
   body.querySelector("#eadp-btn").addEventListener("click", () => {
     closeModal();
@@ -481,9 +481,20 @@ function soonestDate(f) {
  * toutes) : c'est ce qui corrige le bug remonté par Charles-Henri ("quand je modifie un sujet,
  * ça ne se met pas à jour sur la modale 'Point avec...' tant que je ne ressors pas").
  */
-async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
-  const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
-  const own = allFollowUps.filter((f) => f.personId === person.id);
+/**
+ * Calcule les 4 sections d'un point (retard, à transmettre, à aborder groupé par projet,
+ * terminé récemment) — factorisé hors de `openPrepModal` (vague 22 sexies) pour être partagé
+ * avec la fenêtre de masquage privée `js/views/prepMask.js#renderPrepMask`, qui doit afficher
+ * EXACTEMENT les mêmes sections/le même tri que l'écran finalement partagé, sinon cocher
+ * "masquer" sur un sujet ne correspondrait à rien de visible dans le point réel.
+ *
+ * `includeHidden` (retour de Charles-Henri : "je puisse cocher ce que je ne veux pas remonter
+ * [...] en mode privé") : `false` (défaut, utilisé par `openPrepModal`, l'écran qu'il partage)
+ * exclut les Suivis marqués `hiddenFromPrep` — `true` (utilisé par la fenêtre de masquage) les
+ * inclut tous, pour pouvoir aussi bien les masquer que les redémasquer.
+ */
+export function computePrepSections(person, allFollowUps, projects, { includeHidden = false } = {}) {
+  const own = allFollowUps.filter((f) => f.personId === person.id && (includeHidden || !f.hiddenFromPrep));
 
   const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => soonestDate(a) - soonestDate(b));
   const overdue = active.filter(followUpsApi.isControlDue);
@@ -498,6 +509,51 @@ async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   // groupes eux-mêmes s'enchaînent dans l'ordre d'apparition de leur premier sujet — donc du
   // plus urgent au moins urgent, y compris pour les sujets sans projet.
   const upcomingGroups = groupByProject(upcoming, projects);
+
+  return { overdue, toTell, upcoming, upcomingGroups, recentlyDone };
+}
+
+/**
+ * Étape de masquage privée AVANT "Préparer mon point" (retour de Charles-Henri, vague 22
+ * sexies) : *"il faut qu'avant je puisse cocher ce que je ne veux pas remonter dans cet écran
+ * en mode privé et que cette modale soit déportée et déplaçable seule sur un autre écran."*
+ *
+ * Une vraie modale (js/components/modal.js) vit à l'intérieur de CETTE fenêtre — elle ne
+ * peut donc jamais être déplacée sur un second écran indépendamment du reste. Seule une vraie
+ * fenêtre de navigateur, ouverte via `window.open()`, peut être glissée par l'OS sur un autre
+ * écran pendant que celle-ci reste affichée (et partagée en visio) sur le premier. La fenêtre
+ * ouverte ici recharge donc l'app en entier sur la route dédiée `#/prep-mask` (voir
+ * js/app.js et js/views/prepMask.js), qui s'arrête avant de monter la navigation/les FAB
+ * habituels : un outil ponctuel et concentré, pas un second onglet de travail complet.
+ *
+ * Le "Point avec X" (openPrepModal, l'écran effectivement partagé) ne s'ouvre qu'une fois cette
+ * fenêtre refermée — inutile d'échanger des messages entre les deux fenêtres : le masquage se
+ * persiste au fil de l'eau (`followUpsApi.updateFollowUp(..., { hiddenFromPrep })`), donc
+ * `openPrepModal`, en relisant les données fraîches, applique déjà le bon filtre dès qu'il
+ * s'ouvre à son tour.
+ */
+function openPrepMaskThenPrep(person, { onDone } = {}) {
+  const url = location.pathname + "#/prep-mask?person=" + encodeURIComponent(person.id);
+  const win = window.open(url, "prepMask-" + person.id, "width=480,height=760,menubar=no,toolbar=no,location=no,status=no");
+  if (!win) {
+    // Popup bloquée par le navigateur : on ne bloque pas Charles-Henri pour autant, le point
+    // s'ouvre directement sans étape de masquage cette fois plutôt que de le laisser sans rien.
+    showToast("Fenêtre de masquage bloquée par le navigateur — autorise les popups pour cette appli");
+    openPrepModal(person, { onDone });
+    return;
+  }
+  win.focus();
+  const poll = setInterval(() => {
+    if (win.closed) {
+      clearInterval(poll);
+      openPrepModal(person, { onDone });
+    }
+  }, 400);
+}
+
+async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
+  const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
+  const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects);
 
   const remaining = [...overdue, ...toTell, ...upcoming].filter((f) => !coveredIds.has(f.id)).length;
 
