@@ -9,6 +9,7 @@ import { showToast } from "./toast.js";
 import { capture } from "../domain/inbox.js";
 import { openQualifyChoice } from "../views/inbox.js";
 import { saveDraft, getDraft, clearDraft } from "../services/draftStore.js";
+import { showHintOnce } from "./hint.js";
 
 // Reprise d'une saisie interrompue (piste TDAH du 02/09/2026, retour de Charles-Henri —
 // exemples du yaourt/aspirateur et du café oublié : une interruption efface tout ce qui était
@@ -55,6 +56,17 @@ export function openCaptureModal(opts = {}) {
     <button type="button" id="capture-more-btn" class="btn btn-ghost btn-sm" style="padding-left:0;">+ Préciser maintenant (type, rattachement...)</button>
     <div id="capture-quick-types" class="chip-row" style="display:${hasDraft && draft.selectedQuickType ? "flex" : "none"};flex-wrap:wrap;margin-top:8px;"></div>
   `;
+
+  // "Saisie en masse" (retour de Charles-Henri, vague 22) — seconde des deux pistes qu'il a
+  // choisies : coller/taper plusieurs idées d'un coup (une par ligne) et créer une capture
+  // Inbox par ligne en un seul "Enregistrer", plutôt que de rouvrir Capturer autant de fois.
+  // Affiché une seule fois (mémorisé comme les autres bandeaux d'aide au premier usage) —
+  // n'apparaît qu'une fois, pas à chaque ouverture de la modale.
+  showHintOnce(
+    body,
+    "capture-multiline-v1",
+    "Plusieurs lignes ? Chaque ligne non vide devient une capture séparée dans l'Inbox en un seul \"Enregistrer\"."
+  );
 
   const quickTypesEl = body.querySelector("#capture-quick-types");
   quickTypesEl.innerHTML = QUICK_TYPES.map(
@@ -116,6 +128,25 @@ export function openCaptureModal(opts = {}) {
             textarea.focus();
             return;
           }
+
+          // "Saisie en masse" (vague 22) : plusieurs lignes non vides → une capture Inbox par
+          // ligne, en un seul geste. Une seule ligne (le cas normal, largement majoritaire)
+          // garde EXACTEMENT le comportement d'avant cette vague, "+ Préciser maintenant"
+          // inclus — la Règle 1 (capturer doit rester extrêmement rapide) ne doit jamais se
+          // dégrader pour le cas courant à cause d'une fonctionnalité pensée pour l'exception.
+          const lines = value.split("\n").map((l) => l.trim()).filter(Boolean);
+          if (lines.length > 1) {
+            // Le choix de type rapide ne s'applique volontairement pas ici : qualifier
+            // immédiatement N éléments différents rouvrirait N formulaires à la suite, ce qui
+            // irait à l'encontre du geste "tout d'un coup" recherché — chaque ligne atterrit en
+            // attente dans l'Inbox, à qualifier à tête reposée comme n'importe quelle capture.
+            for (const line of lines) await capture(line, "manuel");
+            clearDraft(DRAFT_KEY);
+            close();
+            showToast(`${lines.length} captures enregistrées dans l'Inbox`);
+            return;
+          }
+
           const item = await capture(value, "manuel");
           clearDraft(DRAFT_KEY);
           close();

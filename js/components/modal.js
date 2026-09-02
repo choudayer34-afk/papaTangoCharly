@@ -3,6 +3,7 @@
 // Un seul composant, réutilisé pour la capture, la qualification, les formulaires, etc.
 
 let activeOverlay = null;
+let activeClose = null; // la fonction close() propre à la modale actuellement ouverte — voir closeModal() plus bas
 
 /**
  * @param {Object} opts
@@ -76,18 +77,36 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
     document.removeEventListener("keydown", onKeydown);
     overlay.remove();
     if (activeOverlay === overlay) activeOverlay = null;
+    if (activeClose === close) activeClose = null;
     onClose?.();
   }
 
   document.body.appendChild(overlay);
   activeOverlay = overlay;
+  activeClose = close;
 
   return { close, bodyEl };
 }
 
+// BUG corrigé (retour de Charles-Henri, vague 22 : "shift + un chiffre, par exemple 3, ça
+// m'enregistre en Information alors que je suis en saisie") : cette fonction se contentait de
+// retirer l'overlay du DOM et de réinitialiser `activeOverlay`, sans jamais appeler la vraie
+// fonction close() de la modale en cours — celle qui retire son écouteur clavier local et
+// invoke `onClose`. Or c'est ce closeModal() global (et non le `close` retourné par
+// openModal()) que la quasi-totalité des appelants de l'app utilisent pour fermer une modale
+// avant d'en ouvrir une autre (77 appels dans le code). Conséquence concrète : la qualification
+// Inbox (js/views/inbox.js#openQualifyModal) pose un écouteur `document.addEventListener(
+// "keydown", ...)` local pour les raccourcis 1/2/3/A, retiré via `onClose` — mais choisir un
+// choix ("Suivi", "Tâche"...) ferme la modale avec ce closeModal() global avant d'ouvrir la
+// modale suivante, donc `onClose` n'était JAMAIS appelé et l'écouteur restait attaché à
+// `document` pour de bon. Résultat : taper "3" n'importe où ensuite dans l'app — y compris
+// dans un champ de texte, "3" nécessitant Shift sur un clavier AZERTY — requalifiait
+// silencieusement en arrière-plan l'item Inbox déjà traité en "🧠 Information", un fantôme de
+// plus à chaque nouvelle qualification. Corrigé en centralisant la fermeture : closeModal()
+// délègue désormais à la fonction close() de la modale active (déjà protégée par le flag
+// `closed`, donc sûre même appelée deux fois) plutôt que de manipuler l'overlay à la main.
 export function closeModal() {
-  activeOverlay?.remove();
-  activeOverlay = null;
+  activeClose?.();
 }
 
 /**

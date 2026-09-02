@@ -22,7 +22,7 @@ const RECIPES = [
     id: "multi_followups",
     icon: "👥",
     label: "Plusieurs suivis pour la même personne",
-    description: "Ex. après un point avec un développeur où plusieurs engagements ont été pris : crée un suivi, puis enchaîne directement sur le suivant pour la même personne, sans repasser par sa fiche à chaque fois.",
+    description: "Ex. après un point avec un développeur où plusieurs engagements ont été pris : choisis la personne, puis enchaîne sur le suivant sans repasser par sa fiche — \"Encore un suivi ?\" (vague 22) s'affiche désormais après chaque suivi créé, pas seulement depuis cette recette.",
   },
 ];
 
@@ -95,29 +95,13 @@ async function runMultiFollowUps() {
         onClick: () => {
           const person = people.find((p) => p.id === bodyEl.querySelector("#recipe-person").value);
           close();
-          addFollowUpThenAskForAnother(person);
+          // La boucle "Encore un suivi ?" (retour de Charles-Henri, vague 22) vit désormais
+          // directement dans openCreateFollowUpModal (js/views/people.js) et s'affiche après
+          // CHAQUE suivi créé, plus seulement depuis cette recette — cette recette ne fait donc
+          // plus qu'amorcer le premier suivi pour la personne choisie.
+          openCreateFollowUpModal({ person, onCreated: () => showToast("Suivi créé") });
         },
       },
-    ],
-  });
-}
-
-function addFollowUpThenAskForAnother(person) {
-  openCreateFollowUpModal({
-    person,
-    onCreated: () => promptAnotherFollowUp(person),
-  });
-}
-
-function promptAnotherFollowUp(person) {
-  const body = document.createElement("div");
-  body.textContent = `Ajouter un autre suivi pour ${person.name} ?`;
-  openModal({
-    title: "Encore un suivi ?",
-    body,
-    actions: [
-      { label: "Terminé", variant: "ghost" },
-      { label: "+ Encore un suivi", variant: "primary", onClick: () => addFollowUpThenAskForAnother(person) },
     ],
   });
 }
