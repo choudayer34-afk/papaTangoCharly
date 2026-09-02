@@ -44,6 +44,14 @@
 //  - `lastNotifShownDate` : évite de répéter l'alerte plusieurs fois le même jour à chaque
 //    ouverture de l'app (YYYY-MM-DD, même principe que `focusOverride.date`).
 //
+// "🎯 Mes objectifs" (retour de Charles-Henri, vague 21 : "j'aimerai aussi me noter mes
+// objectifs qq part que ça soit ma ligne directrice") :
+//  - `myObjectives` : un simple texte libre, volontairement PAS structuré comme les objectifs
+//    par Personne (js/domain/objectives.js, qui suivent un collaborateur avec des points de
+//    suivi datés) — ici il n'y a qu'une seule "ligne directrice" à relire, pas une progression
+//    à tracer dans le temps. Accessible depuis l'Accueil (js/views/dashboard.js), comme le
+//    reste des raccourcis de premier niveau.
+
 // Raccourcis clavier personnalisés (retour de Charles-Henri, vague 20 : "je veux pouvoir
 // affecter un raccourci moi-même... pour aller directement sur une personne ou un projet") :
 //  - `customShortcuts` : `{ "ctrl+alt+<touche>": { type: "Person"|"Project", id, label } }`.
@@ -80,8 +88,16 @@ export async function getPreferences() {
     notifOptIn: null,
     lastNotifShownDate: null,
     customShortcuts: {},
+    myObjectives: "",
     ...current,
   };
+}
+
+/** "🎯 Mes objectifs" (ligne directrice personnelle de Charles-Henri, vague 21) — un texte
+ *  libre unique, toujours remplacé en entier, pas de journal ni de sous-structure. */
+export async function setMyObjectives(text) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, myObjectives: text || "" });
 }
 
 export async function markTourSeen() {

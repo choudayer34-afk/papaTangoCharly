@@ -42,7 +42,15 @@ export const STATUS_INFO_HTML =
  * chaque document existant : aucune migration risquée à lancer, chaque suivi se normalise tout
  * seul dès qu'il est relu, sans écriture supplémentaire tant qu'on n'y touche pas soi-même.
  */
-const LEGACY_STATUS_MAP = { todo: "waiting", in_progress: "waiting", waiting: "waiting", follow_up: "relaunched", done: "done" };
+// BUG corrigé (trouvé aux tests de la vague 21, jamais vu par Charles-Henri) : la table ne
+// contenait QUE les anciens statuts (todo/in_progress/waiting/follow_up/done) — "relaunched",
+// pourtant l'un des 3 statuts ACTUELS d'un Suivi, n'y figurait pas et retombait donc sur le
+// "waiting" par défaut ci-dessous dès la relecture suivante. Concrètement : choisir "🔁 Relancé"
+// dans la fiche d'un suivi l'enregistrait correctement, mais le statut revenait silencieusement
+// à "⏳ En attente" au prochain rendu (fermer/rouvrir la fiche, ou même immédiatement dans la
+// modale "Point avec..." après enregistrement). Toute valeur déjà normalisée doit repasser
+// telle quelle, pas seulement ses anciens alias.
+const LEGACY_STATUS_MAP = { todo: "waiting", in_progress: "waiting", waiting: "waiting", relaunched: "relaunched", follow_up: "relaunched", done: "done" };
 
 export function normalizeStatus(status) {
   return LEGACY_STATUS_MAP[status] || "waiting";
@@ -82,15 +90,51 @@ export async function createFollowUp(data) {
     category: data.category || null,
     notable: NOTABLE_VALUES.includes(data.notable) ? data.notable : null,
     expectedResult: data.expectedResult || "",
+    description: data.description || "", // contexte libre non daté (retour de Charles-Henri, vague 21)
     dueDate: data.dueDate || null, // échéance de la personne (direction "waiting_on")
     controlDate: data.controlDate || data.dueDate || null, // quand JE dois vérifier / en parler
     status: data.status || "waiting",
     successCriteria: data.successCriteria || "",
     projectId: data.projectId || null,
     notesLog: [], // journal de notes horodaté, voir addNote() plus bas
+    checklist: [], // sous-étapes courtes libres, même principe que Task.checklist (js/domain/tasks.js)
   });
   await storage.logHistory("FollowUp", followUp.id, "created", { title: followUp.title });
   return followUp;
+}
+
+/**
+ * Sous-étapes courtes libres sur un Suivi (retour de Charles-Henri, vague 21 : "dans un suivi
+ * sur une personne, il faudrait que je puisse mettre une description et une checklist") — même
+ * principe et même forme `{id, text, done, doneAt}` que la checklist des Tâches (voir
+ * js/domain/tasks.js#addChecklistItem/toggleChecklistItem/removeChecklistItem), pour que
+ * js/components/checklist.js reste le seul composant à connaître, sans variante par type de
+ * fiche.
+ */
+export async function addChecklistItem(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Suivi introuvable : " + id);
+  const checklist = [...(current.checklist || []), { id: generateId(), text: trimmed, done: false, doneAt: null }];
+  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  return updated.checklist;
+}
+
+export async function toggleChecklistItem(id, itemId, done) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Suivi introuvable : " + id);
+  const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c));
+  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  return updated.checklist;
+}
+
+export async function removeChecklistItem(id, itemId) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Suivi introuvable : " + id);
+  const checklist = (current.checklist || []).filter((c) => c.id !== itemId);
+  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  return updated.checklist;
 }
 
 /** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans

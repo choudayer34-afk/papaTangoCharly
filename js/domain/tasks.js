@@ -102,7 +102,10 @@ export async function addChecklistItem(id, text) {
 export async function toggleChecklistItem(id, itemId, done) {
   const current = await storage.get(COLLECTION, id);
   if (!current) throw new Error("Tâche introuvable : " + id);
-  const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done } : c));
+  // `doneAt` (retour de Charles-Henri, vague 21 : "voir quand ça s'est produit à l'affichage")
+  // — même principe que toggleStep() dans js/domain/projects.js : horodaté à la coche, effacé
+  // si on décoche par erreur plutôt que de garder une date qui ne correspond plus à rien.
+  const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c));
   const updated = await storage.put(COLLECTION, { ...current, checklist });
   return updated.checklist;
 }
