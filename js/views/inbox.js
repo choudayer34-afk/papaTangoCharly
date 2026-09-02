@@ -141,7 +141,33 @@ export function openQualifyModal(item) {
   other.appendChild(buildChoiceGrid(QUALIFY_CHOICES.filter((c) => !c.primary)));
   body.appendChild(other);
 
-  openModal({ title: "Traiter", body, actions: [{ label: "Plus tard", variant: "ghost" }] });
+  // Raccourcis 1/2/3/A (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
+  // raccourci clavier") — 1/2/3 choisissent directement Action/Suivi/Information dans l'ordre
+  // où ils apparaissent déjà dans la grille primaire, A déplie "Autre". Documentés dans le
+  // Guide (js/services/shortcuts.js#BUILTIN_SHORTCUTS), câblés ici plutôt que dans ce fichier
+  // partagé : cette fenêtre "Traiter" n'a aucun champ de texte, donc aucun risque de capter
+  // une frappe destinée ailleurs.
+  function onKeydown(e) {
+    if (e.key === "1") return act("task");
+    if (e.key === "2") return act("followup");
+    if (e.key === "3") return act("kept");
+    if (e.key.toLowerCase() === "a" && !other.open) {
+      e.preventDefault();
+      other.open = true;
+    }
+  }
+  function act(key) {
+    const choice = QUALIFY_CHOICES.find((c) => c.key === key);
+    if (choice) handleChoice(item, choice);
+  }
+  document.addEventListener("keydown", onKeydown);
+
+  openModal({
+    title: "Traiter",
+    body,
+    actions: [{ label: "Plus tard", variant: "ghost" }],
+    onClose: () => document.removeEventListener("keydown", onKeydown),
+  });
 }
 
 /**

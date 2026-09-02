@@ -15,6 +15,7 @@ import { renderNotesBlock } from "../components/notesBlock.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderManagerSection } from "./management.js";
 import { renderInfoTip } from "../components/infoTip.js";
+import { renderShortcutAssignButton } from "../services/shortcuts.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -99,7 +100,14 @@ export function renderPeople(container) {
     listEl.innerHTML = "";
     const card = document.createElement("div");
     card.className = "card";
-    for (const person of people) {
+    // Ordre manuel (retour de Charles-Henri, vague 20 : "je veux aussi pouvoir réordonner les
+    // personnes au sein de mon équipe") — même mécanisme que l'onglet Projets (js/domain/
+    // people.js#sortPeople/reorderPeople, calqué sur projectsApi.sortProjects/reorderProjects) :
+    // toute la ligne est glissable (comme une carte Projet), pas besoin d'une poignée dédiée,
+    // rien d'éditable en ligne ici qui pourrait entrer en conflit avec le glisser-déposer.
+    const orderedPeople = peopleApi.sortPeople(people);
+    const orderedIds = orderedPeople.map((p) => p.id);
+    for (const person of orderedPeople) {
       const own = followUps.filter((f) => f.personId === person.id);
       const waiting = own.filter((f) => f.status === "waiting").length;
       const relaunched = own.filter((f) => f.status === "relaunched").length;
@@ -107,17 +115,45 @@ export function renderPeople(container) {
 
       const row = document.createElement("div");
       row.className = "item-row";
-      row.style.cursor = "pointer";
+      row.style.cursor = "grab";
+      row.draggable = true;
       row.innerHTML = `
         <div class="item-main">
-          <div class="item-title">${person.type === "manager" ? "👔" : "👤"} ${escapeHtml(person.name)}</div>
+          <div class="item-title">⠿ ${person.type === "manager" ? "👔" : "👤"} ${escapeHtml(person.name)}</div>
           <div class="item-meta">
             ${waiting} en attente · ${relaunched} relancé(s)
             ${late ? ` · <span style="color:var(--color-danger);font-weight:600;">${late} à relancer</span>` : ""}
           </div>
         </div>
       `;
-      row.addEventListener("click", () => openPersonDetail(person, followUps));
+      row.addEventListener("click", () => {
+        // Un glisser-déposer qui se termine peut déclencher un click parasite juste après —
+        // même garde-fou que l'onglet Projets (js/views/projects.js).
+        if (row.dataset.justDragged) return;
+        openPersonDetail(person, followUps);
+      });
+      row.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/person-id", person.id);
+      });
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        row.classList.add("drag-over");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+      row.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        row.classList.remove("drag-over");
+        const draggedId = e.dataTransfer.getData("text/person-id");
+        if (!draggedId || draggedId === person.id) return;
+        const ids = [...orderedIds];
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(person.id);
+        if (from < 0 || to < 0) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        row.dataset.justDragged = "1";
+        await peopleApi.reorderPeople(ids);
+        setTimeout(() => delete row.dataset.justDragged, 300);
+      });
       card.appendChild(row);
     }
     listEl.appendChild(card);
@@ -222,6 +258,7 @@ export async function openPersonDetail(person, allFollowUps) {
       <label for="person-detail-role">Rôle</label>
       <input id="person-detail-role" type="text" value="${escapeAttr(person.role || "")}" />
     </div>
+    <div id="person-shortcut" style="margin-bottom:12px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button id="prep-btn" class="btn btn-secondary btn-block">🗒️ Préparer mon point</button>
       <button id="eadp-btn" class="btn btn-secondary btn-block">📋 Préparer l'EADP</button>
@@ -318,6 +355,9 @@ export async function openPersonDetail(person, allFollowUps) {
     closeModal();
     openPrepareEadpModal(person, { onDone: reopen });
   });
+  // Raccourci clavier personnalisé (retour de Charles-Henri, vague 20) — voir
+  // js/services/shortcuts.js#renderShortcutAssignButton.
+  renderShortcutAssignButton(body.querySelector("#person-shortcut"), { type: "Person", id: person.id, label: person.name });
 
   const objectivesEl = body.querySelector("#person-objectives");
   renderObjectivesList(objectivesEl, objectives, person, reopen);

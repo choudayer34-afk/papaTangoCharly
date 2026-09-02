@@ -21,6 +21,7 @@ import { openCreateTaskModal, openTaskDetail } from "./kanban.js";
 import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
 import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
 import { renderInfoTip } from "../components/infoTip.js";
+import { renderShortcutAssignButton } from "../services/shortcuts.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -351,6 +352,7 @@ export async function openProjectDetail(project, tasks) {
       <label for="detail-criteria">Critère de réussite</label>
       <textarea id="detail-criteria" placeholder="Comment saurai-je que ce projet est réussi ?">${escapeHtml(project.successCriteria || "")}</textarea>
     </div>
+    <div id="project-shortcut" style="margin-bottom:12px;"></div>
     <div id="detail-canevas"></div>
     <!-- Notes : bloc secondaire replié par défaut (audit de simplification du 02/09/2026 —
          "trop de blocs ouverts en permanence sur une fiche déjà longue") ; le compte dans le
@@ -409,6 +411,9 @@ export async function openProjectDetail(project, tasks) {
   `;
 
   renderInfoTip(body.querySelector("#project-status-info"), PROJECT_STATUS_INFO_HTML);
+  // Raccourci clavier personnalisé (retour de Charles-Henri, vague 20) — voir
+  // js/services/shortcuts.js#renderShortcutAssignButton.
+  renderShortcutAssignButton(body.querySelector("#project-shortcut"), { type: "Project", id: project.id, label: project.name });
 
   // "+ Ajouter" par bloc (retour de Charles-Henri : pouvoir créer directement depuis la
   // fiche projet, pour chaque type, sans passer par le fil conducteur générique) — réutilise
