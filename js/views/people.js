@@ -12,6 +12,7 @@ import { showHintOnce } from "../components/hint.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
+import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderManagerSection } from "./management.js";
 import { renderInfoTip } from "../components/infoTip.js";
@@ -21,6 +22,13 @@ import { renderShortcutAssignButton } from "../services/shortcuts.js";
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
  *  trié par `updatedAt` que renvoie le storage, pour ne pas faire sauter un suivi en tête de
  *  liste juste parce qu'on vient de le modifier. */
+/** Tri alphabétique pour les listes déroulantes "Projet" des formulaires de Suivi (retour de
+ *  Charles-Henri, vague 21) — distinct du tri d'affichage de l'onglet Projets lui-même
+ *  (avancement / manuel, voir preferencesApi.projectSort), qui reste inchangé. */
+function sortProjectsByName(projects) {
+  return [...projects].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+}
+
 function sortByCreatedDesc(list) {
   return [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
@@ -222,6 +230,16 @@ export function openCreatePersonModal(prefill = {}) {
   });
 }
 
+/**
+ * "🧭 Repères managériaux" (retour de Charles-Henri, vague 21) : trois notes libres et non
+ * datées, distinctes du Journal de notes (horodaté, un événement à la fois) et de `notes`
+ * (contexte général déjà migré vers le Journal, voir migrateLegacyNotes) — ce que Charles-Henri
+ * a besoin de RETROUVER sur une personne sans avoir à relire tout le journal : ce qu'elle
+ * attend de lui en 1:1 (`expectationsInOneToOne`), ce qu'elle attend de lui comme manager en
+ * général (`expectationsAsManager`), et des observations de personnalité (`personalConsideration`).
+ * Simple texte libre par champ (pas de sous-structure), replié par défaut dans un `<details>`
+ * comme "🕒 Historique" pour ne pas allonger la fiche par défaut.
+ */
 export async function openPersonDetail(person, allFollowUps) {
   preferencesApi.recordRecentlyViewed("Person", person.id).catch(() => {});
   // Fusion des deux "Notes" (vague 19, audit de simplification) — voir peopleApi.migrateLegacyNotes.
@@ -277,6 +295,23 @@ export async function openPersonDetail(person, allFollowUps) {
     <div class="card" id="person-objectives" style="margin-bottom:16px;"></div>
     <div class="section-title">🗒️ Journal de notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
+    <details>
+      <summary class="section-title" style="cursor:pointer;">🧭 Repères managériaux</summary>
+      <div style="margin-top:8px;margin-bottom:16px;">
+        <div class="field">
+          <label for="person-o2o">Attente des O2O — ce que ${escapeHtml(person.name)} attend de moi en 1:1</label>
+          <textarea id="person-o2o" placeholder="Boulot ou perso, pas forcément récurrent, ce qui va bien / moins bien...">${escapeHtml(person.expectationsInOneToOne || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="person-manager-expect">Attente manager — ce que ${escapeHtml(person.name)} attend de moi en tant que manager</label>
+          <textarea id="person-manager-expect" placeholder="Feedback, direction, orientation, attentes vis-à-vis de son propre travail...">${escapeHtml(person.expectationsAsManager || "")}</textarea>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="person-consideration">Considération personnelle</label>
+          <textarea id="person-consideration" placeholder="Personnalité, forces, axes d'amélioration...">${escapeHtml(person.personalConsideration || "")}</textarea>
+        </div>
+      </div>
+    </details>
     <details>
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${personHistory.length})</summary>
       <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
@@ -349,7 +384,7 @@ export async function openPersonDetail(person, allFollowUps) {
   });
   body.querySelector("#prep-btn").addEventListener("click", () => {
     closeModal();
-    openPrepModal(person, own, { onDone: reopen });
+    openPrepModal(person, { onDone: reopen });
   });
   body.querySelector("#eadp-btn").addEventListener("click", () => {
     closeModal();
@@ -399,6 +434,9 @@ export async function openPersonDetail(person, allFollowUps) {
             name,
             type: bodyEl.querySelector("#person-detail-type").value,
             role: bodyEl.querySelector("#person-detail-role").value.trim(),
+            expectationsInOneToOne: bodyEl.querySelector("#person-o2o").value.trim(),
+            expectationsAsManager: bodyEl.querySelector("#person-manager-expect").value.trim(),
+            personalConsideration: bodyEl.querySelector("#person-consideration").value.trim(),
           });
           close();
           showToast("Personne mise à jour");
@@ -408,27 +446,45 @@ export async function openPersonDetail(person, allFollowUps) {
   });
 }
 
+/** Date la plus proche entre échéance et contrôle (retour de Charles-Henri, vague 21 : "que les
+ *  éléments se trient par date d'échéance ou date de contrôle plus petite") — un suivi "à
+ *  transmettre" n'a pas de dueDate, un suivi ordinaire a les deux parfois (dueDate = échéance
+ *  de la personne, controlDate = quand je vérifie, souvent plus tôt) : on veut la plus urgente
+ *  des deux, jamais une seule au détriment de l'autre. Sans aucune date, trié en dernier. */
+function soonestDate(f) {
+  const times = [f.controlDate, f.dueDate].filter(Boolean).map((d) => new Date(d).getTime());
+  return times.length ? Math.min(...times) : Infinity;
+}
+
 /**
  * "Suivi managérial" : préparer un point collaborateur en un coup d'œil, sans avoir à
  * relire manuellement chaque engagement — ce que Charles-Henri fait avant chaque 1:1.
  * Purement une lecture recomposée des mêmes suivis déjà présents sur la fiche (retard de
- * contrôle en premier, puis le reste par date de contrôle, puis les derniers terminés) :
- * aucune nouvelle donnée, aucun nouveau champ.
+ * contrôle en premier, puis le reste par date de contrôle/échéance, puis les derniers
+ * terminés) : aucune nouvelle donnée, aucun nouveau champ sur le Suivi lui-même.
  *
  * "🎯 À aborder" est en plus regroupé par projet (fil rouge par sujet plutôt que des lignes
  * isolées — retour de Charles-Henri du 02/09/2026 : "les deux", projet ET date). Le
  * regroupement est volontairement limité à cette seule section : c'est précisément celle
  * visée par sa question, et "🔴 En retard" / "📣 À transmettre" restent des listes courtes où
  * un fil rouge par projet ajouterait plus de bruit que de lisibilité.
+ *
+ * `coveredIds` (retour de Charles-Henri, vague 21 : "je dois identifier lors de la préparation
+ * du point que je suis passé sur le sujet quand on les passe un à un") — un `Set` d'ids tenu le
+ * temps d'UNE préparation de point, jamais persisté : rouvrir "🗒️ Point avec..." plus tard (une
+ * autre fois, un autre jour) repart d'une ardoise vierge, seul le passage "en direct" au sein
+ * d'une même session de préparation compte. Un sujet se marque "vu" soit en cochant la case
+ * dédiée sur sa ligne (sans l'ouvrir), soit automatiquement en l'ouvrant (`openFromPrep`) — dans
+ * les deux cas la modale se reconstruit toujours avec des données FRAÎCHES (`followUpsApi.
+ * listAll()` relu à chaque appel plutôt que de réutiliser un tableau `own` capturé une fois pour
+ * toutes) : c'est ce qui corrige le bug remonté par Charles-Henri ("quand je modifie un sujet,
+ * ça ne se met pas à jour sur la modale 'Point avec...' tant que je ne ressors pas").
  */
-async function openPrepModal(person, own, { onDone } = {}) {
-  const projects = await projectsApi.listAll();
+async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
+  const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
+  const own = allFollowUps.filter((f) => f.personId === person.id);
 
-  const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => {
-    const da = a.controlDate ? new Date(a.controlDate).getTime() : Infinity;
-    const db = b.controlDate ? new Date(b.controlDate).getTime() : Infinity;
-    return da - db;
-  });
+  const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => soonestDate(a) - soonestDate(b));
   const overdue = active.filter(followUpsApi.isControlDue);
   const notOverdue = active.filter((f) => !followUpsApi.isControlDue(f));
   const upcoming = notOverdue.filter((f) => f.direction !== "to_tell");
@@ -436,14 +492,17 @@ async function openPrepModal(person, own, { onDone } = {}) {
   const recentlyDone = [...own.filter((f) => f.status === "done")]
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .slice(0, 5);
-  // `upcoming` est déjà trié par date de contrôle croissante (cf. `active` ci-dessus) : le
+  // `upcoming` est déjà trié par date la plus proche croissante (cf. `active` ci-dessus) : le
   // regroupement par projet hérite donc de cet ordre à l'intérieur de chaque groupe, et les
   // groupes eux-mêmes s'enchaînent dans l'ordre d'apparition de leur premier sujet — donc du
   // plus urgent au moins urgent, y compris pour les sujets sans projet.
   const upcomingGroups = groupByProject(upcoming, projects);
 
+  const remaining = [...overdue, ...toTell, ...upcoming].filter((f) => !coveredIds.has(f.id)).length;
+
   const body = document.createElement("div");
   body.innerHTML = `
+    <div class="item-meta" style="margin-bottom:12px;">☑️ ${remaining === 0 ? "Tous les sujets ont été vus." : `${remaining} sujet(s) restant(s) à passer.`}</div>
     <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
     <div class="card" id="prep-overdue" style="margin-bottom:16px;"></div>
     <div class="section-title">📣 À transmettre (${toTell.length})</div>
@@ -455,12 +514,13 @@ async function openPrepModal(person, own, { onDone } = {}) {
   `;
 
   const openFromPrep = (f) => {
+    coveredIds.add(f.id);
     closeModal();
-    openEditFollowUpModal(f, { onDone: () => openPrepModal(person, own, { onDone }) });
+    openEditFollowUpModal(f, { onDone: () => openPrepModal(person, { onDone, coveredIds }) });
   };
-  renderFollowUpList(body.querySelector("#prep-overdue"), overdue, { onOpen: openFromPrep });
-  renderFollowUpList(body.querySelector("#prep-to-tell"), toTell, { onOpen: openFromPrep });
-  renderGroupedFollowUpList(body.querySelector("#prep-upcoming"), upcomingGroups, { onOpen: openFromPrep });
+  renderFollowUpList(body.querySelector("#prep-overdue"), overdue, { onOpen: openFromPrep, coveredIds });
+  renderFollowUpList(body.querySelector("#prep-to-tell"), toTell, { onOpen: openFromPrep, coveredIds });
+  renderGroupedFollowUpList(body.querySelector("#prep-upcoming"), upcomingGroups, { onOpen: openFromPrep, coveredIds });
   renderFollowUpList(body.querySelector("#prep-done"), recentlyDone, { onOpen: openFromPrep });
 
   openModal({
@@ -490,11 +550,19 @@ function groupByProject(items, projects) {
   return groups;
 }
 
-function appendFollowUpRows(container, followUps, onOpen) {
+/**
+ * `coveredIds` (optionnel — uniquement fourni par `openPrepModal`, vague 21) : quand présent,
+ * chaque ligne gagne une case "vu" indépendante du statut du Suivi lui-même (cocher ne modifie
+ * rien côté données, seulement l'affichage de cette session de préparation — voir commentaire
+ * sur `openPrepModal`). `onCoveredChange` permet au regroupement par projet de rafraîchir le
+ * compteur "x/y vus" de son étiquette après une case cochée sans tout redessiner.
+ */
+function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredChange) {
   for (const f of followUps) {
     const isToTell = f.direction === "to_tell";
+    const isCovered = !!coveredIds?.has(f.id);
     const row = document.createElement("div");
-    row.className = "item-row";
+    row.className = "item-row" + (isCovered ? " item-row-covered" : "");
     row.style.cursor = "pointer";
     const meta = isToTell
       ? f.controlDate
@@ -505,28 +573,42 @@ function appendFollowUpRows(container, followUps, onOpen) {
         : "Pas d'échéance";
     const notableIcon = f.notable === "positive" ? "👍 " : f.notable === "negative" ? "👎 " : "";
     row.innerHTML = `
+      ${coveredIds ? `<label class="covered-check" title="Marquer comme vu pendant ce point"><input type="checkbox" ${isCovered ? "checked" : ""} aria-label="Vu pendant ce point" /></label>` : ""}
       <div class="item-main">
         <div class="item-title">${notableIcon}${isToTell ? "📣 " : ""}${escapeHtml(f.title)}${f.category ? ` <span class="item-meta">· ${followUpsApi.CATEGORY_LABELS[f.category]}</span>` : ""}</div>
         <div class="item-meta">${meta} · Ajouté le ${formatDate(f.createdAt)}</div>
       </div>
       <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
     `;
+    if (coveredIds) {
+      const checkWrap = row.querySelector(".covered-check");
+      // Empêche la case de déclencher aussi l'ouverture de la fiche (clic qui bulle vers `row`).
+      checkWrap.addEventListener("click", (e) => e.stopPropagation());
+      checkWrap.querySelector("input").addEventListener("change", (e) => {
+        if (e.target.checked) coveredIds.add(f.id);
+        else coveredIds.delete(f.id);
+        row.classList.toggle("item-row-covered", e.target.checked);
+        onCoveredChange?.();
+      });
+    }
     row.addEventListener("click", () => (onOpen ? onOpen(f) : openEditFollowUpModal(f)));
     container.appendChild(row);
   }
 }
 
-function renderFollowUpList(container, followUps, { onOpen } = {}) {
+function renderFollowUpList(container, followUps, { onOpen, coveredIds } = {}) {
   if (!followUps.length) {
     container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
     return;
   }
-  appendFollowUpRows(container, followUps, onOpen);
+  appendFollowUpRows(container, followUps, onOpen, coveredIds);
 }
 
 /** Variante groupée de `renderFollowUpList` : un sous-titre par groupe (ex. nom de projet),
- *  puis ses suivis dans l'ordre déjà trié — voir `groupByProject`. */
-function renderGroupedFollowUpList(container, groups, { onOpen } = {}) {
+ *  puis ses suivis dans l'ordre déjà trié — voir `groupByProject`. Le compteur "x/y vus" sur
+ *  l'étiquette (retour de Charles-Henri, vague 21) ne s'affiche que dans le contexte de
+ *  préparation d'un point (`coveredIds` fourni). */
+function renderGroupedFollowUpList(container, groups, { onOpen, coveredIds } = {}) {
   if (!groups.some((g) => g.items.length)) {
     container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
     return;
@@ -538,9 +620,17 @@ function renderGroupedFollowUpList(container, groups, { onOpen } = {}) {
     groupEl.className = "prep-group";
     const label = document.createElement("div");
     label.className = "prep-group-label";
-    label.textContent = group.label;
     groupEl.appendChild(label);
-    appendFollowUpRows(groupEl, group.items, onOpen);
+    const updateLabel = () => {
+      if (!coveredIds) {
+        label.textContent = group.label;
+        return;
+      }
+      const covered = group.items.filter((i) => coveredIds.has(i.id)).length;
+      label.textContent = `${group.label} — ${covered}/${group.items.length} vu(s)`;
+    };
+    updateLabel();
+    appendFollowUpRows(groupEl, group.items, onOpen, coveredIds, updateLabel);
     container.appendChild(groupEl);
   }
 }
@@ -867,8 +957,17 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
       <label for="fu-project">Projet (optionnel)</label>
       <select id="fu-project">
         <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}" ${p.id === projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
+      <button type="button" id="fu-new-project-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">+ Nouveau projet</button>
+      <div id="fu-new-project-row" style="display:none;gap:8px;margin-top:6px;">
+        <input id="fu-new-project-name" type="text" placeholder="Nom du nouveau projet" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <button type="button" id="fu-new-project-confirm" class="btn btn-secondary btn-sm">Créer</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fu-description">Description (optionnel)</label>
+      <textarea id="fu-description" placeholder="Contexte libre, pas encore d'échéance à retenir ici"></textarea>
     </div>
     <div class="field">
       <label>Élément notable ? (préparation EADP, optionnel)</label>
@@ -879,6 +978,32 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
       </div>
     </div>
   `;
+
+  // "Créer un projet à la volée" (retour de Charles-Henri, vague 21 : "dans la fiche nouveau
+  // suivi, je dois pouvoir créer un nouveau projet à la volée") — une simple rangée qui
+  // s'ouvre/se ferme dans le formulaire plutôt qu'une modale imbriquée, pour ne jamais perdre
+  // ce qui a déjà été saisi (titre, dates...) le temps de nommer le projet.
+  body.querySelector("#fu-new-project-btn").addEventListener("click", () => {
+    const row = body.querySelector("#fu-new-project-row");
+    row.style.display = row.style.display === "none" ? "flex" : "none";
+    if (row.style.display === "flex") body.querySelector("#fu-new-project-name").focus();
+  });
+  body.querySelector("#fu-new-project-confirm").addEventListener("click", async () => {
+    const name = body.querySelector("#fu-new-project-name").value.trim();
+    if (!name) return;
+    const project = await projectsApi.createProject({ name });
+    const select = body.querySelector("#fu-project");
+    const option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.name;
+    const options = [...select.options].filter((o) => o.value);
+    const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
+    select.insertBefore(option, insertBefore || null);
+    select.value = project.id;
+    body.querySelector("#fu-new-project-name").value = "";
+    body.querySelector("#fu-new-project-row").style.display = "none";
+    showToast("Projet créé");
+  });
 
   showHintOnce(
     body,
@@ -921,6 +1046,7 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
             direction,
             category: direction === "to_tell" ? bodyEl.querySelector("#fu-category").value || null : null,
             notable: bodyEl.querySelector('input[name="fu-notable"]:checked')?.value || null,
+            description: bodyEl.querySelector("#fu-description").value.trim(),
             dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-due").value || null,
             controlDate: bodyEl.querySelector("#fu-control").value || null,
             projectId: bodyEl.querySelector("#fu-project").value || null,
@@ -991,8 +1117,13 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       <label for="fu-edit-project">Projet</label>
       <select id="fu-edit-project">
         <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}" ${p.id === followUp.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === followUp.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
+      <button type="button" id="fu-edit-new-project-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">+ Nouveau projet</button>
+      <div id="fu-edit-new-project-row" style="display:none;gap:8px;margin-top:6px;">
+        <input id="fu-edit-new-project-name" type="text" placeholder="Nom du nouveau projet" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <button type="button" id="fu-edit-new-project-confirm" class="btn btn-secondary btn-sm">Créer</button>
+      </div>
     </div>
     <div class="field">
       <label>Élément notable ? (préparation EADP, optionnel)</label>
@@ -1002,6 +1133,12 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="negative" ${followUp.notable === "negative" ? "checked" : ""} /> 👎 Négatif</label>
       </div>
     </div>
+    <div class="field">
+      <label for="fu-edit-description">Description</label>
+      <textarea id="fu-edit-description" placeholder="Contexte libre">${escapeHtml(followUp.description || "")}</textarea>
+    </div>
+    <div class="section-title" id="fu-edit-checklist-title">☑️ Sous-étapes (${(followUp.checklist || []).filter((c) => c.done).length}/${(followUp.checklist || []).length})</div>
+    <div id="fu-edit-checklist" style="margin-bottom:16px;"></div>
     <div class="section-title">🗓️ Réunion</div>
     <div class="field" style="margin-bottom:8px;">
       <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
@@ -1019,6 +1156,54 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
+
+  body.querySelector("#fu-edit-new-project-btn").addEventListener("click", () => {
+    const row = body.querySelector("#fu-edit-new-project-row");
+    row.style.display = row.style.display === "none" ? "flex" : "none";
+    if (row.style.display === "flex") body.querySelector("#fu-edit-new-project-name").focus();
+  });
+  body.querySelector("#fu-edit-new-project-confirm").addEventListener("click", async () => {
+    const name = body.querySelector("#fu-edit-new-project-name").value.trim();
+    if (!name) return;
+    const project = await projectsApi.createProject({ name });
+    const select = body.querySelector("#fu-edit-project");
+    const option = document.createElement("option");
+    option.value = project.id;
+    option.textContent = project.name;
+    const options = [...select.options].filter((o) => o.value);
+    const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
+    select.insertBefore(option, insertBefore || null);
+    select.value = project.id;
+    body.querySelector("#fu-edit-new-project-name").value = "";
+    body.querySelector("#fu-edit-new-project-row").style.display = "none";
+    showToast("Projet créé");
+  });
+
+  const checklistTitleEl = body.querySelector("#fu-edit-checklist-title");
+  function updateChecklistTitle() {
+    const list = followUp.checklist || [];
+    checklistTitleEl.textContent = `☑️ Sous-étapes (${list.filter((c) => c.done).length}/${list.length})`;
+  }
+  renderChecklist(body.querySelector("#fu-edit-checklist"), followUp.checklist || [], {
+    onAdd: async (text) => {
+      const updated = await followUpsApi.addChecklistItem(followUp.id, text);
+      followUp.checklist = updated;
+      updateChecklistTitle();
+      return updated;
+    },
+    onToggle: async (itemId, done) => {
+      const updated = await followUpsApi.toggleChecklistItem(followUp.id, itemId, done);
+      followUp.checklist = updated;
+      updateChecklistTitle();
+      return updated;
+    },
+    onRemove: async (itemId) => {
+      const updated = await followUpsApi.removeChecklistItem(followUp.id, itemId);
+      followUp.checklist = updated;
+      updateChecklistTitle();
+      return updated;
+    },
+  });
 
   renderNotesBlock(body.querySelector("#detail-notes"), followUp.notesLog || [], {
     onAdd: async (text) => {
@@ -1106,6 +1291,7 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
             dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-edit-due").value || null,
             controlDate: bodyEl.querySelector("#fu-edit-control").value || null,
             projectId: bodyEl.querySelector("#fu-edit-project").value || null,
+            description: bodyEl.querySelector("#fu-edit-description").value.trim(),
           });
           close();
           showToast("Suivi mis à jour");

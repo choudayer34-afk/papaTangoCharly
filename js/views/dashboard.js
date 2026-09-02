@@ -68,6 +68,7 @@ export function renderDashboard(container) {
         <button id="recipes-btn" class="btn btn-secondary btn-sm">🧩 Recettes</button>
         <a href="#/memory" class="btn btn-secondary btn-sm" style="text-decoration:none;">🧠 Pause mémoire</a>
         <button id="weekly-review-btn" class="btn btn-secondary btn-sm">🧭 Revue hebdo</button>
+        <button id="my-objectives-btn" class="btn btn-secondary btn-sm">🎯 Mes objectifs</button>
         <button id="dashboard-settings-btn" class="btn btn-secondary btn-sm" aria-label="Personnaliser l'accueil">⚙️</button>
       </div>
     </div>
@@ -91,6 +92,7 @@ export function renderDashboard(container) {
 
   container.querySelector("#recipes-btn").addEventListener("click", () => openRecipesModal());
   container.querySelector("#weekly-review-btn").addEventListener("click", () => openWeeklyReview());
+  container.querySelector("#my-objectives-btn").addEventListener("click", () => openMyObjectivesModal());
   container.querySelector("#dashboard-settings-btn").addEventListener("click", () => openDashboardSettingsModal());
   showHintOnce(
     container.querySelector(".view"),
@@ -489,6 +491,39 @@ export function renderDashboard(container) {
             renderRecentlyViewedSection();
             renderRecentSection();
             showToast("Accueil mis à jour");
+          },
+        },
+      ],
+    });
+  }
+
+  /** "🎯 Mes objectifs" (retour de Charles-Henri, vague 21 : "j'aimerai aussi me noter mes
+   *  objectifs qq part que ça soit ma ligne directrice") — un texte libre unique, relu et
+   *  réécrit à chaque ouverture, volontairement sans historique ni sous-structure : ce n'est
+   *  pas un suivi daté comme les objectifs par Personne (js/domain/objectives.js), juste une
+   *  ligne directrice qu'on retrouve toujours au même endroit. */
+  async function openMyObjectivesModal() {
+    const prefs = await preferencesApi.getPreferences();
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <p style="margin-top:0;color:var(--color-text-muted);">Ta ligne directrice — ce que tu veux garder en tête, à relire quand tu perds le fil.</p>
+      <div class="field" style="margin-bottom:0;">
+        <textarea id="my-objectives-text" placeholder="Ex. Faire monter l'équipe en autonomie, sécuriser la refonte X avant fin d'année...">${escapeHtml(prefs.myObjectives || "")}</textarea>
+      </div>
+    `;
+    const { bodyEl, close } = openModal({
+      title: "🎯 Mes objectifs",
+      body,
+      actions: [
+        { label: "Annuler", variant: "ghost" },
+        {
+          label: "Enregistrer",
+          variant: "primary",
+          closesModal: false,
+          onClick: async () => {
+            await preferencesApi.setMyObjectives(bodyEl.querySelector("#my-objectives-text").value.trim());
+            close();
+            showToast("Objectifs enregistrés");
           },
         },
       ],
