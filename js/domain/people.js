@@ -13,9 +13,23 @@ export async function createPerson(data) {
     type: data.type || "collaborateur", // collaborateur | manager
     notes: data.notes || "",
     notesLog: [], // journal de notes horodaté, voir addNote() plus bas — distinct de `notes` (contexte libre non daté)
+    order: data.order ?? Date.now(), // position manuelle (glisser-déposer, onglet Équipe) — voir sortPeople()/reorderPeople() plus bas
   });
   await storage.logHistory("Person", person.id, "created", { name: person.name });
   return person;
+}
+
+/** Ordre d'affichage de l'onglet Équipe (retour de Charles-Henri, vague 20 : "je veux aussi
+ *  pouvoir réordonner les personnes au sein de mon équipe") — même principe que
+ *  `Project.order`/`sortProjects()`/`reorderProjects()` dans js/domain/projects.js : `order`
+ *  vaut `createdAt` par défaut (donc déjà trié par ordre d'ajout tant que personne n'a
+ *  glissé-déposé), réécrit en bloc à chaque réordonnancement. */
+export function sortPeople(list) {
+  return [...list].sort((a, b) => (a.order ?? a.createdAt ?? 0) - (b.order ?? b.createdAt ?? 0));
+}
+
+export async function reorderPeople(orderedIds) {
+  await Promise.all(orderedIds.map((id, index) => updatePerson(id, { order: index })));
 }
 
 /** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans

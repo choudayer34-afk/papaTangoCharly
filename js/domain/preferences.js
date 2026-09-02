@@ -43,6 +43,15 @@
 //    fois tranché.
 //  - `lastNotifShownDate` : évite de répéter l'alerte plusieurs fois le même jour à chaque
 //    ouverture de l'app (YYYY-MM-DD, même principe que `focusOverride.date`).
+//
+// Raccourcis clavier personnalisés (retour de Charles-Henri, vague 20 : "je veux pouvoir
+// affecter un raccourci moi-même... pour aller directement sur une personne ou un projet") :
+//  - `customShortcuts` : `{ "ctrl+alt+<touche>": { type: "Person"|"Project", id, label } }`.
+//    Cet espace de combinaisons (toujours Ctrl+Alt+une lettre ou un chiffre) n'entre jamais en
+//    collision avec les raccourcis fixes de l'app (voir js/services/shortcuts.js#
+//    BUILTIN_SHORTCUTS, aucun n'utilise Ctrl+Alt ensemble) ni avec ceux du navigateur.
+//    Synchronisé comme le reste des préférences : un raccourci assigné suit Charles-Henri
+//    d'un appareil à l'autre (au prochain chargement de l'app sur cet autre appareil).
 
 import * as storage from "../services/storage.js";
 
@@ -70,6 +79,7 @@ export async function getPreferences() {
     recentlyViewed: [],
     notifOptIn: null,
     lastNotifShownDate: null,
+    customShortcuts: {},
     ...current,
   };
 }
@@ -179,4 +189,34 @@ export async function setNotifOptIn(value) {
 export async function markNotifShown(dateKey) {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, lastNotifShownDate: dateKey });
+}
+
+/**
+ * Assigne un raccourci Ctrl+Alt+<touche> à une Personne ou un Projet (retour de Charles-Henri,
+ * vague 20). Une même fiche ne garde jamais deux raccourcis à la fois : réassigner une fiche
+ * déjà raccourcie retire d'abord son ancienne combinaison plutôt que d'en accumuler deux —
+ * cohérent avec "un raccourci, une destination" tel qu'on le connaît dans d'autres apps.
+ */
+export async function setCustomShortcut(combo, target) {
+  const current = await getPreferences();
+  const customShortcuts = { ...current.customShortcuts };
+  for (const [key, value] of Object.entries(customShortcuts)) {
+    if (value.type === target.type && value.id === target.id) delete customShortcuts[key];
+  }
+  customShortcuts[combo] = target;
+  return storage.put(COLLECTION, { ...current, customShortcuts });
+}
+
+/** Retire un raccourci personnalisé (bouton "Retirer" sur la fiche qui le porte). */
+export async function removeCustomShortcut(combo) {
+  const current = await getPreferences();
+  const customShortcuts = { ...current.customShortcuts };
+  delete customShortcuts[combo];
+  return storage.put(COLLECTION, { ...current, customShortcuts });
+}
+
+/** Retrouve le raccourci déjà assigné à une fiche donnée (pour l'afficher dessus), ou `null`. */
+export function findShortcutForTarget(customShortcuts, type, id) {
+  const entry = Object.entries(customShortcuts || {}).find(([, v]) => v.type === type && v.id === id);
+  return entry ? entry[0] : null;
 }
