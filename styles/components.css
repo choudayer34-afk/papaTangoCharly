@@ -356,6 +356,11 @@ a { color: inherit; }
   color: var(--color-text-muted);
 }
 .kanban-column.drag-over { outline: 2px dashed var(--color-primary); outline-offset: -2px; }
+/* Réutilisée par le glisser-déposer des cartes Projet (onglet Projets, tri manuel) et des
+   lignes Équipe (vague 20, retour de Charles-Henri : "je veux aussi pouvoir réordonner les
+   personnes au sein de mon équipe") — même langage visuel que les colonnes Kanban ci-dessus. */
+.card.drag-over,
+.item-row.drag-over { outline: 2px dashed var(--color-primary); outline-offset: -2px; }
 .kanban-card {
   background: var(--color-surface);
   border-radius: var(--radius-sm);
