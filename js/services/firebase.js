@@ -57,6 +57,14 @@ export async function signOutUser() {
   return signOut(auth);
 }
 
+// Email de Charles-Henri lui-même — source unique partagée avec js/components/adminPanel.js
+// (bouton 🔧 Administration) et js/views/login.js (message "Accès restreint" plus précis pour
+// lui que pour les autres, voir plus bas). Ne joue AUCUN rôle dans isEmailAllowed() ci-dessous :
+// son propre accès reste soumis exactement à la même liste blanche `allowedUsers` que tout le
+// monde, sans court-circuit caché — cohérent avec les règles de sécurité Firestore qu'il doit
+// appliquer lui-même, qui elles non plus ne prévoient aucune exception pour son propre email.
+export const ADMIN_EMAIL = "ch-houdayer@hotmail.fr";
+
 // Liste blanche (retour de Charles-Henri : "quelques personnes précises que je choisis") —
 // il ne veut pas ouvrir l'appli en libre inscription, seulement à des personnes qu'il désigne
 // lui-même. Collection Firestore top-niveau `allowedUsers`, volontairement HORS du scope
