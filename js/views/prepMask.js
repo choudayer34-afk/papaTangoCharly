@@ -1,15 +1,20 @@
-// Fenêtre de masquage privée, ouverte AVANT "🗒️ Préparer mon point" (retour de Charles-Henri,
-// vague 22 sexies) : "il faut qu'avant je puisse cocher ce que je ne veux pas remonter dans cet
-// écran en mode privé et que cette modale soit déportée et déplaçable seule sur un autre
-// écran." — voir js/views/people.js#openPrepMaskThenPrep pour le déclenchement (window.open)
-// et le raisonnement complet sur pourquoi ceci doit être une vraie fenêtre de navigateur plutôt
-// qu'une modale du composant habituel (js/components/modal.js) : seule une vraie fenêtre peut
-// être glissée par l'OS sur un second écran, indépendamment de la fenêtre principale — celle
-// que Charles-Henri partage en visio pendant le point.
+// Masquage privé, AVANT "🗒️ Préparer mon point" (retour de Charles-Henri, vague 22 sexies) :
+// "il faut qu'avant je puisse cocher ce que je ne veux pas remonter dans cet écran en mode
+// privé et que cette modale soit déportée et déplaçable seule sur un autre écran." — voir
+// js/views/people.js#openPrepMaskThenPrep pour le déclenchement et le raisonnement complet.
 //
-// Rendue par js/app.js sur la route dédiée `#/prep-mask?person=<id>`, en dehors du montage
-// habituel de la navigation/des FAB (mountApp) : un outil ponctuel et concentré, pas un second
-// onglet de travail complet.
+// Deux façons d'afficher EXACTEMENT la même checklist (`renderMaskChecklist` ci-dessous, seule
+// fonction qui connaît le détail du rendu) :
+// - `renderPrepMask` : une vraie fenêtre de navigateur à part (route dédiée `#/prep-mask`,
+//   ouverte via window.open par people.js) — le cas normal sur un ordinateur, seul contexte où
+//   "déportée et déplaçable sur un autre écran" a un sens (plusieurs écrans physiques).
+// - Un appel direct à `renderMaskChecklist` dans une modale in-app classique (voir
+//   js/views/people.js#openPrepMaskThenPrep) — repli utilisé quand une vraie fenêtre séparée
+//   n'a structurellement aucun sens : un iPhone/iPad en PWA installée sur l'écran d'accueil n'a
+//   qu'un seul écran, et `window.open()` y est bloqué ou navigue hors de l'app installée plutôt
+//   que d'ouvrir une fenêtre indépendante (limitation connue d'iOS Safari en mode standalone,
+//   pas quelque chose que ce code puisse contourner). Le masquage reste ainsi disponible
+//   partout ; seule la présentation "fenêtre à part" est spécifique au poste de travail.
 //
 // Le masquage est PERSISTANT par Suivi (`hiddenFromPrep`, retour explicite de Charles-Henri :
 // "mémorisé pour cette personne" plutôt que remis à zéro à chaque préparation) — un sujet
@@ -27,6 +32,51 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+/**
+ * Construit la checklist de masquage dans `container` (un simple `<div>`, que l'appelant place
+ * où il veut : plein écran d'une fenêtre séparée, ou corps d'une modale in-app). `onClose(hasHidden)`
+ * est appelé une seule fois quand la personne clique sur le bouton d'action final ; `hasHidden`
+ * (nombre de sujets actuellement masqués) permet à l'appelant d'adapter son propre message.
+ */
+export async function renderMaskChecklist(container, person, { closeLabel = "✅ Terminé", onClose } = {}) {
+  async function refresh() {
+    const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
+    const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects, {
+      includeHidden: true,
+    });
+    const hiddenCount = [...overdue, ...toTell, ...upcoming, ...recentlyDone].filter((f) => f.hiddenFromPrep).length;
+
+    container.innerHTML = `
+      <p class="item-meta" style="margin-bottom:8px;">
+        Coche ce que tu veux garder privé — ça n'apparaîtra pas dans le point avec
+        <strong>${escapeHtml(person.name)}</strong>. Une fois décoché, un sujet reste masqué
+        la prochaine fois aussi, jusqu'à ce que tu le redécoches ici.
+      </p>
+      <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
+      <div class="card" id="mask-overdue" style="margin-bottom:16px;"></div>
+      <div class="section-title">📣 À transmettre (${toTell.length})</div>
+      <div class="card" id="mask-to-tell" style="margin-bottom:16px;"></div>
+      <div class="section-title">🎯 À aborder (${upcoming.length})</div>
+      <div class="card" id="mask-upcoming" style="margin-bottom:16px;"></div>
+      <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
+      <div class="card" id="mask-done" style="margin-bottom:20px;"></div>
+      <button type="button" id="mask-close-btn" class="btn btn-primary btn-block">${closeLabel}</button>
+    `;
+
+    renderMaskList(container.querySelector("#mask-overdue"), overdue, refresh);
+    renderMaskList(container.querySelector("#mask-to-tell"), toTell, refresh);
+    renderMaskGroupedList(container.querySelector("#mask-upcoming"), upcomingGroups, refresh);
+    renderMaskList(container.querySelector("#mask-done"), recentlyDone, refresh);
+
+    container.querySelector("#mask-close-btn").addEventListener("click", () => onClose?.(hiddenCount));
+  }
+
+  await refresh();
+}
+
+// Rendue par js/app.js sur la route dédiée `#/prep-mask?person=<id>`, en dehors du montage
+// habituel de la navigation/des FAB (mountApp) : un outil ponctuel et concentré, pas un second
+// onglet de travail complet.
 export async function renderPrepMask(container) {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   const personId = params.get("person");
@@ -43,47 +93,25 @@ export async function renderPrepMask(container) {
 
   document.title = `Masquer — Point avec ${person.name}`;
 
-  async function refresh() {
-    const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
-    const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects, {
-      includeHidden: true,
-    });
-    const hiddenCount = [...overdue, ...toTell, ...upcoming, ...recentlyDone].filter((f) => f.hiddenFromPrep).length;
+  const wrapper = document.createElement("div");
+  wrapper.className = "view";
+  wrapper.style.cssText = "max-width:520px;margin:0 auto;padding:20px;";
+  wrapper.innerHTML = `
+    <h1 style="margin-top:0;">🙈 Avant de partager</h1>
+    <p class="item-meta" style="margin-bottom:20px;">
+      Cette fenêtre est privée — garde-la sur ton écran, ou déplace-la sur un second si tu en as
+      un. Ferme-la quand tu es prêt : le point s'ouvrira automatiquement dans l'autre fenêtre.
+    </p>
+    <div id="mask-checklist"></div>
+  `;
+  container.innerHTML = "";
+  container.appendChild(wrapper);
 
-    container.innerHTML = `
-      <div class="view" style="max-width:520px;margin:0 auto;padding:20px;">
-        <h1 style="margin-top:0;">🙈 Avant de partager</h1>
-        <p class="item-meta" style="margin-bottom:8px;">
-          Coche ce que tu veux garder privé — ça n'apparaîtra pas dans le point avec
-          <strong>${escapeHtml(person.name)}</strong>. Une fois décoché, un sujet reste masqué
-          la prochaine fois aussi, jusqu'à ce que tu le redécoches ici.
-        </p>
-        <p class="item-meta" style="margin-bottom:20px;">
-          Cette fenêtre est privée — garde-la sur ton écran, ou déplace-la sur un second si tu
-          en as un. Ferme-la quand tu es prêt : le point s'ouvrira automatiquement dans l'autre
-          fenêtre${hiddenCount ? `, avec ${hiddenCount} sujet${hiddenCount > 1 ? "s" : ""} masqué${hiddenCount > 1 ? "s" : ""}` : ""}.
-        </p>
-        <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
-        <div class="card" id="mask-overdue" style="margin-bottom:16px;"></div>
-        <div class="section-title">📣 À transmettre (${toTell.length})</div>
-        <div class="card" id="mask-to-tell" style="margin-bottom:16px;"></div>
-        <div class="section-title">🎯 À aborder (${upcoming.length})</div>
-        <div class="card" id="mask-upcoming" style="margin-bottom:16px;"></div>
-        <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
-        <div class="card" id="mask-done" style="margin-bottom:20px;"></div>
-        <button type="button" id="mask-close-btn" class="btn btn-primary btn-block">✅ Terminé — fermer cette fenêtre</button>
-      </div>
-    `;
+  await renderMaskChecklist(wrapper.querySelector("#mask-checklist"), person, {
+    closeLabel: "✅ Terminé — fermer cette fenêtre",
+    onClose: () => window.close(),
+  });
 
-    renderMaskList(container.querySelector("#mask-overdue"), overdue, refresh);
-    renderMaskList(container.querySelector("#mask-to-tell"), toTell, refresh);
-    renderMaskGroupedList(container.querySelector("#mask-upcoming"), upcomingGroups, refresh);
-    renderMaskList(container.querySelector("#mask-done"), recentlyDone, refresh);
-
-    container.querySelector("#mask-close-btn").addEventListener("click", () => window.close());
-  }
-
-  await refresh();
   return null; // rien à nettoyer — cette fenêtre n'a pas de cycle de vie de route habituel
 }
 

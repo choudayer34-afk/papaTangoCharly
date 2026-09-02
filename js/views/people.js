@@ -18,6 +18,7 @@ import { renderManagerSection } from "./management.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { exportFollowUpOverview } from "../components/overviewExport.js";
+import { renderMaskChecklist } from "./prepMask.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -531,15 +532,31 @@ export function computePrepSections(person, allFollowUps, projects, { includeHid
  * persiste au fil de l'eau (`followUpsApi.updateFollowUp(..., { hiddenFromPrep })`), donc
  * `openPrepModal`, en relisant les données fraîches, applique déjà le bon filtre dès qu'il
  * s'ouvre à son tour.
+ *
+ * BUG corrigé (retour de Charles-Henri, vague 22 octies : "ça marche pas sur iphone en mode
+ * signet sur écran d'accueil") : une PWA iOS lancée depuis l'écran d'accueil (mode "standalone",
+ * `navigator.standalone === true`, propriété exclusive à iOS Safari) n'a structurellement qu'un
+ * seul écran ET qu'une seule fenêtre — WebKit y bloque `window.open()` ou, pire, quitte l'app
+ * installée pour rouvrir l'URL dans Safari, cassant complètement l'expérience "app" au lieu de
+ * simplement échouer proprement. Comme il n'existe de toute façon aucun second écran à viser
+ * dans ce contexte, la fenêtre séparée n'a plus aucun sens : on affiche alors EXACTEMENT la même
+ * checklist de masquage (`renderMaskChecklist`, factorisée avec `js/views/prepMask.js` pour ne
+ * jamais diverger) dans une modale in-app classique — le masquage reste disponible partout,
+ * seule la présentation "fenêtre à part, déplaçable" est spécifique à un poste avec plusieurs
+ * écrans, là où elle a un sens.
  */
 function openPrepMaskThenPrep(person, { onDone } = {}) {
+  if (window.navigator.standalone === true) {
+    openPrepMaskModal(person, { onDone });
+    return;
+  }
   const url = location.pathname + "#/prep-mask?person=" + encodeURIComponent(person.id);
   const win = window.open(url, "prepMask-" + person.id, "width=480,height=760,menubar=no,toolbar=no,location=no,status=no");
   if (!win) {
-    // Popup bloquée par le navigateur : on ne bloque pas Charles-Henri pour autant, le point
-    // s'ouvre directement sans étape de masquage cette fois plutôt que de le laisser sans rien.
-    showToast("Fenêtre de masquage bloquée par le navigateur — autorise les popups pour cette appli");
-    openPrepModal(person, { onDone });
+    // Popup bloquée par le navigateur (ou tout autre contexte où window.open ne renvoie
+    // simplement rien d'utilisable) : on retombe sur la même modale in-app plutôt que de priver
+    // Charles-Henri du masquage — seule la présentation "fenêtre à part" n'est pas possible ici.
+    openPrepMaskModal(person, { onDone });
     return;
   }
   win.focus();
@@ -549,6 +566,24 @@ function openPrepMaskThenPrep(person, { onDone } = {}) {
       openPrepModal(person, { onDone });
     }
   }, 400);
+}
+
+/**
+ * Repli in-app de la fenêtre de masquage (voir commentaire ci-dessus) — même checklist, dans
+ * une modale classique plutôt qu'une fenêtre séparée. `onClose` de `openModal` (déclenché une
+ * seule fois quel que soit le chemin de fermeture — bouton, Échap, clic en dehors, voir
+ * js/components/modal.js) ouvre le point ensuite : fermer cette modale de N'IMPORTE QUELLE
+ * façon a le même effet que fermer la fenêtre séparée sur un poste avec plusieurs écrans.
+ */
+function openPrepMaskModal(person, { onDone } = {}) {
+  const body = document.createElement("div");
+  const { bodyEl, close } = openModal({
+    title: "🙈 Avant de partager",
+    body,
+    actions: [],
+    onClose: () => openPrepModal(person, { onDone }),
+  });
+  renderMaskChecklist(bodyEl, person, { closeLabel: "✅ Voir le point", onClose: () => close() });
 }
 
 async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
