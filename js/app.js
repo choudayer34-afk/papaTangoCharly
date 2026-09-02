@@ -14,6 +14,7 @@ import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
 import { renderLogin, renderRestricted } from "./views/login.js";
+import { renderPrepMask } from "./views/prepMask.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountAdminButton } from "./components/adminPanel.js";
@@ -205,6 +206,15 @@ onAuthChange(async (user) => {
     if (!allowed) {
       pendingRestrictedEmail = user.email;
       await signOutUser();
+      return;
+    }
+    // Fenêtre de masquage privée avant "Préparer mon point" (retour de Charles-Henri, vague 22
+    // sexies, voir js/views/people.js#openPrepMaskThenPrep et js/views/prepMask.js) : une vraie
+    // fenêtre de navigateur à part, ouverte par window.open() sur cette route dédiée, PAS
+    // l'app complète — pas de nav/FAB/aide/recherche/admin à monter pour un outil aussi ponctuel
+    // et concentré, et qu'on veut pouvoir glisser sur un second écran sans trimballer le reste.
+    if (location.hash.startsWith("#/prep-mask")) {
+      renderPrepMask(appRoot);
       return;
     }
     mountApp();
