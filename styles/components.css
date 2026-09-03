@@ -849,6 +849,18 @@ tbody.drag-over-group {
    rangées de chips en permanence, dans un menu replié par défaut — même mécanique <details>
    que js/components/infoTip.js, avec un panneau flottant plutôt qu'une simple expansion
    inline puisqu'il s'agit ici d'une barre d'outils, pas d'une fiche. */
+/* BUG corrigé (retour de Charles-Henri, 03/09/2026 : "l'outil filtrer ouvre qqch qui n'est pas
+   perceptible en dessous") — `#kanban-filters` hérite de `.chip-row` (`overflow-x: auto`), ce
+   qui force le navigateur à calculer `overflow-y: auto` également (une règle CSS ne peut pas
+   laisser un seul axe à `visible` si l'autre ne l'est pas). Le panneau flottant
+   `.filter-popover-panel`, en position absolue à l'intérieur de cette rangée, se retrouvait donc
+   DÉCOUPÉ par la hauteur de la rangée elle-même (~70px) au lieu de flotter par-dessus le reste de
+   l'écran — seuls quelques pixels du haut du panneau restaient visibles, le reste nécessitant un
+   scroll interne invisible pour l'œil. Cette rangée n'a par ailleurs jamais besoin de défilement
+   horizontal (elle ne contient que le bouton "🔧 Filtrer", et passe déjà en `flex-wrap:wrap`) :
+   corrigé en repassant `#kanban-filters` en overflow visible, pour que le panneau flotte
+   normalement au-dessus du reste de la page, comme prévu dès sa conception.*/
+#kanban-filters { overflow: visible; }
 .filter-popover {
   position: relative;
   flex: 0 0 auto;
