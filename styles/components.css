@@ -76,8 +76,35 @@ a { color: inherit; }
 @media (min-width: 560px) {
   .bottom-nav a { flex: 1; }
 }
-.bottom-nav a .icon { font-size: 20px; }
+.bottom-nav a .icon { font-size: 20px; position: relative; }
 .bottom-nav a.active { color: var(--color-primary); font-weight: 600; }
+
+/* Pastille "🔴 3" sur l'onglet Inbox (retour de Charles-Henri, vague 23 : "le nombre
+   d'éléments dedans") — voir js/components/inboxBadge.js. Rouge plutôt que la couleur primaire
+   du reste de la nav : ce compte représente quelque chose qui ATTEND une action (à qualifier),
+   pas une simple info neutre. */
+.nav-badge {
+  position: absolute;
+  top: -4px;
+  right: -9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--color-danger);
+  color: var(--color-text-inverse);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+/* Un `display` fixé par une règle "auteur" (celle ci-dessus) l'emporte TOUJOURS sur la règle
+   par défaut du navigateur pour l'attribut `hidden` (`[hidden]{display:none}`, une simple règle
+   "agent utilisateur"), quelle que soit la spécificité comparée — sans cette ligne, poser
+   `badge.hidden = true` en JS n'aurait donc silencieusement aucun effet visuel. */
+.nav-badge[hidden] { display: none; }
 
 /* ---------- Card ---------- */
 .card {
