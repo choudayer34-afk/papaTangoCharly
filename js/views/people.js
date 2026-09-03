@@ -19,6 +19,7 @@ import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { exportFollowUpOverview } from "../components/overviewExport.js";
 import { renderMaskChecklist } from "./prepMask.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -408,6 +409,13 @@ export async function openPersonDetail(person, allFollowUps) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost" },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        label: "🔗 Copier le lien",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/people", "Person", person.id),
+      },
       {
         label: "🗑️ Supprimer",
         variant: "danger",
@@ -1473,6 +1481,13 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        label: "🔗 Copier le lien",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/people", "FollowUp", followUp.id),
+      },
       {
         // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
         // parmi les 3 propositions de visualisation automatique) — voir

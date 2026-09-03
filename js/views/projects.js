@@ -22,6 +22,7 @@ import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
 import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -686,6 +687,13 @@ export async function openProjectDetail(project, tasks) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost" },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        label: "🔗 Copier le lien",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/projects", "Project", project.id),
+      },
       isArchived
         ? {
             label: "↩️ Rouvrir le projet",

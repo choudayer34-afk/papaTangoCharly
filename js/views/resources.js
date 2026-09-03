@@ -11,6 +11,7 @@ import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 const FILTERS = [
   { key: "recent", label: "Récentes" },
@@ -300,6 +301,15 @@ export async function openResourceDetail(resource, projects, tasks) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost" },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        // Distinct du bouton "🔗 Ouvrir le lien" ci-dessus, qui pointe vers l'URL externe de la
+        // ressource elle-même (site, document...), pas vers sa fiche dans Pilotage.
+        label: "🔗 Copier le lien Pilotage",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/resources", "Resource", resource.id),
+      },
       {
         label: "🗑️ Supprimer",
         variant: "danger",

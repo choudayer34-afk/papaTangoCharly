@@ -28,6 +28,7 @@ import { openQualifyChoice, openKeptItemDetail } from "./inbox.js";
 import { openCaptureModal } from "../components/capture.js";
 import { getDraft, clearDraft } from "../services/draftStore.js";
 import { renderInfoTip } from "../components/infoTip.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -1302,6 +1303,13 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        label: "🔗 Copier le lien",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/dashboard", isMeeting ? "Meeting" : "Decision", data.id),
+      },
       {
         label: "🗑️ Supprimer",
         variant: "danger",

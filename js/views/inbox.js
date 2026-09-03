@@ -15,6 +15,7 @@ import { openCreateTaskModal } from "./kanban.js";
 import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
@@ -364,6 +365,13 @@ export function openKeptItemDetail(item, { onClose } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        label: "🔗 Copier le lien",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/inbox", "Kept", item.id),
+      },
       {
         label: "🗄️ Archiver",
         variant: "secondary",

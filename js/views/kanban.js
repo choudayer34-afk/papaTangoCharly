@@ -28,6 +28,7 @@ import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { exportTaskOverview } from "../components/overviewExport.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -1128,6 +1129,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23 : "un lien que je peux copier et
+        // mettre dans une conversation Teams") — voir js/components/copyLink.js.
+        label: "🔗 Copier le lien",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => copyEntityLink("#/kanban", "Task", task.id),
+      },
       {
         // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
         // parmi les 3 propositions de visualisation automatique) : une image PNG ponctuelle
