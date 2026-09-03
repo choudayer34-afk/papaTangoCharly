@@ -18,6 +18,7 @@ import { renderPrepMask } from "./views/prepMask.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountAdminButton } from "./components/adminPanel.js";
+import { mountInboxBadge, unmountInboxBadge } from "./components/inboxBadge.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
@@ -130,6 +131,9 @@ function mountApp() {
   // décide s'il doit apparaître ou non (voir mountAdminButton) : seul son propre compte
   // ch-houdayer@hotmail.fr le voit, jamais les autres personnes autorisées à utiliser Pilotage.
   mountAdminButton();
+  // Pastille "🔴 3" sur l'onglet Inbox (retour de Charles-Henri, vague 23) — voir
+  // js/components/inboxBadge.js. Après mountNav() : cherche le lien déjà créé dans `nav`.
+  mountInboxBadge(nav);
   mountPomodoroWidget();
   // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
   // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
@@ -188,6 +192,7 @@ function unmountApp() {
   document.querySelector(".help-fab")?.remove();
   document.querySelector(".search-fab")?.remove();
   document.querySelector(".admin-fab")?.remove();
+  unmountInboxBadge();
   unmountPomodoroWidget();
   teardownGlobalShortcuts();
   window.removeEventListener("hashchange", renderRoute);
