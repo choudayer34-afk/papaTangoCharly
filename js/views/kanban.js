@@ -29,6 +29,7 @@ import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "..
 import { renderInfoTip } from "../components/infoTip.js";
 import { exportTaskOverview } from "../components/overviewExport.js";
 import { copyEntityLink } from "../components/copyLink.js";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -54,6 +55,7 @@ export function renderKanban(container) {
       </div>
     </div>
     <div class="view">
+      <div id="pilotage-subnav"></div>
       <div class="chip-row" id="kanban-filters" style="flex-wrap:wrap;">
         <details class="filter-popover" id="kanban-filter-popover">
           <summary class="chip">🔧 Filtrer<span class="filter-popover-badge" id="kanban-filter-badge" hidden></span></summary>
@@ -89,6 +91,7 @@ export function renderKanban(container) {
     </div>
   `;
 
+  renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/kanban");
   showHintOnce(
     container.querySelector(".view"),
     "kanban-intro-v1",
@@ -931,23 +934,21 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     itemTitle: task.title,
   });
 
+  // Fiche à onglets (vague 24, retour de Charles-Henri : "je trouve que dans les fiches c'est
+  // un peu fourre-tout", précisé ensuite élément par élément — voir
+  // claude/vague-24-declins-fiches-navigation.md, section 7, pour la table complète). En-tête
+  // toujours visible (Titre/Statut/Échéance), puis 3 onglets : Détails (Description/Critère de
+  // clôture/Projet/Bloqué/Canevas), Sous-étapes (la checklist) et Activité (Réunion, Ressources,
+  // Outlook, Notes, Historique, Lié — Charles-Henri a choisi d'y regrouper aussi Réunion et
+  // Lié, qui perdent donc leur statut "toujours déplié" qu'ils avaient depuis l'audit du
+  // 02/09/2026). AUCUN champ, bouton ou id n'a été retiré ni renommé par rapport à la version
+  // précédente — seul l'emplacement visuel change, pour que tout le câblage plus bas
+  // (querySelector par id) continue de fonctionner à l'identique.
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
       <label for="detail-title">Titre</label>
       <input id="detail-title" type="text" value="${escapeAttr(task.title)}" />
-    </div>
-    <div class="field">
-      <label for="detail-description">Description</label>
-      <textarea id="detail-description" placeholder="Le détail — ce que le titre seul ne suffit pas à dire">${escapeHtml(task.description || "")}</textarea>
-    </div>
-    <div class="field">
-      <label for="detail-criteria">Critère de clôture</label>
-      <textarea id="detail-criteria" placeholder="Comment saurai-je que c'est réellement terminé ?">${escapeHtml(task.successCriteria || "")}</textarea>
-    </div>
-    <div class="field">
-      <label for="detail-due">Échéance</label>
-      <input id="detail-due" type="date" value="${task.dueDate || ""}" />
     </div>
     <div class="field">
       <label for="detail-status">Statut</label>
@@ -956,62 +957,105 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       </select>
     </div>
     <div class="field">
-      <label for="detail-project">Projet</label>
-      <select id="detail-project">
-        <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
-      </select>
+      <label for="detail-due">Échéance</label>
+      <input id="detail-due" type="date" value="${task.dueDate || ""}" />
     </div>
-    <div class="field" style="display:flex;align-items:center;gap:8px;">
-      <input id="detail-blocked" type="checkbox" style="width:auto;" ${task.isBlocked ? "checked" : ""} />
-      <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
+
+    <div class="chip-row fiche-tabs" role="tablist">
+      <button type="button" class="chip active" data-tab="details" role="tab">Détails</button>
+      <button type="button" class="chip" data-tab="steps" role="tab">Sous-étapes</button>
+      <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
     </div>
-    <div id="detail-canevas"></div>
-    <div class="section-title" id="checklist-title">☑️ Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</div>
-    <div id="detail-checklist" style="margin-bottom:16px;"></div>
-    <div class="section-title">🗓️ Réunion</div>
-    <div class="field" style="margin-bottom:8px;">
-      <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-      <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
-      <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
-    </div>
-    <!-- Ressources / Réunions Outlook / Notes : blocs secondaires repliés par défaut (audit de
-         simplification du 02/09/2026 — "trop de blocs ouverts en permanence sur une fiche déjà
-         longue") ; le compte dans le résumé garde l'information visible sans avoir à déplier. -->
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
-      <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
-        <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+
+    <div class="fiche-tabpanel" data-tabpanel="details">
+      <div class="field">
+        <label for="detail-description">Description</label>
+        <textarea id="detail-description" placeholder="Le détail — ce que le titre seul ne suffit pas à dire">${escapeHtml(task.description || "")}</textarea>
       </div>
-    </details>
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">📅 Réunions Outlook associées (${(task.outlookMeetings || []).length})</summary>
-      <div class="card" id="detail-outlook" style="margin-top:8px;margin-bottom:8px;"></div>
+      <div class="field">
+        <label for="detail-criteria">Critère de clôture</label>
+        <textarea id="detail-criteria" placeholder="Comment saurai-je que c'est réellement terminé ?">${escapeHtml(task.successCriteria || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="detail-project">Projet</label>
+        <select id="detail-project">
+          <option value="">— Aucun —</option>
+          ${projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field" style="display:flex;align-items:center;gap:8px;">
+        <input id="detail-blocked" type="checkbox" style="width:auto;" ${task.isBlocked ? "checked" : ""} />
+        <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
+      </div>
+      <div id="detail-canevas"></div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="steps" hidden>
+      <div class="section-title" id="checklist-title" style="margin-top:0;">☑️ Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</div>
+      <div id="detail-checklist" style="margin-bottom:16px;"></div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="activity" hidden>
+      <div class="section-title" style="margin-top:0;">🗓️ Réunion</div>
+      <div class="field" style="margin-bottom:8px;">
+        <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
+      </div>
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
+        <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
+        <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
       </div>
-    </details>
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(task.notesLog || []).length})</summary>
-      <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
-    </details>
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">🕒 Historique (${taskHistory.length})</summary>
-      <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
-    </details>
-    <div class="section-title">🔗 Lié</div>
-    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
-      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+      <!-- Ressources / Réunions Outlook / Notes : blocs secondaires repliés par défaut (audit de
+           simplification du 02/09/2026 — "trop de blocs ouverts en permanence sur une fiche déjà
+           longue") ; le compte dans le résumé garde l'information visible sans avoir à déplier. -->
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
+        <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
+          <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+        </div>
+      </details>
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">📅 Réunions Outlook associées (${(task.outlookMeetings || []).length})</summary>
+        <div class="card" id="detail-outlook" style="margin-top:8px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+          <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+          <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
+        </div>
+      </details>
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(task.notesLog || []).length})</summary>
+        <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">🕒 Historique (${taskHistory.length})</summary>
+        <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+      <div class="section-title">🔗 Lié</div>
+      <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+        <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+      </div>
     </div>
   `;
+
+  // Bascule d'onglet : ni framework ni removal du DOM — chaque panneau existe en permanence,
+  // seul l'attribut `hidden` change (voir styles/components.css : `.fiche-tabpanel` ne pose
+  // volontairement AUCUN `display` à elle seule, pour ne jamais rejouer le bug déjà rencontré
+  // vague 23 où une règle CSS d'origine auteur l'emportait sur `[hidden]` — voir
+  // claude/vague-23-lien-partage-pastille-inbox.md). Tout le câblage ci-dessous (checklist,
+  // ressources, notes...) continue de cibler ses ids normalement, qu'un panneau soit affiché ou
+  // non, puisque le DOM n'est jamais retiré.
+  body.querySelectorAll(".fiche-tabs .chip").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      body.querySelectorAll(".fiche-tabs .chip").forEach((b) => b.classList.toggle("active", b === tabBtn));
+      body.querySelectorAll(".fiche-tabpanel").forEach((panel) => {
+        panel.hidden = panel.dataset.tabpanel !== tabBtn.dataset.tab;
+      });
+    });
+  });
 
   renderCanevas(body.querySelector("#detail-canevas"), task.steps, async (stepKey, done) => {
     await tasksApi.toggleStep(task.id, stepKey, done);

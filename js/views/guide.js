@@ -28,15 +28,17 @@ const COMPASS = [
   { sit: "Préparer une réunion ou un projet CSE", hat: "CSE", target: "hat-cse", detail: "Catégorie « CSE » sur Projet/Réunion" },
 ];
 
+// 8 → 5 icônes directes depuis la vague 24 (retour de Charles-Henri, sur la base de Material
+// Design/Apple HIG : 3-5 destinations recommandées en barre du bas) — Projets et Calendrier
+// deviennent des sous-onglets à l'intérieur de Pilotage (mêmes routes, juste une autre
+// présentation) ; Ressources, Prompts, Guide, Nouveautés et Mémoire & TDAH rejoignent le
+// nouvel onglet ☰ Plus. Voir claude/vague-24-declins-fiches-navigation.md pour le détail.
 const TABS_REF = [
   ["🏠 Accueil", "Vue du jour : retards, échéances, projets, informations conservées.", "Tous les matins, en 2 minutes."],
   ["📥 Inbox", "Sas d'attente de tout ce que tu as capturé mais pas encore qualifié.", "Une fois par jour, ou pendant la Revue hebdomadaire."],
-  ["📋 Pilotage", "Le Kanban de tes Tâches (ce que TOI tu dois faire), triées par échéance.", "Pour avancer concrètement sur ta liste du jour."],
-  ["📦 Projets", "Vue d'ensemble de chaque projet : avancement, sous-parties, tout ce qui y est rattaché.", "Pour un point d'étape ou avant une réunion de suivi projet."],
+  ["📋 Pilotage", "Trois sous-onglets en haut de l'écran : Tâches (ton Kanban, triées par échéance), Projets (avancement, sous-parties, tout ce qui y est rattaché) et Calendrier (vue mois/semaine). Un seul onglet du bas pour les trois.", "Pour avancer sur ta liste du jour, faire un point d'étape projet, ou visualiser une période."],
   ["👥 Équipe", "Une fiche par personne : Suivis (attentes/transmissions), Objectifs, historique. Le filtre « 👔 Mon manager » y bascule vers ce que TOI tu dois remonter à ton propre manager.", "Avant un 1:1, pour noter un engagement pris à la volée, ou avant ton propre point avec ton manager."],
-  ["📅 Calendrier", "Vue mois/semaine agrégeant échéances de tâches, réunions, décisions et suivis.", "Pour visualiser une période plutôt qu'une liste."],
-  ["📎 Ressources", "Bibliothèque de liens/emplacements réutilisables sans duplication.", "Avant de recréer un lien — vérifie qu'il n'existe pas déjà."],
-  ["🤖 Prompts IA", "Tes prompts réutilisables, copiables en un clic.", "Quand tu retombes sur un prompt déjà écrit."],
+  ["☰ Plus", "Tout ce qui ne rentre pas dans les 4 autres onglets : Ressources (liens/emplacements sans duplication), Prompts IA (copiables en un clic), Guide, Nouveautés et Mémoire & TDAH.", "Quand tu cherches un lien déjà enregistré, un prompt réutilisable, ou une pause mémoire."],
 ];
 
 // Mécanismes transverses (retour de Charles-Henri, 01/09/2026 : pouvoir chercher "comment
@@ -79,7 +81,7 @@ const TOPICS_REF = [
   },
   {
     title: "⌨️ Raccourcis clavier",
-    text: "Ctrl+K ouvre la recherche globale, curseur posé directement dans le champ. Alt+N ouvre Capturer depuis n'importe quel écran. Alt+1 à Alt+8 vont directement sur l'onglet à cette position dans la barre du bas (1 = Accueil, 2 = Inbox, 3 = Pilotage, 4 = Projets, 5 = Équipe, 6 = Calendrier, 7 = Ressources, 8 = Prompts) — sans effet tant qu'une fiche est ouverte, pour ne jamais changer d'écran sous elle par erreur. Ctrl+Entrée déclenche le bouton principal (Enregistrer, Créer...) de la fiche ouverte. Ctrl+Z rejoue le bouton « Annuler » du dernier toast affiché (ex. après un glisser-déposer de date sur le Calendrier) tant qu'il est encore visible — dans un champ de texte, Ctrl+Z reste l'annulation native du navigateur. Dans la fenêtre « Traiter » d'une capture Inbox : 1/2/3 choisissent directement Action/Suivi/Information, A déplie « Autre ». Dans la recherche : Alt+1 à Alt+8 basculent le filtre de type (Tâche, Projet, Personne, Suivi, Ressource, Réunion, Décision, Information/Idée) au lieu de changer d'onglet. Enfin, chaque fiche Personne et Projet propose un bouton « ⌨️ Assigner un raccourci » : choisis n'importe quelle lettre ou chiffre, la combinaison Ctrl+Alt+cette touche rouvrira directement cette fiche depuis n'importe quel écran — un espace de raccourcis entièrement séparé des précédents (jamais Ctrl+Alt sur les raccourcis fixes), donc aucune collision possible entre les deux. Ctrl+N et Ctrl+1…9, souvent utilisés ailleurs pour ce genre de raccourcis, sont réservés par tous les navigateurs (nouvelle fenêtre, changer d'onglet du navigateur) — c'est pour ça qu'ils n'apparaissent pas ici.",
+    text: "Ctrl+K ouvre la recherche globale, curseur posé directement dans le champ. Alt+N ouvre Capturer depuis n'importe quel écran. Alt+1 à Alt+5 vont directement sur l'onglet à cette position dans la barre du bas (1 = Accueil, 2 = Inbox, 3 = Pilotage, 4 = Équipe, 5 = Plus) — sans effet tant qu'une fiche est ouverte, pour ne jamais changer d'écran sous elle par erreur. Depuis la vague 24 (barre resserrée à 5 icônes), Projets/Calendrier et Ressources/Prompts/Guide/Nouveautés/Mémoire n'ont plus de raccourci dédié : ils se rejoignent au clic, depuis Pilotage ou depuis Plus. Ctrl+Entrée déclenche le bouton principal (Enregistrer, Créer...) de la fiche ouverte. Ctrl+Z rejoue le bouton « Annuler » du dernier toast affiché (ex. après un glisser-déposer de date sur le Calendrier) tant qu'il est encore visible — dans un champ de texte, Ctrl+Z reste l'annulation native du navigateur. Dans la fenêtre « Traiter » d'une capture Inbox : 1/2/3 choisissent directement Action/Suivi/Information, A déplie « Autre ». Dans la recherche : Alt+1 à Alt+8 basculent le filtre de type (Tâche, Projet, Personne, Suivi, Ressource, Réunion, Décision, Information/Idée) au lieu de changer d'onglet. Enfin, chaque fiche Personne et Projet propose un bouton « ⌨️ Assigner un raccourci » : choisis n'importe quelle lettre ou chiffre, la combinaison Ctrl+Alt+cette touche rouvrira directement cette fiche depuis n'importe quel écran — un espace de raccourcis entièrement séparé des précédents (jamais Ctrl+Alt sur les raccourcis fixes), donc aucune collision possible entre les deux. Ctrl+N et Ctrl+1…9, souvent utilisés ailleurs pour ce genre de raccourcis, sont réservés par tous les navigateurs (nouvelle fenêtre, changer d'onglet du navigateur) — c'est pour ça qu'ils n'apparaissent pas ici.",
   },
 ];
 

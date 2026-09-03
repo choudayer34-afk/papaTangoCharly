@@ -23,6 +23,7 @@ import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } fro
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { copyEntityLink } from "../components/copyLink.js";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -41,6 +42,7 @@ export function renderProjects(container) {
       <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
     </div>
     <div class="view">
+      <div id="pilotage-subnav"></div>
       <div class="chip-row" id="status-filter">
         <button type="button" class="chip active" data-status="active">🟢 Actifs</button>
         <button type="button" class="chip" data-status="archived">🗄️ Fermés</button>
@@ -54,6 +56,7 @@ export function renderProjects(container) {
     </div>
   `;
 
+  renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/projects");
   const listEl = container.querySelector("#projects-list");
   const subtitleEl = container.querySelector("#projects-subtitle");
   const statusFilterEl = container.querySelector("#status-filter");

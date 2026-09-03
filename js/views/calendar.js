@@ -19,6 +19,7 @@ import { showToast } from "../components/toast.js";
 import { openTaskDetail } from "./kanban.js";
 import { openRecentDetail } from "./dashboard.js";
 import { openEditFollowUpModal } from "./people.js";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -35,6 +36,7 @@ export function renderCalendar(container) {
       </div>
     </div>
     <div class="view">
+      <div id="pilotage-subnav"></div>
       <div class="cal-nav">
         <button id="cal-prev" class="btn btn-ghost btn-sm">‹</button>
         <button id="cal-today" class="btn btn-ghost btn-sm">Aujourd'hui</button>
@@ -44,6 +46,7 @@ export function renderCalendar(container) {
     </div>
   `;
 
+  renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/calendar");
   const subtitleEl = container.querySelector("#calendar-subtitle");
   const bodyEl = container.querySelector("#calendar-body");
 
