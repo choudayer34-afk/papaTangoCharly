@@ -36,7 +36,7 @@ const TOUR_STEPS = [
   {
     emoji: "🎉",
     title: "C'est parti",
-    text: "Tu peux revoir cette visite, la distinction Tâche/Suivi, ou ouvrir le guide complet (casquette par casquette, cas d'usage détaillés) à tout moment avec le bouton ❓ en bas à gauche.",
+    text: "Tu peux revoir cette visite ou la distinction Tâche/Suivi à tout moment avec le bouton ❓ en bas à gauche — le guide complet (casquette par casquette, cas d'usage détaillés) vit maintenant dans l'onglet ☰ Plus, en bas de l'écran.",
   },
 ];
 
@@ -106,8 +106,7 @@ function openHelpModal() {
     <div class="section-title">S'y retrouver plus tard</div>
     <p>Chaque fiche garde son 🕒 Historique. Le bouton 🕒 Tout l'historique sur l'Accueil ouvre le fil complet, tous types confondus.</p>
 
-    <a id="full-guide-link" href="#/guide" class="btn btn-secondary btn-block" style="margin-top:8px;text-decoration:none;">📖 Ouvrir le guide complet</a>
-    <a id="whatsnew-link" href="#/whatsnew" class="btn btn-secondary btn-block" style="margin-top:8px;text-decoration:none;">🆕 Voir les nouveautés</a>
+    <p style="margin-top:8px;color:var(--color-text-muted);">📖 Le guide complet, 🆕 les nouveautés et 🧠 Mémoire & TDAH vivent désormais dans l'onglet <strong>☰ Plus</strong>, en bas de l'écran (vague 24, navigation resserrée à 5 icônes).</p>
     <button id="replay-tour-btn" class="btn btn-secondary btn-block" style="margin-top:8px;">🧭 Revoir la visite guidée</button>
   `;
 
@@ -117,11 +116,10 @@ function openHelpModal() {
     actions: [{ label: "Fermer", variant: "ghost" }],
   });
 
-  // Le guide vit désormais dans l'app (route #/guide, hors ligne compatible — retour de
-  // Charles-Henri) plutôt que sur une page externe : un simple changement de hash suffit,
-  // pas besoin d'ouvrir un nouvel onglet ni de perdre la connexion pour y accéder.
-  body.querySelector("#full-guide-link").addEventListener("click", () => closeModal());
-  body.querySelector("#whatsnew-link").addEventListener("click", () => closeModal());
+  // Guide/Nouveautés/Mémoire ont quitté cette modale pour l'onglet ☰ Plus (vague 24, retour de
+  // Charles-Henri : "tout regrouper dans Plus" plutôt que de les laisser accessibles depuis ❓
+  // Aide) — voir js/views/more.js. ❓ Aide reste réservée à la visite guidée et au rappel
+  // Tâche/Suivi, consultés ponctuellement depuis n'importe quel écran.
   body.querySelector("#replay-tour-btn").addEventListener("click", () => {
     closeModal();
     openTour();
