@@ -10,6 +10,7 @@ import { renderPeople } from "./views/people.js";
 import { renderCalendar } from "./views/calendar.js";
 import { renderResources } from "./views/resources.js";
 import { renderPrompts } from "./views/prompts.js";
+import { renderMore } from "./views/more.js";
 import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
@@ -29,6 +30,10 @@ import { parseOpenParam } from "./services/deeplink.js";
 import * as tasksApi from "./domain/tasks.js";
 import * as preferencesApi from "./domain/preferences.js";
 
+// ROUTES reste la table de dispatch COMPLÈTE — toute route qui y figure fonctionne par hash,
+// que son icône apparaisse ou non dans la barre du bas. Distinct de NAV_ITEMS ci-dessous
+// (vague 24) depuis que la barre du bas ne montre plus mécaniquement une icône par entrée de
+// ROUTES : avant cette vague, mountNav() itérait directement Object.entries(ROUTES).
 const ROUTES = {
   "#/dashboard": { render: renderDashboard, label: "Accueil", icon: "🏠" },
   "#/inbox": { render: renderInbox, label: "Inbox", icon: "📥" },
@@ -42,13 +47,32 @@ const ROUTES = {
   "#/calendar": { render: renderCalendar, label: "Calendrier", icon: "📅" },
   "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
   "#/prompts": { render: renderPrompts, label: "Prompts", icon: "🤖" },
+  "#/more": { render: renderMore, label: "Plus", icon: "☰" },
 };
 
-// Le guide (§ retour de Charles-Henri : "accessible même hors ligne via l'appli", pas
-// hébergé ailleurs) est volontairement HORS de ROUTES : c'est une page de référence qu'on
-// consulte ponctuellement depuis le bouton ❓ Aide, pas un onglet de travail — l'ajouter à
-// ROUTES l'aurait automatiquement affiché dans la barre de navigation du bas (mountNav
-// itère ROUTES), ce qui aurait ajouté un dixième onglet permanent pour un besoin occasionnel.
+// Barre de navigation du bas (vague 24, retour de Charles-Henri, base : la densité de 8 onglets
+// dépassait Material Design (3 à 5 destinations recommandées) et Apple HIG (bascule vers un
+// onglet "Plus" au-delà d'environ 5) — voir claude/vague-24-declins-fiches-navigation.md,
+// sections 2 et 7 pour le diagnostic et l'organisation exacte choisie avec Charles-Henri.
+// "Pilotage" regroupe désormais Tâches/Projets/Calendrier en sous-onglets À L'INTÉRIEUR de ces
+// 3 écrans (voir js/components/pilotageSubNav.js) — les routes elles-mêmes ne changent pas,
+// seule l'icône du bas devient commune aux 3 (`activeFor`). Même principe pour "Plus", actif
+// aussi bien sur son propre écran que sur Ressources/Prompts/Guide/Nouveautés/Mémoire, qui n'ont
+// plus leur propre icône directe.
+const NAV_ITEMS = [
+  { hash: "#/dashboard", label: "Accueil", icon: "🏠" },
+  { hash: "#/inbox", label: "Inbox", icon: "📥" },
+  { hash: "#/kanban", label: "Pilotage", icon: "📋", activeFor: ["#/kanban", "#/projects", "#/calendar"] },
+  { hash: "#/people", label: "Équipe", icon: "👥" },
+  { hash: "#/more", label: "Plus", icon: "☰", activeFor: ["#/more", "#/resources", "#/prompts", "#/guide", "#/whatsnew", "#/memory"] },
+];
+
+// Guide/Nouveautés/Mémoire restent HORS de ROUTES : des pages de référence consultées
+// ponctuellement (désormais depuis l'onglet ☰ Plus plutôt que ❓ Aide, voir js/views/more.js et
+// js/components/onboarding.js), pas des écrans de travail — les ajouter à ROUTES les aurait
+// automatiquement fait apparaître comme icônes de la barre du bas (voir mountNav plus bas, qui
+// itère désormais NAV_ITEMS et non plus ROUTES, mais HIDDEN_ROUTES garde ce même principe de
+// prudence pour toute future page de référence).
 const HIDDEN_ROUTES = {
   "#/guide": { render: renderGuide },
   "#/whatsnew": { render: renderWhatsNew },
@@ -71,19 +95,26 @@ let pendingRestrictedEmail = null;
 function mountNav() {
   const el = document.createElement("nav");
   el.className = "bottom-nav";
-  for (const [hash, route] of Object.entries(ROUTES)) {
+  for (const item of NAV_ITEMS) {
     const link = document.createElement("a");
-    link.href = hash;
-    link.dataset.hash = hash;
-    link.innerHTML = `<span class="icon">${route.icon}</span><span>${route.label}</span>`;
+    link.href = item.hash;
+    link.dataset.hash = item.hash;
+    link.innerHTML = `<span class="icon">${item.icon}</span><span>${item.label}</span>`;
     el.appendChild(link);
   }
   document.body.appendChild(el);
   return el;
 }
 
+// Un item de la barre du bas est actif pour son propre hash ET pour tout hash listé dans son
+// `activeFor` (ex. "Pilotage" reste actif sur #/projects et #/calendar, "Plus" sur ses 5 pages
+// — voir NAV_ITEMS ci-dessus) — sans `activeFor`, seul son propre hash compte, comme avant.
 function updateNavActive(hash) {
-  nav?.querySelectorAll("a").forEach((a) => a.classList.toggle("active", a.dataset.hash === hash));
+  nav?.querySelectorAll("a").forEach((a) => {
+    const item = NAV_ITEMS.find((i) => i.hash === a.dataset.hash);
+    const matches = item?.activeFor ? item.activeFor.includes(hash) : a.dataset.hash === hash;
+    a.classList.toggle("active", matches);
+  });
 }
 
 // Lien profond vers une fiche précise (retour de Charles-Henri, 01/09/2026 : le lien collé
@@ -137,8 +168,12 @@ function mountApp() {
   mountPomodoroWidget();
   // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
   // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
-  // shortcuts.js. `Object.keys(ROUTES)` donne l'ordre exact des onglets pour Alt+1…Alt+8.
-  initGlobalShortcuts(Object.keys(ROUTES));
+  // shortcuts.js. Depuis la vague 24 (barre du bas réduite à 5 icônes), Alt+1…Alt+5 pointent
+  // vers NAV_ITEMS plutôt que vers les 8 entrées de ROUTES — Charles-Henri a explicitement
+  // choisi de ne rien construire pour atteindre Projets/Calendrier/Ressources/Prompts/Guide/
+  // Nouveautés/Mémoire au clavier au-delà de ce qui existe déjà (clic, Ctrl+K) : "ça ne marche
+  // pas actuellement, donc on laisse tomber" — voir claude/vague-24-declins-fiches-navigation.md.
+  initGlobalShortcuts(NAV_ITEMS.map((item) => item.hash));
   window.addEventListener("hashchange", renderRoute);
   renderRoute();
   maybeShowFirstRunTour();
