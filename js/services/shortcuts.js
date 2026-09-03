@@ -35,9 +35,9 @@ export const BUILTIN_SHORTCUTS = [
   { combo: "Ctrl+K", description: "Ouvre la recherche globale, curseur posé directement dans le champ." },
   { combo: "Alt+N", description: "Ouvre la modale Capturer, depuis n'importe quel écran." },
   {
-    combo: "Alt+1 … Alt+8",
+    combo: "Alt+1 … Alt+5",
     description:
-      "Va directement sur l'onglet à cette position dans la barre du bas (1 = Accueil, 2 = Inbox, 3 = Pilotage, 4 = Projets, 5 = Équipe, 6 = Calendrier, 7 = Ressources, 8 = Prompts). Sans effet tant qu'une fiche est ouverte, pour ne jamais changer d'écran sous elle par erreur.",
+      "Va directement sur l'onglet à cette position dans la barre du bas (1 = Accueil, 2 = Inbox, 3 = Pilotage, 4 = Équipe, 5 = Plus). Depuis la vague 24 (barre resserrée à 5 icônes), Projets/Calendrier se rejoignent depuis Pilotage (sous-onglets) et Ressources/Prompts/Guide/Nouveautés/Mémoire depuis Plus — au clic, pas au clavier pour l'instant. Sans effet tant qu'une fiche est ouverte, pour ne jamais changer d'écran sous elle par erreur.",
   },
   {
     combo: "Ctrl+Entrée",
@@ -92,8 +92,9 @@ function comboFromEvent(e) {
 let handler = null;
 
 /** Monté une seule fois pour toute la session (js/app.js#mountApp). `routeHashes` = l'ordre
- *  des onglets de la barre du bas (`Object.keys(ROUTES)`), pour qu'Alt+1…Alt+8 pointe toujours
- *  vers le bon onglet même si la liste évolue plus tard. */
+ *  des 5 icônes de la barre du bas (`NAV_ITEMS.map(i => i.hash)` depuis la vague 24, avant ça
+ *  `Object.keys(ROUTES)`), pour qu'Alt+1…Alt+5 pointe toujours vers la bonne icône même si la
+ *  liste évolue plus tard. */
 export function initGlobalShortcuts(routeHashes) {
   ROUTE_HASHES.length = 0;
   ROUTE_HASHES.push(...routeHashes);
@@ -134,7 +135,7 @@ export function initGlobalShortcuts(routeHashes) {
       return;
     }
 
-    if (e.altKey && !mod && !e.shiftKey && /^[1-8]$/.test(e.key)) {
+    if (e.altKey && !mod && !e.shiftKey && /^[1-5]$/.test(e.key)) {
       // Jamais changer d'écran sous une fiche ouverte — cohérent avec le principe "une seule
       // modale à la fois" (js/components/modal.js) : naviguer laisserait la fiche flotter
       // au-dessus d'un écran qui n'est plus le sien.
