@@ -82,6 +82,22 @@ export const CATEGORY_LABELS = {
 export const NOTABLE_VALUES = ["positive", "negative"];
 export const NOTABLE_LABELS = { positive: "👍 Notable positif", negative: "👎 Notable négatif" };
 
+// Règle métier (retour de Charles-Henri, 06/09/2026 : "quand je mets une date d'échéance [...]
+// si la date de contrôle n'est pas saisie ou est [postérieure] à la date d'échéance saisie ça
+// doit mettre la date de contrôle à la date d'échéance") — la date de contrôle ne doit jamais
+// être PLUS TARDIVE que l'échéance (on garde la possibilité de contrôler en avance, très
+// largement le cas normal d'un suivi "waiting_on" — voir le commentaire en tête de fichier —
+// on empêche seulement de contrôler après coup, ce qui n'aurait pas de sens). Sans échéance,
+// la date de contrôle saisie est gardée telle quelle (un suivi "to_tell" n'a jamais de dueDate,
+// voir plus bas). Factorisé ici pour être appliqué de façon identique à la création
+// (`createFollowUp`) et à la modification (`updateFollowUp`) plutôt que dans chaque formulaire
+// appelant (js/views/people.js) — un seul endroit qui fait foi, jamais désynchronisable.
+function resolveControlDate(dueDate, controlDate) {
+  if (!dueDate) return controlDate || null;
+  if (!controlDate || new Date(controlDate).getTime() > new Date(dueDate).getTime()) return dueDate;
+  return controlDate;
+}
+
 export async function createFollowUp(data) {
   const followUp = await storage.put(COLLECTION, {
     title: data.title, // l'engagement pris par la personne, ou ce que je dois lui dire
@@ -92,7 +108,7 @@ export async function createFollowUp(data) {
     expectedResult: data.expectedResult || "",
     description: data.description || "", // contexte libre non daté (retour de Charles-Henri, vague 21)
     dueDate: data.dueDate || null, // échéance de la personne (direction "waiting_on")
-    controlDate: data.controlDate || data.dueDate || null, // quand JE dois vérifier / en parler
+    controlDate: resolveControlDate(data.dueDate, data.controlDate), // quand JE dois vérifier / en parler
     status: data.status || "waiting",
     successCriteria: data.successCriteria || "",
     projectId: data.projectId || null,
@@ -153,8 +169,15 @@ export async function addNote(id, text) {
 export async function updateFollowUp(id, patch) {
   const current = await storage.get(COLLECTION, id);
   if (!current) throw new Error("Suivi introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
-  await storage.logHistory("FollowUp", id, "updated", { patch });
+  // Même règle qu'à la création (voir `resolveControlDate` plus haut) — seulement quand
+  // `dueDate` fait partie de CE patch : un appelant qui ne touche pas l'échéance (ex. cocher
+  // "terminé", ajouter une note) ne doit jamais voir sa date de contrôle recalculée dans son
+  // dos.
+  const finalPatch = "dueDate" in patch
+    ? { ...patch, controlDate: resolveControlDate(patch.dueDate, "controlDate" in patch ? patch.controlDate : current.controlDate) }
+    : patch;
+  const updated = await storage.put(COLLECTION, { ...current, ...finalPatch });
+  await storage.logHistory("FollowUp", id, "updated", { patch: finalPatch });
   return updated;
 }
 
