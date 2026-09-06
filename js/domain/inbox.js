@@ -62,6 +62,26 @@ export async function autoArchiveStaleKept() {
 }
 
 /**
+ * Corrige le texte brut d'une capture encore en attente (retour de Charles-Henri, 06/09/2026 :
+ * "quand on prend une note rapide, quand elle est dans inbox, je dois pouvoir modifier le
+ * titre même si je la qualifie pas") — jusqu'ici, la seule façon de toucher au texte capturé
+ * passait par la qualification (openQualifyModal, qui l'affiche en lecture seule) : une
+ * capture rapide (dictée, frappe pressée) contient parfois une coquille ou un mot à préciser,
+ * et attendre d'avoir choisi Tâche/Suivi/Information/... pour la corriger va à l'encontre de
+ * l'esprit "friction minimale" de l'Inbox (§11/§12). Ne change ni le statut ni rien d'autre —
+ * la Règle 3 (ne jamais perdre la capture) reste respectée, on corrige juste son texte.
+ */
+export async function updateRawContent(id, rawContent) {
+  const trimmed = (rawContent || "").trim();
+  if (!trimmed) throw new Error("Le texte ne peut pas être vide");
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Élément Inbox introuvable : " + id);
+  const updated = await storage.put(COLLECTION, { ...current, rawContent: trimmed });
+  await storage.logHistory("InboxItem", id, "raw_content_edited", {});
+  return updated;
+}
+
+/**
  * Journal de notes horodaté sur une Information/Idée "gardée" (retour de Charles-Henri,
  * 01/09/2026, généralisé à "tout les éléments") — même principe que addNote() dans
  * domain/tasks.js (additif uniquement), mais posé directement ici plutôt que via une fonction
