@@ -248,12 +248,29 @@ export async function openPersonDetail(person, allFollowUps) {
   // Fusion des deux "Notes" (vague 19, audit de simplification) — voir peopleApi.migrateLegacyNotes.
   person = (await peopleApi.migrateLegacyNotes(person.id)) || person;
   const own = sortByCreatedDesc(allFollowUps.filter((f) => f.personId === person.id));
-  const active = own.filter((f) => f.status !== "done" && f.direction !== "to_tell");
-  const toTell = own.filter((f) => f.status !== "done" && f.direction === "to_tell");
   const done = own.filter((f) => f.status === "done");
 
-  const [allHistory, allObjectives] = await Promise.all([historyApi.listAll(), objectivesApi.listAll()]);
+  const [allHistory, allObjectives, allProjects] = await Promise.all([
+    historyApi.listAll(),
+    objectivesApi.listAll(),
+    projectsApi.listAll(),
+  ]);
   const objectives = allObjectives.filter((o) => o.personId === person.id);
+
+  // Engagements en attente organisés par projet puis par date la plus proche (retour de
+  // Charles-Henri, 06/09/2026 : "organisé par projet ou par date d'échéance") — même principe
+  // et mêmes fonctions déjà éprouvées côté "🎯 À aborder" de la préparation de point
+  // (`soonestDate`/`groupByProject`/`renderGroupedFollowUpList`, voir `computePrepSections`) :
+  // trié par date la plus proche d'abord, puis regroupé par projet en conservant cet ordre à
+  // l'intérieur de chaque groupe (donc du plus urgent au moins urgent, groupe par groupe).
+  const active = [...own.filter((f) => f.status !== "done" && f.direction !== "to_tell")].sort(
+    (a, b) => soonestDate(a) - soonestDate(b)
+  );
+  const toTell = [...own.filter((f) => f.status !== "done" && f.direction === "to_tell")].sort(
+    (a, b) => soonestDate(a) - soonestDate(b)
+  );
+  const activeGroups = groupByProject(active, allProjects);
+  const toTellGroups = groupByProject(toTell, allProjects);
 
   // §38 "Où en est Clément ?" : l'historique d'une personne, c'est le sien plus celui de
   // tous ses suivis — même principe que l'agrégation faite côté fiche Projet (§46).
@@ -262,6 +279,14 @@ export async function openPersonDetail(person, allFollowUps) {
     .filter((h) => trackedKeys.has(`${h.entityType}:${h.entityId}`))
     .sort((a, b) => a.date - b.date);
 
+  // Fiche à onglets (vague 25, retour de Charles-Henri : "idem dans la fiche du collaborateur
+  // j'aimerai une organisation piste A" — voir claude/vague-25-onglets-fiches-controle-suivi.md,
+  // section 4, pour l'inventaire complet et le découpage validé). En-tête toujours visible
+  // (Nom, Type, Rôle, raccourci clavier, et les boutons Préparer mon point/EADP — gardés hors
+  // onglets car ils lancent un autre écran plutôt que d'afficher du contenu de la fiche), puis
+  // 4 onglets : Suivis (Engagements en cours/À transmettre/+ Suivi/Réalisé), Objectifs, Notes &
+  // repères (Journal de notes/Repères managériaux) et Activité (Historique/Lié). AUCUN champ,
+  // bouton ou id n'est retiré ni renommé par rapport à la version précédente.
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -284,48 +309,78 @@ export async function openPersonDetail(person, allFollowUps) {
       <button id="prep-btn" class="btn btn-secondary btn-block">🗒️ Préparer mon point</button>
       <button id="eadp-btn" class="btn btn-secondary btn-block">📋 Préparer l'EADP</button>
     </div>
-    <div class="section-title" style="margin-top:0;">🎯 Engagements en cours (${active.length})</div>
-    <div class="card" id="active-followups" style="margin-bottom:16px;"></div>
-    <div class="section-title">📣 À transmettre (${toTell.length})</div>
-    <div class="card" id="to-tell-followups" style="margin-bottom:16px;"></div>
-    <button id="add-followup-btn" class="btn btn-secondary btn-sm btn-block" style="margin-bottom:16px;">+ Suivi</button>
-    <div class="section-title">🟢 Réalisé (${done.length})</div>
-    <div class="card" id="done-followups" style="margin-bottom:16px;"></div>
-    <div class="section-header-row">
-      <div class="section-title">🎯 Objectifs (${objectives.length})</div>
-      <button type="button" id="add-objective-btn" class="btn btn-ghost btn-sm">+ Ajouter</button>
+
+    <div class="chip-row fiche-tabs" role="tablist">
+      <button type="button" class="chip active" data-tab="followups" role="tab">Suivis</button>
+      <button type="button" class="chip" data-tab="objectives" role="tab" id="fiche-tab-objectives">Objectifs (${objectives.length})</button>
+      <button type="button" class="chip" data-tab="notes" role="tab">Notes &amp; repères</button>
+      <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
     </div>
-    <div class="card" id="person-objectives" style="margin-bottom:16px;"></div>
-    <div class="section-title">🗒️ Journal de notes</div>
-    <div id="detail-notes" style="margin-bottom:16px;"></div>
-    <details>
-      <summary class="section-title" style="cursor:pointer;">🧭 Repères managériaux</summary>
-      <div style="margin-top:8px;margin-bottom:16px;">
-        <div class="field">
-          <label for="person-o2o">Attente des O2O — ce que ${escapeHtml(person.name)} attend de moi en 1:1</label>
-          <textarea id="person-o2o" placeholder="Boulot ou perso, pas forcément récurrent, ce qui va bien / moins bien...">${escapeHtml(person.expectationsInOneToOne || "")}</textarea>
-        </div>
-        <div class="field">
-          <label for="person-manager-expect">Attente manager — ce que ${escapeHtml(person.name)} attend de moi en tant que manager</label>
-          <textarea id="person-manager-expect" placeholder="Feedback, direction, orientation, attentes vis-à-vis de son propre travail...">${escapeHtml(person.expectationsAsManager || "")}</textarea>
-        </div>
-        <div class="field" style="margin-bottom:0;">
-          <label for="person-consideration">Considération personnelle</label>
-          <textarea id="person-consideration" placeholder="Personnalité, forces, axes d'amélioration...">${escapeHtml(person.personalConsideration || "")}</textarea>
-        </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="followups">
+      <div class="section-title" style="margin-top:0;">🎯 Engagements en cours (${active.length})</div>
+      <div class="card" id="active-followups" style="margin-bottom:16px;"></div>
+      <div class="section-title">📣 À transmettre (${toTell.length})</div>
+      <div class="card" id="to-tell-followups" style="margin-bottom:16px;"></div>
+      <button id="add-followup-btn" class="btn btn-secondary btn-sm btn-block" style="margin-bottom:16px;">+ Suivi</button>
+      <div class="section-title">🟢 Réalisé (${done.length})</div>
+      <div class="card" id="done-followups" style="margin-bottom:16px;"></div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="objectives" hidden>
+      <div class="section-header-row">
+        <div class="section-title" style="margin-top:0;">🎯 Objectifs (${objectives.length})</div>
+        <button type="button" id="add-objective-btn" class="btn btn-ghost btn-sm">+ Ajouter</button>
       </div>
-    </details>
-    <details>
-      <summary class="section-title" style="cursor:pointer;">🕒 Historique (${personHistory.length})</summary>
-      <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
-    </details>
-    <div class="section-title">🔗 Lié</div>
-    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
-      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+      <div class="card" id="person-objectives" style="margin-bottom:16px;"></div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="notes" hidden>
+      <div class="section-title" style="margin-top:0;">🗒️ Journal de notes</div>
+      <div id="detail-notes" style="margin-bottom:16px;"></div>
+      <details>
+        <summary class="section-title" style="cursor:pointer;">🧭 Repères managériaux</summary>
+        <div style="margin-top:8px;margin-bottom:16px;">
+          <div class="field">
+            <label for="person-o2o">Attente des O2O — ce que ${escapeHtml(person.name)} attend de moi en 1:1</label>
+            <textarea id="person-o2o" placeholder="Boulot ou perso, pas forcément récurrent, ce qui va bien / moins bien...">${escapeHtml(person.expectationsInOneToOne || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="person-manager-expect">Attente manager — ce que ${escapeHtml(person.name)} attend de moi en tant que manager</label>
+            <textarea id="person-manager-expect" placeholder="Feedback, direction, orientation, attentes vis-à-vis de son propre travail...">${escapeHtml(person.expectationsAsManager || "")}</textarea>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="person-consideration">Considération personnelle</label>
+            <textarea id="person-consideration" placeholder="Personnalité, forces, axes d'amélioration...">${escapeHtml(person.personalConsideration || "")}</textarea>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="activity" hidden>
+      <details>
+        <summary class="section-title" style="cursor:pointer;margin-top:0;">🕒 Historique (${personHistory.length})</summary>
+        <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+      <div class="section-title">🔗 Lié</div>
+      <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+        <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+      </div>
     </div>
   `;
+
+  // Bascule d'onglet — même mécanique que la fiche Tâche (voir js/views/kanban.js#openTaskDetail) :
+  // chaque panneau existe en permanence, seul l'attribut `hidden` change.
+  body.querySelectorAll(".fiche-tabs .chip").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      body.querySelectorAll(".fiche-tabs .chip").forEach((b) => b.classList.toggle("active", b === tabBtn));
+      body.querySelectorAll(".fiche-tabpanel").forEach((panel) => {
+        panel.hidden = panel.dataset.tabpanel !== tabBtn.dataset.tab;
+      });
+    });
+  });
 
   // Rouvre la fiche avec des données fraîches — utilisé par toute action menée depuis une
   // modale imbriquée (créer/modifier/supprimer un suivi), plutôt que de laisser la fiche
@@ -335,14 +390,14 @@ export async function openPersonDetail(person, allFollowUps) {
   const reopen = async () => openPersonDetail(person, await followUpsApi.listAll());
 
   const activeEl = body.querySelector("#active-followups");
-  renderFollowUpList(activeEl, active, {
+  renderGroupedFollowUpList(activeEl, activeGroups, {
     onOpen: (f) => {
       closeModal();
       openEditFollowUpModal(f, { onDone: reopen });
     },
   });
   const toTellEl = body.querySelector("#to-tell-followups");
-  renderFollowUpList(toTellEl, toTell, {
+  renderGroupedFollowUpList(toTellEl, toTellGroups, {
     onOpen: (f) => {
       closeModal();
       openEditFollowUpModal(f, { onDone: reopen });
@@ -408,17 +463,21 @@ export async function openPersonDetail(person, allFollowUps) {
     title: (person.type === "manager" ? "👔 " : "👤 ") + person.name,
     body,
     actions: [
-      { label: "Fermer", variant: "ghost" },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true },
       {
         // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
-        label: "🔗 Copier le lien",
+        icon: "🔗",
+        label: "Copier le lien",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/people", "Person", person.id),
       },
       {
-        label: "🗑️ Supprimer",
+        icon: "🗑️",
+        label: "Supprimer",
         variant: "danger",
+        compact: true,
         closesModal: false,
         onClick: () => {
           closeModal();
@@ -434,8 +493,10 @@ export async function openPersonDetail(person, allFollowUps) {
         },
       },
       {
+        icon: "💾",
         label: "Enregistrer",
         variant: "primary",
+        compact: true,
         closesModal: false,
         onClick: async () => {
           const name = bodyEl.querySelector("#person-detail-name").value.trim();
@@ -790,7 +851,7 @@ function openCreateObjectiveModal(person, { onDone } = {}) {
   });
 }
 
-function openObjectiveDetail(objective, person, { onDone } = {}) {
+export function openObjectiveDetail(objective, person, { onDone } = {}) {
   const entries = [...(objective.entries || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
   const body = document.createElement("div");
   body.innerHTML = `
@@ -804,6 +865,17 @@ function openObjectiveDetail(objective, person, { onDone } = {}) {
       <input id="obj-entry-date" type="date" value="${new Date().toISOString().slice(0, 10)}" style="flex:1;min-width:130px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       <input id="obj-entry-note" type="text" placeholder="Où en est-on ?" style="flex:2;min-width:160px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       <button id="add-entry-btn" type="button" class="btn btn-secondary btn-sm">+ Point</button>
+    </div>
+    <!-- "🔗 Lié" (retour de Charles-Henri, 06/09/2026 : "pouvoir y rattacher d'autres projets ou
+         faire un suivi") — un Objectif se suit désormais comme les autres fiches : on y attache
+         des Projets/Suivis déjà existants (ou on en crée un nouveau déjà lié), même mécanique
+         partagée que partout ailleurs (js/components/linkedItems.js), sans dupliquer le Kanban
+         ni la mécanique Projet. -->
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="obj-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="obj-link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="obj-create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
   const entriesEl = body.querySelector("#obj-entries");
@@ -830,6 +902,23 @@ function openObjectiveDetail(objective, person, { onDone } = {}) {
     renderEntries([...updated.entries].sort((a, b) => new Date(b.date) - new Date(a.date)));
     body.querySelector("#obj-entry-note").value = "";
     showToast("Point de suivi ajouté");
+  });
+
+  const objLinkRef = { type: "Objective", id: objective.id };
+  linkedItemsApi.renderLinkedSection(body.querySelector("#obj-links"), objLinkRef);
+  body.querySelector("#obj-link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(objLinkRef, objective.title, {
+      onLinked: () => openObjectiveDetail(objective, person, { onDone }),
+      onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+    });
+  });
+  body.querySelector("#obj-create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(objLinkRef, objective.title, {
+      onLinked: () => openObjectiveDetail(objective, person, { onDone }),
+      onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+    });
   });
 
   const { bodyEl, close } = openModal({
@@ -1480,11 +1569,13 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
     title: "Modifier le suivi",
     body,
     actions: [
-      { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true, onClick: () => onDone?.() },
       {
         // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
-        label: "🔗 Copier le lien",
+        icon: "🔗",
+        label: "Copier le lien",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/people", "FollowUp", followUp.id),
       },
@@ -1492,8 +1583,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
         // parmi les 3 propositions de visualisation automatique) — voir
         // js/components/overviewExport.js et le même bouton sur la fiche Tâche (kanban.js).
-        label: "📄 Exporter",
+        icon: "📄",
+        label: "Exporter",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () =>
           exportFollowUpOverview(followUp, {
@@ -1504,8 +1597,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
           }),
       },
       {
-        label: "🗑️ Supprimer",
+        icon: "🗑️",
+        label: "Supprimer",
         variant: "danger",
+        compact: true,
         closesModal: false,
         onClick: () => {
           closeModal();
@@ -1522,8 +1617,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         },
       },
       {
+        icon: "💾",
         label: "Enregistrer",
         variant: "primary",
+        compact: true,
         closesModal: false,
         onClick: async () => {
           const direction = bodyEl.querySelector('input[name="fu-edit-direction"]:checked')?.value || "waiting_on";

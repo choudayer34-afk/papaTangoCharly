@@ -335,6 +335,17 @@ export async function openProjectDetail(project, tasks) {
     .filter((h) => trackedKeys.has(`${h.entityType}:${h.entityId}`))
     .sort((a, b) => a.date - b.date);
 
+  const isArchived = projectsApi.isArchived(project);
+
+  // Fiche à onglets (vague 25, retour de Charles-Henri : "je veux aussi une organisation piste A
+  // comme sur les tâches" — voir claude/vague-25-onglets-fiches-controle-suivi.md, section 3,
+  // pour l'inventaire complet et le découpage validé). En-tête toujours visible (Nom, Catégorie,
+  // badge Actif/Fermé, raccourci clavier), puis 4 onglets : Détails (Objectif/Critère de
+  // réussite/Canevas/Notes), Sous-parties (avancement par bloc), Contenu (Tâches/Suivis/
+  // Réunions/Décisions) et Activité (Ressources/Historique/Lié). AUCUN champ, bouton ou id
+  // n'est retiré ni renommé par rapport à la version précédente — seul l'emplacement visuel
+  // change, tout le câblage plus bas (querySelector par id) continue de fonctionner à
+  // l'identique.
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -348,71 +359,102 @@ export async function openProjectDetail(project, tasks) {
         ${Object.keys(prefs.categories || {}).map((c) => `<option value="${escapeAttr(c)}"></option>`).join("")}
       </datalist>
     </div>
-    <div class="field">
-      <label for="detail-objective">Objectif</label>
-      <textarea id="detail-objective">${escapeHtml(project.objective || "")}</textarea>
-    </div>
-    <div class="field">
-      <label for="detail-criteria">Critère de réussite</label>
-      <textarea id="detail-criteria" placeholder="Comment saurai-je que ce projet est réussi ?">${escapeHtml(project.successCriteria || "")}</textarea>
-    </div>
+    <div class="item-meta" style="margin-bottom:12px;">${isArchived ? "🗄️ Fermé" : "🟢 Actif"}</div>
     <div id="project-shortcut" style="margin-bottom:12px;"></div>
-    <div id="detail-canevas"></div>
-    <!-- Notes : bloc secondaire replié par défaut (audit de simplification du 02/09/2026 —
-         "trop de blocs ouverts en permanence sur une fiche déjà longue") ; le compte dans le
-         résumé garde l'information visible sans avoir à déplier. -->
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(project.notesLog || []).length})</summary>
-      <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
-    </details>
-    <div class="section-header-row">
-      <div class="section-title">🧩 Sous-parties (${parts.length})</div>
-      <span id="project-status-info"></span>
+
+    <div class="chip-row fiche-tabs" role="tablist">
+      <button type="button" class="chip active" data-tab="details" role="tab">Détails</button>
+      <button type="button" class="chip" data-tab="parts" role="tab" id="fiche-tab-parts">Sous-parties (${parts.length})</button>
+      <button type="button" class="chip" data-tab="content" role="tab">Contenu</button>
+      <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
     </div>
-    <div class="card" id="detail-parts" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <input id="new-part-label" type="text" placeholder="Ex. Traduction" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <button id="add-part-btn" type="button" class="btn btn-secondary btn-sm">+ Sous-partie</button>
-    </div>
-    <div class="section-header-row">
-      <div class="section-title">Tâches (${progress.total})</div>
-      <button type="button" id="add-task-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
-    </div>
-    <div class="card" id="detail-tasks" style="margin-bottom:16px;"></div>
-    <div class="section-header-row">
-      <div class="section-title">👀 Suivis (${linkedFollowUps.length})</div>
-      <button type="button" id="add-followup-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
-    </div>
-    <div class="card" id="detail-followups" style="margin-bottom:16px;"></div>
-    <div class="section-header-row">
-      <div class="section-title">🗓️ Réunions (${linkedMeetings.length})</div>
-      <button type="button" id="add-meeting-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
-    </div>
-    <div class="card" id="detail-meetings" style="margin-bottom:16px;"></div>
-    <div class="section-header-row">
-      <div class="section-title">🗳️ Décisions (${linkedDecisions.length})</div>
-      <button type="button" id="add-decision-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
-    </div>
-    <div class="card" id="detail-decisions" style="margin-bottom:16px;"></div>
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
-      <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;">
-        <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
-        <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+
+    <div class="fiche-tabpanel" data-tabpanel="details">
+      <div class="field">
+        <label for="detail-objective">Objectif</label>
+        <textarea id="detail-objective">${escapeHtml(project.objective || "")}</textarea>
       </div>
-    </details>
-    <details class="fiche-section">
-      <summary class="section-title" style="cursor:pointer;">🕒 Historique (${projectHistory.length})</summary>
-      <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
-    </details>
-    <div class="section-title">🔗 Lié</div>
-    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
-      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+      <div class="field">
+        <label for="detail-criteria">Critère de réussite</label>
+        <textarea id="detail-criteria" placeholder="Comment saurai-je que ce projet est réussi ?">${escapeHtml(project.successCriteria || "")}</textarea>
+      </div>
+      <div id="detail-canevas"></div>
+      <!-- Notes : bloc secondaire replié par défaut (audit de simplification du 02/09/2026 —
+           "trop de blocs ouverts en permanence sur une fiche déjà longue") ; le compte dans le
+           résumé garde l'information visible sans avoir à déplier. -->
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(project.notesLog || []).length})</summary>
+        <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="parts" hidden>
+      <div class="section-header-row">
+        <div class="section-title" style="margin-top:0;">🧩 Sous-parties (${parts.length})</div>
+        <span id="project-status-info"></span>
+      </div>
+      <div class="card" id="detail-parts" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input id="new-part-label" type="text" placeholder="Ex. Traduction" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <button id="add-part-btn" type="button" class="btn btn-secondary btn-sm">+ Sous-partie</button>
+      </div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="content" hidden>
+      <div class="section-header-row">
+        <div class="section-title" style="margin-top:0;">Tâches (${progress.total})</div>
+        <button type="button" id="add-task-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+      </div>
+      <div class="card" id="detail-tasks" style="margin-bottom:16px;"></div>
+      <div class="section-header-row">
+        <div class="section-title">👀 Suivis (${linkedFollowUps.length})</div>
+        <button type="button" id="add-followup-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+      </div>
+      <div class="card" id="detail-followups" style="margin-bottom:16px;"></div>
+      <div class="section-header-row">
+        <div class="section-title">🗓️ Réunions (${linkedMeetings.length})</div>
+        <button type="button" id="add-meeting-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+      </div>
+      <div class="card" id="detail-meetings" style="margin-bottom:16px;"></div>
+      <div class="section-header-row">
+        <div class="section-title">🗳️ Décisions (${linkedDecisions.length})</div>
+        <button type="button" id="add-decision-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>
+      </div>
+      <div class="card" id="detail-decisions" style="margin-bottom:16px;"></div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="activity" hidden>
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;margin-top:0;">📎 Ressources (${linkedResources.length})</summary>
+        <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
+          <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+        </div>
+      </details>
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">🕒 Historique (${projectHistory.length})</summary>
+        <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
+      </details>
+      <div class="section-title">🔗 Lié</div>
+      <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+        <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+      </div>
     </div>
   `;
+
+  // Bascule d'onglet — même mécanique que la fiche Tâche (voir js/views/kanban.js#openTaskDetail) :
+  // chaque panneau existe en permanence, seul l'attribut `hidden` change.
+  body.querySelectorAll(".fiche-tabs .chip").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      body.querySelectorAll(".fiche-tabs .chip").forEach((b) => b.classList.toggle("active", b === tabBtn));
+      body.querySelectorAll(".fiche-tabpanel").forEach((panel) => {
+        panel.hidden = panel.dataset.tabpanel !== tabBtn.dataset.tab;
+      });
+    });
+  });
 
   renderInfoTip(body.querySelector("#project-status-info"), PROJECT_STATUS_INFO_HTML);
   // Raccourci clavier personnalisé (retour de Charles-Henri, vague 20) — voir
@@ -683,24 +725,26 @@ export async function openProjectDetail(project, tasks) {
     });
   });
 
-  const isArchived = projectsApi.isArchived(project);
-
   const { bodyEl, close } = openModal({
     title: project.name + (isArchived ? " 🗄️" : ""),
     body,
     actions: [
-      { label: "Fermer", variant: "ghost" },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true },
       {
         // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
-        label: "🔗 Copier le lien",
+        icon: "🔗",
+        label: "Copier le lien",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/projects", "Project", project.id),
       },
       isArchived
         ? {
-            label: "↩️ Rouvrir le projet",
+            icon: "↩️",
+            label: "Rouvrir le projet",
             variant: "secondary",
+            compact: true,
             closesModal: false,
             onClick: async () => {
               await projectsApi.reopenProject(project.id);
@@ -709,8 +753,10 @@ export async function openProjectDetail(project, tasks) {
             },
           }
         : {
-            label: "🗄️ Clôturer le projet",
+            icon: "🗄️",
+            label: "Clôturer le projet",
             variant: "secondary",
+            compact: true,
             closesModal: false,
             onClick: () => {
               closeModal();
@@ -740,8 +786,10 @@ export async function openProjectDetail(project, tasks) {
             },
           },
       {
-        label: "🗑️ Supprimer",
+        icon: "🗑️",
+        label: "Supprimer",
         variant: "danger",
+        compact: true,
         closesModal: false,
         onClick: () => {
           closeModal();
@@ -757,8 +805,10 @@ export async function openProjectDetail(project, tasks) {
         },
       },
       {
+        icon: "💾",
         label: "Enregistrer",
         variant: "primary",
+        compact: true,
         closesModal: false,
         onClick: async () => {
           const name = bodyEl.querySelector("#detail-name").value.trim();

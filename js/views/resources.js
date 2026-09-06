@@ -300,19 +300,23 @@ export async function openResourceDetail(resource, projects, tasks) {
     title: resourcesApi.typeInfo(resource.type).emoji + " " + resource.title,
     body,
     actions: [
-      { label: "Fermer", variant: "ghost" },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true },
       {
         // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
         // Distinct du bouton "🔗 Ouvrir le lien" ci-dessus, qui pointe vers l'URL externe de la
         // ressource elle-même (site, document...), pas vers sa fiche dans Pilotage.
-        label: "🔗 Copier le lien Pilotage",
+        icon: "🔗",
+        label: "Copier le lien Pilotage",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/resources", "Resource", resource.id),
       },
       {
-        label: "🗑️ Supprimer",
+        icon: "🗑️",
+        label: "Supprimer",
         variant: "danger",
+        compact: true,
         closesModal: false,
         onClick: () => {
           closeModal();
@@ -328,8 +332,10 @@ export async function openResourceDetail(resource, projects, tasks) {
         },
       },
       {
+        icon: "💾",
         label: "Enregistrer",
         variant: "primary",
+        compact: true,
         closesModal: false,
         onClick: async () => {
           const title = bodyEl.querySelector("#res-detail-title").value.trim();

@@ -1301,17 +1301,21 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
     title: `${item.emoji} ${data.title}`,
     body,
     actions: [
-      { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true, onClick: () => onClose?.() },
       {
         // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
-        label: "🔗 Copier le lien",
+        icon: "🔗",
+        label: "Copier le lien",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/dashboard", isMeeting ? "Meeting" : "Decision", data.id),
       },
       {
-        label: "🗑️ Supprimer",
+        icon: "🗑️",
+        label: "Supprimer",
         variant: "danger",
+        compact: true,
         closesModal: false,
         onClick: () => {
           closeModal();
@@ -1329,8 +1333,10 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
         },
       },
       {
+        icon: "💾",
         label: "Enregistrer",
         variant: "primary",
+        compact: true,
         closesModal: false,
         onClick: async () => {
           const title = bodyEl.querySelector("#rd-title").value.trim();

@@ -963,7 +963,7 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
 
     <div class="chip-row fiche-tabs" role="tablist">
       <button type="button" class="chip active" data-tab="details" role="tab">Détails</button>
-      <button type="button" class="chip" data-tab="steps" role="tab">Sous-étapes</button>
+      <button type="button" class="chip" data-tab="steps" role="tab" id="fiche-tab-steps">Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</button>
       <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
     </div>
 
@@ -996,7 +996,15 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     </div>
 
     <div class="fiche-tabpanel" data-tabpanel="activity" hidden>
-      <div class="section-title" style="margin-top:0;">🗓️ Réunion</div>
+      <!-- "🗓️ Réunion" et "📅 Réunions Outlook associées" fusionnés en un seul bloc (retour de
+           Charles-Henri, 06/09/2026 : "il y a la rubrique réunion et réunion Outlook associée
+           c'est un peu redondant") — un seul "🗓️ Réunions" : l'outil de composition/création
+           (.ics) toujours visible en haut, la liste de celles déjà associées repliée par défaut
+           en dessous, comme un sous-bloc du même sujet plutôt que deux rubriques concurrentes.
+           Aucun id/champ renommé (meeting-title-preview, copy-meeting-title-btn,
+           create-meeting-btn, detail-outlook, outlook-title, outlook-date, add-outlook-btn) —
+           seul l'habillage visuel change, tout le câblage plus bas continue de fonctionner. -->
+      <div class="section-title" style="margin-top:0;">🗓️ Réunions</div>
       <div class="field" style="margin-bottom:8px;">
         <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
       </div>
@@ -1004,24 +1012,25 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
         <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
       </div>
-      <!-- Ressources / Réunions Outlook / Notes : blocs secondaires repliés par défaut (audit de
-           simplification du 02/09/2026 — "trop de blocs ouverts en permanence sur une fiche déjà
-           longue") ; le compte dans le résumé garde l'information visible sans avoir à déplier. -->
+      <!-- Ressources / Réunions déjà associées / Notes : blocs secondaires repliés par défaut
+           (audit de simplification du 02/09/2026 — "trop de blocs ouverts en permanence sur une
+           fiche déjà longue") ; le compte dans le résumé garde l'information visible sans avoir
+           à déplier. -->
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">📅 Déjà associées (${(task.outlookMeetings || []).length})</summary>
+        <div class="card" id="detail-outlook" style="margin-top:8px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+          <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+          <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+          <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
+        </div>
+      </details>
       <details class="fiche-section">
         <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
         <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
         <div style="display:flex;gap:8px;margin-bottom:16px;">
           <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
           <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
-        </div>
-      </details>
-      <details class="fiche-section">
-        <summary class="section-title" style="cursor:pointer;">📅 Réunions Outlook associées (${(task.outlookMeetings || []).length})</summary>
-        <div class="card" id="detail-outlook" style="margin-top:8px;margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-          <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-          <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-          <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
         </div>
       </details>
       <details class="fiche-section">
@@ -1061,9 +1070,16 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     await tasksApi.toggleStep(task.id, stepKey, done);
   });
   const checklistTitleEl = body.querySelector("#checklist-title");
+  // Compte visible directement dans le libellé de l'onglet (retour de Charles-Henri,
+  // 06/09/2026 : "qu'on voie nombre d'étape effectué / nombre d'étape total directement dans
+  // le titre de l'onglet") — même texte que le titre de section à l'intérieur du panneau,
+  // les deux se mettent à jour ensemble à chaque changement de la checklist.
+  const fichTabStepsEl = body.querySelector("#fiche-tab-steps");
   function updateChecklistTitle() {
     const list = task.checklist || [];
-    checklistTitleEl.textContent = `☑️ Sous-étapes (${list.filter((c) => c.done).length}/${list.length})`;
+    const count = `${list.filter((c) => c.done).length}/${list.length}`;
+    checklistTitleEl.textContent = `☑️ Sous-étapes (${count})`;
+    fichTabStepsEl.textContent = `Sous-étapes (${count})`;
   }
   renderChecklist(body.querySelector("#detail-checklist"), task.checklist || [], {
     onAdd: async (text) => {
@@ -1172,12 +1188,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     title: "Détail de la tâche",
     body,
     actions: [
-      { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true, onClick: () => onClose?.() },
       {
         // Lien de partage (retour de Charles-Henri, vague 23 : "un lien que je peux copier et
         // mettre dans une conversation Teams") — voir js/components/copyLink.js.
-        label: "🔗 Copier le lien",
+        icon: "🔗",
+        label: "Copier le lien",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/kanban", "Task", task.id),
       },
@@ -1185,14 +1203,18 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
         // parmi les 3 propositions de visualisation automatique) : une image PNG ponctuelle
         // plutôt qu'une vue maintenue dans l'app — voir js/components/overviewExport.js.
-        label: "📄 Exporter",
+        icon: "📄",
+        label: "Exporter",
         variant: "secondary",
+        compact: true,
         closesModal: false,
         onClick: () => exportTaskOverview(task, { project: taskProject, statusLabel: tasksApi.STATUS_LABELS[task.status] }),
       },
       {
-        label: "🗑️ Supprimer",
+        icon: "🗑️",
+        label: "Supprimer",
         variant: "danger",
+        compact: true,
         closesModal: false,
         onClick: () => {
           closeModal();
@@ -1209,8 +1231,10 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         },
       },
       {
+        icon: "💾",
         label: "Enregistrer",
         variant: "primary",
+        compact: true,
         closesModal: false,
         onClick: async () => {
           const title = bodyEl.querySelector("#detail-title").value.trim();
