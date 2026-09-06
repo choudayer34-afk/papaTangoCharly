@@ -85,6 +85,19 @@ export function renderInbox(container) {
         </div>
       `;
       const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "8px";
+      // Modifier le texte capturé sans avoir à qualifier (retour de Charles-Henri,
+      // 06/09/2026, voir js/domain/inbox.js#updateRawContent) — bouton icône distinct de
+      // "Traiter" : l'un corrige le texte, l'autre choisit ce qu'il devient.
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn btn-ghost btn-sm";
+      editBtn.title = "Modifier le texte";
+      editBtn.setAttribute("aria-label", "Modifier le texte");
+      editBtn.textContent = "✏️";
+      editBtn.addEventListener("click", () => openEditRawModal(item));
+      actions.appendChild(editBtn);
       const btn = document.createElement("button");
       btn.className = "btn btn-secondary btn-sm";
       btn.textContent = "Traiter";
@@ -99,6 +112,43 @@ export function renderInbox(container) {
 
   const unsubscribe = inboxApi.subscribePending(render);
   return unsubscribe;
+}
+
+/**
+ * Corrige le texte d'une capture encore en attente, sans passer par la qualification (retour
+ * de Charles-Henri, 06/09/2026 : "je dois pouvoir modifier le titre même si je la qualifie
+ * pas") — une petite modale dédiée plutôt que de rendre `raw` éditable dans openQualifyModal :
+ * ce dernier reste "je choisis ce que ça devient", celle-ci reste "je corrige ce que j'ai
+ * écrit", les deux actions restent indépendantes l'une de l'autre.
+ */
+function openEditRawModal(item) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="inbox-edit-raw">Texte capturé</label>
+      <textarea id="inbox-edit-raw">${escapeHtml(item.rawContent)}</textarea>
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: "✏️ Modifier",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost" },
+      {
+        label: "Enregistrer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const text = bodyEl.querySelector("#inbox-edit-raw").value.trim();
+          if (!text) return;
+          await inboxApi.updateRawContent(item.id, text);
+          close();
+          showToast("Modifié");
+        },
+      },
+    ],
+  });
+  setTimeout(() => bodyEl.querySelector("#inbox-edit-raw").focus(), 30);
 }
 
 /** Exportée pour la Revue hebdomadaire guidée (§51, components/weeklyReview.js), qui doit
