@@ -24,6 +24,7 @@ import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
 import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
+import { logView, logLogin } from "./services/usageTracking.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
 import { parseOpenParam } from "./services/deeplink.js";
@@ -74,9 +75,9 @@ const NAV_ITEMS = [
 // itère désormais NAV_ITEMS et non plus ROUTES, mais HIDDEN_ROUTES garde ce même principe de
 // prudence pour toute future page de référence).
 const HIDDEN_ROUTES = {
-  "#/guide": { render: renderGuide },
-  "#/whatsnew": { render: renderWhatsNew },
-  "#/memory": { render: renderMemoryTraining },
+  "#/guide": { render: renderGuide, label: "Guide" },
+  "#/whatsnew": { render: renderWhatsNew, label: "Nouveautés" },
+  "#/memory": { render: renderMemoryTraining, label: "Mémoire" },
 };
 
 const appRoot = document.getElementById("app");
@@ -143,12 +144,17 @@ function renderRoute() {
     currentCleanup?.();
     currentCleanup = ROUTES["#/dashboard"].render(appRoot) || null;
     updateNavActive("#/dashboard");
+    logView("#/dashboard", ROUTES["#/dashboard"].label).catch(() => {});
     return;
   }
   currentCleanup?.();
   currentCleanup = known.render(appRoot) || null;
   updateNavActive(path);
   maybeOpenDeepLink(queryString);
+  // Suivi d'usage superadmin (retour de Charles-Henri, 06/09/2026, voir
+  // js/services/usageTracking.js) — jamais bloquant : un souci de règle Firestore ou de réseau
+  // ne doit jamais gêner la navigation normale de qui que ce soit.
+  logView(path, known.label).catch(() => {});
 }
 
 function mountApp() {
@@ -248,6 +254,10 @@ onAuthChange(async (user) => {
       await signOutUser();
       return;
     }
+    // Suivi d'usage superadmin (retour de Charles-Henri, 06/09/2026, voir
+    // js/services/usageTracking.js) — une connexion par ouverture de session authentifiée, y
+    // compris pour la fenêtre de masquage privée ci-dessous (voir le commentaire de logLogin()).
+    logLogin().catch(() => {});
     // Fenêtre de masquage privée avant "Préparer mon point" (retour de Charles-Henri, vague 22
     // sexies, voir js/views/people.js#openPrepMaskThenPrep et js/views/prepMask.js) : une vraie
     // fenêtre de navigateur à part, ouverte par window.open() sur cette route dédiée, PAS
