@@ -48,6 +48,15 @@ a { color: inherit; }
 .view { padding: 0 var(--space-4); }
 
 /* ---------- Bottom nav ---------- */
+/* BUG corrigé (retour de Charles-Henri, 06/09/2026 : "les 5 boutons du bas ne sont pas
+   centrés sur iPhone — écrasé à gauche, espace libre à droite") — `justify-content` n'était
+   jamais défini ici (valeur par défaut `flex-start`), sans conséquence visible tant qu'il y
+   avait 8 icônes (elles remplissaient déjà presque toute la largeur d'un iPhone). Réduites à 5
+   par la vague 24, leur largeur cumulée (5 × 64px mini) laisse un vide net à droite d'un écran
+   qui les contenait avant sans déborder — `justify-content: space-evenly` les répartit
+   uniformément quelle que soit la largeur, sans rien changer au repli en défilement horizontal
+   (`overflow-x: auto`) qui reste le filet de sécurité si NAV_ITEMS grossit un jour au point de
+   ne plus tenir sur un écran. */
 .bottom-nav {
   position: fixed;
   bottom: 0; left: 0; right: 0;
@@ -55,6 +64,7 @@ a { color: inherit; }
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   display: flex;
+  justify-content: space-evenly;
   overflow-x: auto;
   z-index: 20;
 }
@@ -755,11 +765,32 @@ tbody.drag-over-group {
 }
 .modal .modal-actions {
   display: flex;
+  /* BUG corrigé (retour de Charles-Henri, 06/09/2026 : "je ne vois pas le bouton sauvegarder
+     [...] la modale est légèrement trop large") — sans `flex-wrap`, une rangée de 5 boutons
+     (Fermer/Copier le lien/Exporter/Supprimer/Enregistrer sur la fiche Tâche/Projet/Personne/
+     Suivi) déborde largement un écran d'iPhone ; `.modal` ayant `overflow: hidden`, ce
+     débordement était purement et simplement DÉCOUPÉ plutôt que scrollable — le dernier bouton
+     de la rangée ("Enregistrer") disparaissait hors champ, invisible plutôt qu'accessible en
+     scrollant. `flex-wrap: wrap` fait passer les boutons en trop sur une seconde ligne plutôt
+     que de les faire disparaître — filet de sécurité valable pour toute modale de l'app, en
+     plus du passage en icônes ci-dessous (`.btn-compact`) qui évite le plus souvent d'en avoir
+     besoin sur les 4 fiches concernées. */
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-4);
   padding-top: var(--space-3);
   border-top: 1px solid var(--color-border);
   flex: none;
+}
+/* Boutons d'action compacts (retour de Charles-Henri, 06/09/2026 : "les boutons en bas trop
+   gros, il faudrait sans doute les remplacer par des icônes") — icône + libellé tant qu'il y a
+   la place, icône seule en dessous de 480px (téléphone) ; `title`/`aria-label` (voir modal.js)
+   gardent le libellé complet accessible même icône seule. */
+.btn-compact { padding: 8px 12px; }
+.btn-compact .btn-icon { font-size: 16px; line-height: 1; }
+@media (max-width: 480px) {
+  .btn-compact { padding: 8px; min-width: 40px; }
+  .btn-compact .btn-label { display: none; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -842,6 +873,38 @@ tbody.drag-over-group {
   background: var(--color-primary);
   color: var(--color-text-inverse);
   border-color: var(--color-primary);
+}
+
+/* ---------- Onglets de fiche (Tâche, vague 24) : "segmented control" façon iOS ----------
+   Retour de Charles-Henri, 06/09/2026 : "les onglets Détails/Sous-étapes/Activité se
+   confondent avec le reste, il faudrait qu'on voie bien que ce sont des onglets." Ce bloc
+   partage volontairement `.chip-row`/`.chip` (voir kanban.js#openTaskDetail — pas de nouvelle
+   classe HTML) mais les habille très différemment ici : un rail à fond gris qui contient les 3
+   onglets, l'actif porté par une pastille à fond plein qui se déplace d'un onglet à l'autre —
+   look "Réglages iPhone", le plus repérable comme groupe d'onglets parmi les 3 pistes
+   proposées. Chaque onglet occupe une part égale du rail (`flex:1`) plutôt que sa largeur
+   naturelle comme un chip de filtre normal, et le rail ne défile jamais horizontalement
+   (toujours exactement 3 onglets, jamais plus). */
+.fiche-tabs {
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  gap: 2px;
+  overflow-x: visible;
+  margin-bottom: var(--space-4);
+}
+.fiche-tabs .chip {
+  flex: 1 1 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  text-align: center;
+  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+}
+.fiche-tabs .chip.active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ---------- Menu "🔧 Filtrer" (Pilotage — audit de simplification du 02/09/2026) ----------
