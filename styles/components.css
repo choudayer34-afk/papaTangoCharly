@@ -875,16 +875,27 @@ tbody.drag-over-group {
   border-color: var(--color-primary);
 }
 
-/* ---------- Onglets de fiche (Tâche, vague 24) : "segmented control" façon iOS ----------
+/* ---------- Onglets de fiche (Tâche vague 24, Projet/Personne vague 25) : "segmented control"
+   façon iOS ----------
    Retour de Charles-Henri, 06/09/2026 : "les onglets Détails/Sous-étapes/Activité se
    confondent avec le reste, il faudrait qu'on voie bien que ce sont des onglets." Ce bloc
    partage volontairement `.chip-row`/`.chip` (voir kanban.js#openTaskDetail — pas de nouvelle
-   classe HTML) mais les habille très différemment ici : un rail à fond gris qui contient les 3
+   classe HTML) mais les habille très différemment ici : un rail à fond gris qui contient les
    onglets, l'actif porté par une pastille à fond plein qui se déplace d'un onglet à l'autre —
-   look "Réglages iPhone", le plus repérable comme groupe d'onglets parmi les 3 pistes
-   proposées. Chaque onglet occupe une part égale du rail (`flex:1`) plutôt que sa largeur
-   naturelle comme un chip de filtre normal, et le rail ne défile jamais horizontalement
-   (toujours exactement 3 onglets, jamais plus). */
+   look "Réglages iPhone". Chaque onglet occupe une part égale du rail (`flex:1`) plutôt que sa
+   largeur naturelle comme un chip de filtre normal.
+   BUG corrigé (retour de Charles-Henri, capture d'écran, fiche Personne : le 4e onglet
+   "Activité" coupé à mi-mot) : `.chip` (règle de base ci-dessus) porte `white-space: nowrap` et
+   un flex item garde par défaut `min-width: auto` — un onglet ne pouvait donc jamais rétrécir
+   sous la largeur de son texte non coupé. Invisible sur la fiche Tâche (3 onglets courts,
+   largeur cumulée < largeur d'un iPhone), mais avec 4 onglets et un libellé plus long ("Notes &
+   repères", "Sous-parties (3)"...) la somme dépassait la largeur du rail ; `.fiche-tabs` a
+   `overflow-x: visible` (volontaire, pour ne jamais reproduire le bug de couplage overflow-x/y
+   déjà rencontré sur `#kanban-filters`), donc rien n'y coupait le débordement — c'est le
+   `overflow: hidden` du `.modal` parent qui tranchait finalement le dernier onglet en plein
+   milieu. Corrigé par `min-width: 0` (autorise un onglet à rétrécir sous la rangée) et
+   `white-space: normal` (le texte passe sur 2 lignes plutôt que déborder) — le rail ne défile
+   toujours jamais horizontalement, il s'adapte à la place disponible. */
 .fiche-tabs {
   background: var(--color-surface-alt);
   border-radius: var(--radius-pill);
@@ -895,6 +906,9 @@ tbody.drag-over-group {
 }
 .fiche-tabs .chip {
   flex: 1 1 0;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.25;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
