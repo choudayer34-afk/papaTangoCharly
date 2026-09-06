@@ -15,6 +15,7 @@
 import { openModal } from "./modal.js";
 import { showToast } from "./toast.js";
 import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js";
+import * as usageTrackingApi from "../services/usageTracking.js";
 
 // Une entrée par application tierce. `tutorialHtml` répond à un besoin concret et récurrent
 // pour CETTE application précise plutôt qu'à une checklist générique — pour Firebase, c'est la
@@ -113,6 +114,10 @@ function openAdminPanel() {
       <label>Applications tierces</label>
       <div id="admin-apps-list"></div>
     </div>
+    <div class="field">
+      <label>Suivi d'usage</label>
+      <button type="button" id="admin-usage-btn" class="btn btn-secondary">📊 Voir l'activité des comptes</button>
+    </div>
   `;
 
   const listEl = body.querySelector("#admin-apps-list");
@@ -155,6 +160,79 @@ function openAdminPanel() {
       showToast("Impossible de copier — sélectionne et copie-le manuellement");
     }
   });
+
+  bodyEl.querySelector("#admin-usage-btn").addEventListener("click", () => {
+    openUsagePanel();
+  });
+}
+
+// Suivi d'usage superadmin (retour de Charles-Henri, 06/09/2026 : "est-ce que je peux avoir un
+// mode superadmin [...] avec des KPI sympa pour voir ce qui est utilisé, comment et quand ?") —
+// portée et logique d'agrégation détaillées dans js/services/usageTracking.js. Cette section
+// reste volontairement DANS 🔧 Administration plutôt qu'un nouvel onglet/écran (décision
+// explicite de Charles-Henri) — même bouton "← Retour" que openAppTutorial() pour rouvrir le
+// panneau derrière, puisque l'ouvrir a refermé cette modale-ci (une seule modale à la fois).
+async function openUsagePanel() {
+  const body = document.createElement("div");
+  body.innerHTML = `<div class="empty-state" style="padding:16px;">Chargement…</div>`;
+  const { bodyEl } = openModal({
+    title: "📊 Usage",
+    body,
+    dismissible: true,
+    actions: [{ label: "← Retour", variant: "ghost", onClick: () => openAdminPanel() }],
+  });
+
+  const events = await usageTrackingApi.fetchUsageEvents();
+  const stats = usageTrackingApi.computeUsageStats(events);
+  renderUsageStats(bodyEl, stats);
+}
+
+function renderUsageStats(bodyEl, stats) {
+  if (stats.totalEvents === 0) {
+    bodyEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune donnée pour l'instant — reviens une fois que les comptes autorisés auront ouvert l'appli.</div>`;
+    return;
+  }
+
+  const accountRows = stats.accounts
+    .map(
+      (acc) => `
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-weight:600;">${escapeHtml(acc.email)}</div>
+      <div class="item-meta">Dernière activité : ${formatDateTime(acc.lastSeen)}</div>
+      <div class="item-meta">${acc.loginCount} connexion${acc.loginCount > 1 ? "s" : ""} · ${acc.viewCount} écran${acc.viewCount > 1 ? "s" : ""} consulté${acc.viewCount > 1 ? "s" : ""}</div>
+      ${acc.topScreens.length ? `<div class="item-meta">Le plus consulté : ${acc.topScreens.map((s) => `${escapeHtml(s.label)} (${s.count})`).join(", ")}</div>` : ""}
+    </div>
+  `
+    )
+    .join("");
+
+  const globalRows = stats.topScreensGlobal.map((s) => `<li>${escapeHtml(s.label)} — ${s.count}</li>`).join("");
+
+  bodyEl.innerHTML = `
+    <p class="item-meta">Suivi depuis le ${formatDate(stats.since)} · ${stats.totalEvents} événement${stats.totalEvents > 1 ? "s" : ""}.</p>
+    <div class="field">
+      <label>Par compte</label>
+      ${accountRows}
+    </div>
+    <div class="field">
+      <label>Écrans les plus consultés (tous comptes)</label>
+      <ol style="padding-left:20px;">${globalRows}</ol>
+    </div>
+  `;
+}
+
+function formatDateTime(ts) {
+  return ts ? new Date(ts).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
+}
+
+function formatDate(ts) {
+  return ts ? new Date(ts).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "—";
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str || "";
+  return div.innerHTML;
 }
 
 // Modale dédiée par application (plutôt qu'un simple lien) : Charles-Henri veut retrouver, au
