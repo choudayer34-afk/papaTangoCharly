@@ -18,6 +18,9 @@ import {
   persistentMultipleTabManager,
   doc,
   getDoc,
+  collection,
+  getDocs,
+  addDoc,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -80,4 +83,25 @@ export async function isEmailAllowed(email) {
   const ref = doc(db, "allowedUsers", email.toLowerCase());
   const snap = await getDoc(ref);
   return snap.exists();
+}
+
+// Suivi d'usage superadmin (retour de Charles-Henri, 06/09/2026 : "est-ce que je peux avoir un
+// mode superadmin ou moi seul ch-houdayer@hotmail.fr peux voir l'activité des autres comptes ?
+// [...] avec des KPI sympa" — voir js/services/usageTracking.js pour la portée exacte retenue et
+// toute la logique d'agrégation). Collection top-niveau `usageEvents`, même principe que
+// `allowedUsers` ci-dessus : volontairement HORS du scope users/{uid} de storage.js, car c'est
+// l'inverse de la scope par utilisateur qu'il faut ici — n'importe quel compte doit pouvoir
+// écrire un événement sur lui-même, mais seul ADMIN_EMAIL doit pouvoir tous les relire. Ce
+// fichier reste le SEUL à parler à Firestore directement (voir l'en-tête) : usageTracking.js ne
+// fait que construire les événements à écrire et agréger ceux qu'on relit via ces deux
+// fonctions. Comme pour allowedUsers, il n'y a aucune UI pour gérer la règle de sécurité
+// correspondante — Charles-Henri l'applique lui-même à la main dans la console Firebase (voir
+// le texte de règle documenté dans usageTracking.js).
+export async function recordUsageEvent(event) {
+  await addDoc(collection(db, "usageEvents"), event);
+}
+
+export async function listUsageEvents() {
+  const snap = await getDocs(collection(db, "usageEvents"));
+  return snap.docs.map((d) => d.data());
 }
