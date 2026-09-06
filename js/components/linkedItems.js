@@ -16,9 +16,10 @@ import * as resourcesApi from "../domain/resources.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as inboxApi from "../domain/inbox.js";
+import * as objectivesApi from "../domain/objectives.js";
 import { openTaskDetail, openCreateTaskModal } from "../views/kanban.js";
 import { openProjectDetail, openCreateProjectModal } from "../views/projects.js";
-import { openPersonDetail, openEditFollowUpModal, openCreateFollowUpModal } from "../views/people.js";
+import { openPersonDetail, openEditFollowUpModal, openCreateFollowUpModal, openObjectiveDetail } from "../views/people.js";
 import { openResourceDetail, openCreateResourceModal } from "../views/resources.js";
 import { openRecentDetail, openCreateMeetingModal, openCreateDecisionModal } from "../views/dashboard.js";
 import { openKeptItemDetail } from "../views/inbox.js";
@@ -40,7 +41,7 @@ export const ENTITY_KINDS = [
 ];
 
 export async function fetchBundle() {
-  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems] = await Promise.all([
+  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives] = await Promise.all([
     tasksApi.listAll(),
     projectsApi.listAll(),
     peopleApi.listAll(),
@@ -49,8 +50,9 @@ export async function fetchBundle() {
     meetingsApi.listAll(),
     decisionsApi.listAll(),
     inboxApi.listKept(),
+    objectivesApi.listAll(),
   ]);
-  return { tasks, projects, people, followUps, resources, meetings, decisions, keptItems };
+  return { tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives };
 }
 
 /** Résout une référence {type, id} en { emoji, title, onOpen }, ou null si l'élément visé a
@@ -105,6 +107,19 @@ export function resolveRef(bundle, ref) {
         }
       );
     }
+    case "Objective": {
+      // Un Objectif se résout comme les autres — sauf qu'ouvrir sa fiche demande aussi la
+      // personne propriétaire (retour de Charles-Henri, 06/09/2026 : "pouvoir y rattacher
+      // d'autres projets ou faire un suivi" — voir js/views/people.js#openObjectiveDetail).
+      const o = bundle.objectives.find((x) => x.id === ref.id);
+      if (!o) return null;
+      const owner = bundle.people.find((p) => p.id === o.personId);
+      return {
+        emoji: o.status === "done" ? "✅" : "🎯",
+        title: o.title,
+        onOpen: () => openObjectiveDetail(o, owner, {}),
+      };
+    }
     case "Kept": {
       const k = (bundle.keptItems || []).find((x) => x.id === ref.id);
       // Résolu à null si l'Information a été auto-archivée depuis (§ balayage 15 jours,
@@ -133,6 +148,7 @@ function allRefs(bundle) {
     ...bundle.meetings.map((m) => ({ type: "Meeting", id: m.id })),
     ...bundle.decisions.map((d) => ({ type: "Decision", id: d.id })),
     ...(bundle.keptItems || []).map((k) => ({ type: "Kept", id: k.id })),
+    ...bundle.objectives.map((o) => ({ type: "Objective", id: o.id })),
   ];
 }
 

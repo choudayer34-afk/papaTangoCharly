@@ -11,9 +11,15 @@
 // sont désormais inclus. "je dois voir également le statut" : chaque résultat Tâche/Suivi/
 // Projet affiche son statut, seuls types de l'app où ce mot a un sens concret. Et "comment
 // cibler plus facilement une recherche" : un bandeau de chips par type (tous actifs par
-// défaut, comme aujourd'hui), avec Alt+1…Alt+8 pour les basculer sans la souris — cohérent
+// défaut, comme aujourd'hui), avec Alt+1…Alt+9 pour les basculer sans la souris — cohérent
 // avec le reste des raccourcis de cette vague (js/services/shortcuts.js), mais scopé à cette
 // seule modale pour ne jamais entrer en conflit avec Alt+1…8 qui change d'onglet ailleurs.
+//
+// Vague 25 (retour de Charles-Henri, 06/09/2026, en réponse à "vois-tu d'autres éléments ?") :
+// les Objectifs ont rejoint le système "🔗 Lié" cette même vague (voir js/views/people.js
+// #openObjectiveDetail) mais restaient introuvables par la recherche globale — le seul des 9
+// types de l'app absent d'ici. Ajoutés en 9e position ; `onKeydown` plus bas est déjà générique
+// (borné par `SEARCH_TYPES.length`), Alt+9 fonctionne donc sans rien y changer.
 
 import { openModal, closeModal } from "./modal.js";
 import * as tasksApi from "../domain/tasks.js";
@@ -24,15 +30,16 @@ import * as resourcesApi from "../domain/resources.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as inboxApi from "../domain/inbox.js";
+import * as objectivesApi from "../domain/objectives.js";
 import { openTaskDetail } from "../views/kanban.js";
 import { openProjectDetail } from "../views/projects.js";
-import { openPersonDetail, openEditFollowUpModal } from "../views/people.js";
+import { openPersonDetail, openEditFollowUpModal, openObjectiveDetail } from "../views/people.js";
 import { openResourceDetail } from "../views/resources.js";
 import { openRecentDetail } from "../views/dashboard.js";
 import { openKeptItemDetail } from "../views/inbox.js";
 
-// Ordre = celui des chips affichées et des touches Alt+1…Alt+8 qui leur correspondent.
-const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information/Idée"];
+// Ordre = celui des chips affichées et des touches Alt+1…Alt+9 qui leur correspondent.
+const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information/Idée", "Objectif"];
 
 function haystack(...parts) {
   return parts.filter(Boolean).join(" ").toLowerCase();
@@ -48,7 +55,7 @@ async function runSearch(query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
 
-  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems] = await Promise.all([
+  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives] = await Promise.all([
     tasksApi.listAll(),
     projectsApi.listAll(),
     peopleApi.listAll(),
@@ -57,6 +64,7 @@ async function runSearch(query) {
     meetingsApi.listAll(),
     decisionsApi.listAll(),
     inboxApi.listKept(),
+    objectivesApi.listAll(),
   ]);
 
   const results = [];
@@ -144,6 +152,22 @@ async function runSearch(query) {
         emoji: item.keptAsType === "idea" ? "💡" : "🧠",
         title: item.rawContent,
         onOpen: () => openKeptItemDetail(item),
+      });
+    }
+  }
+  // Objectifs (vague 25) — un Objectif n'a pas de journal de notes propre, mais chaque point
+  // (`entries`) porte un texte libre : inclus, sinon un point ancien deviendrait introuvable ici
+  // alors qu'il l'est déjà par ouverture directe de la fiche Objectif.
+  for (const o of objectives) {
+    const entriesText = (o.entries || []).map((e) => e.note).join(" ");
+    if (haystack(o.title, entriesText).includes(q)) {
+      const owner = people.find((p) => p.id === o.personId);
+      results.push({
+        type: "Objectif",
+        emoji: o.status === "done" ? "✅" : "🎯",
+        title: o.title,
+        meta: owner ? owner.name : "",
+        onOpen: () => openObjectiveDetail(o, owner, {}),
       });
     }
   }

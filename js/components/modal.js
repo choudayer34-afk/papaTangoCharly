@@ -9,7 +9,14 @@ let activeClose = null; // la fonction close() propre à la modale actuellement 
  * @param {Object} opts
  * @param {string} opts.title
  * @param {HTMLElement|string} opts.body - noeud DOM ou HTML à insérer dans le corps.
- * @param {Array<{label:string, variant?:string, onClick?:Function, closesModal?:boolean}>} opts.actions
+ * @param {Array<{label:string, variant?:string, onClick?:Function, closesModal?:boolean, icon?:string, compact?:boolean}>} opts.actions
+ *   `icon`/`compact` (retour de Charles-Henri, 06/09/2026 : "je ne vois pas le bouton
+ *   sauvegarder [...] il faudrait sans doute les remplacer par des icônes") — réservés aux
+ *   fiches à 5 actions (Tâche/Projet/Personne/Suivi) dont le texte cumulé dépasse la largeur
+ *   d'un iPhone : `compact: true` + `icon` affiche l'icône ET le libellé sur un écran assez
+ *   large, mais ne garde que l'icône en dessous de 480px (voir `.btn-compact` dans
+ *   styles/components.css) — `title`/`aria-label` gardent le libellé complet accessible même
+ *   icône seule. Les autres actions (non `compact`) sont inchangées, texte brut comme avant.
  * @param {boolean} [opts.dismissible=true]
  * @param {Function} [opts.onClose] - appelé une seule fois, quel que soit le chemin de
  *   fermeture (clic en dehors, Échap, ou n'importe quelle action) — utile pour un appelant qui
@@ -47,8 +54,14 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
     for (const action of actions) {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "btn " + (action.variant ? "btn-" + action.variant : "btn-secondary");
-      btn.textContent = action.label;
+      btn.className = "btn " + (action.variant ? "btn-" + action.variant : "btn-secondary") + (action.compact ? " btn-compact" : "");
+      if (action.compact && action.icon) {
+        btn.innerHTML = `<span class="btn-icon" aria-hidden="true">${action.icon}</span><span class="btn-label">${action.label}</span>`;
+        btn.title = action.label;
+        btn.setAttribute("aria-label", action.label);
+      } else {
+        btn.textContent = action.label;
+      }
       btn.addEventListener("click", () => {
         action.onClick?.();
         if (action.closesModal !== false) close();
