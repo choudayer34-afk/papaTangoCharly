@@ -32,6 +32,7 @@ import * as decisionsApi from "../domain/decisions.js";
 import * as inboxApi from "../domain/inbox.js";
 import * as objectivesApi from "../domain/objectives.js";
 import { openTaskDetail } from "../views/kanban.js";
+import { openDuplicateTaskModal } from "./duplicateTask.js";
 import { openProjectDetail } from "../views/projects.js";
 import { openPersonDetail, openEditFollowUpModal, openObjectiveDetail } from "../views/people.js";
 import { openResourceDetail } from "../views/resources.js";
@@ -78,6 +79,10 @@ async function runSearch(query) {
         title: t.title,
         status: `${tasksApi.STATUS_ICONS[t.status] || ""} ${tasksApi.STATUS_LABELS[t.status] || ""}`.trim(),
         onOpen: () => openTaskDetail(t, projects),
+        // "🗐 Dupliquer" directement depuis la recherche (retour de Charles-Henri, 07/09/2026 :
+        // "que ce soit via la recherche ou la tâche elle-même") — seul type à le proposer, une
+        // Tâche étant la seule fiche concernée par cette action.
+        onDuplicate: () => openDuplicateTaskModal(t, { onDuplicated: (nt) => openTaskDetail(nt, projects) }),
       });
     }
   }
@@ -245,6 +250,18 @@ export function openSearchModal() {
         closeModal();
         r.onOpen();
       });
+      if (r.onDuplicate) {
+        const dupBtn = document.createElement("button");
+        dupBtn.type = "button";
+        dupBtn.className = "btn btn-ghost btn-sm";
+        dupBtn.textContent = "🗐 Dupliquer";
+        dupBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeModal();
+          r.onDuplicate();
+        });
+        row.appendChild(dupBtn);
+      }
       card.appendChild(row);
     }
     resultsEl.appendChild(card);

@@ -5,7 +5,13 @@
 // (#/kanban, #/projects, #/calendar) ne changent pas : ce composant n'est qu'une rangée de
 // pastilles au-dessus de chacun des 3 écrans pour passer de l'un à l'autre sans repasser par la
 // barre du bas — aucun lien profond ni filtre propre à un de ces écrans n'est affecté.
-
+//
+// Rail segmenté façon "Réglages iPhone" (audit du 07/09/2026, retour de Charles-Henri : "on
+// s'y perd un peu" entre le choix d'écran et les filtres/vues juste en dessous) — réutilise
+// `.fiche-tabs`, le même style déjà posé sur les onglets Détails/Sous-étapes/Activité d'une
+// fiche (styles/components.css), plutôt qu'une classe dédiée : ce rail n'était jusqu'ici qu'une
+// `.chip-row` ordinaire, visuellement indiscernable d'une rangée de filtres. `pilotage-subnav`
+// reste sur le conteneur pour tout hook futur, mais ne porte plus aucun style à elle seule.
 const ITEMS = [
   { hash: "#/kanban", label: "📋 Tâches" },
   { hash: "#/projects", label: "📦 Projets" },
@@ -16,9 +22,9 @@ const ITEMS = [
  *  bon chip — comparaison exacte, pas de préfixe, les 3 hash étant fixes et connus. */
 export function renderPilotageSubNav(container, activeHash) {
   container.innerHTML = `
-    <div class="chip-row pilotage-subnav">
+    <div class="fiche-tabs pilotage-subnav" role="tablist">
       ${ITEMS.map(
-        (item) => `<a href="${item.hash}" class="chip${item.hash === activeHash ? " active" : ""}">${item.label}</a>`
+        (item) => `<a href="${item.hash}" class="chip${item.hash === activeHash ? " active" : ""}" role="tab">${item.label}</a>`
       ).join("")}
     </div>
   `;
