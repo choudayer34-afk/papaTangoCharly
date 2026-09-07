@@ -16,6 +16,12 @@ const ITEMS = [
   { hash: "#/kanban", label: "📋 Tâches" },
   { hash: "#/projects", label: "📦 Projets" },
   { hash: "#/calendar", label: "📅 Calendrier" },
+  // "🎯 Priorisation" (vague 33, retour de Charles-Henri, 07/09/2026 : "on pourra commencer
+  // après par le premier sujet" — matrice de priorisation. Choix explicite d'un nouvel onglet
+  // ICI, dans le rail déjà existant, plutôt qu'une icône de barre du bas supplémentaire (vague
+  // 24) ou une route sous ☰ Plus — vue js/views/priorisation.js) : c'est un classement du MÊME
+  // flux de Tâches que 📋 Tâches/📦 Projets, pas un écran de référence consulté ponctuellement.
+  { hash: "#/priorisation", label: "🎯 Priorisation" },
 ];
 
 /** `activeHash` : le hash de l'écran actuellement affiché (ex. "#/kanban"), pour surligner le

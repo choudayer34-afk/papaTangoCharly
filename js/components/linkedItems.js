@@ -81,7 +81,16 @@ export function resolveRef(bundle, ref) {
     }
     case "FollowUp": {
       const f = bundle.followUps.find((x) => x.id === ref.id);
-      return f && { emoji: "👀", title: f.title, onOpen: () => openEditFollowUpModal(f) };
+      if (!f) return null;
+      // Nom du collaborateur préfixé au titre (retour de Charles-Henri, 07/09/2026 : "je vois
+      // pas à qui est attribué le suivi [...] il me faudrait le nom du collaborateur [...] à
+      // tous les niveaux où ça apparaît") — même format "Nom — Titre" déjà utilisé pour un Suivi
+      // partout ailleurs dans l'app (dashboard.js, weeklyReview.js, search.js). `resolveRef` est
+      // LE point de passage unique pour afficher une référence {type, id} — corriger ici suffit
+      // à couvrir toutes les sections "🔗 Lié" (7 fiches), le sélecteur "🔗 Lier une fiche" et
+      // "🔄 Reprendre où j'en étais" (Dashboard) en un seul endroit, sans toucher à chacun.
+      const person = bundle.people.find((x) => x.id === f.personId);
+      return { emoji: "👀", title: person ? `${person.name} — ${f.title}` : f.title, onOpen: () => openEditFollowUpModal(f) };
     }
     case "Resource": {
       const r = bundle.resources.find((x) => x.id === ref.id);
