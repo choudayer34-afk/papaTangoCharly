@@ -140,6 +140,18 @@ export function renderPriorisation(container) {
    * une fois combinée au popover "🔧 Filtrer" replié ci-dessus. Chaque point est cliquable
    * (retour de Charles-Henri : "les points sont non cliquables du coup on ne sait pas à quoi ça
    * correspond") et ouvre directement la tâche, comme une ligne du classement complet.
+   *
+   * BUG corrigé (retour de Charles-Henri, 07/09/2026, capture d'écran : le graphique reste
+   * coupé malgré le correctif précédent) : le SVG était en `width:100%` sans limite — inoffensif
+   * sur mobile, mais `#app.app-wide` (>= 900px, voir styles/components.css) retire complètement
+   * le `max-width` habituel de `#app` pour laisser le Kanban utiliser toute la largeur de
+   * l'écran. La matrice héritait donc de cette largeur totale, quel que soit la taille réelle de
+   * l'écran (grand téléphone en paysage, fenêtre large) — et sa hauteur, liée à une proportion
+   * fixe (480×220), grandissait d'autant, dépassant largement la hauteur visible avant même
+   * d'atteindre le bas. `max-width:480px` fixe une taille plafond correspondant exactement aux
+   * unités du viewBox (1 unité = 1px maximum) : en dessous de 480px de large, rien ne change
+   * (toujours 100% de la largeur, comportement mobile inchangé) ; au-dessus, le graphique ne
+   * grandit plus jamais au-delà de 480×220, quelle que soit la largeur de la fenêtre.
    */
   function renderQuadrant(ranked) {
     const top = ranked.slice(0, 8);
@@ -169,7 +181,7 @@ export function renderPriorisation(container) {
       .join("");
 
     quadrantEl.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;" role="img" aria-label="Matrice urgence-impact — cliquer un point pour ouvrir la tâche correspondante">
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto;" role="img" aria-label="Matrice urgence-impact — cliquer un point pour ouvrir la tâche correspondante">
         <line x1="${PAD}" y1="${H - PAD}" x2="${W - PAD}" y2="${H - PAD}" stroke="var(--color-border)" stroke-width="1.5" />
         <line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H - PAD}" stroke="var(--color-border)" stroke-width="1.5" />
         <line x1="${(W / 2).toFixed(1)}" y1="${PAD}" x2="${(W / 2).toFixed(1)}" y2="${H - PAD}" stroke="var(--color-border)" stroke-width="1" stroke-dasharray="4 4" />

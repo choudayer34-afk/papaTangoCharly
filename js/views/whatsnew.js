@@ -33,6 +33,18 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "⚖️ Grille de décision structurée (fiche Décision)",
+        text: "Sur une fiche Décision, un cadre optionnel \"+ Ajouter une grille de décision\" pour trancher un sujet un peu lourd (garder un prestataire, lancer un chantier) plutôt qu'une simple case \"décision + date\" : plusieurs options comparées sur des critères pondérés — 💰 Coût, ⚠️ Risque, ↩️ Réversibilité, ⏰ Urgence par défaut, modifiables et complétables. Chaque option notée de 1 à 5 sur chaque critère fait apparaître une recommandation (🏆 l'option au total pondéré le plus haut) qui se met à jour au fil de la saisie, avant même d'enregistrer. Une fois enregistrée, la grille (et sa recommandation) reste tracée dans l'historique de la décision — retrouvable telle quelle des mois plus tard, plutôt qu'un simple \"Décision modifiée\" muet sur le raisonnement suivi.",
+        howTo: "Ouvrir une fiche Décision → \"+ Ajouter une grille de décision\". \"🗳️ Enregistrer la grille\" trace le choix dans l'historique ; \"🗑️ Retirer la grille\" revient à une décision simple sans perdre le reste de la fiche.",
+        gain: "Comparer plusieurs options sur les mêmes critères plutôt qu'à l'instinct, et retrouver trois mois plus tard pourquoi une option a été préférée à une autre.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "⚖️ Répartition de la charge (Équipe)",
         text: "Un nouveau mode \"⚖️ Charge\" dans l'onglet Équipe, à côté de \"👥 Tous\"/\"👔 Mon manager\" : pour chaque collaborateur, le nombre de Suivis actifs qu'il te doit, ceux en retard et ceux stagnants (5 j sans mouvement) — celui qui a la charge la plus légère est mis en avant. Au moment de créer un nouveau Suivi sans avoir déjà choisi la personne, une suggestion apparaît directement dans le formulaire (\"💡 Suggestion : Camille a la charge la plus légère\") plutôt que de devoir aller consulter l'onglet Équipe à part. Les Tâches n'ayant jamais d'attributaire dans cette app, seuls les Suivis \"j'attends quelque chose de lui\" comptent dans la charge — pas ceux où c'est toi qui dois transmettre une information.",
         howTo: "Onglet Équipe → \"⚖️ Charge\". Ou directement dans \"Nouveau suivi\" (sans personne déjà choisie) : bouton \"Choisir\" à côté de la suggestion.",
@@ -54,6 +66,11 @@ const WHATS_NEW = [
         type: "fix",
         title: "🎯 Priorisation : matrice plus compacte, points cliquables, légende des couleurs",
         text: "Trois ajustements sur la matrice urgence × impact : elle prenait plus de hauteur qu'un écran normal (filtre Casquette replié dans un popover \"🔧 Filtrer\", matrice moins haute) ; ses points n'étaient pas cliquables (chacun ouvre désormais la tâche correspondante, comme une ligne du classement complet) ; et les couleurs de la barre à 3 segments du classement n'étaient pas expliquées (légende ajoutée juste au-dessus, avec le poids courant de chaque signal en %).",
+      },
+      {
+        type: "fix",
+        title: "🎯 Priorisation : la matrice reste plafonnée à sa taille même sur un grand écran",
+        text: "Le correctif précédent réduisait le format du graphique, mais pas sa taille réelle : sur un écran large (grand téléphone en paysage, fenêtre large), la matrice reprend toute la largeur disponible et grandissait d'autant en hauteur, redevenant plus haute que l'écran. Elle a désormais une taille maximale fixe, quelle que soit la largeur de l'écran.",
       },
     ],
   },

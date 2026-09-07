@@ -30,6 +30,7 @@ import { openCaptureModal } from "../components/capture.js";
 import { getDraft, clearDraft } from "../services/draftStore.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { copyEntityLink } from "../components/copyLink.js";
+import { renderDecisionGrid } from "../components/decisionGrid.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -1466,7 +1467,7 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
         ${projects.map((p) => `<option value="${p.id}" ${p.id === data.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
-    ${isMeeting ? `<div id="rd-canevas"></div>` : ""}
+    ${isMeeting ? `<div id="rd-canevas"></div>` : `<div class="section-title">⚖️ Grille de décision</div><div id="detail-decision-grid" style="margin-bottom:16px;"></div>`}
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
@@ -1502,6 +1503,13 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
           onDecline: () => openRecentDetail(item, projects, { onClose }),
         });
       }
+    });
+  } else {
+    renderDecisionGrid(body.querySelector("#detail-decision-grid"), data, {
+      onReopen: () => {
+        closeModal();
+        openRecentDetail(item, projects, { onClose });
+      },
     });
   }
 
