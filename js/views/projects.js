@@ -26,6 +26,8 @@ import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
+import * as projectHealthApi from "../domain/projectHealth.js";
+import { renderProjectHealth } from "../components/projectHealth.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -70,6 +72,7 @@ export function renderProjects(container) {
         <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
         <button type="button" class="chip" data-view="list">📋 Liste</button>
         <button type="button" class="chip" data-view="category">🗂️ Par catégorie</button>
+        <button type="button" class="chip" data-view="health">🩺 Santé</button>
         <details class="filter-popover" id="projects-filter-popover">
           <summary class="chip">🔧 Filtrer &amp; trier<span class="filter-popover-badge" id="projects-filter-badge" hidden></span></summary>
           <div class="filter-popover-panel">
@@ -96,12 +99,18 @@ export function renderProjects(container) {
       </div>
       <div id="projects-list"></div>
       <div id="projects-board" class="projects-board" style="display:none;"></div>
+      <!-- "🩺 Santé" (§49, détecteur de signaux faibles) : un 3e mode de vue de plus, même
+           bascule que Liste/Par catégorie ci-dessus plutôt qu'un nouvel onglet Pilotage — un
+           score de santé par projet n'est qu'une autre façon de regarder le même flux de
+           Projets, pas un flux de données différent. -->
+      <div id="projects-health" style="display:none;"></div>
     </div>
   `;
 
   renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/projects");
   const listEl = container.querySelector("#projects-list");
   const boardEl = container.querySelector("#projects-board");
+  const healthEl = container.querySelector("#projects-health");
   const subtitleEl = container.querySelector("#projects-subtitle");
   const statusFilterEl = container.querySelector("#status-filter");
   const sortToggleEl = container.querySelector("#sort-toggle");
@@ -117,9 +126,15 @@ export function renderProjects(container) {
   let viewMode = pilotageView.getViewState().projectsMode;
   function updateViewToggle() {
     controlsEl.querySelectorAll("[data-view]").forEach((chip) => chip.classList.toggle("active", chip.dataset.view === viewMode));
+    // "🩺 Santé" (§49) a sa propre logique de tri (par score) et ne montre toujours que les
+    // projets actifs — Statut/Tri/Catégorie n'ont pas de prise dessus, même principe que
+    // Priorisation/Charge qui ont chacun leurs propres réglages plutôt que d'hériter de ceux
+    // d'un autre écran.
+    filterPopoverEl.style.display = viewMode === "health" ? "none" : "";
     categoryFilterGroupEl.style.display = viewMode === "category" ? "none" : "";
-    listEl.style.display = viewMode === "category" ? "none" : "";
+    listEl.style.display = viewMode === "list" ? "" : "none";
     boardEl.style.display = viewMode === "category" ? "" : "none";
+    healthEl.style.display = viewMode === "health" ? "" : "none";
   }
   updateViewToggle();
   controlsEl.querySelectorAll("[data-view]").forEach((chip) => {
@@ -151,6 +166,7 @@ export function renderProjects(container) {
   let rawProjects = [];
   let projects = [];
   let tasks = [];
+  let followUps = [];
   let sortMode = "manual";
   let categories = {};
   let categoryFilter = "all";
@@ -194,12 +210,23 @@ export function renderProjects(container) {
     });
   });
 
-  /** Redessine la vue actuellement affichée (Liste ou Par catégorie) — un seul point d'entrée
-   *  pour tous les déclencheurs (filtres, tri, bascule de vue, données à jour), pour ne jamais
-   *  en oublier un qui redessinerait la mauvaise vue ou aucune des deux. */
+  /** Redessine la vue actuellement affichée (Liste, Par catégorie ou Santé) — un seul point
+   *  d'entrée pour tous les déclencheurs (filtres, tri, bascule de vue, données à jour), pour ne
+   *  jamais en oublier un qui redessinerait la mauvaise vue ou aucune des trois. */
   function renderCurrent() {
     if (viewMode === "category") renderCategoryBoard();
+    else if (viewMode === "health") renderHealth();
     else render();
+  }
+
+  /** "🩺 Santé" (§49) : toujours les projets ACTIFS (rankByHealth filtre déjà `status ===
+   *  "active"" en interne), indépendamment du filtre Statut/Catégorie/Tri de la vue Liste — ce
+   *  n'est pas une liste filtrable de plus, c'est un tableau de bord à part entière. */
+  function renderHealth() {
+    const ranked = projectHealthApi.rankByHealth(rawProjects, tasks, followUps);
+    renderProjectHealth(healthEl, ranked, {
+      onOpenProject: (project) => openProjectDetail(project, tasks.filter((t) => t.projectId === project.id)),
+    });
   }
 
   /**
@@ -453,11 +480,19 @@ export function renderProjects(container) {
     tasks = items;
     renderCurrent();
   });
+  // Suivis en retard rattachés au projet — un des signaux de "🩺 Santé" (§49) ; jamais utilisé
+  // par les vues Liste/Par catégorie, mais un seul abonnement partagé plutôt qu'un chargement à
+  // chaque bascule vers ce mode évite un flash "aucun signal" le temps de la requête.
+  const unsubFollowUps = followUpsApi.subscribe((items) => {
+    followUps = items;
+    renderCurrent();
+  });
 
   return function cleanup() {
     container.classList.remove("app-wide");
     unsubProjects();
     unsubTasks();
+    unsubFollowUps();
     document.removeEventListener("click", closeFilterPopoverOnOutsideClick);
   };
 }

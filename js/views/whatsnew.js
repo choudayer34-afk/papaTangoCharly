@@ -33,6 +33,18 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "🩺 Santé des projets (onglet Projets)",
+        text: "Un 3e mode d'affichage \"🩺 Santé\" dans l'onglet Projets (à côté de \"📋 Liste\"/\"🗂️ Par catégorie\") : chaque projet actif reçoit un score de santé sur 100, calculé depuis ce qui existe déjà dans l'app — tâches en retard (au retard cumulé, pas juste au nombre), tâches bloquées, tâches en pause, et suivis en retard rattachés au projet. Les projets sont triés du moins bon au meilleur, avec une jauge visuelle et les signaux précis qui expliquent le score (\"📈 Retard cumulé +8 j sur 2 tâches\", \"⏸️ 1 tâche en pause\"...) — un projet sans signal affiche \"🟢 Aucun signal notable\" et sa prochaine échéance à titre indicatif.",
+        howTo: "Onglet Pilotage → Projets → \"🩺 Santé\". Cliquer une ligne ouvre directement la fiche du projet concerné.",
+        gain: "Repérer une dérive sur un projet avant qu'elle ne devienne un franc retard, plutôt qu'à la Revue hebdomadaire seulement.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "⚖️ Grille de décision structurée (fiche Décision)",
         text: "Sur une fiche Décision, un cadre optionnel \"+ Ajouter une grille de décision\" pour trancher un sujet un peu lourd (garder un prestataire, lancer un chantier) plutôt qu'une simple case \"décision + date\" : plusieurs options comparées sur des critères pondérés — 💰 Coût, ⚠️ Risque, ↩️ Réversibilité, ⏰ Urgence par défaut, modifiables et complétables. Chaque option notée de 1 à 5 sur chaque critère fait apparaître une recommandation (🏆 l'option au total pondéré le plus haut) qui se met à jour au fil de la saisie, avant même d'enregistrer. Une fois enregistrée, la grille (et sa recommandation) reste tracée dans l'historique de la décision — retrouvable telle quelle des mois plus tard, plutôt qu'un simple \"Décision modifiée\" muet sur le raisonnement suivi.",
         howTo: "Ouvrir une fiche Décision → \"+ Ajouter une grille de décision\". \"🗳️ Enregistrer la grille\" trace le choix dans l'historique ; \"🗑️ Retirer la grille\" revient à une décision simple sans perdre le reste de la fiche.",
