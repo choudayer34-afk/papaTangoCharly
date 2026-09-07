@@ -8,6 +8,7 @@ import { renderKanban } from "./views/kanban.js";
 import { renderProjects } from "./views/projects.js";
 import { renderPeople } from "./views/people.js";
 import { renderCalendar } from "./views/calendar.js";
+import { renderPriorisation } from "./views/priorisation.js";
 import { renderResources } from "./views/resources.js";
 import { renderPrompts } from "./views/prompts.js";
 import { renderMore } from "./views/more.js";
@@ -48,6 +49,9 @@ const ROUTES = {
   // route ; voir js/views/people.js et js/views/management.js#renderManagerSection.
   "#/people": { render: renderPeople, label: "Équipe", icon: "👥" },
   "#/calendar": { render: renderCalendar, label: "Calendrier", icon: "📅" },
+  // Matrice de priorisation (vague 33) — 4e sous-onglet de "Pilotage" (voir NAV_ITEMS
+  // ci-dessous et js/components/pilotageSubNav.js), même principe que Tâches/Projets/Calendrier.
+  "#/priorisation": { render: renderPriorisation, label: "Priorisation", icon: "🎯" },
   "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
   "#/prompts": { render: renderPrompts, label: "Prompts", icon: "🤖" },
   "#/more": { render: renderMore, label: "Plus", icon: "☰" },
@@ -65,7 +69,7 @@ const ROUTES = {
 const NAV_ITEMS = [
   { hash: "#/dashboard", label: "Accueil", icon: "🏠" },
   { hash: "#/inbox", label: "Inbox", icon: "📥" },
-  { hash: "#/kanban", label: "Pilotage", icon: "📋", activeFor: ["#/kanban", "#/projects", "#/calendar"] },
+  { hash: "#/kanban", label: "Pilotage", icon: "📋", activeFor: ["#/kanban", "#/projects", "#/calendar", "#/priorisation"] },
   { hash: "#/people", label: "Équipe", icon: "👥" },
   { hash: "#/more", label: "Plus", icon: "☰", activeFor: ["#/more", "#/resources", "#/prompts", "#/guide", "#/whatsnew", "#/memory"] },
 ];
