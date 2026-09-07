@@ -90,8 +90,40 @@ export async function getPreferences() {
     lastNotifShownDate: null,
     customShortcuts: {},
     myObjectives: "",
+    homeMode: "classic",
+    seenWhatsNewCount: 0,
     ...current,
   };
+}
+
+/**
+ * "🆕 Nouveautés" (audit TDAH ciblé du 07/09/2026, retour de Charles-Henri : "ça manque de
+ * notes de mises à jour... il faut qu'on sache que c'est une nouveauté") — combien d'entrées
+ * de `js/views/whatsnew.js#WHATS_NEW` ce compte a déjà vues, comparé au total actuel pour savoir
+ * combien sont nouvelles (voir js/components/whatsNewBadge.js). Un simple compteur plutôt qu'un
+ * id de dernière entrée vue : WHATS_NEW ne grandit jamais que par le haut (plus récent en
+ * premier), donc la différence de compte suffit et survit même si une future vague réorganisait
+ * les groupes. Remis à jour dès l'ouverture de la page Nouveautés (voir renderWhatsNew), jamais
+ * par l'utilisateur lui-même.
+ */
+export async function setSeenWhatsNewCount(count) {
+  const current = await getPreferences();
+  if (count <= current.seenWhatsNewCount) return current; // ne revient jamais en arrière
+  return storage.put(COLLECTION, { ...current, seenWhatsNewCount: count });
+}
+
+/**
+ * Mode d'affichage de l'Accueil (audit TDAH ciblé du 07/09/2026, retour de Charles-Henri après
+ * comparaison de plusieurs pistes) : "classic" (comportement actuel, inchangé) ou "focus" (une
+ * seule chose à la fois, triée par urgence — retard d'abord, puis échéance proche, puis pause —
+ * avec un accès explicite "Tout voir" vers la liste complète et le reste de l'Accueil, rien de
+ * cet accès n'est supprimé). Un réglage PAR COMPTE (comme le reste de `preferences`), pas un
+ * remplacement de l'existant : chacun choisit ce qui lui convient, TDAH ou non — voir
+ * js/views/dashboard.js#applyHomeModeVisibility.
+ */
+export async function setHomeMode(mode) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, homeMode: mode === "focus" ? "focus" : "classic" });
 }
 
 /** "🎯 Mes objectifs" (ligne directrice personnelle de Charles-Henri, vague 21) — un texte
