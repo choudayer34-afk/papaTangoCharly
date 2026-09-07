@@ -226,6 +226,15 @@ export async function setFocusOverride(date, taskIds) {
   return storage.put(COLLECTION, { ...current, focusOverride: { date, taskIds } });
 }
 
+/** Poids de la matrice de priorisation (vague 33, js/domain/priorisation.js) — "le scoring doit
+ *  être paramétrable par l'utilisateur mais on peut la définir avec valeur par défaut" (retour
+ *  de Charles-Henri) : réglés depuis l'onglet 🎯 Priorisation, valeurs par défaut sinon
+ *  (`priorisationApi.DEFAULT_WEIGHTS`, jamais dupliquées ici). */
+export async function setPriorityWeights(weights) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, priorityWeights: weights });
+}
+
 const RECENTLY_VIEWED_MAX = 3;
 
 /** Enregistre l'ouverture d'une fiche pour "🔄 Reprendre où j'en étais" (js/views/

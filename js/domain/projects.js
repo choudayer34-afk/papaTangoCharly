@@ -40,6 +40,10 @@ export async function createProject(data) {
     color: data.color || "#4C56C4",
     category: data.category || null,
     status: "active", // active | done | archived
+    // "⭐ Projet prioritaire" (vague 33, retour de Charles-Henri : "impact — le projet est-il
+    // critique ?") — signal manuel et optionnel consommé par js/domain/priorisation.js pour la
+    // matrice de priorisation ; faux par défaut, aucune saisie supplémentaire imposée.
+    critical: !!data.critical,
     steps: buildSteps("project"), // canevas Projet (§17, §78.9) — cochable depuis la fiche
     parts: [],
     order: data.order ?? Date.now(),
