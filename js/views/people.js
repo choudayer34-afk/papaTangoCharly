@@ -15,6 +15,8 @@ import { renderNotesBlock } from "../components/notesBlock.js";
 import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderManagerSection } from "./management.js";
+import { renderWorkloadSection } from "./workload.js";
+import * as workloadApi from "../domain/workload.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { renderMaskChecklist } from "./prepMask.js";
@@ -59,6 +61,7 @@ export function renderPeople(container) {
       <div class="chip-row" id="people-mode-toggle">
         <button type="button" class="chip" data-mode="all">👥 Tous</button>
         <button type="button" class="chip" data-mode="manager">👔 Mon manager</button>
+        <button type="button" class="chip" data-mode="load">⚖️ Charge</button>
       </div>
       <div id="people-list"></div>
     </div>
@@ -93,6 +96,18 @@ export function renderPeople(container) {
         ? `${managers.length} manager${managers.length > 1 ? "s" : ""}`
         : "Pas encore de manager renseigné";
       renderManagerSection(listEl, people, followUps);
+      return;
+    }
+
+    // "⚖️ Charge" (vague 34, retour de Charles-Henri : assistant de répartition de charge) —
+    // même principe que "👔 Mon manager" ci-dessus, un 3e mode du même chip-row plutôt qu'un
+    // onglet séparé (voir js/views/workload.js).
+    if (mode === "load") {
+      const collaborateurs = people.filter((p) => p.type !== "manager");
+      subtitleEl.textContent = collaborateurs.length
+        ? `${collaborateurs.length} collaborateur${collaborateurs.length > 1 ? "s" : ""}`
+        : "Pas encore de collaborateur renseigné";
+      renderWorkloadSection(listEl, people, followUps);
       return;
     }
 
@@ -1112,10 +1127,21 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
  * vient s'ajouter par-dessus, pas à la place.
  */
 export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", defaultDueDate = "", defaultControlDate = "", onCreated, onCancel } = {}) {
-  const [projects, people] = await Promise.all([
+  const [projects, people, existingFollowUps] = await Promise.all([
     projectsApi.listAll(),
     person ? Promise.resolve(null) : peopleApi.listAll(),
+    person ? Promise.resolve(null) : followUpsApi.listAll(),
   ]);
+  // "💡 Suggestion" (vague 34, retour de Charles-Henri : "il te suggérerait à qui confier un
+  // nouveau sujet plutôt que de le décider à l'instinct ou par défaut sur la même personne") —
+  // calculée ici, au moment précis de la décision, plutôt que seulement consultable à part sur
+  // l'onglet Équipe (voir js/views/workload.js) : ce formulaire est LE point de passage commun
+  // à tous les endroits où un nouveau Suivi peut naître sans personne déjà choisie (Inbox,
+  // Capturer, fiche Projet, "🔗 Lier une fiche"...). N'a de sens qu'à partir de 2 collaborateurs
+  // à comparer, et seulement quand le picker est affiché (`!person`).
+  const loadSuggestion = !person && people && people.filter((p) => p.type !== "manager").length >= 2
+    ? workloadApi.rankByLoad(people, existingFollowUps)[0]
+    : null;
   const body = document.createElement("div");
   body.innerHTML = `
     ${
@@ -1128,6 +1154,11 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
         ${people.map((p) => `<option value="${p.id}">${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</option>`).join("")}
       </select>
       <button type="button" id="fu-multi-toggle" class="btn btn-ghost btn-sm" style="padding-left:0;margin-top:6px;">👥 Assigner le même suivi à plusieurs personnes</button>
+      ${
+        loadSuggestion
+          ? `<div class="item-meta" id="fu-load-hint" style="margin-top:6px;">💡 Suggestion : <strong>${escapeHtml(loadSuggestion.person.name)}</strong> a la charge la plus légère (${loadSuggestion.volume} suivi${loadSuggestion.volume > 1 ? "s" : ""} actif${loadSuggestion.volume > 1 ? "s" : ""}) — <button type="button" id="fu-load-hint-pick" class="btn btn-ghost btn-sm" style="padding:0 4px;">Choisir</button></div>`
+          : ""
+      }
     </div>
     <div class="field" id="fu-multi-people-field" style="display:none;">
       <label>À qui ?</label>
@@ -1222,6 +1253,12 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
   // formulaire X d'ici vendredi"), plutôt que de ressaisir le même texte pour chacune. N'existe
   // que quand le formulaire propose déjà un sélecteur de personne (`!person`) — depuis une
   // fiche Personne déjà ouverte, il n'y a par construction qu'une seule personne possible.
+  if (loadSuggestion) {
+    body.querySelector("#fu-load-hint-pick").addEventListener("click", () => {
+      body.querySelector("#fu-person").value = loadSuggestion.person.id;
+    });
+  }
+
   if (!person) {
     const multiToggleBtn = body.querySelector("#fu-multi-toggle");
     const multiToggleBackBtn = body.querySelector("#fu-multi-toggle-back");

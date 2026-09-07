@@ -33,6 +33,18 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "⚖️ Répartition de la charge (Équipe)",
+        text: "Un nouveau mode \"⚖️ Charge\" dans l'onglet Équipe, à côté de \"👥 Tous\"/\"👔 Mon manager\" : pour chaque collaborateur, le nombre de Suivis actifs qu'il te doit, ceux en retard et ceux stagnants (5 j sans mouvement) — celui qui a la charge la plus légère est mis en avant. Au moment de créer un nouveau Suivi sans avoir déjà choisi la personne, une suggestion apparaît directement dans le formulaire (\"💡 Suggestion : Camille a la charge la plus légère\") plutôt que de devoir aller consulter l'onglet Équipe à part. Les Tâches n'ayant jamais d'attributaire dans cette app, seuls les Suivis \"j'attends quelque chose de lui\" comptent dans la charge — pas ceux où c'est toi qui dois transmettre une information.",
+        howTo: "Onglet Équipe → \"⚖️ Charge\". Ou directement dans \"Nouveau suivi\" (sans personne déjà choisie) : bouton \"Choisir\" à côté de la suggestion.",
+        gain: "Confier un nouveau sujet à qui a le plus de disponibilité plutôt qu'à la même personne par réflexe ou par défaut.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "🎯 Priorisation — une matrice qui dit pourquoi, pas juste dans quel ordre",
         text: "Au lieu de ne trier que par échéance, un nouvel onglet \"🎯 Priorisation\" (à côté de Tâches/Projets/Calendrier dans Pilotage) croise trois signaux déjà dans l'app — l'échéance (urgence), le projet marqué \"⭐ prioritaire\" ou non (impact) et la case \"🔴 Bloqué\" de la tâche (blocage) — pour classer toutes les tâches en cours avec, pour chacune, la phrase \"🧭 Pourquoi maintenant\" qui explique le classement. Les poids des trois signaux sont réglables (\"⚙️ Régler les poids\"), avec des valeurs par défaut sinon. Le \"🎯 Focus du jour\" de l'Accueil utilise désormais la même formule pour ses 3 tâches condensées, plutôt que le simple tri par échéance d'avant.",
         howTo: "Onglet Pilotage → 🎯 Priorisation. Pour marquer un projet prioritaire : ouvrir sa fiche → cocher \"⭐ Projet prioritaire\".",
