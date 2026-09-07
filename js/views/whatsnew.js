@@ -33,6 +33,31 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "🤖 Lier un prompt à une tâche",
+        text: "Une section \"🤖 Prompts\" dans l'onglet Activité d'une fiche Tâche, symétrique de \"📎 Ressources\" — garde le bon prompt sous la main pendant qu'on travaille le sujet.",
+        howTo: "Ouvre une tâche → onglet Activité → \"🤖 Prompts\" → lie un prompt existant ou crée-en un directement depuis là.",
+        gain: "Plus besoin d'aller chercher le prompt dans sa bibliothèque à chaque fois : il est copiable en un clic directement depuis la tâche.",
+      },
+      {
+        type: "add",
+        title: "🗐 Dupliquer une tâche",
+        text: "Reprend le titre (avec la date du jour, ajustable), la description, le critère de clôture, le projet — avec le choix de garder aussi les sous-étapes (non cochées), les ressources et les prompts liés. Toujours en ⚪ À faire, sans échéance, avec un lien automatique vers la tâche d'origine.",
+        howTo: "Depuis la fiche Tâche (bouton 🗐 Dupliquer) ou directement depuis un résultat de recherche.",
+        gain: "Un sujet qui revient régulièrement se relance en quelques secondes, sans tout retaper.",
+      },
+      {
+        type: "change",
+        title: "🧭 Navigation Pilotage unifiée",
+        text: "Tâches/Projets/Calendrier partagent maintenant le même repère visuel (rail segmenté) et la même forme d'écran : le type de vue d'un côté, un seul menu \"🔧 Filtrer & trier\" de l'autre — Tâches passe de 3 lignes de contrôle à 1, Projets de 4 à 1.",
+        gain: "Fini le bandeau qui \"bouge\" en changeant d'onglet, et la confusion entre type de vue (Trello/Tableau, Mois/Semaine) et filtres.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "🎯 Mode d'Accueil \"Focus\"",
         text: "Une seule chose à la fois sur l'Accueil, triée par urgence (retard, échéance proche, en pause) — au lieu de plusieurs sections empilées à balayer.",
         howTo: "⚙️ Personnaliser l'accueil (en haut de l'Accueil) → Mode d'accueil → Focus.",
