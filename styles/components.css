@@ -1328,6 +1328,12 @@ tbody.drag-over-group {
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+/* Signal cliquable (retour de Charles-Henri, 07/09/2026 : ouvrir l'élément ciblé par le signal,
+   pas le projet) — un léger contour au survol suffit à signaler que CE chip précis est
+   cliquable, distinct du survol de toute la ligne (.health-row:hover) qui, lui, ouvre le projet. */
+.health-signal-chip-clickable:hover {
+  box-shadow: 0 0 0 1px currentColor inset;
+}
 
 /* ---------- Journal de notes horodaté (js/components/notesBlock.js) ---------- */
 .notes-entry {
