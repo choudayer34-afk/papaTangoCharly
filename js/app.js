@@ -21,6 +21,7 @@ import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountAdminButton } from "./components/adminPanel.js";
 import { mountInboxBadge, unmountInboxBadge } from "./components/inboxBadge.js";
+import { mountWhatsNewBadge, unmountWhatsNewBadge } from "./components/whatsNewBadge.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
@@ -172,6 +173,9 @@ function mountApp() {
   // Pastille "🔴 3" sur l'onglet Inbox (retour de Charles-Henri, vague 23) — voir
   // js/components/inboxBadge.js. Après mountNav() : cherche le lien déjà créé dans `nav`.
   mountInboxBadge(nav);
+  // Pastille "🆕" sur l'onglet ☰ Plus (audit TDAH ciblé du 07/09/2026) — voir
+  // js/components/whatsNewBadge.js.
+  mountWhatsNewBadge(nav);
   mountPomodoroWidget();
   // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
   // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
@@ -281,6 +285,7 @@ function unmountApp() {
   document.querySelector(".search-fab")?.remove();
   document.querySelector(".admin-fab")?.remove();
   unmountInboxBadge();
+  unmountWhatsNewBadge();
   unmountPomodoroWidget();
   teardownGlobalShortcuts();
   window.removeEventListener("hashchange", renderRoute);
