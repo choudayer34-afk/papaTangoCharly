@@ -340,12 +340,20 @@ export async function openProjectDetail(project, tasks) {
   // Fiche à onglets (vague 25, retour de Charles-Henri : "je veux aussi une organisation piste A
   // comme sur les tâches" — voir claude/vague-25-onglets-fiches-controle-suivi.md, section 3,
   // pour l'inventaire complet et le découpage validé). En-tête toujours visible (Nom, Catégorie,
-  // badge Actif/Fermé, raccourci clavier), puis 4 onglets : Détails (Objectif/Critère de
-  // réussite/Canevas/Notes), Sous-parties (avancement par bloc), Contenu (Tâches/Suivis/
-  // Réunions/Décisions) et Activité (Ressources/Historique/Lié). AUCUN champ, bouton ou id
-  // n'est retiré ni renommé par rapport à la version précédente — seul l'emplacement visuel
-  // change, tout le câblage plus bas (querySelector par id) continue de fonctionner à
-  // l'identique.
+  // badge Actif/Fermé, raccourci clavier), puis 3 onglets : Détails (Objectif/Critère de
+  // réussite/Canevas/Notes), Contenu (Sous-parties/Tâches/Suivis/Réunions/Décisions) et Activité
+  // (Ressources/Historique/Lié). AUCUN champ, bouton ou id n'est retiré ni renommé par rapport à
+  // la version précédente — seul l'emplacement visuel change, tout le câblage plus bas
+  // (querySelector par id) continue de fonctionner à l'identique.
+  //
+  // Audit TDAH ciblé du 07/09/2026 (claude/vague-27-superadmin-usage-kpi.md § audit) : la fiche
+  // Projet avait 4 onglets contre 3 pour la fiche Tâche, signalé "à surveiller" dans la vague 25.
+  // Sous-parties n'a pas assez de matière pour justifier un onglet à elle seule (un seul bloc
+  // d'ajout + une liste) et c'est, de fait, un contenu du projet au même titre que les Tâches ou
+  // les Suivis — elle rejoint donc l'onglet Contenu, en premier (avant Tâches), plutôt que de
+  // garder un 4e onglet dédié. Le système à trois états + notes par sous-partie n'est PAS touché
+  // ici (décision explicite du 02/09/2026 de le garder distinct des Tâches, voir
+  // js/domain/projects.js) — seul l'endroit où il s'affiche change.
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -364,7 +372,6 @@ export async function openProjectDetail(project, tasks) {
 
     <div class="chip-row fiche-tabs" role="tablist">
       <button type="button" class="chip active" data-tab="details" role="tab">Détails</button>
-      <button type="button" class="chip" data-tab="parts" role="tab" id="fiche-tab-parts">Sous-parties (${parts.length})</button>
       <button type="button" class="chip" data-tab="content" role="tab">Contenu</button>
       <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
     </div>
@@ -388,7 +395,9 @@ export async function openProjectDetail(project, tasks) {
       </details>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="parts" hidden>
+    <div class="fiche-tabpanel" data-tabpanel="content" hidden>
+      <!-- Sous-parties (déplacé ici le 07/09/2026, ex-onglet dédié — voir commentaire plus haut) :
+           reste en tête du contenu, comme avant. Id, structure et câblage inchangés. -->
       <div class="section-header-row">
         <div class="section-title" style="margin-top:0;">🧩 Sous-parties (${parts.length})</div>
         <span id="project-status-info"></span>
@@ -398,9 +407,7 @@ export async function openProjectDetail(project, tasks) {
         <input id="new-part-label" type="text" placeholder="Ex. Traduction" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
         <button id="add-part-btn" type="button" class="btn btn-secondary btn-sm">+ Sous-partie</button>
       </div>
-    </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="content" hidden>
       <div class="section-header-row">
         <div class="section-title" style="margin-top:0;">Tâches (${progress.total})</div>
         <button type="button" id="add-task-inline" class="btn btn-ghost btn-sm">+ Ajouter</button>

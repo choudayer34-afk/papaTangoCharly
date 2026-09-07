@@ -83,6 +83,7 @@ export function renderDashboard(container) {
       <div class="stat-grid" id="stat-grid"></div>
       <div id="recent-viewed-section"></div>
       <div id="focus-section"></div>
+      <div id="focus-queue-section"></div>
       <div id="needs-attention-section"></div>
       <div id="kept-section"></div>
       <div id="projects-section"></div>
@@ -108,6 +109,7 @@ export function renderDashboard(container) {
   const statGrid = container.querySelector("#stat-grid");
   const recentViewedSection = container.querySelector("#recent-viewed-section");
   const focusSection = container.querySelector("#focus-section");
+  const focusQueueSection = container.querySelector("#focus-queue-section");
   const needsAttentionSection = container.querySelector("#needs-attention-section");
   const keptSection = container.querySelector("#kept-section");
   const projectsSection = container.querySelector("#projects-section");
@@ -127,6 +129,13 @@ export function renderDashboard(container) {
   let hiddenSections = new Set();
   let focusOverride = { date: null, taskIds: [] };
   let recentlyViewed = [];
+  // Mode "Focus" (audit TDAH ciblé du 07/09/2026) — voir applyHomeModeVisibility() et
+  // renderFocusQueueSection() plus bas. `focusExpanded`/`focusQueueIndex` sont volontairement
+  // NON persistés : un état d'affichage transitoire, remis à zéro à chaque montage de l'Accueil,
+  // pas une préférence durable comme `homeMode` lui-même.
+  let homeMode = "classic";
+  let focusExpanded = false;
+  let focusQueueIndex = 0;
 
   // Lecture locale (localStorage), synchrone — pas besoin d'attendre les préférences
   // Firestore pour afficher ce bandeau, qui doit apparaître le plus tôt possible.
@@ -147,6 +156,7 @@ export function renderDashboard(container) {
     }
     focusOverride = prefs.focusOverride || { date: null, taskIds: [] };
     recentlyViewed = prefs.recentlyViewed || [];
+    homeMode = prefs.homeMode || "classic";
     renderHatFilter();
     renderReviewReminder(prefs.lastWeeklyReviewAt);
     renderNotifOptIn(prefs.notifOptIn);
@@ -154,9 +164,11 @@ export function renderDashboard(container) {
     renderRecentlyViewedSection();
     renderFocusSection();
     renderNeedsAttentionSection();
+    renderFocusQueueSection();
     renderKeptSection();
     renderProjectsSection();
     renderRecentSection();
+    applyHomeModeVisibility();
   });
 
   function renderHatFilter() {
@@ -166,6 +178,7 @@ export function renderDashboard(container) {
       renderStats();
       renderFocusSection();
       renderNeedsAttentionSection();
+      renderFocusQueueSection();
       renderProjectsSection();
       renderRecentSection();
       await preferencesApi.setCasquette(hatId);
@@ -410,6 +423,174 @@ export function renderDashboard(container) {
     }
   }
 
+  /**
+   * Mode "Focus" (audit TDAH ciblé du 07/09/2026, retour de Charles-Henri après comparaison de
+   * plusieurs pistes d'Accueil — voir claude/vague-28-audit-tdah-onglets-projet-accueil.md et la
+   * vague suivante pour la décision finale) : contrairement à renderNeedsAttentionSection()
+   * ci-dessus (délibérément NON touchée — comportement du mode "classic" inchangé), la file
+   * "Focus" fusionne AUSSI les tâches réellement en retard (`tasksApi.isLate`), pas seulement
+   * les trois catégories déjà fusionnées le 02/09/2026 — c'est la fusion "modérée" demandée :
+   * plus rien de ce qui a besoin de toi n'est laissé dans un coin séparé (le bloc chiffré
+   * "🔴 En retard" reste par ailleurs affiché tel quel, cette file ne le remplace pas).
+   */
+  function computeFocusQueue() {
+    const lateTasks = hatFilterTasks(tasks)
+      .filter((t) => t.status !== "done" && tasksApi.isLate(t))
+      .map((t) => ({ kind: "late", urgency: 0, sortKey: new Date(t.dueDate).getTime(), data: t }));
+    const overdueFollowUps = hatFilterFollowUps(followUps)
+      .filter(followUpsApi.isControlDue)
+      .map((f) => ({ kind: "followup", urgency: 0, sortKey: f.controlDate ? new Date(f.controlDate).getTime() : 0, data: f }));
+    const dueSoonTasks = hatFilterTasks(tasks)
+      .filter((t) => t.status !== "done" && t.dueDate && daysFromToday(t.dueDate) > 0 && daysFromToday(t.dueDate) <= 7)
+      .map((t) => ({ kind: "dueSoon", urgency: 1, sortKey: new Date(t.dueDate).getTime(), data: t }));
+    const stalledTasks = hatFilterTasks(tasks)
+      .filter(tasksApi.isStalled)
+      .map((t) => ({ kind: "stalled", urgency: 2, sortKey: t.updatedAt || t.createdAt || 0, data: t }));
+    return [...lateTasks, ...overdueFollowUps, ...dueSoonTasks, ...stalledTasks].sort(
+      (a, b) => a.urgency - b.urgency || a.sortKey - b.sortKey
+    );
+  }
+
+  /** Traduit une entrée de la file Focus en {why, title, sub, onOpen} — même contenu
+   *  d'information que les lignes de renderNeedsAttentionSection(), présenté différemment
+   *  (le "pourquoi" en évidence plutôt qu'en pastille de fin de ligne). */
+  function queueEntryView(entry, peopleById) {
+    if (entry.kind === "late") {
+      const t = entry.data;
+      const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+      return {
+        why: `🔴 En retard depuis ${daysLate(t.dueDate)} j`,
+        title: escapeHtml(t.title),
+        sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
+        onOpen: () => openTaskDetail(t, projects),
+      };
+    }
+    if (entry.kind === "followup") {
+      const f = entry.data;
+      const person = peopleById.get(f.personId);
+      const isToTell = f.direction === "to_tell";
+      return {
+        why: isToTell ? "📣 À transmettre — en retard" : "👀 Suivi en retard",
+        title: `${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}`,
+        sub: `${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}`,
+        onOpen: person ? () => openPersonDetail(person, followUps) : null,
+      };
+    }
+    if (entry.kind === "dueSoon") {
+      const t = entry.data;
+      const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+      return {
+        why: `🗓️ Échéance proche · ${formatDate(t.dueDate)}`,
+        title: escapeHtml(t.title),
+        sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
+        onOpen: () => openTaskDetail(t, projects),
+      };
+    }
+    const t = entry.data;
+    const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+    const days = Math.floor((Date.now() - (t.updatedAt || t.createdAt || 0)) / 86400000);
+    return {
+      why: `⏸️ En pause depuis ${days} j`,
+      title: escapeHtml(t.title),
+      sub: project ? `📦 ${escapeHtml(project.name)}` : "",
+      onOpen: () => openTaskDetail(t, projects),
+    };
+  }
+
+  function renderFocusQueueSection() {
+    if (homeMode !== "focus") {
+      focusQueueSection.innerHTML = "";
+      return;
+    }
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    const queue = computeFocusQueue();
+    const toggleHtml = `
+      <div style="text-align:center;">
+        <button type="button" id="focus-queue-toggle" class="btn btn-ghost btn-sm">${focusExpanded ? "▲ Réduire" : "▾ Tout voir"}</button>
+      </div>
+    `;
+
+    if (!queue.length) {
+      focusQueueSection.innerHTML = `
+        <div class="card" style="text-align:center;padding:24px 16px;margin-bottom:12px;">
+          <div style="font-size:1.4rem;margin-bottom:6px;">🎉</div>
+          <div class="item-title">Rien ne t'attend pour l'instant.</div>
+        </div>
+        ${toggleHtml}
+      `;
+    } else if (!focusExpanded) {
+      if (focusQueueIndex >= queue.length) focusQueueIndex = 0;
+      const entry = queue[focusQueueIndex];
+      const view = queueEntryView(entry, peopleById);
+      focusQueueSection.innerHTML = `
+        <div class="card" style="padding:16px;margin-bottom:12px;text-align:center;">
+          <div class="item-meta" style="color:var(--color-danger);font-weight:600;">${view.why}</div>
+          <div class="item-title" style="margin:6px 0 2px;">${view.title}</div>
+          <div class="item-meta">${view.sub}</div>
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:14px;">
+            <button type="button" id="focus-queue-skip" class="btn btn-secondary btn-sm">Passer</button>
+            <button type="button" id="focus-queue-open" class="btn btn-primary btn-sm">Ouvrir</button>
+          </div>
+          <div class="item-meta" style="margin-top:10px;">${focusQueueIndex + 1} sur ${queue.length}</div>
+        </div>
+        ${toggleHtml}
+      `;
+      focusQueueSection.querySelector("#focus-queue-skip").addEventListener("click", () => {
+        focusQueueIndex = (focusQueueIndex + 1) % queue.length;
+        renderFocusQueueSection();
+      });
+      const openBtn = focusQueueSection.querySelector("#focus-queue-open");
+      if (view.onOpen) openBtn.addEventListener("click", view.onOpen);
+      else openBtn.disabled = true;
+    } else {
+      focusQueueSection.innerHTML = `
+        <div class="section-title" style="margin-top:0;">⚠️ Ça a besoin de toi (${queue.length})</div>
+        <div class="card" id="focus-queue-list" style="margin-bottom:8px;"></div>
+        ${toggleHtml}
+      `;
+      const listEl = focusQueueSection.querySelector("#focus-queue-list");
+      for (const entry of queue) {
+        const view = queueEntryView(entry, peopleById);
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.innerHTML = `
+          <div class="item-main" ${view.onOpen ? 'style="cursor:pointer;"' : ""}>
+            <div class="item-title">${view.title}</div>
+            <div class="item-meta">${view.why} · ${view.sub}</div>
+          </div>
+        `;
+        if (view.onOpen) row.querySelector(".item-main").addEventListener("click", view.onOpen);
+        listEl.appendChild(row);
+      }
+    }
+    focusQueueSection.querySelector("#focus-queue-toggle").addEventListener("click", () => {
+      focusExpanded = !focusExpanded;
+      renderFocusQueueSection();
+      applyHomeModeVisibility();
+    });
+  }
+
+  /**
+   * Bascule entre les deux modes d'Accueil sans dupliquer aucune donnée ni logique : en mode
+   * "focus", l'ancien "🎯 Focus du jour" et "⚠️ Ça a besoin de toi" (mode classic) sont masqués
+   * au profit de la nouvelle file (`focus-queue-section`) ; les sections secondaires
+   * (Informations, Projets, Reprendre où j'en étais, Récemment) restent montées et à jour comme
+   * toujours, seulement repliées derrière "Tout voir" tant qu'on n'a pas demandé à les voir —
+   * rien n'est supprimé, seulement pas montré en premier (retour de Charles-Henri : "ne pas
+   * perdre de vue ce qu'il faut faire").
+   */
+  function applyHomeModeVisibility() {
+    const isFocus = homeMode === "focus";
+    focusSection.hidden = isFocus;
+    needsAttentionSection.hidden = isFocus;
+    focusQueueSection.hidden = !isFocus;
+    const secondaryHidden = isFocus && !focusExpanded;
+    keptSection.hidden = secondaryHidden;
+    projectsSection.hidden = secondaryHidden;
+    recentViewedSection.hidden = secondaryHidden;
+    recentSection.hidden = secondaryHidden;
+  }
+
   /** Filtre une liste de Tâches/Suivis sur la casquette active — "all" = pas de filtre.
    *  Cartes projets/réunions/décisions ont chacune leur propre variante (voir plus bas), le
    *  besoin de map projets/personnes n'étant pas le même.
@@ -460,9 +641,18 @@ export function renderDashboard(container) {
    *  une case à cocher par section masquable, mémorisée pour de bon (pas juste pour cette
    *  session). */
   function openDashboardSettingsModal() {
+    let selectedHomeMode = homeMode;
     const body = document.createElement("div");
     body.innerHTML = `
-      <p style="margin-top:0;color:var(--color-text-muted);">Décoche les sections dont tu ne te sers pas — elles disparaissent de l'Accueil (le bloc chiffré en haut reste toujours visible).</p>
+      <div class="field" style="margin-bottom:16px;">
+        <label style="display:block;margin-bottom:6px;">Mode d'accueil</label>
+        <div class="chip-row" id="home-mode-row" style="margin-bottom:4px;">
+          <button type="button" class="chip${selectedHomeMode === "classic" ? " active" : ""}" data-mode="classic">Classique</button>
+          <button type="button" class="chip${selectedHomeMode === "focus" ? " active" : ""}" data-mode="focus">Focus</button>
+        </div>
+        <p class="item-meta" style="margin:0;">Focus : une seule chose à la fois, triée par urgence (retard, échéance, pause) — le reste (Informations, Projets, Reprendre où j'en étais...) reste à un clic via "Tout voir", rien n'est supprimé.</p>
+      </div>
+      <p style="color:var(--color-text-muted);">En mode Classique, décoche les sections dont tu ne te sers pas — elles disparaissent de l'Accueil (le bloc chiffré en haut reste toujours visible).</p>
       ${DASHBOARD_SECTIONS.map(
         (s) => `
         <div class="field" style="display:flex;align-items:center;gap:8px;">
@@ -471,6 +661,12 @@ export function renderDashboard(container) {
         </div>`
       ).join("")}
     `;
+    body.querySelectorAll("#home-mode-row .chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        selectedHomeMode = btn.dataset.mode;
+        body.querySelectorAll("#home-mode-row .chip").forEach((b) => b.classList.toggle("active", b === btn));
+      });
+    });
     openModal({
       title: "⚙️ Personnaliser l'accueil",
       body,
@@ -483,13 +679,24 @@ export function renderDashboard(container) {
           onClick: async () => {
             const hidden = DASHBOARD_SECTIONS.filter((s) => !body.querySelector(`#dash-sec-${s.key}`).checked).map((s) => s.key);
             hiddenSections = new Set(hidden);
+            const modeChanged = selectedHomeMode !== homeMode;
+            homeMode = selectedHomeMode;
+            if (modeChanged) {
+              // Repart d'une file/position propre à chaque bascule de mode plutôt que de garder
+              // un état d'affichage qui n'a plus de sens dans l'autre mode.
+              focusExpanded = false;
+              focusQueueIndex = 0;
+            }
             await preferencesApi.setDashboardHidden(hidden);
+            await preferencesApi.setHomeMode(homeMode);
             closeModal();
             renderNeedsAttentionSection();
+            renderFocusQueueSection();
             renderKeptSection();
             renderProjectsSection();
             renderRecentlyViewedSection();
             renderRecentSection();
+            applyHomeModeVisibility();
             showToast("Accueil mis à jour");
           },
         },
@@ -956,6 +1163,7 @@ export function renderDashboard(container) {
     renderStats();
     renderFocusSection();
     renderNeedsAttentionSection();
+    renderFocusQueueSection();
     renderProjectsSection();
   });
   const unsubInbox = inboxApi.subscribePending((items) => {
@@ -975,6 +1183,7 @@ export function renderDashboard(container) {
     renderStats();
     renderFocusSection();
     renderNeedsAttentionSection();
+    renderFocusQueueSection();
     renderProjectsSection();
     renderRecentSection();
     renderRecentlyViewedSection();
@@ -990,11 +1199,13 @@ export function renderDashboard(container) {
   const unsubPeople = peopleApi.subscribe((items) => {
     people = items;
     renderNeedsAttentionSection();
+    renderFocusQueueSection();
   });
   const unsubFollowUps = followUpsApi.subscribe((items) => {
     followUps = items;
     renderStats();
     renderNeedsAttentionSection();
+    renderFocusQueueSection();
   });
 
   return function cleanup() {

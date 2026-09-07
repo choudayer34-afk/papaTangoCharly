@@ -12,6 +12,15 @@
 // Aucune de ces 5 routes ne change (#/resources, #/prompts, #/guide, #/whatsnew, #/memory) :
 // ce module ne fait que les lister, exactement comme js/views/whatsnew.js liste des entrées
 // statiques plutôt que d'incarner lui-même une logique métier.
+//
+// Repère "Nouveau" sur la ligne Nouveautés (audit TDAH ciblé du 07/09/2026, retour de
+// Charles-Henri : "il faut qu'on sache que c'est une nouveauté... guider où aller pour voir la
+// note de mise à jour") — la pastille de js/components/whatsNewBadge.js signale déjà, sur
+// l'onglet ☰ Plus lui-même, qu'il y a du nouveau ; ce repère, une fois DANS l'écran Plus, dit
+// PRÉCISÉMENT quelle ligne regarder plutôt que de laisser deviner parmi les 5.
+
+import * as preferencesApi from "../domain/preferences.js";
+import { WHATS_NEW_TOTAL_COUNT } from "./whatsnew.js";
 
 const ITEMS = [
   { hash: "#/resources", emoji: "📎", title: "Ressources", subtitle: "Bibliothèque de liens et documents, sans duplication" },
@@ -44,10 +53,18 @@ export function renderMore(container) {
     <a class="item-row" href="${item.hash}" style="text-decoration:none;color:inherit;${i === ITEMS.length - 1 ? "border-bottom:none;" : ""}">
       <div style="font-size:1.4rem;line-height:1;">${item.emoji}</div>
       <div class="item-main">
-        <div class="item-title">${escapeHtml(item.title)}</div>
+        <div class="item-title">${escapeHtml(item.title)}${item.hash === "#/whatsnew" ? '<span id="more-whatsnew-flag"></span>' : ""}</div>
         <div class="item-meta">${escapeHtml(item.subtitle)}</div>
       </div>
     </a>
   `
   ).join("");
+
+  preferencesApi.getPreferences().then((prefs) => {
+    const unseen = WHATS_NEW_TOTAL_COUNT - (prefs.seenWhatsNewCount || 0);
+    const flag = listEl.querySelector("#more-whatsnew-flag");
+    if (unseen > 0 && flag) {
+      flag.innerHTML = ` <span class="badge" style="background:var(--color-danger);color:var(--color-text-inverse);">Nouveau${unseen > 1 ? " (" + unseen + ")" : ""}</span>`;
+    }
+  });
 }
