@@ -25,9 +25,19 @@ import * as preferencesApi from "../domain/preferences.js";
 // rédigées après coup pour rattraper le retard pris depuis le 1er septembre (voir
 // claude/vague-29-focus-nouveautes-badge.md) ; celles du 31 août/1er septembre restent dans leur
 // forme d'origine plutôt que d'être réécrites rétroactivement.
-export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifié", fix: "🐛 Corrigé" };
+export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifié", fix: "🐛 Corrigé", remove: "🗑️ Retiré" };
 
 const WHATS_NEW = [
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "remove",
+        title: "📄 Retrait du bouton \"Exporter\" (Tâche et Suivi)",
+        text: "L'export en image PNG d'une Tâche ou d'un Suivi (ajouté fin août) ne rendait pas service : sur une fiche sans description ni sous-étapes, l'image produite était quasiment vide et n'apportait rien par rapport à la fiche elle-même. Retiré des deux fiches, sans remplacement pour l'instant.",
+      },
+    ],
+  },
   {
     date: "7 septembre 2026",
     items: [

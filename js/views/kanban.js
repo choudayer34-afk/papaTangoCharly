@@ -29,7 +29,6 @@ import { renderNotesBlock } from "../components/notesBlock.js";
 import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderInfoTip } from "../components/infoTip.js";
-import { exportTaskOverview } from "../components/overviewExport.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import { openDuplicateTaskModal } from "../components/duplicateTask.js";
@@ -1286,17 +1285,6 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
             onCancel: () => openTaskDetail(task, projects, { onClose }),
           });
         },
-      },
-      {
-        // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
-        // parmi les 3 propositions de visualisation automatique) : une image PNG ponctuelle
-        // plutôt qu'une vue maintenue dans l'app — voir js/components/overviewExport.js.
-        icon: "📄",
-        label: "Exporter",
-        variant: "secondary",
-        compact: true,
-        closesModal: false,
-        onClick: () => exportTaskOverview(task, { project: taskProject, statusLabel: tasksApi.STATUS_LABELS[task.status] }),
       },
       {
         icon: "🗑️",

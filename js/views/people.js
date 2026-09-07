@@ -17,7 +17,6 @@ import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "..
 import { renderManagerSection } from "./management.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
-import { exportFollowUpOverview } from "../components/overviewExport.js";
 import { renderMaskChecklist } from "./prepMask.js";
 import { copyEntityLink } from "../components/copyLink.js";
 
@@ -1578,23 +1577,6 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/people", "FollowUp", followUp.id),
-      },
-      {
-        // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue
-        // parmi les 3 propositions de visualisation automatique) — voir
-        // js/components/overviewExport.js et le même bouton sur la fiche Tâche (kanban.js).
-        icon: "📄",
-        label: "Exporter",
-        variant: "secondary",
-        compact: true,
-        closesModal: false,
-        onClick: () =>
-          exportFollowUpOverview(followUp, {
-            project: followUpProject,
-            person,
-            statusLabel: followUpsApi.STATUS_LABELS[followUp.status],
-            directionLabel: followUpsApi.DIRECTION_LABELS[followUp.direction || "waiting_on"],
-          }),
       },
       {
         icon: "🗑️",
