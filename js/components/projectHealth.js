@@ -39,9 +39,15 @@ function gaugeSvg(score, color) {
 
 /**
  * `ranked` : sortie de `projectHealthApi.rankByHealth()`. `onOpenProject(project)` : ouvre la
- * fiche Projet correspondante (même geste que cliquer une ligne côté Priorisation/Charge).
+ * fiche Projet correspondante (clic sur la ligne, même geste que Priorisation/Charge).
+ * `onOpenSignal(target)` (retour de Charles-Henri, 07/09/2026 : "qu'on puisse cliquer sur
+ * l'élément [...] pour ouvrir l'élément ciblé par cette information, pas le projet") : clic sur
+ * un signal précis (hors "🟢 Aucun signal notable", qui ne porte pas de `target`) — reçoit le
+ * `target` `{type, id}` posé par `computeHealth()`, jamais le projet lui-même. `stopPropagation`
+ * sur le clic du signal évite de déclencher EN PLUS le clic de toute la ligne vers la fiche
+ * Projet.
  */
-export function renderProjectHealth(container, ranked, { onOpenProject } = {}) {
+export function renderProjectHealth(container, ranked, { onOpenProject, onOpenSignal } = {}) {
   if (!ranked.length) {
     container.innerHTML = `<div class="empty-state" style="padding:16px;"><span class="emoji">🩺</span>Aucun projet actif à surveiller pour l'instant.</div>`;
     return;
@@ -60,7 +66,13 @@ export function renderProjectHealth(container, ranked, { onOpenProject } = {}) {
           <div style="min-width:0;">
             <div class="health-project-name">${r.project.critical ? "⭐ " : "📦 "}${escapeHtml(r.project.name)}</div>
             <div class="health-signals">
-              ${r.signals.map((s) => `<span class="health-signal-chip" style="${SIGNAL_LEVEL_STYLE[s.level]}">${escapeHtml(s.text)}</span>`).join("")}
+              ${r.signals
+                .map((s, i) =>
+                  s.target
+                    ? `<span class="health-signal-chip health-signal-chip-clickable" style="${SIGNAL_LEVEL_STYLE[s.level]}cursor:pointer;" data-project-id="${r.project.id}" data-signal-index="${i}" title="Ouvrir ${s.target.type === "Task" ? "la tâche" : "le suivi"} concerné">${escapeHtml(s.text)}</span>`
+                    : `<span class="health-signal-chip" style="${SIGNAL_LEVEL_STYLE[s.level]}">${escapeHtml(s.text)}</span>`
+                )
+                .join("")}
             </div>
           </div>
         </div>
@@ -68,12 +80,22 @@ export function renderProjectHealth(container, ranked, { onOpenProject } = {}) {
         )
         .join("")}
     </div>
-    <div class="fine-print" style="color:var(--color-text-muted);font-size:var(--font-size-xs);margin-top:8px;">Score calculé à partir des tâches en retard, bloquées ou en pause, et des suivis en retard rattachés au projet — trié du moins bon au meilleur.</div>
+    <div class="fine-print" style="color:var(--color-text-muted);font-size:var(--font-size-xs);margin-top:8px;">Score calculé à partir des tâches en retard, bloquées ou en pause, et des suivis en retard rattachés au projet — trié du moins bon au meilleur. Cliquer un signal ouvre l'élément concerné, cliquer ailleurs sur la ligne ouvre la fiche du projet.</div>
   `;
 
   container.querySelectorAll(".health-row").forEach((row) => {
     const found = ranked.find((r) => r.project.id === row.dataset.projectId);
     if (!found) return;
     row.addEventListener("click", () => onOpenProject?.(found.project));
+  });
+
+  container.querySelectorAll(".health-signal-chip-clickable").forEach((chip) => {
+    const found = ranked.find((r) => r.project.id === chip.dataset.projectId);
+    const signal = found?.signals[Number(chip.dataset.signalIndex)];
+    if (!signal?.target) return;
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onOpenSignal?.(signal.target);
+    });
   });
 }
