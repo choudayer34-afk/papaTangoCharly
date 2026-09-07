@@ -16,6 +16,7 @@ import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
 import { renderLogin, renderRestricted } from "./views/login.js";
 import { renderPrepMask } from "./views/prepMask.js";
+import { openModal } from "./components/modal.js";
 import { mountCaptureFab } from "./components/capture.js";
 import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
 import { mountAdminButton } from "./components/adminPanel.js";
@@ -182,7 +183,9 @@ function mountApp() {
   initGlobalShortcuts(NAV_ITEMS.map((item) => item.hash));
   window.addEventListener("hashchange", renderRoute);
   renderRoute();
-  maybeShowFirstRunTour();
+  // "ℹ️ Suivi d'usage" doit être vue avant la visite guidée si les deux sont en attente pour ce
+  // compte (une seule modale à la fois, voir modal.js) — voir maybeShowUsageNotice ci-dessous.
+  maybeShowUsageNotice().then(maybeShowFirstRunTour);
   // Auto-archivage des Informations/Idées de plus de 15 jours (retour de Charles-Henri, voir
   // js/domain/inbox.js) — balayage silencieux à chaque montage plutôt qu'une vraie tâche
   // planifiée côté serveur, qui n'existe pas dans cette architecture. Jamais bloquant : erreur
@@ -192,6 +195,50 @@ function mountApp() {
   // programmés" version retenue : notification navigateur app ouverte uniquement, sans
   // infrastructure serveur). Une fois par montage de l'app, jamais bloquant.
   maybeNotifyStalledOrLate().catch(() => {});
+}
+
+/**
+ * Bandeau d'information "suivi d'usage" (retour de Charles-Henri, 06/09/2026 : "oui" à la
+ * question de savoir si les autres comptes doivent être informés que leur usage est suivi —
+ * voir js/services/usageTracking.js) — affiché UNE SEULE FOIS par compte, à sa toute première
+ * connexion suivant la mise en ligne de cette vague (même principe que maybeShowFirstRunTour,
+ * js/components/onboarding.js : mémorisé via preferences, jamais reproposé une fois vu).
+ *
+ * `seenUsageNotice` est marqué à la FERMETURE de la modale, pas à son ouverture (contrairement
+ * à markTourSeen(), appelé avant openTour()) : preferences.js n'a qu'un document unique
+ * lu-modifié-réécrit en entier (pas d'écriture atomique par champ), et renderDashboard() écrit
+ * elle aussi ce même document tout de suite au montage (sa migration ponctuelle
+ * dashboardHiddenMigratedV19, js/views/dashboard.js) — deux écritures concurrentes sur le même
+ * document au montage peuvent se piétiner (la plus tardive écrase la plus fraîche avec un
+ * instantané plus vieux). En ne marquant qu'à la fermeture — un geste humain qui arrive
+ * forcément après que ce montage initial se soit calmé — cette écriture ne se retrouve jamais
+ * dans cette fenêtre de course. Une vraie Promise (résolue à la fermeture, pas à l'ouverture)
+ * pour que l'appelant puisse enchaîner proprement sur la visite guidée sans que les deux
+ * modales ne se marchent dessus (une seule modale à la fois, voir modal.js).
+ */
+async function maybeShowUsageNotice() {
+  const prefs = await preferencesApi.getPreferences();
+  if (prefs.seenUsageNotice) return;
+  await new Promise((resolve) => {
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <p style="margin-top:0;">Pour t'aider à piloter Pilotage, les écrans que tu consultes et
+      tes connexions sont enregistrés (quoi, quand, par quel compte) — jamais le détail de ce que
+      tu saisis, modifies ou consultes à l'intérieur d'un écran.</p>
+      <p style="margin-bottom:0;">Seul le compte administrateur (ch-houdayer@hotmail.fr) peut
+      consulter ces informations.</p>
+    `;
+    openModal({
+      title: "ℹ️ Suivi d'usage",
+      body,
+      dismissible: true,
+      onClose: () => {
+        preferencesApi.markUsageNoticeSeen().catch(() => {});
+        resolve();
+      },
+      actions: [{ label: "J'ai compris", variant: "primary" }],
+    });
+  });
 }
 
 /**
