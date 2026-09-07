@@ -50,6 +50,11 @@ const WHATS_NEW = [
         howTo: "Onglet Pilotage → 🎯 Priorisation. Pour marquer un projet prioritaire : ouvrir sa fiche → cocher \"⭐ Projet prioritaire\".",
         gain: "Savoir non seulement quoi faire en premier, mais pourquoi — et pouvoir confier à un projet plus de poids dans le classement d'un simple réglage, sans y repenser à chaque tâche.",
       },
+      {
+        type: "fix",
+        title: "🎯 Priorisation : matrice plus compacte, points cliquables, légende des couleurs",
+        text: "Trois ajustements sur la matrice urgence × impact : elle prenait plus de hauteur qu'un écran normal (filtre Casquette replié dans un popover \"🔧 Filtrer\", matrice moins haute) ; ses points n'étaient pas cliquables (chacun ouvre désormais la tâche correspondante, comme une ligne du classement complet) ; et les couleurs de la barre à 3 segments du classement n'étaient pas expliquées (légende ajoutée juste au-dessus, avec le poids courant de chaque signal en %).",
+      },
     ],
   },
   {
