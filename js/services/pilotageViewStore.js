@@ -13,9 +13,14 @@ const KEY = "pilotage-view";
 
 function defaultState() {
   return {
-    mode: "trello", // "trello" | "table"
+    mode: "trello", // Tâches : "trello" | "table"
+    // Projets : "list" | "category" (retour de Charles-Henri, 07/09/2026 — vue "Par catégorie"
+    // en colonnes glissables, voir js/views/projects.js). Clé séparée de `mode` ci-dessus : les
+    // deux vies (Tâches Trello/Tableau, Projets Liste/Catégorie) sont indépendantes, jamais la
+    // même bascule.
+    projectsMode: "list",
     table: {
-      groupBy: "status", // "none" | "status" | "project"
+      groupBy: "status", // "none" | "status" | "project" | "dueDate"
       sortColumn: null, // "type" | "status" | "project" | "dueDate" | null
       sortDir: "asc", // "asc" | "desc"
       // Le Titre reste toujours la première colonne, épinglée — seules ces colonnes-ci sont
@@ -56,6 +61,13 @@ function save(state) {
 export function setMode(mode) {
   const state = getViewState();
   state.mode = mode;
+  save(state);
+  return state;
+}
+
+export function setProjectsMode(mode) {
+  const state = getViewState();
+  state.projectsMode = mode;
   save(state);
   return state;
 }
