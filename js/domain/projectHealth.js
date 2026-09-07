@@ -51,10 +51,26 @@ function plural(n, word) {
   return `${n} ${word}${n > 1 ? "s" : ""}`;
 }
 
+function taskRef(task) {
+  return { type: "Task", id: task.id };
+}
+
+function followUpRef(followUp) {
+  return { type: "FollowUp", id: followUp.id };
+}
+
 /**
  * Calcule le score de santé (0 à 100, 100 = aucun signal) et la liste des signaux qui
  * l'expliquent pour UN projet — `allTasks`/`allFollowUps` sont les flux complets de l'app,
  * filtrés ici sur `projectId` (même principe que workload.js#computeLoad).
+ *
+ * Chaque signal (hors "🟢 Aucun signal notable", qui ne pointe vers rien) porte un `target`
+ * ({type: "Task"|"FollowUp", id}) — retour de Charles-Henri, 07/09/2026 : "qu'on puisse cliquer
+ * sur l'élément [...] pour ouvrir l'élément ciblé par cette information, pas le projet". Un
+ * signal qui agrège plusieurs éléments (ex. "2 tâches bloquées") pointe vers le plus parlant des
+ * deux plutôt que de rester non cliquable faute d'un unique élément évident : le plus en retard
+ * pour le retard cumulé, le moins retouché pour les tâches en pause, le plus tardif pour les
+ * suivis en retard, une bloquée-ET-en-retard de préférence à une simplement bloquée.
  */
 export function computeHealth(project, allTasks, allFollowUps) {
   const tasks = allTasks.filter((t) => t.projectId === project.id && t.status !== "done");
@@ -79,20 +95,31 @@ export function computeHealth(project, allTasks, allFollowUps) {
   const signals = [];
   if (blockedTasks.length) {
     const n = blockedTasks.length;
-    signals.push({ level: "danger", text: `🔴 ${n} tâche${n > 1 ? "s" : ""} bloquée${n > 1 ? "s" : ""}` });
+    const target = blockedTasks.find((t) => tasksApi.isLate(t)) || blockedTasks[0];
+    signals.push({ level: "danger", text: `🔴 ${n} tâche${n > 1 ? "s" : ""} bloquée${n > 1 ? "s" : ""}`, target: taskRef(target) });
   }
-  if (lateTasks.length) signals.push({ level: "warning", text: `📈 Retard cumulé +${lateDays} j sur ${plural(lateTasks.length, "tâche")}` });
-  if (stalledTasks.length) signals.push({ level: "warning", text: `⏸️ ${plural(stalledTasks.length, "tâche")} en pause` });
-  if (lateFollowUps.length) signals.push({ level: "warning", text: `👀 ${plural(lateFollowUps.length, "suivi")} en retard` });
+  if (lateTasks.length) {
+    const worst = lateTasks.reduce((w, t) => (daysLate(t.dueDate) > daysLate(w.dueDate) ? t : w));
+    signals.push({ level: "warning", text: `📈 Retard cumulé +${lateDays} j sur ${plural(lateTasks.length, "tâche")}`, target: taskRef(worst) });
+  }
+  if (stalledTasks.length) {
+    const mostStale = stalledTasks.reduce((w, t) => ((t.updatedAt || t.createdAt || 0) < (w.updatedAt || w.createdAt || 0) ? t : w));
+    signals.push({ level: "warning", text: `⏸️ ${plural(stalledTasks.length, "tâche")} en pause`, target: taskRef(mostStale) });
+  }
+  if (lateFollowUps.length) {
+    const mostOverdue = lateFollowUps.reduce((w, f) => (new Date(f.controlDate).getTime() < new Date(w.controlDate).getTime() ? f : w));
+    signals.push({ level: "warning", text: `👀 ${plural(lateFollowUps.length, "suivi")} en retard`, target: followUpRef(mostOverdue) });
+  }
 
   if (!signals.length) {
     // Prochaine échéance affichée seulement quand tout va bien — sur un projet déjà en
     // difficulté, l'information la plus utile est déjà dans les signaux d'alerte ci-dessus.
-    const nextDue = tasks
-      .filter((t) => t.dueDate && !tasksApi.isLate(t))
-      .map((t) => t.dueDate)
-      .sort()[0];
-    signals.push(nextDue ? { level: "info", text: `🗓️ Prochaine échéance dans ${daysUntil(nextDue)} j` } : { level: "ok", text: "🟢 Aucun signal notable" });
+    const upcoming = tasks.filter((t) => t.dueDate && !tasksApi.isLate(t)).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    signals.push(
+      upcoming.length
+        ? { level: "info", text: `🗓️ Prochaine échéance dans ${daysUntil(upcoming[0].dueDate)} j`, target: taskRef(upcoming[0]) }
+        : { level: "ok", text: "🟢 Aucun signal notable" }
+    );
   }
 
   const level = score >= 75 ? "success" : score >= 50 ? "warning" : "danger";
