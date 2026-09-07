@@ -23,12 +23,11 @@ import * as followUpsApi from "../domain/followups.js";
 import * as resourcesApi from "../domain/resources.js";
 import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal } from "./modal.js";
-import { showToast } from "./toast.js";
 import { renderInfoTip } from "./infoTip.js";
 import { openQualifyModal } from "../views/inbox.js";
 import { openTaskDetail } from "../views/kanban.js";
 import { openProjectDetail } from "../views/projects.js";
-import { openPersonDetail } from "../views/people.js";
+import { openEditFollowUpModal } from "../views/people.js";
 import { openResourceDetail } from "../views/resources.js";
 
 export async function openWeeklyReview() {
@@ -90,16 +89,14 @@ export async function openWeeklyReview() {
   const unclassifiedResources = resources.filter(resourcesApi.isUnclassified);
 
   const peopleById = new Map(people.map((p) => [p.id, p]));
-  // Suppression sans cascade (voir domain/people.js) : un Suivi peut pointer vers une
-  // personne supprimée entre-temps — on ne casse jamais, on prévient juste.
-  const openPersonOrWarn = (f) => {
-    const person = peopleById.get(f.personId);
-    if (!person) {
-      showToast("La personne liée à ce suivi a été supprimée");
-      return;
-    }
+  // Ouvre le Suivi lui-même, pas la fiche de la personne (retour de Charles-Henri, 07/09/2026 :
+  // "tous les éléments sur lesquels je clique doivent m'emmener sur l'élément lui-même et pas
+  // son parent") — cohérent avec js/components/linkedItems.js, qui ouvre déjà correctement le
+  // Suivi et jamais la Personne pour une réf {type: "FollowUp"}. Fonctionne même si la personne
+  // a été supprimée entre-temps (openEditFollowUpModal gère déjà ce cas).
+  const openFollowUpFromReview = (f) => {
     closeModal();
-    openPersonDetail(person, followUps);
+    openEditFollowUpModal(f);
   };
 
   const body = document.createElement("div");
@@ -159,7 +156,7 @@ export async function openWeeklyReview() {
     meta: (f) => "Contrôle : " + formatDate(f.controlDate),
     badge: (f) => followUpsApi.STATUS_LABELS[f.status],
     badgeClass: (f) => f.status,
-    onOpen: openPersonOrWarn,
+    onOpen: openFollowUpFromReview,
   });
   renderRows(body.querySelector("#wr-projects"), projectsWithoutNextAction, {
     label: (p) => p.name,
@@ -173,14 +170,14 @@ export async function openWeeklyReview() {
     meta: (f) => "Contrôle : " + formatDate(f.controlDate),
     badge: (f) => followUpsApi.STATUS_LABELS[f.status],
     badgeClass: (f) => f.status,
-    onOpen: openPersonOrWarn,
+    onOpen: openFollowUpFromReview,
   });
   renderRows(body.querySelector("#wr-management"), managementTopics, {
     label: (f) => `${peopleById.get(f.personId)?.name || "?"} — ${f.title}`,
     meta: (f) => (f.controlDate || f.dueDate ? "Contrôle : " + formatDate(f.controlDate || f.dueDate) : ""),
     badge: (f) => followUpsApi.STATUS_LABELS[f.status],
     badgeClass: (f) => f.status,
-    onOpen: openPersonOrWarn,
+    onOpen: openFollowUpFromReview,
   });
   renderRows(body.querySelector("#wr-resources"), unclassifiedResources, {
     label: (r) => r.title,
