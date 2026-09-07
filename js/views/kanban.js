@@ -12,6 +12,7 @@
 import * as tasksApi from "../domain/tasks.js";
 import * as projectsApi from "../domain/projects.js";
 import * as resourcesApi from "../domain/resources.js";
+import * as promptsApi from "../domain/prompts.js";
 import * as historyApi from "../domain/history.js";
 import * as preferencesApi from "../domain/preferences.js";
 import * as casquettesApi from "../domain/casquettes.js";
@@ -20,6 +21,7 @@ import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
+import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
@@ -30,6 +32,7 @@ import { renderInfoTip } from "../components/infoTip.js";
 import { exportTaskOverview } from "../components/overviewExport.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
+import { openDuplicateTaskModal } from "../components/duplicateTask.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -50,15 +53,28 @@ export function renderKanban(container) {
   container.innerHTML = `
     <div class="topbar">
       <div>
-        <h1>Pilotage</h1>
+        <h1>Tâches</h1>
         <div class="subtitle">Glisse une carte, ou utilise ‹ › pour changer son statut</div>
       </div>
     </div>
     <div class="view">
       <div id="pilotage-subnav"></div>
+      <!-- Une seule rangée "type de vue + Filtrer & trier" (audit du 07/09/2026, retour de
+           Charles-Henri : "on s'y perd un peu [...] le type de visualisation, les filtres" —
+           Trello/Tableau se confondaient visuellement avec les filtres alors que ce sont deux
+           familles différentes). Échéance, "Masquer terminées" et "Regrouper par" (visible
+           seulement en vue Tableau) ont rejoint Casquette/Projet dans le même menu déplié —
+           avant cette vague, échéance et "Masquer terminées" étaient deux rangées de chips
+           TOUJOURS affichées séparément de "🔧 Filtrer", et "Regrouper par" une 3e rangée à
+           part en mode Tableau. AUCUN id n'a été renommé (kanban-hat-filter,
+           kanban-project-filter, kanban-group-by...) : tout le câblage plus bas continue de
+           cibler les mêmes éléments, seul leur emplacement dans le DOM change. -->
       <div class="chip-row" id="kanban-filters" style="flex-wrap:wrap;">
+        <button type="button" class="chip" data-view="trello">🗂️ Trello</button>
+        <button type="button" class="chip" data-view="table">📊 Tableau</button>
+        <span id="kanban-status-info"></span>
         <details class="filter-popover" id="kanban-filter-popover">
-          <summary class="chip">🔧 Filtrer<span class="filter-popover-badge" id="kanban-filter-badge" hidden></span></summary>
+          <summary class="chip">🔧 Filtrer &amp; trier<span class="filter-popover-badge" id="kanban-filter-badge" hidden></span></summary>
           <div class="filter-popover-panel">
             <div class="filter-popover-group">
               <div class="filter-popover-label" style="display:flex;align-items:center;gap:6px;">Casquette<span id="kanban-hat-info"></span></div>
@@ -68,23 +84,25 @@ export function renderKanban(container) {
               <div class="filter-popover-label">Projet</div>
               <select id="kanban-project-filter"></select>
             </div>
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Échéance</div>
+              <div class="chip-row" id="kanban-due-filter" style="flex-wrap:wrap;margin-bottom:0;"></div>
+            </div>
+            <div class="filter-popover-group">
+              <div class="chip-row" style="margin-bottom:0;">
+                <button type="button" class="chip" id="kanban-hide-done">🙈 Masquer terminées</button>
+              </div>
+            </div>
+            <div class="filter-popover-group" id="kanban-groupby-group" style="display:none;">
+              <div class="filter-popover-label">Regrouper par (vue Tableau)</div>
+              <select id="kanban-group-by">
+                <option value="status">Statut</option>
+                <option value="project">Projet</option>
+                <option value="none">Aucun</option>
+              </select>
+            </div>
           </div>
         </details>
-      </div>
-      <div class="chip-row" id="kanban-view-toggle">
-        <button type="button" class="chip" data-view="trello">🗂️ Trello</button>
-        <button type="button" class="chip" data-view="table">📊 Tableau</button>
-        <span id="kanban-status-info"></span>
-      </div>
-      <div class="chip-row" id="kanban-table-controls" style="display:none;">
-        <label style="display:flex;align-items:center;gap:8px;font-size:var(--font-size-sm);color:var(--color-text-muted);">
-          Regrouper par
-          <select id="kanban-group-by" class="chip" style="border-radius:var(--radius-sm);">
-            <option value="status">Statut</option>
-            <option value="project">Projet</option>
-            <option value="none">Aucun</option>
-          </select>
-        </label>
       </div>
       <div class="kanban-board" id="kanban-board"></div>
       <div id="kanban-table" style="display:none;"></div>
@@ -107,8 +125,13 @@ export function renderKanban(container) {
   const filterPopoverEl = container.querySelector("#kanban-filter-popover");
   const filterBadgeEl = container.querySelector("#kanban-filter-badge");
   const projectFilterEl = container.querySelector("#kanban-project-filter");
-  const viewToggleEl = container.querySelector("#kanban-view-toggle");
-  const tableControlsEl = container.querySelector("#kanban-table-controls");
+  const dueFilterEl = container.querySelector("#kanban-due-filter");
+  // Trello/Tableau vivent maintenant dans la même rangée que "🔧 Filtrer & trier" plutôt que
+  // dans leur propre `#kanban-view-toggle` (audit du 07/09/2026) — `filtersEl` sert donc les
+  // deux rôles, le sélecteur `[data-view]` ci-dessous ne matchant de toute façon que ces deux
+  // boutons-là.
+  const viewToggleEl = filtersEl;
+  const groupByGroupEl = container.querySelector("#kanban-groupby-group");
   const groupByEl = container.querySelector("#kanban-group-by");
   let latestTasks = [];
   let latestProjects = [];
@@ -138,7 +161,9 @@ export function renderKanban(container) {
 
   function updateViewToggle() {
     viewToggleEl.querySelectorAll("[data-view]").forEach((chip) => chip.classList.toggle("active", chip.dataset.view === viewMode));
-    tableControlsEl.style.display = viewMode === "table" ? "" : "none";
+    // "Regrouper par" n'a de sens qu'en vue Tableau — masqué dans le menu "Filtrer & trier"
+    // sinon (même logique qu'avant cette vague, seul l'emplacement a changé).
+    groupByGroupEl.style.display = viewMode === "table" ? "" : "none";
     board.style.display = viewMode === "table" ? "none" : "";
     tableEl.style.display = viewMode === "table" ? "" : "none";
   }
@@ -175,12 +200,16 @@ export function renderKanban(container) {
     );
   }
 
-  // "🔧 Filtrer" (audit de simplification du 02/09/2026 : "regrouper casquette + projet, deux
-  // façons de restreindre la même liste, dans un même menu plutôt que deux rangées de chips en
-  // permanence à l'écran") — un badge sur le bouton donne l'état d'un coup d'œil sans avoir à
-  // ouvrir le menu, pour ne jamais laisser un filtre actif oublié invisible.
+  // "🔧 Filtrer & trier" (audit de simplification du 02/09/2026, étendu le 07/09/2026 :
+  // casquette + projet + échéance + "masquer terminées" + regrouper-par, cinq façons de
+  // restreindre/organiser la même liste, dans un même menu plutôt que plusieurs rangées de
+  // chips en permanence à l'écran) — un badge sur le bouton donne l'état d'un coup d'œil sans
+  // avoir à ouvrir le menu, pour ne jamais laisser un filtre actif oublié invisible. Échéance et
+  // "Masquer terminées" comptent désormais dans ce badge : avant cette vague ils vivaient hors
+  // du menu, toujours visibles, donc jamais "oubliables" au même sens — une fois dans le menu,
+  // ils doivent l'être pour la même raison que Casquette/Projet.
   function updateFilterBadge() {
-    const count = (activeHat !== "all" ? 1 : 0) + (filterProjectId !== "all" ? 1 : 0);
+    const count = (activeHat !== "all" ? 1 : 0) + (filterProjectId !== "all" ? 1 : 0) + (filterWindow !== "all" ? 1 : 0) + (hideDone ? 1 : 0);
     filterBadgeEl.textContent = count ? String(count) : "";
     filterBadgeEl.hidden = count === 0;
   }
@@ -189,24 +218,24 @@ export function renderKanban(container) {
   }
   document.addEventListener("click", closeFilterPopoverOnOutsideClick);
 
-  filtersEl.insertAdjacentHTML(
-    "beforeend",
-    DUE_WINDOWS.map((w) => `<button type="button" class="chip${w.key === "all" ? " active" : ""}" data-window="${w.key}">${w.label}</button>`).join("") +
-      `<button type="button" class="chip" id="kanban-hide-done">🙈 Masquer terminées</button>`
-  );
-  filtersEl.querySelectorAll("[data-window]").forEach((chip) => {
+  dueFilterEl.innerHTML = DUE_WINDOWS.map(
+    (w) => `<button type="button" class="chip${w.key === "all" ? " active" : ""}" data-window="${w.key}">${w.label}</button>`
+  ).join("");
+  dueFilterEl.querySelectorAll("[data-window]").forEach((chip) => {
     chip.addEventListener("click", () => {
       filterWindow = chip.dataset.window;
-      filtersEl.querySelectorAll("[data-window]").forEach((c) => c.classList.toggle("active", c === chip));
+      dueFilterEl.querySelectorAll("[data-window]").forEach((c) => c.classList.toggle("active", c === chip));
+      updateFilterBadge();
       renderBoard();
     });
   });
   // "Masquer terminées" (retour de Charles-Henri, 02/09/2026) : filtre en plus des autres,
   // jamais persisté d'une visite à l'autre (même traitement que filterWindow/filterProjectId
   // ci-dessus) — s'applique aussi bien au Trello (la colonne "Terminé" se vide) qu'au Tableau.
-  filtersEl.querySelector("#kanban-hide-done").addEventListener("click", (e) => {
+  container.querySelector("#kanban-hide-done").addEventListener("click", (e) => {
     hideDone = !hideDone;
     e.currentTarget.classList.toggle("active", hideDone);
+    updateFilterBadge();
     renderBoard();
   });
   projectFilterEl.addEventListener("change", () => {
@@ -916,9 +945,14 @@ export async function openCreateTaskModal(prefill = {}) {
  */
 export async function openTaskDetail(task, projects, { onClose } = {}) {
   preferencesApi.recordRecentlyViewed("Task", task.id).catch(() => {});
-  const [allResources, allHistory] = await Promise.all([resourcesApi.listAll(), historyApi.listAll()]);
+  const [allResources, allPrompts, allHistory] = await Promise.all([resourcesApi.listAll(), promptsApi.listAll(), historyApi.listAll()]);
   const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
   const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));
+  // "🤖 Prompts" (retour de Charles-Henri, 07/09/2026 : "dans une tâche j'aimerai pouvoir lier
+  // un prompt") — même mécanique que les Ressources juste au-dessus (taskIds sur Prompt plutôt
+  // que dans le fil "🔗 Lié"), voir js/domain/prompts.js.
+  const linkedPrompts = allPrompts.filter((p) => (p.taskIds || []).includes(task.id));
+  const unlinkedPrompts = allPrompts.filter((p) => !(p.taskIds || []).includes(task.id));
   const taskHistory = allHistory
     .filter((h) => h.entityType === "Task" && h.entityId === task.id)
     .sort((a, b) => a.date - b.date);
@@ -1031,6 +1065,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         <div style="display:flex;gap:8px;margin-bottom:16px;">
           <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
           <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
+        </div>
+      </details>
+      <details class="fiche-section">
+        <summary class="section-title" style="cursor:pointer;">🤖 Prompts (${linkedPrompts.length})</summary>
+        <div class="card" id="detail-prompts" style="margin-top:8px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button id="link-prompt-btn" class="btn btn-secondary btn-sm">🔗 Lier existant</button>
+          <button id="new-prompt-btn-inline" class="btn btn-secondary btn-sm">+ Nouveau prompt</button>
         </div>
       </details>
       <details class="fiche-section">
@@ -1170,6 +1212,35 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     });
   });
 
+  const promptsEl = body.querySelector("#detail-prompts");
+  renderPromptList(promptsEl, linkedPrompts, {
+    onUnlink: (p) => promptsApi.linkToTask(p.id, task.id, false),
+  });
+  body.querySelector("#link-prompt-btn").addEventListener("click", () => {
+    if (!unlinkedPrompts.length) {
+      showToast("Aucun autre prompt à lier pour l'instant");
+      return;
+    }
+    closeModal();
+    openPromptPickerModal(
+      unlinkedPrompts,
+      async (prompt) => {
+        await promptsApi.linkToTask(prompt.id, task.id, true);
+        showToast("Prompt lié");
+        openTaskDetail(task, projects, { onClose });
+      },
+      () => openTaskDetail(task, projects, { onClose })
+    );
+  });
+  body.querySelector("#new-prompt-btn-inline").addEventListener("click", () => {
+    closeModal();
+    openCreatePromptModal({
+      taskId: task.id,
+      onCreated: () => openTaskDetail(task, projects, { onClose }),
+      onCancel: () => openTaskDetail(task, projects, { onClose }),
+    });
+  });
+
   const outlookEl = body.querySelector("#detail-outlook");
   renderOutlookList(outlookEl, task);
   body.querySelector("#add-outlook-btn").addEventListener("click", async () => {
@@ -1198,6 +1269,23 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/kanban", "Task", task.id),
+      },
+      {
+        // "🗐 Dupliquer" (retour de Charles-Henri, 07/09/2026) — voir
+        // js/components/duplicateTask.js pour tout ce qui est repris ou non. L'autre point
+        // d'entrée (recherche globale) est câblé dans js/components/search.js.
+        icon: "🗐",
+        label: "Dupliquer",
+        variant: "secondary",
+        compact: true,
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          openDuplicateTaskModal(task, {
+            onDuplicated: (newTask) => openTaskDetail(newTask, projects, { onClose }),
+            onCancel: () => openTaskDetail(task, projects, { onClose }),
+          });
+        },
       },
       {
         // "Exporter la vue d'ensemble" (retour de Charles-Henri, vague 22, option (c) retenue

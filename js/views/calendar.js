@@ -30,13 +30,17 @@ export function renderCalendar(container) {
         <h1>Calendrier</h1>
         <div class="subtitle" id="calendar-subtitle">—</div>
       </div>
-      <div style="display:flex;gap:8px;">
-        <button id="cal-view-month" class="btn btn-secondary btn-sm">Mois</button>
-        <button id="cal-view-week" class="btn btn-secondary btn-sm">Semaine</button>
-      </div>
     </div>
     <div class="view">
       <div id="pilotage-subnav"></div>
+      <!-- Mois/Semaine descendus du bandeau du haut, et devenus deux chips actif/inactif comme
+           Trello/Tableau côté Tâches (audit du 07/09/2026) : c'est le "type de vue" de cet
+           écran, au même titre — avant cette vague c'étaient deux boutons ordinaires, sans
+           aucun indicateur visuel du mode actuellement affiché. -->
+      <div class="chip-row" id="cal-view-toggle">
+        <button type="button" class="chip active" data-view="month">Mois</button>
+        <button type="button" class="chip" data-view="week">Semaine</button>
+      </div>
       <div class="cal-nav">
         <button id="cal-prev" class="btn btn-ghost btn-sm">‹</button>
         <button id="cal-today" class="btn btn-ghost btn-sm">Aujourd'hui</button>
@@ -133,13 +137,16 @@ export function renderCalendar(container) {
     }
   }
 
-  container.querySelector("#cal-view-month").addEventListener("click", () => {
-    mode = "month";
-    render();
-  });
-  container.querySelector("#cal-view-week").addEventListener("click", () => {
-    mode = "week";
-    render();
+  const calViewToggleEl = container.querySelector("#cal-view-toggle");
+  function updateCalViewToggle() {
+    calViewToggleEl.querySelectorAll("[data-view]").forEach((chip) => chip.classList.toggle("active", chip.dataset.view === mode));
+  }
+  calViewToggleEl.querySelectorAll("[data-view]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      mode = chip.dataset.view;
+      updateCalViewToggle();
+      render();
+    });
   });
   container.querySelector("#cal-prev").addEventListener("click", () => {
     cursor = mode === "month" ? addMonths(cursor, -1) : addDays(cursor, -7);

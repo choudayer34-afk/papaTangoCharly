@@ -39,19 +39,41 @@ export function renderProjects(container) {
         <h1>Projets</h1>
         <div class="subtitle" id="projects-subtitle">—</div>
       </div>
-      <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
     </div>
     <div class="view">
       <div id="pilotage-subnav"></div>
-      <div class="chip-row" id="status-filter">
-        <button type="button" class="chip active" data-status="active">🟢 Actifs</button>
-        <button type="button" class="chip" data-status="archived">🗄️ Fermés</button>
+      <!-- "+ Projet" descendu du bandeau du haut, Statut/Tri/Catégorie regroupés dans un seul
+           menu "🔧 Filtrer & trier" (audit du 07/09/2026, retour de Charles-Henri : "Actif/
+           Fermés, Ordre/avancement, filtres [...] ça fait 4 lignes") — même popover que celui
+           déjà utilisé côté Tâches (js/views/kanban.js). AUCUN id n'a été renommé
+           (status-filter, sort-toggle, category-filters) : tout le câblage plus bas continue de
+           cibler les mêmes éléments, seul leur emplacement dans le DOM change. -->
+      <div class="chip-row" id="projects-controls" style="flex-wrap:wrap;">
+        <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
+        <details class="filter-popover" id="projects-filter-popover">
+          <summary class="chip">🔧 Filtrer &amp; trier<span class="filter-popover-badge" id="projects-filter-badge" hidden></span></summary>
+          <div class="filter-popover-panel">
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Statut</div>
+              <div class="chip-row" id="status-filter" style="margin-bottom:0;">
+                <button type="button" class="chip active" data-status="active">🟢 Actifs</button>
+                <button type="button" class="chip" data-status="archived">🗄️ Fermés</button>
+              </div>
+            </div>
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Trier par</div>
+              <div class="chip-row" id="sort-toggle" style="margin-bottom:0;">
+                <button type="button" class="chip" data-sort="manual">✋ Ordre manuel</button>
+                <button type="button" class="chip" data-sort="progress">📊 Avancement</button>
+              </div>
+            </div>
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Catégorie</div>
+              <div class="chip-row" id="category-filters" style="flex-wrap:wrap;margin-bottom:0;"></div>
+            </div>
+          </div>
+        </details>
       </div>
-      <div class="chip-row" id="sort-toggle">
-        <button type="button" class="chip" data-sort="manual">✋ Ordre manuel</button>
-        <button type="button" class="chip" data-sort="progress">📊 Avancement</button>
-      </div>
-      <div class="chip-row" id="category-filters" style="flex-wrap:wrap;"></div>
       <div id="projects-list"></div>
     </div>
   `;
@@ -62,7 +84,22 @@ export function renderProjects(container) {
   const statusFilterEl = container.querySelector("#status-filter");
   const sortToggleEl = container.querySelector("#sort-toggle");
   const categoryFiltersEl = container.querySelector("#category-filters");
+  const filterPopoverEl = container.querySelector("#projects-filter-popover");
+  const filterBadgeEl = container.querySelector("#projects-filter-badge");
   container.querySelector("#new-project-btn").addEventListener("click", () => openCreateProjectModal());
+
+  // Même mécanique de badge que "🔧 Filtrer & trier" côté Tâches (js/views/kanban.js) : compte
+  // seulement ce qui s'écarte du réglage par défaut (Actifs / Ordre manuel / Toutes catégories),
+  // pour ne jamais laisser un filtre actif oublié invisible une fois le menu replié.
+  function updateFilterBadge() {
+    const count = (statusFilter !== "active" ? 1 : 0) + (sortMode !== "manual" ? 1 : 0) + (categoryFilter !== "all" ? 1 : 0);
+    filterBadgeEl.textContent = count ? String(count) : "";
+    filterBadgeEl.hidden = count === 0;
+  }
+  function closeFilterPopoverOnOutsideClick(e) {
+    if (filterPopoverEl.open && !filterPopoverEl.contains(e.target)) filterPopoverEl.open = false;
+  }
+  document.addEventListener("click", closeFilterPopoverOnOutsideClick);
 
   let rawProjects = [];
   let projects = [];
@@ -84,6 +121,7 @@ export function renderProjects(container) {
       statusFilter = chip.dataset.status;
       statusFilterEl.querySelectorAll("[data-status]").forEach((c) => c.classList.toggle("active", c.dataset.status === statusFilter));
       applyStatusFilter();
+      updateFilterBadge();
       render();
     });
   });
@@ -92,6 +130,7 @@ export function renderProjects(container) {
     sortMode = prefs.projectSort || "manual";
     categories = prefs.categories || {};
     updateSortToggle();
+    updateFilterBadge();
     render();
   });
 
@@ -102,6 +141,7 @@ export function renderProjects(container) {
     chip.addEventListener("click", async () => {
       sortMode = chip.dataset.sort;
       updateSortToggle();
+      updateFilterBadge();
       await preferencesApi.setProjectSort(sortMode);
       render();
     });
@@ -121,6 +161,7 @@ export function renderProjects(container) {
     categoryFiltersEl.querySelectorAll("[data-cat]").forEach((chip) => {
       chip.addEventListener("click", () => {
         categoryFilter = chip.dataset.cat;
+        updateFilterBadge();
         render();
       });
     });
@@ -240,6 +281,7 @@ export function renderProjects(container) {
   return function cleanup() {
     unsubProjects();
     unsubTasks();
+    document.removeEventListener("click", closeFilterPopoverOnOutsideClick);
   };
 }
 
