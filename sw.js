@@ -5,7 +5,7 @@
 // sur "fetch" plus bas (vague 22 novies) pour le raisonnement complet.
 // Pattern repris d'EnVie (§56/§57 : réutiliser l'existant avant de recréer).
 
-const CACHE_NAME = "pilotage-cache-v29";
+const CACHE_NAME = "pilotage-cache-v30";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -59,6 +59,7 @@ const APP_SHELL = [
   "./js/components/inboxBadge.js",
   "./js/components/whatsNewBadge.js",
   "./js/components/pilotageSubNav.js",
+  "./js/components/duplicateTask.js",
   "./js/views/dashboard.js",
   "./js/views/inbox.js",
   "./js/views/kanban.js",
