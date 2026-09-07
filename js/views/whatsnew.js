@@ -38,6 +38,11 @@ const WHATS_NEW = [
         howTo: "Onglet Pilotage → Projets → \"🩺 Santé\". Cliquer une ligne ouvre directement la fiche du projet concerné.",
         gain: "Repérer une dérive sur un projet avant qu'elle ne devienne un franc retard, plutôt qu'à la Revue hebdomadaire seulement.",
       },
+      {
+        type: "fix",
+        title: "🩺 Santé des projets : chaque signal ouvre directement l'élément concerné",
+        text: "Un signal comme \"1 tâche en pause\" ou \"Prochaine échéance dans 17 j\" ouvrait la fiche du projet entier au clic, sans dire laquelle de ses tâches ou de ses suivis était concernée. Cliquer directement sur un signal (hors \"🟢 Aucun signal notable\") ouvre désormais la tâche ou le suivi précis qu'il désigne ; cliquer ailleurs sur la ligne continue d'ouvrir la fiche du projet comme avant.",
+      },
     ],
   },
   {

@@ -226,6 +226,20 @@ export function renderProjects(container) {
     const ranked = projectHealthApi.rankByHealth(rawProjects, tasks, followUps);
     renderProjectHealth(healthEl, ranked, {
       onOpenProject: (project) => openProjectDetail(project, tasks.filter((t) => t.projectId === project.id)),
+      // Clic sur un signal précis (retour de Charles-Henri, 07/09/2026 : "qu'on puisse cliquer
+      // sur l'élément [...] pour ouvrir l'élément ciblé par cette information, pas le projet") —
+      // ouvre directement la Tâche ou le Suivi visé, jamais la fiche Projet. Mêmes fonctions
+      // d'ouverture déjà utilisées ailleurs dans ce fichier (openTaskDetail pour "+ Tâche" côté
+      // fiche Projet, openEditFollowUpModal pour le clic sur un Suivi lié).
+      onOpenSignal: (target) => {
+        if (target.type === "Task") {
+          const task = tasks.find((t) => t.id === target.id);
+          if (task) openTaskDetail(task, rawProjects.filter((p) => !projectsApi.isArchived(p)));
+        } else if (target.type === "FollowUp") {
+          const followUp = followUps.find((f) => f.id === target.id);
+          if (followUp) openEditFollowUpModal(followUp);
+        }
+      },
     });
   }
 
