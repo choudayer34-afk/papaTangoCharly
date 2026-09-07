@@ -270,6 +270,10 @@ a { color: inherit; }
 /* Projet fermé (retour de Charles-Henri, 02/09/2026) — neutre, volontairement distinct des
    badges de statut ci-dessus : une fermeture n'est ni un succès ni un retard. */
 .badge-archived { background: var(--color-surface-alt); color: var(--color-text-muted); }
+/* "⭐ Projet prioritaire" (vague 33, matrice de priorisation) — teinte waiting (violet),
+   distincte du warning déjà pris par "🔁 Relancé"/"👀 À suivre", pour ne pas laisser croire à un
+   retard : marquer un projet prioritaire est une décision positive, pas un signal d'alerte. */
+.badge-critical { background: var(--color-waiting-bg); color: var(--color-waiting); }
 
 /* ---------- Empty state ---------- */
 .empty-state {
