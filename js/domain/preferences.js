@@ -76,6 +76,7 @@ export async function getPreferences() {
   return {
     id: DOC_ID,
     seenTour: false,
+    seenUsageNotice: false,
     categories: {},
     projectSort: "manual",
     casquette: "all",
@@ -103,6 +104,20 @@ export async function setMyObjectives(text) {
 export async function markTourSeen() {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, id: DOC_ID, seenTour: true });
+}
+
+/**
+ * Marque l'information "suivi d'usage" comme vue (retour de Charles-Henri, 06/09/2026 : "oui"
+ * à la question de savoir si les autres comptes doivent être informés — voir
+ * js/services/usageTracking.js et js/app.js#maybeShowUsageNotice) — même principe que
+ * markTourSeen() : affichée une seule fois par compte, jamais reproposée une fois vue. Un
+ * compte déjà autorisé AVANT cette vague (préférences existantes sans ce champ) verra la
+ * notice une fois, à sa prochaine connexion, exactement comme un tout nouveau compte — c'est
+ * voulu : le suivi était déjà actif pour lui, il doit en être informé lui aussi.
+ */
+export async function markUsageNoticeSeen() {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, id: DOC_ID, seenUsageNotice: true });
 }
 
 /**
