@@ -11,6 +11,7 @@ import * as peopleApi from "../domain/people.js";
 import * as followUpsApi from "../domain/followups.js";
 import * as preferencesApi from "../domain/preferences.js";
 import * as casquettesApi from "../domain/casquettes.js";
+import * as priorisationApi from "../domain/priorisation.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
@@ -128,6 +129,10 @@ export function renderDashboard(container) {
   let activeHat = "all";
   let hiddenSections = new Set();
   let focusOverride = { date: null, taskIds: [] };
+  // Poids de la matrice de priorisation (vague 33) — réglés depuis l'onglet 🎯 Priorisation
+  // (Pilotage), relus ici à chaque montage de l'Accueil comme le reste des préférences
+  // ci-dessous ; valeurs par défaut tant que Charles-Henri n'a rien réglé.
+  let priorityWeights = priorisationApi.DEFAULT_WEIGHTS;
   let recentlyViewed = [];
   // Mode "Focus" (audit TDAH ciblé du 07/09/2026) — voir applyHomeModeVisibility() et
   // renderFocusQueueSection() plus bas. `focusExpanded`/`focusQueueIndex` sont volontairement
@@ -155,6 +160,7 @@ export function renderDashboard(container) {
       hiddenSections = new Set(prefs.dashboardHidden || []);
     }
     focusOverride = prefs.focusOverride || { date: null, taskIds: [] };
+    priorityWeights = prefs.priorityWeights || priorisationApi.DEFAULT_WEIGHTS;
     recentlyViewed = prefs.recentlyViewed || [];
     homeMode = prefs.homeMode || "classic";
     renderHatFilter();
@@ -864,21 +870,24 @@ export function renderDashboard(container) {
   /**
    * "🎯 Focus du jour" (piste TDAH du 01/09/2026, retour de Charles-Henri) : au lieu d'un
    * chiffre "📅 Aujourd'hui" qui peut grimper sans limite, 3 tâches au plus, choisies
-   * automatiquement (en retard d'abord, puis échéance la plus proche) mais modifiables d'un
-   * clic — le choix hybride retenu plutôt qu'une liste 100% automatique ou 100% manuelle.
-   * L'échéance complète du jour reste accessible juste en dessous, rien n'est masqué.
+   * automatiquement mais modifiables d'un clic — le choix hybride retenu plutôt qu'une liste
+   * 100% automatique ou 100% manuelle. L'échéance complète du jour reste accessible juste en
+   * dessous, rien n'est masqué.
+   *
+   * Tri : matrice de priorisation (vague 33, retour de Charles-Henri, 07/09/2026 — "au lieu de
+   * juste trier par échéance, elle croiserait urgence, impact [...] et niveau de blocage")
+   * plutôt que le simple tri "en retard d'abord, puis échéance la plus proche" d'avant cette
+   * vague — voir js/domain/priorisation.js, seul endroit où vit la formule. `focusRanked()`
+   * donne accès au détail du score (`why`) pour la phrase affichée sous chaque tâche ci-dessous ;
+   * `focusCandidates()` en garde juste les tâches, pour ne rien changer à la logique de swap
+   * manuel plus bas qui raisonne déjà en tâches brutes.
    */
-  function focusCandidates() {
+  function focusRanked() {
     const notDone = hatFilterTasks(tasks).filter((t) => t.status !== "done");
-    return [...notDone].sort((a, b) => {
-      const aLate = tasksApi.isLate(a);
-      const bLate = tasksApi.isLate(b);
-      if (aLate !== bLate) return aLate ? -1 : 1;
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    });
+    return priorisationApi.rankTasks(notDone, projects, priorityWeights);
+  }
+  function focusCandidates() {
+    return focusRanked().map((r) => r.task);
   }
 
   function todayDateKey() {
@@ -886,7 +895,8 @@ export function renderDashboard(container) {
   }
 
   function renderFocusSection() {
-    const candidates = focusCandidates();
+    const rankedCandidates = focusRanked();
+    const candidates = rankedCandidates.map((r) => r.task);
     let chosen;
     if (focusOverride.date === todayDateKey() && (focusOverride.taskIds || []).length) {
       const byId = new Map(candidates.map((t) => [t.id, t]));
@@ -916,9 +926,13 @@ export function renderDashboard(container) {
     if (!chosen.length) {
       listEl.innerHTML = `<div class="empty-state" style="padding:16px;"><span class="emoji">🎉</span>Rien en attente. Le focus se remplira tout seul dès qu'une tâche sera à faire.</div>`;
     } else {
+      // Détail du score déjà calculé par focusRanked() ci-dessus — évite de recalculer
+      // urgence/impact/blocage/why une seconde fois pour la phrase "pourquoi" de chaque ligne.
+      const whyById = new Map(rankedCandidates.map((r) => [r.task.id, r.why]));
       for (const t of chosen) {
         const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
         const late = tasksApi.isLate(t);
+        const why = whyById.get(t.id);
         const row = document.createElement("div");
         row.className = "item-row";
         row.innerHTML = `
@@ -927,6 +941,7 @@ export function renderDashboard(container) {
             <div class="item-meta">
               ${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}${late ? ` · <strong style="color:var(--color-danger);">en retard</strong>` : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
             </div>
+            ${why ? `<div class="item-meta" style="font-style:italic;">🧭 Pourquoi maintenant : ${escapeHtml(why)}</div>` : ""}
           </div>
         `;
         const swapBtn = document.createElement("button");

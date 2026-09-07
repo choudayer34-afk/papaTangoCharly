@@ -33,6 +33,28 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "🎯 Priorisation — une matrice qui dit pourquoi, pas juste dans quel ordre",
+        text: "Au lieu de ne trier que par échéance, un nouvel onglet \"🎯 Priorisation\" (à côté de Tâches/Projets/Calendrier dans Pilotage) croise trois signaux déjà dans l'app — l'échéance (urgence), le projet marqué \"⭐ prioritaire\" ou non (impact) et la case \"🔴 Bloqué\" de la tâche (blocage) — pour classer toutes les tâches en cours avec, pour chacune, la phrase \"🧭 Pourquoi maintenant\" qui explique le classement. Les poids des trois signaux sont réglables (\"⚙️ Régler les poids\"), avec des valeurs par défaut sinon. Le \"🎯 Focus du jour\" de l'Accueil utilise désormais la même formule pour ses 3 tâches condensées, plutôt que le simple tri par échéance d'avant.",
+        howTo: "Onglet Pilotage → 🎯 Priorisation. Pour marquer un projet prioritaire : ouvrir sa fiche → cocher \"⭐ Projet prioritaire\".",
+        gain: "Savoir non seulement quoi faire en premier, mais pourquoi — et pouvoir confier à un projet plus de poids dans le classement d'un simple réglage, sans y repenser à chaque tâche.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "👤 Nom du collaborateur affiché sur un Suivi, partout où il apparaît",
+        text: "Un Suivi qui appartient à quelqu'un d'autre que toi n'affichait que son titre, sans dire à qui il était attribué, dès qu'il apparaissait en dehors de la fiche de cette personne — bloc \"👀 Suivis\" d'une fiche Projet, section \"🔗 Lié\" (les 7 fiches), sélecteur \"🔗 Lier une fiche\" et \"🔄 Reprendre où j'en étais\" de l'Accueil. Le nom du collaborateur est désormais préfixé au titre à tous ces endroits (\"Alice Martin — Relancer le fournisseur\"), même format déjà utilisé ailleurs dans l'app (Accueil, Revue hebdomadaire, recherche globale).",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "🗓️ Regrouper les tâches par échéance (vue Tableau)",
         text: "Un nouveau regroupement \"Échéance\" dans le Tableau : 🔴 En retard, Aujourd'hui, Dans la semaine, Dans le mois, Plus tard, Sans date — toujours les 6 groupes, même vides. Le glisser-déposer entre groupes reste réservé à Statut/Projet : il n'y a pas de date cible évidente quand on dépose une tâche dans \"Plus tard\".",
         howTo: "Onglet Pilotage → Tâches → vue 📊 Tableau → \"🔧 Filtrer & trier\" → Regrouper par → Échéance.",

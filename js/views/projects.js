@@ -5,6 +5,7 @@ import * as projectsApi from "../domain/projects.js";
 import * as tasksApi from "../domain/tasks.js";
 import * as resourcesApi from "../domain/resources.js";
 import * as followUpsApi from "../domain/followups.js";
+import * as peopleApi from "../domain/people.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
@@ -229,7 +230,7 @@ export function renderProjects(container) {
     if (draggable) card.style.cursor = "grab";
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}</div>
+        <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${project.critical ? ` <span class="badge badge-critical">⭐ Prioritaire</span>` : ""}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}</div>
         <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
       </div>
       ${project.objective ? `<div class="item-meta" style="margin-bottom:8px;">${escapeHtml(project.objective)}</div>` : ""}
@@ -489,6 +490,10 @@ export async function openCreateProjectModal(prefill = {}) {
       <label for="project-objective">Objectif (optionnel)</label>
       <textarea id="project-objective" placeholder="Qu'est-ce qu'on cherche à obtenir ?">${escapeHtml(prefill.objective || "")}</textarea>
     </div>
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input id="project-critical" type="checkbox" style="width:auto;" ${prefill.critical ? "checked" : ""} />
+      <label for="project-critical" style="margin:0;">⭐ Projet prioritaire (compte dans la Priorisation)</label>
+    </div>
   `;
   const { bodyEl, close } = openModal({
     title: "Nouveau projet",
@@ -508,6 +513,7 @@ export async function openCreateProjectModal(prefill = {}) {
             name,
             category: category || null,
             objective: bodyEl.querySelector("#project-objective").value.trim(),
+            critical: bodyEl.querySelector("#project-critical").checked,
           });
           close();
           showToast("Projet créé");
@@ -521,7 +527,7 @@ export async function openCreateProjectModal(prefill = {}) {
 export async function openProjectDetail(project, tasks) {
   preferencesApi.recordRecentlyViewed("Project", project.id).catch(() => {});
   const progress = projectsApi.computeProgress(tasks);
-  const [allProjects, allResources, allFollowUps, allMeetings, allDecisions, allHistory, prefs] = await Promise.all([
+  const [allProjects, allResources, allFollowUps, allMeetings, allDecisions, allHistory, prefs, allPeople] = await Promise.all([
     projectsApi.listAll(),
     resourcesApi.listAll(),
     followUpsApi.listAll(),
@@ -529,7 +535,13 @@ export async function openProjectDetail(project, tasks) {
     decisionsApi.listAll(),
     historyApi.listAll(),
     preferencesApi.getPreferences(),
+    peopleApi.listAll(),
   ]);
+  // Pour afficher le collaborateur sur chaque Suivi lié ci-dessous (retour de Charles-Henri,
+  // 07/09/2026 : "je vois pas à qui est attribué le suivi [...] à tous les niveaux où ça
+  // apparaît") — un projet transverse peut avoir des Suivis pour plusieurs collaborateurs à la
+  // fois, contrairement à une fiche Personne où le nom est déjà celui de la page entière.
+  const peopleById = new Map(allPeople.map((p) => [p.id, p]));
   const linkedResources = allResources.filter((r) => (r.projectIds || []).includes(project.id));
   const unlinkedResources = allResources.filter((r) => !(r.projectIds || []).includes(project.id));
   const linkedFollowUps = allFollowUps.filter((f) => f.projectId === project.id);
@@ -586,6 +598,14 @@ export async function openProjectDetail(project, tasks) {
       </datalist>
     </div>
     <div class="item-meta" style="margin-bottom:12px;">${isArchived ? "🗄️ Fermé" : "🟢 Actif"}</div>
+    <!-- "⭐ Projet prioritaire" (vague 33, retour de Charles-Henri : "impact — le projet est-il
+         critique ?") — seul signal manuel requis par la matrice de priorisation, volontairement
+         posé ici (en-tête de la fiche, toujours visible) plutôt que dans l'onglet Détails, au
+         même niveau que le statut Actif/Fermé juste au-dessus. -->
+    <div class="field" style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <input id="detail-critical" type="checkbox" style="width:auto;" ${project.critical ? "checked" : ""} />
+      <label for="detail-critical" style="margin:0;">⭐ Projet prioritaire (compte dans la Priorisation)</label>
+    </div>
     <div id="project-shortcut" style="margin-bottom:12px;"></div>
 
     <div class="chip-row fiche-tabs" role="tablist">
@@ -730,9 +750,13 @@ export async function openProjectDetail(project, tasks) {
       const row = document.createElement("div");
       row.className = "item-row";
       row.style.cursor = "pointer";
+      const person = peopleById.get(f.personId);
+      // Nom du collaborateur affiché en premier (voir peopleById plus haut) : un projet
+      // transverse a souvent des Suivis pour plusieurs personnes différentes, sans lui le
+      // titre seul ne dit pas à qui ce Suivi est attribué.
       row.innerHTML = `
         <div class="item-main">
-          <div class="item-title">${escapeHtml(f.title)}</div>
+          <div class="item-title">${person ? escapeHtml(person.name) + " — " : ""}${escapeHtml(f.title)}</div>
           <div class="item-meta">${f.controlDate ? "Contrôle : " + formatDate(f.controlDate) : "Pas de date de contrôle"}</div>
         </div>
         <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
@@ -1045,6 +1069,7 @@ export async function openProjectDetail(project, tasks) {
             category: category || null,
             objective: bodyEl.querySelector("#detail-objective").value.trim(),
             successCriteria: bodyEl.querySelector("#detail-criteria").value.trim(),
+            critical: bodyEl.querySelector("#detail-critical").checked,
           });
           close();
           showToast("Projet mis à jour");
