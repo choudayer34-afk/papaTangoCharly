@@ -32,6 +32,37 @@ const WHATS_NEW = [
     date: "7 septembre 2026",
     items: [
       {
+        type: "add",
+        title: "🗓️ Regrouper les tâches par échéance (vue Tableau)",
+        text: "Un nouveau regroupement \"Échéance\" dans le Tableau : 🔴 En retard, Aujourd'hui, Dans la semaine, Dans le mois, Plus tard, Sans date — toujours les 6 groupes, même vides. Le glisser-déposer entre groupes reste réservé à Statut/Projet : il n'y a pas de date cible évidente quand on dépose une tâche dans \"Plus tard\".",
+        howTo: "Onglet Pilotage → Tâches → vue 📊 Tableau → \"🔧 Filtrer & trier\" → Regrouper par → Échéance.",
+        gain: "Voir d'un coup d'œil ce qui presse sans avoir à trier une longue liste par date.",
+      },
+      {
+        type: "add",
+        title: "⏸️ Filtre \"Stagnantes\" et \"🗓️ Sans échéance\" (Tâches)",
+        text: "Deux nouveaux filtres cumulables dans \"🔧 Filtrer & trier\" : \"🗓️ Sans échéance\" (ajouté au filtre Échéance existant) isole ce qui n'a pas de date, \"⏸️ Stagnantes\" isole ce qui n'a pas bougé depuis 5 jours (même règle que le bloc \"⏸️ En pause\" de l'Accueil) — deux filtres séparés, une tâche peut être stagnante ET sans échéance, ou l'un sans l'autre.",
+        howTo: "Onglet Pilotage → Tâches → \"🔧 Filtrer & trier\".",
+        gain: "Repérer en un clic ce qui risque de se perdre : ni date pour le rattraper, ni mouvement depuis un moment.",
+      },
+      {
+        type: "fix",
+        title: "🖥️ Pilotage prend toute la largeur en mode web (Projets et Calendrier)",
+        text: "Sur grand écran, Tâches prenait déjà toute la largeur disponible ; Projets et Calendrier restaient resserrés au centre, avec un décalage visible en changeant d'onglet. Les trois se comportent maintenant à l'identique.",
+      },
+      {
+        type: "add",
+        title: "🗂️ Vue \"Par catégorie\" (Projets)",
+        text: "Une nouvelle vue dans l'onglet Projets, à côté de \"📋 Liste\" : un bloc par catégorie (\"Sans catégorie\" en dernier), réparti en 3 colonnes en mode web et empilé en mobile. Glisser un projet d'un bloc à l'autre change sa catégorie immédiatement, sans confirmation. Une catégorie qui n'a plus aucun projet après le filtre Statut disparaît, plutôt que de s'afficher vide.",
+        howTo: "Onglet Projets → \"🗂️ Par catégorie\".",
+        gain: "Voir la répartition des projets par catégorie d'un coup d'œil, et réorganiser en glissant plutôt qu'en rouvrant chaque fiche.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
         type: "fix",
         title: "👀 Cliquer sur un Suivi ouvre le Suivi, pas la personne",
         text: "Depuis \"⚠️ Ça a besoin de toi\", le mode Focus, \"📣 Relances dues\" et la Revue hebdomadaire, cliquer sur un Suivi (\"à transmettre\" ou \"en attente\") ouvrait la fiche du collaborateur au lieu du Suivi lui-même — il fallait ensuite le retrouver dans sa liste. Corrigé : ces quatre endroits ouvrent maintenant directement le Suivi concerné, comme le fait déjà la recherche globale.",

@@ -9,6 +9,7 @@ import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
 import * as preferencesApi from "../domain/preferences.js";
+import * as pilotageView from "../services/pilotageViewStore.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
@@ -33,6 +34,13 @@ const PROJECT_STATUS_INFO_HTML =
   "Cette fiche mélange volontairement trois vocabulaires de statut distincts : les <strong>Tâches</strong> (⚪🔵⏳👀🟢, le pipeline de travail), les <strong>Suivis</strong> (⏳🔁✅, attendre une personne) et les <strong>Sous-parties</strong> (◻️🔶✅, avancement d'un bloc sans créer de tâche dédiée).";
 
 export function renderProjects(container) {
+  // Plein écran en mode web (retour de Charles-Henri, 07/09/2026 : "il y a toujours un
+  // décalage [...] Tâches qui prend toute la page, à Projet qui réduit sur le milieu
+  // uniquement") — même classe et même principe que js/views/kanban.js (posée/retirée au
+  // montage/démontage), pour que les 3 écrans Pilotage (Tâches/Projets/Calendrier) se
+  // comportent enfin à l'identique en largeur.
+  container.classList.add("app-wide");
+
   container.innerHTML = `
     <div class="topbar">
       <div>
@@ -47,9 +55,20 @@ export function renderProjects(container) {
            Fermés, Ordre/avancement, filtres [...] ça fait 4 lignes") — même popover que celui
            déjà utilisé côté Tâches (js/views/kanban.js). AUCUN id n'a été renommé
            (status-filter, sort-toggle, category-filters) : tout le câblage plus bas continue de
-           cibler les mêmes éléments, seul leur emplacement dans le DOM change. -->
+           cibler les mêmes éléments, seul leur emplacement dans le DOM change.
+
+           Bascule "📋 Liste / 🗂️ Par catégorie" ajoutée le 07/09/2026 (retour de Charles-Henri :
+           "une vue qui regroupe les projets par catégorie [...] répartie sur la page par bloc,
+           avec possibilité de glisser pour passer un projet d'une catégorie à l'autre") — même
+           patron que Trello/Tableau côté Tâches (js/views/kanban.js) : une bascule de type de
+           vue à côté du menu de filtres, jamais confondue avec lui (vague 30). La vue par
+           catégorie n'a pas de sens croisée avec le filtre "Catégorie" lui-même (on les voit
+           déjà toutes, côte à côte) — ce groupe de filtre est donc masqué en vue "category",
+           voir #projects-category-filter-group plus bas. -->
       <div class="chip-row" id="projects-controls" style="flex-wrap:wrap;">
         <button id="new-project-btn" class="btn btn-primary btn-sm">+ Projet</button>
+        <button type="button" class="chip" data-view="list">📋 Liste</button>
+        <button type="button" class="chip" data-view="category">🗂️ Par catégorie</button>
         <details class="filter-popover" id="projects-filter-popover">
           <summary class="chip">🔧 Filtrer &amp; trier<span class="filter-popover-badge" id="projects-filter-badge" hidden></span></summary>
           <div class="filter-popover-panel">
@@ -67,7 +86,7 @@ export function renderProjects(container) {
                 <button type="button" class="chip" data-sort="progress">📊 Avancement</button>
               </div>
             </div>
-            <div class="filter-popover-group">
+            <div class="filter-popover-group" id="projects-category-filter-group">
               <div class="filter-popover-label">Catégorie</div>
               <div class="chip-row" id="category-filters" style="flex-wrap:wrap;margin-bottom:0;"></div>
             </div>
@@ -75,24 +94,51 @@ export function renderProjects(container) {
         </details>
       </div>
       <div id="projects-list"></div>
+      <div id="projects-board" class="projects-board" style="display:none;"></div>
     </div>
   `;
 
   renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/projects");
   const listEl = container.querySelector("#projects-list");
+  const boardEl = container.querySelector("#projects-board");
   const subtitleEl = container.querySelector("#projects-subtitle");
   const statusFilterEl = container.querySelector("#status-filter");
   const sortToggleEl = container.querySelector("#sort-toggle");
   const categoryFiltersEl = container.querySelector("#category-filters");
+  const categoryFilterGroupEl = container.querySelector("#projects-category-filter-group");
   const filterPopoverEl = container.querySelector("#projects-filter-popover");
   const filterBadgeEl = container.querySelector("#projects-filter-badge");
+  const controlsEl = container.querySelector("#projects-controls");
   container.querySelector("#new-project-btn").addEventListener("click", () => openCreateProjectModal());
+
+  // Bascule de vue (localStorage, propre à l'appareil — même mécanique que
+  // js/services/pilotageViewStore.js#mode côté Tâches, voir setProjectsMode()).
+  let viewMode = pilotageView.getViewState().projectsMode;
+  function updateViewToggle() {
+    controlsEl.querySelectorAll("[data-view]").forEach((chip) => chip.classList.toggle("active", chip.dataset.view === viewMode));
+    categoryFilterGroupEl.style.display = viewMode === "category" ? "none" : "";
+    listEl.style.display = viewMode === "category" ? "none" : "";
+    boardEl.style.display = viewMode === "category" ? "" : "none";
+  }
+  updateViewToggle();
+  controlsEl.querySelectorAll("[data-view]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      viewMode = chip.dataset.view;
+      pilotageView.setProjectsMode(viewMode);
+      updateViewToggle();
+      updateFilterBadge();
+      renderCurrent();
+    });
+  });
 
   // Même mécanique de badge que "🔧 Filtrer & trier" côté Tâches (js/views/kanban.js) : compte
   // seulement ce qui s'écarte du réglage par défaut (Actifs / Ordre manuel / Toutes catégories),
   // pour ne jamais laisser un filtre actif oublié invisible une fois le menu replié.
   function updateFilterBadge() {
-    const count = (statusFilter !== "active" ? 1 : 0) + (sortMode !== "manual" ? 1 : 0) + (categoryFilter !== "all" ? 1 : 0);
+    // Le filtre "Catégorie" est masqué (et sans effet, voir renderCategoryBoard) en vue "🗂️ Par
+    // catégorie" — il ne doit donc jamais compter dans le badge tant que cette vue est active,
+    // pour ne jamais afficher "1 filtre actif" sans rien de visible à quoi le rattacher.
+    const count = (statusFilter !== "active" ? 1 : 0) + (sortMode !== "manual" ? 1 : 0) + (viewMode !== "category" && categoryFilter !== "all" ? 1 : 0);
     filterBadgeEl.textContent = count ? String(count) : "";
     filterBadgeEl.hidden = count === 0;
   }
@@ -122,7 +168,7 @@ export function renderProjects(container) {
       statusFilterEl.querySelectorAll("[data-status]").forEach((c) => c.classList.toggle("active", c.dataset.status === statusFilter));
       applyStatusFilter();
       updateFilterBadge();
-      render();
+      renderCurrent();
     });
   });
 
@@ -131,7 +177,7 @@ export function renderProjects(container) {
     categories = prefs.categories || {};
     updateSortToggle();
     updateFilterBadge();
-    render();
+    renderCurrent();
   });
 
   function updateSortToggle() {
@@ -143,9 +189,117 @@ export function renderProjects(container) {
       updateSortToggle();
       updateFilterBadge();
       await preferencesApi.setProjectSort(sortMode);
-      render();
+      renderCurrent();
     });
   });
+
+  /** Redessine la vue actuellement affichée (Liste ou Par catégorie) — un seul point d'entrée
+   *  pour tous les déclencheurs (filtres, tri, bascule de vue, données à jour), pour ne jamais
+   *  en oublier un qui redessinerait la mauvaise vue ou aucune des deux. */
+  function renderCurrent() {
+    if (viewMode === "category") renderCategoryBoard();
+    else render();
+  }
+
+  /**
+   * Construit une carte Projet — factorisé le 07/09/2026 (ajout de la vue "Par catégorie") pour
+   * que la Liste et les colonnes de catégorie ne dessinent jamais la carte différemment. Le
+   * glisser-déposer fait DEUX choses désormais, jamais confondues : réordonner (ordre manuel,
+   * `orderedIds` — toujours la liste GLOBALE, jamais un sous-ensemble par catégorie, pour ne
+   * jamais désynchroniser l'ordre manuel affiché en vue Liste) et, seulement en vue par
+   * catégorie (`categoryMode`), changer la catégorie du projet déposé si elle diffère de celle
+   * de la colonne visée (`columnCategory`) — appliqué immédiatement, sans confirmation (retour
+   * de Charles-Henri, question posée avant d'agir). Une carte reste déplaçable en vue par
+   * catégorie même en tri "Avancement" (`sortMode !== "manual"`) : changer de catégorie n'a
+   * rien à voir avec l'ordre d'affichage, contrairement à la Liste où glisser ne sert QUE à
+   * réordonner et n'a donc de sens qu'en tri manuel.
+   */
+  function buildProjectCard(project, { tasksByProject, orderedIds, projectsById, categoryMode, columnCategory }) {
+    const projectTasks = tasksByProject.get(project.id) || [];
+    const progress = projectsApi.computeProgress(projectTasks);
+    const icon = preferencesApi.categoryIcon(categories, project.category);
+    const isArchived = projectsApi.isArchived(project);
+    const draggable = !isArchived && (sortMode === "manual" || categoryMode);
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.marginBottom = "12px";
+    card.style.cursor = "pointer";
+    card.draggable = draggable;
+    if (draggable) card.style.cursor = "grab";
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;">
+        <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}</div>
+        <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
+      </div>
+      ${project.objective ? `<div class="item-meta" style="margin-bottom:8px;">${escapeHtml(project.objective)}</div>` : ""}
+      <div style="height:6px;background:var(--color-surface-alt);border-radius:var(--radius-pill);overflow:hidden;margin:8px 0;">
+        <div style="height:100%;width:${progress.percent}%;background:var(--color-primary);"></div>
+      </div>
+      <div class="kanban-card-meta">
+        <span>🟢 ${progress.done} réalisé</span>
+        <span>🔵 ${progress.in_progress} en cours</span>
+        <span>⏳ ${progress.waiting} attente</span>
+        ${progress.blocked ? `<span class="badge badge-late">🔴 ${progress.blocked} bloqué</span>` : ""}
+        <span>⚪ ${progress.todo + progress.follow_up} reste</span>
+      </div>
+    `;
+    // Réouverture rapide directement depuis la carte (retour de Charles-Henri) — pas besoin
+    // d'ouvrir toute la fiche juste pour rouvrir un projet fermé qu'on repère dans la liste.
+    if (isArchived) {
+      const reopenBtn = document.createElement("button");
+      reopenBtn.type = "button";
+      reopenBtn.className = "btn btn-secondary btn-sm";
+      reopenBtn.style.marginTop = "8px";
+      reopenBtn.textContent = "↩️ Rouvrir";
+      reopenBtn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await projectsApi.reopenProject(project.id);
+        showToast("Projet rouvert");
+      });
+      card.appendChild(reopenBtn);
+    }
+    card.addEventListener("click", (e) => {
+      // Un glisser-déposer qui se termine peut déclencher un click parasite — seul un cas où
+      // `draggable` est vrai peut en produire un.
+      if (card.dataset.justDragged) return;
+      openProjectDetail(project, projectTasks);
+    });
+    card.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/project-id", project.id);
+    });
+    card.addEventListener("dragover", (e) => {
+      if (!draggable) return;
+      e.preventDefault();
+      card.classList.add("drag-over");
+    });
+    card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
+    card.addEventListener("drop", async (e) => {
+      if (!draggable) return;
+      e.preventDefault();
+      e.stopPropagation(); // évite de aussi déclencher le drop de la colonne (vue par catégorie)
+      card.classList.remove("drag-over");
+      const draggedId = e.dataTransfer.getData("text/project-id");
+      if (!draggedId || draggedId === project.id) return;
+      const dragged = projectsById.get(draggedId);
+      if (!dragged) return;
+      if (categoryMode && (dragged.category || null) !== columnCategory) {
+        await projectsApi.updateProject(draggedId, { category: columnCategory });
+      }
+      if (sortMode === "manual") {
+        const ids = [...orderedIds];
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(project.id);
+        if (from >= 0 && to >= 0) {
+          ids.splice(to, 0, ids.splice(from, 1)[0]);
+          card.dataset.justDragged = "1";
+          await projectsApi.reorderProjects(ids);
+          setTimeout(() => delete card.dataset.justDragged, 300);
+        }
+      }
+    });
+    return card;
+  }
 
   function render() {
     subtitleEl.textContent = projects.length ? `${projects.length} projet(s)` : "Aucun projet";
@@ -162,7 +316,7 @@ export function renderProjects(container) {
       chip.addEventListener("click", () => {
         categoryFilter = chip.dataset.cat;
         updateFilterBadge();
-        render();
+        renderCurrent();
       });
     });
 
@@ -187,98 +341,120 @@ export function renderProjects(container) {
     for (const project of filtered) tasksByProject.set(project.id, tasks.filter((t) => t.projectId === project.id));
     const ordered = projectsApi.sortProjects(filtered, sortMode, tasksByProject);
     const orderedIds = ordered.map((p) => p.id);
+    const projectsById = new Map(filtered.map((p) => [p.id, p]));
 
     listEl.innerHTML = "";
     for (const project of ordered) {
-      const projectTasks = tasksByProject.get(project.id) || [];
-      const progress = projectsApi.computeProgress(projectTasks);
-      const icon = preferencesApi.categoryIcon(categories, project.category);
+      listEl.appendChild(buildProjectCard(project, { tasksByProject, orderedIds, projectsById, categoryMode: false }));
+    }
+  }
 
-      const isArchived = projectsApi.isArchived(project);
-      const draggable = sortMode === "manual" && !isArchived;
-      const card = document.createElement("div");
-      card.className = "card";
-      card.style.marginBottom = "12px";
-      card.style.cursor = "pointer";
-      card.draggable = draggable;
-      if (draggable) card.style.cursor = "grab";
-      card.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:baseline;">
-          <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}</div>
-          <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
-        </div>
-        ${project.objective ? `<div class="item-meta" style="margin-bottom:8px;">${escapeHtml(project.objective)}</div>` : ""}
-        <div style="height:6px;background:var(--color-surface-alt);border-radius:var(--radius-pill);overflow:hidden;margin:8px 0;">
-          <div style="height:100%;width:${progress.percent}%;background:var(--color-primary);"></div>
-        </div>
-        <div class="kanban-card-meta">
-          <span>🟢 ${progress.done} réalisé</span>
-          <span>🔵 ${progress.in_progress} en cours</span>
-          <span>⏳ ${progress.waiting} attente</span>
-          ${progress.blocked ? `<span class="badge badge-late">🔴 ${progress.blocked} bloqué</span>` : ""}
-          <span>⚪ ${progress.todo + progress.follow_up} reste</span>
-        </div>
-      `;
-      // Réouverture rapide directement depuis la carte (retour de Charles-Henri) — pas besoin
-      // d'ouvrir toute la fiche juste pour rouvrir un projet fermé qu'on repère dans la liste.
-      if (isArchived) {
-        const reopenBtn = document.createElement("button");
-        reopenBtn.type = "button";
-        reopenBtn.className = "btn btn-secondary btn-sm";
-        reopenBtn.style.marginTop = "8px";
-        reopenBtn.textContent = "↩️ Rouvrir";
-        reopenBtn.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          await projectsApi.reopenProject(project.id);
-          showToast("Projet rouvert");
-        });
-        card.appendChild(reopenBtn);
+  /**
+   * Vue "🗂️ Par catégorie" (retour de Charles-Henri, 07/09/2026) : une colonne par catégorie
+   * (ordre = ordre d'enregistrement des catégories, voir preferencesApi.registerCategory),
+   * "Sans catégorie" toujours en dernier, glisser une carte d'une colonne à l'autre change sa
+   * catégorie. Ignore volontairement `categoryFilter` (le filtre "Catégorie" du menu, masqué en
+   * vue "category" par updateViewToggle()) : le but de cette vue est justement de TOUTES les
+   * voir côte à côte. "Si pas de projet suite au filtre alors la catégorie disparaît" (demande
+   * explicite) : une colonne dont le contenu est vide après le filtre Statut n'est simplement
+   * jamais construite, plutôt que montrée vide — y compris "Sans catégorie".
+   */
+  function renderCategoryBoard() {
+    subtitleEl.textContent = projects.length ? `${projects.length} projet(s)` : "Aucun projet";
+    boardEl.innerHTML = "";
+
+    if (!projects.length) {
+      boardEl.innerHTML =
+        statusFilter === "archived"
+          ? `<div class="empty-state"><span class="emoji">🗄️</span>Aucun projet fermé pour l'instant.</div>`
+          : `<div class="empty-state"><span class="emoji">📦</span>Pas encore de projet. Crée le premier avec le bouton « + Projet ».</div>`;
+      return;
+    }
+
+    const tasksByProject = new Map();
+    for (const project of projects) tasksByProject.set(project.id, tasks.filter((t) => t.projectId === project.id));
+    // Ordre GLOBAL (tous projets visibles confondus, toutes catégories) — c'est ce même tableau
+    // qui sert de base au glisser-déposer "réordonner" dans buildProjectCard(), pour que l'ordre
+    // manuel reste cohérent entre cette vue et la Liste (jamais deux ordres différents selon la
+    // vue affichée).
+    const orderedAll = projectsApi.sortProjects(projects, sortMode, tasksByProject);
+    const orderedIds = orderedAll.map((p) => p.id);
+    const projectsById = new Map(projects.map((p) => [p.id, p]));
+
+    const registeredNames = Object.keys(categories); // ordre d'enregistrement (voir preferences.js)
+    const looseNames = [...new Set(projects.map((p) => p.category).filter((c) => c && !registeredNames.includes(c)))];
+    const buckets = [...registeredNames, ...looseNames]
+      .map((name) => ({ key: name, label: name, icon: preferencesApi.categoryIcon(categories, name) }))
+      .filter((b) => projects.some((p) => p.category === b.key));
+    const uncategorizedCount = projects.filter((p) => !p.category).length;
+    if (uncategorizedCount) buckets.push({ key: null, label: "Sans catégorie", icon: "📁" });
+
+    if (!buckets.length) {
+      boardEl.innerHTML = `<div class="empty-state"><span class="emoji">📦</span>Rien à afficher avec ces filtres.</div>`;
+      return;
+    }
+
+    for (const bucket of buckets) {
+      const bucketProjects = bucket.key === null ? projects.filter((p) => !p.category) : projects.filter((p) => p.category === bucket.key);
+      const orderedBucket = projectsApi.sortProjects(bucketProjects, sortMode, tasksByProject);
+
+      const column = document.createElement("div");
+      column.className = "projects-category-column";
+      const header = document.createElement("div");
+      header.className = "kanban-column-header";
+      header.innerHTML = `<span>${bucket.icon} ${escapeHtml(bucket.label)}</span>`;
+      const count = document.createElement("span");
+      count.className = "count";
+      count.textContent = orderedBucket.length;
+      header.appendChild(count);
+      column.appendChild(header);
+
+      const cardsWrap = document.createElement("div");
+      cardsWrap.className = "projects-category-cards";
+      for (const project of orderedBucket) {
+        cardsWrap.appendChild(
+          buildProjectCard(project, { tasksByProject, orderedIds, projectsById, categoryMode: true, columnCategory: bucket.key })
+        );
       }
-      card.addEventListener("click", (e) => {
-        // Un glisser-déposer qui se termine peut déclencher un click parasite — sortMode
-        // "manual" est le seul cas où draggable est vrai, donc le seul où ça peut arriver.
-        if (card.dataset.justDragged) return;
-        openProjectDetail(project, projectTasks);
-      });
-      card.addEventListener("dragstart", (e) => {
-        e.dataTransfer.setData("text/project-id", project.id);
-      });
-      card.addEventListener("dragover", (e) => {
-        if (sortMode !== "manual" || isArchived) return;
+      column.appendChild(cardsWrap);
+
+      // Cible de dépose sur la colonne elle-même (pas seulement sur une carte) — pour pouvoir
+      // déposer sous la dernière carte, ou dans une colonne qui n'en a qu'une ou deux. Le
+      // `e.stopPropagation()` du drop d'une carte (buildProjectCard) évite tout double
+      // traitement quand la dépose a lieu directement sur une carte.
+      cardsWrap.addEventListener("dragover", (e) => {
         e.preventDefault();
-        card.classList.add("drag-over");
+        cardsWrap.classList.add("drag-over");
       });
-      card.addEventListener("dragleave", () => card.classList.remove("drag-over"));
-      card.addEventListener("drop", async (e) => {
-        if (sortMode !== "manual" || isArchived) return;
+      cardsWrap.addEventListener("dragleave", () => cardsWrap.classList.remove("drag-over"));
+      cardsWrap.addEventListener("drop", async (e) => {
         e.preventDefault();
-        card.classList.remove("drag-over");
+        cardsWrap.classList.remove("drag-over");
         const draggedId = e.dataTransfer.getData("text/project-id");
-        if (!draggedId || draggedId === project.id) return;
-        const ids = [...orderedIds];
-        const from = ids.indexOf(draggedId);
-        const to = ids.indexOf(project.id);
-        if (from < 0 || to < 0) return;
-        ids.splice(to, 0, ids.splice(from, 1)[0]);
-        card.dataset.justDragged = "1";
-        await projectsApi.reorderProjects(ids);
-        setTimeout(() => delete card.dataset.justDragged, 300);
+        if (!draggedId) return;
+        const dragged = projectsById.get(draggedId);
+        if (!dragged) return;
+        if ((dragged.category || null) !== bucket.key) {
+          await projectsApi.updateProject(draggedId, { category: bucket.key });
+        }
       });
-      listEl.appendChild(card);
+
+      boardEl.appendChild(column);
     }
   }
 
   const unsubProjects = projectsApi.subscribe((items) => {
     rawProjects = items;
     applyStatusFilter();
-    render();
+    renderCurrent();
   });
   const unsubTasks = tasksApi.subscribe((items) => {
     tasks = items;
-    render();
+    renderCurrent();
   });
 
   return function cleanup() {
+    container.classList.remove("app-wide");
     unsubProjects();
     unsubTasks();
     document.removeEventListener("click", closeFilterPopoverOnOutsideClick);

@@ -41,7 +41,36 @@ const DUE_WINDOWS = [
   { key: "7", label: "≤ 7 jours" },
   { key: "15", label: "≤ 15 jours" },
   { key: "late", label: "🔴 En retard" },
+  { key: "none", label: "🗓️ Sans échéance" },
 ];
+
+// Regroupement par échéance en vue Tableau (retour de Charles-Henri, 07/09/2026 : "je dois
+// pouvoir regrouper par échéance En retard / Aujourd'hui / Dans la semaine / Dans le mois /
+// Plus tard / Sans date") — toujours les 6 groupes, même vides, comme le regroupement par
+// Statut (jamais un sous-ensemble façon regroupement par Projet) : ce sont des catégories
+// fixes, voir "0 en retard" a sa propre valeur informative. "Semaine"/"mois" sont des fenêtres
+// glissantes de 7/30 jours (mêmes seuils que le filtre Échéance ≤7/≤15 jours plus haut), pas
+// des semaines/mois calendaires. Le glisser-déposer entre groupes reste désactivé pour ce
+// regroupement (voir renderTableView plus bas) : contrairement à Statut/Projet, il n'y a pas de
+// valeur cible évidente à assigner à une tâche déposée dans "Dans la semaine" ou "Plus tard".
+const DUE_BUCKETS = [
+  { key: "late", label: "🔴 En retard" },
+  { key: "today", label: "Aujourd'hui" },
+  { key: "week", label: "Dans la semaine" },
+  { key: "month", label: "Dans le mois" },
+  { key: "later", label: "Plus tard" },
+  { key: "none", label: "Sans date" },
+];
+
+function dueDateBucketKey(task) {
+  if (!task.dueDate) return "none";
+  const days = daysFromToday(task.dueDate);
+  if (days < 0) return "late";
+  if (days === 0) return "today";
+  if (days <= 7) return "week";
+  if (days <= 30) return "month";
+  return "later";
+}
 
 export function renderKanban(container) {
   // Plein écran en mode web (retour de Charles-Henri : éviter le scroll horizontal) — la
@@ -88,8 +117,9 @@ export function renderKanban(container) {
               <div class="chip-row" id="kanban-due-filter" style="flex-wrap:wrap;margin-bottom:0;"></div>
             </div>
             <div class="filter-popover-group">
-              <div class="chip-row" style="margin-bottom:0;">
+              <div class="chip-row" style="margin-bottom:0;flex-wrap:wrap;">
                 <button type="button" class="chip" id="kanban-hide-done">🙈 Masquer terminées</button>
+                <button type="button" class="chip" id="kanban-stalled-only">⏸️ Stagnantes</button>
               </div>
             </div>
             <div class="filter-popover-group" id="kanban-groupby-group" style="display:none;">
@@ -97,6 +127,7 @@ export function renderKanban(container) {
               <select id="kanban-group-by">
                 <option value="status">Statut</option>
                 <option value="project">Projet</option>
+                <option value="dueDate">Échéance</option>
                 <option value="none">Aucun</option>
               </select>
             </div>
@@ -138,6 +169,14 @@ export function renderKanban(container) {
   let filterProjectId = "all";
   let activeHat = "all";
   let hideDone = false;
+  // "⏸️ Stagnantes" (retour de Charles-Henri, 07/09/2026 : "un filtre pour identifier [...] ce
+  // qui n'avance pas depuis un certain temps") — même critère et même seuil que le bloc "⏸️ En
+  // pause depuis X j" de l'Accueil (tasksApi.isStalled, 5 jours sans mise à jour sur un statut
+  // actif), pour ne jamais avoir deux définitions de "stagnant" dans l'app. Filtre indépendant
+  // de "Sans échéance" (ajouté à DUE_WINDOWS ci-dessus) : une tâche peut être stagnante ET avoir
+  // une échéance, ou sans échéance ET avancer normalement — deux questions différentes, donc
+  // deux filtres cumulables plutôt qu'un seul bouton fusionné.
+  let stalledOnly = false;
 
   // Vue Trello/Tableau (02/09/2026) : préférence propre à l'appareil (localStorage), pas
   // besoin d'attendre les préférences Firestore pour l'afficher — contrairement à la
@@ -208,7 +247,12 @@ export function renderKanban(container) {
   // du menu, toujours visibles, donc jamais "oubliables" au même sens — une fois dans le menu,
   // ils doivent l'être pour la même raison que Casquette/Projet.
   function updateFilterBadge() {
-    const count = (activeHat !== "all" ? 1 : 0) + (filterProjectId !== "all" ? 1 : 0) + (filterWindow !== "all" ? 1 : 0) + (hideDone ? 1 : 0);
+    const count =
+      (activeHat !== "all" ? 1 : 0) +
+      (filterProjectId !== "all" ? 1 : 0) +
+      (filterWindow !== "all" ? 1 : 0) +
+      (hideDone ? 1 : 0) +
+      (stalledOnly ? 1 : 0);
     filterBadgeEl.textContent = count ? String(count) : "";
     filterBadgeEl.hidden = count === 0;
   }
@@ -237,6 +281,12 @@ export function renderKanban(container) {
     updateFilterBadge();
     renderBoard();
   });
+  container.querySelector("#kanban-stalled-only").addEventListener("click", (e) => {
+    stalledOnly = !stalledOnly;
+    e.currentTarget.classList.toggle("active", stalledOnly);
+    updateFilterBadge();
+    renderBoard();
+  });
   projectFilterEl.addEventListener("change", () => {
     filterProjectId = projectFilterEl.value;
     updateFilterBadge();
@@ -257,8 +307,9 @@ export function renderKanban(container) {
     else if (filterWindow === "7" || filterWindow === "15") {
       const horizon = Number(filterWindow);
       list = list.filter((t) => t.dueDate && daysFromToday(t.dueDate) >= 0 && daysFromToday(t.dueDate) <= horizon);
-    }
+    } else if (filterWindow === "none") list = list.filter((t) => !t.dueDate);
     if (hideDone) list = list.filter((t) => t.status !== "done");
+    if (stalledOnly) list = list.filter((t) => tasksApi.isStalled(t));
     return list;
   }
 
@@ -406,7 +457,9 @@ function renderTableView(container, tasks, projects, onChange) {
   // Statut/Projet redevient inutile comme colonne quand c'est déjà lui qui structure les
   // groupes (même logique que Monday : la colonne de regroupement disparaît, remplacée par
   // les en-têtes de section).
-  const visibleColumns = columnOrder.filter((c) => !(groupBy === "status" && c === "status") && !(groupBy === "project" && c === "project"));
+  const visibleColumns = columnOrder.filter(
+    (c) => !(groupBy === "status" && c === "status") && !(groupBy === "project" && c === "project") && !(groupBy === "dueDate" && c === "dueDate")
+  );
 
   function cellSortValue(task, col) {
     if (col === "type") return task.type === "communication" ? 1 : 0;
@@ -458,6 +511,8 @@ function renderTableView(container, tasks, projects, onChange) {
       const project = key === "__none__" ? null : projects.find((p) => p.id === key);
       return { key, label: project ? project.name : "Sans projet", items: sortRows(byKey.get(key)) };
     });
+  } else if (groupBy === "dueDate") {
+    groups = DUE_BUCKETS.map((b) => ({ key: b.key, label: b.label, items: sortRows(tasks.filter((t) => dueDateBucketKey(t) === b.key)) }));
   } else {
     groups = [{ key: "__all__", label: null, items: sortRows(tasks) }];
   }
@@ -494,8 +549,12 @@ function renderTableView(container, tasks, projects, onChange) {
     // Glisser une ligne vers un autre groupe pour changer sa valeur (retour de Charles-Henri,
     // 02/09/2026 : "basculer par glisser une tâche ailleurs", façon Monday) — n'a de sens que
     // quand un regroupement structure les lignes (Statut/Projet) ; en "Aucun", il n'y a qu'un
-    // seul groupe, glisser une ligne dedans ne changerait jamais rien.
-    if (groupBy !== "none") {
+    // seul groupe, glisser une ligne dedans ne changerait jamais rien. Volontairement exclu
+    // aussi pour "Échéance" (retour de Charles-Henri, 07/09/2026, question posée avant d'agir) :
+    // contrairement à Statut/Projet, il n'y a pas de valeur cible évidente à assigner à une
+    // tâche déposée dans "Dans la semaine" ou "Plus tard" — ce regroupement sert à visualiser,
+    // pas à agir.
+    if (groupBy !== "none" && groupBy !== "dueDate") {
       tbody.addEventListener("dragover", (e) => {
         if (!e.dataTransfer.types.includes("text/pilotage-row-task")) return;
         e.preventDefault();
@@ -584,7 +643,11 @@ function renderTableRow(task, projects, visibleColumns, onChange, groupBy) {
   // une tâche ailleurs") — un élément dédié plutôt que toute la ligne, pour ne jamais gêner la
   // sélection/l'édition de texte dans les champs de la ligne (titre, notes...). N'a de sens que
   // si un regroupement structure les lignes (voir la logique de drop dans renderTableView).
-  if (groupBy !== "none") {
+  // Absente en regroupement "Échéance" (retour de Charles-Henri, 07/09/2026) : ces groupes sont
+  // des fenêtres de date calculées, pas une cible de dépose sensée (aucune date-cible par
+  // groupe) — la poignée resterait visible sans jamais rien pouvoir faire, ce qui serait
+  // trompeur. Voir aussi le gate équivalent sur les écouteurs de drop dans renderTableView.
+  if (groupBy !== "none" && groupBy !== "dueDate") {
     const handle = document.createElement("span");
     handle.className = "pilotage-table-drag-handle";
     handle.textContent = "⠿";

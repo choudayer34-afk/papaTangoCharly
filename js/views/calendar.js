@@ -24,6 +24,13 @@ import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 export function renderCalendar(container) {
+  // Plein écran en mode web (retour de Charles-Henri, 07/09/2026 : "il y a toujours un
+  // décalage [...] Calendrier idem [que Projet]") — même classe et même principe que
+  // js/views/kanban.js et js/views/projects.js (posée/retirée au montage/démontage), pour
+  // que les 3 écrans Pilotage (Tâches/Projets/Calendrier) se comportent enfin à l'identique
+  // en largeur.
+  container.classList.add("app-wide");
+
   container.innerHTML = `
     <div class="topbar">
       <div>
@@ -183,6 +190,7 @@ export function renderCalendar(container) {
   });
 
   return function cleanup() {
+    container.classList.remove("app-wide");
     unsubTasks();
     unsubProjects();
     unsubMeetings();
