@@ -32,6 +32,16 @@ const WHATS_NEW = [
     date: "7 septembre 2026",
     items: [
       {
+        type: "fix",
+        title: "👀 Cliquer sur un Suivi ouvre le Suivi, pas la personne",
+        text: "Depuis \"⚠️ Ça a besoin de toi\", le mode Focus, \"📣 Relances dues\" et la Revue hebdomadaire, cliquer sur un Suivi (\"à transmettre\" ou \"en attente\") ouvrait la fiche du collaborateur au lieu du Suivi lui-même — il fallait ensuite le retrouver dans sa liste. Corrigé : ces quatre endroits ouvrent maintenant directement le Suivi concerné, comme le fait déjà la recherche globale.",
+      },
+    ],
+  },
+  {
+    date: "7 septembre 2026",
+    items: [
+      {
         type: "remove",
         title: "📄 Retrait du bouton \"Exporter\" (Tâche et Suivi)",
         text: "L'export en image PNG d'une Tâche ou d'un Suivi (ajouté fin août) ne rendait pas service : sur une fiche sans description ni sous-étapes, l'image produite était quasiment vide et n'apportait rien par rapport à la fiche elle-même. Retiré des deux fiches, sans remplacement pour l'instant.",

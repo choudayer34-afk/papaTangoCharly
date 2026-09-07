@@ -17,7 +17,7 @@ import { showHintOnce } from "../components/hint.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
-import { openPersonDetail } from "./people.js";
+import { openEditFollowUpModal } from "./people.js";
 import { openProjectDetail } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -396,8 +396,13 @@ export function renderDashboard(container) {
           </div>
           <span class="badge badge-late">🔴</span>
         `;
-        if (person) row.addEventListener("click", () => openPersonDetail(person, followUps));
-        else row.style.cursor = "default";
+        // Ouvre le Suivi lui-même, pas la fiche de la personne (retour de Charles-Henri,
+        // 07/09/2026 : "tous les éléments sur lesquels je clique doivent m'emmener sur
+        // l'élément lui-même et pas son parent") — cohérent avec js/components/linkedItems.js,
+        // qui ouvre déjà correctement le Suivi et jamais la Personne pour une réf {type:
+        // "FollowUp"}. Fonctionne même si la personne a été supprimée entre-temps
+        // (openEditFollowUpModal gère déjà ce cas, voir js/views/people.js).
+        row.addEventListener("click", () => openEditFollowUpModal(f));
       } else if (entry.kind === "dueSoon") {
         const t = entry.data;
         row.innerHTML = `
@@ -473,7 +478,9 @@ export function renderDashboard(container) {
         why: isToTell ? "📣 À transmettre — en retard" : "👀 Suivi en retard",
         title: `${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}`,
         sub: `${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}`,
-        onOpen: person ? () => openPersonDetail(person, followUps) : null,
+        // Ouvre le Suivi lui-même, pas la fiche de la personne — voir même remarque dans
+        // renderNeedsAttentionSection() plus haut.
+        onOpen: () => openEditFollowUpModal(f),
       };
     }
     if (entry.kind === "dueSoon") {
@@ -787,19 +794,19 @@ export function renderDashboard(container) {
         const isToTell = f.direction === "to_tell";
         const row = document.createElement("div");
         row.className = "item-row";
-        row.style.cursor = person ? "pointer" : "default";
+        row.style.cursor = "pointer";
         row.innerHTML = `
           <div class="item-main">
             <div class="item-title">${isToTell ? "📣 " : ""}${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
             <div class="item-meta">${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
           </div>
         `;
-        if (person) {
-          row.addEventListener("click", () => {
-            closeModal();
-            openPersonDetail(person, followUps);
-          });
-        }
+        // Ouvre le Suivi lui-même, pas la fiche de la personne — voir même remarque dans
+        // renderNeedsAttentionSection() plus haut.
+        row.addEventListener("click", () => {
+          closeModal();
+          openEditFollowUpModal(f);
+        });
         listEl.appendChild(row);
       }
     }
