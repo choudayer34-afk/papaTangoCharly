@@ -414,6 +414,34 @@ a { color: inherit; }
    personnes au sein de mon équipe") — même langage visuel que les colonnes Kanban ci-dessus. */
 .card.drag-over,
 .item-row.drag-over { outline: 2px dashed var(--color-primary); outline-offset: -2px; }
+
+/* Vue Projets "🗂️ Par catégorie" (retour de Charles-Henri, 07/09/2026) : un bloc par
+   catégorie, réparti en 3 colonnes en mode web, empilé en une seule colonne sur mobile —
+   même seuil (900px) et même langage visuel (.kanban-column-header réutilisé tel quel)
+   que le reste de Pilotage plutôt que d'inventer un nouveau système de colonnes. */
+.projects-board {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+@media (min-width: 900px) {
+  .projects-board { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.projects-category-column {
+  background: var(--color-surface-alt);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  min-width: 0;
+}
+/* Cible de dépose sur le fond de colonne (sous la dernière carte) — voir le
+   `dragover`/`drop` posé sur `.projects-category-cards` dans js/views/projects.js. Les cartes
+   elles-mêmes utilisent déjà .card.drag-over ci-dessus. */
+.projects-category-cards.drag-over {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-md);
+}
 .kanban-card {
   background: var(--color-surface);
   border-radius: var(--radius-sm);
