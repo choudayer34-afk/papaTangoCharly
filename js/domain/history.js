@@ -40,6 +40,11 @@ const ACTION_META = {
   "Decision:created": { emoji: "🗳️", label: "Décision enregistrée" },
   "Decision:updated": { emoji: "✏️", label: "Décision modifiée" },
   "Decision:deleted": { emoji: "🗑️", label: "Décision supprimée" },
+  // Grille de décision structurée (§49, retour de Charles-Henri : "la logique de la décision
+  // resterait tracée dans l'historique, retrouvable trois mois plus tard") — entrée dédiée et
+  // lisible plutôt que noyée dans "Décision modifiée", voir js/domain/decisions.js#saveGrid().
+  "Decision:grid_recorded": { emoji: "⚖️", label: "Grille de décision enregistrée" },
+  "Decision:grid_removed": { emoji: "⚖️", label: "Grille de décision retirée" },
 };
 
 // Le "fil conducteur" (§ retour de Charles-Henri : "les éléments semblent séparés") ajoute
@@ -86,6 +91,9 @@ export function describe(entry) {
   }
   if (!detail && entry.action === "unlinked" && entry.metadata?.from) {
     detail = `Délié de ${entry.metadata.from.label || entry.metadata.from.type}`;
+  }
+  if (!detail && entry.action === "grid_recorded" && entry.metadata?.recommended) {
+    detail = `${entry.metadata.recommended} conseillée · ${entry.metadata.summary || ""}`.trim();
   }
   return { emoji: meta.emoji, label: meta.label, detail };
 }
