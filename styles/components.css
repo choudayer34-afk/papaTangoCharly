@@ -936,8 +936,10 @@ tbody.drag-over-group {
    scroll interne invisible pour l'œil. Cette rangée n'a par ailleurs jamais besoin de défilement
    horizontal (elle ne contient que le bouton "🔧 Filtrer", et passe déjà en `flex-wrap:wrap`) :
    corrigé en repassant `#kanban-filters` en overflow visible, pour que le panneau flotte
-   normalement au-dessus du reste de la page, comme prévu dès sa conception.*/
-#kanban-filters { overflow: visible; }
+   normalement au-dessus du reste de la page, comme prévu dès sa conception.
+   `#projects-controls` (audit du 07/09/2026, même menu "🔧 Filtrer & trier" ajouté côté Projets)
+   a besoin du même correctif, pour la même raison exacte. */
+#kanban-filters, #projects-controls { overflow: visible; }
 .filter-popover {
   position: relative;
   flex: 0 0 auto;
