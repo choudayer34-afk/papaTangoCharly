@@ -129,7 +129,7 @@ export function renderDashboard(container) {
   let categories = {};
   let activeHat = "all";
   let hiddenSections = new Set();
-  let focusOverride = { date: null, taskIds: [] };
+  let focusOverride = { date: null, addedTaskIds: [] };
   // Poids de la matrice de priorisation (vague 33) — réglés depuis l'onglet 🎯 Priorisation
   // (Pilotage), relus ici à chaque montage de l'Accueil comme le reste des préférences
   // ci-dessous ; valeurs par défaut tant que Charles-Henri n'a rien réglé.
@@ -160,7 +160,7 @@ export function renderDashboard(container) {
     } else {
       hiddenSections = new Set(prefs.dashboardHidden || []);
     }
-    focusOverride = prefs.focusOverride || { date: null, taskIds: [] };
+    focusOverride = prefs.focusOverride || { date: null, addedTaskIds: [] };
     priorityWeights = prefs.priorityWeights || priorisationApi.DEFAULT_WEIGHTS;
     recentlyViewed = prefs.recentlyViewed || [];
     homeMode = prefs.homeMode || "classic";
@@ -870,17 +870,29 @@ export function renderDashboard(container) {
 
   /**
    * "🎯 Focus du jour" (piste TDAH du 01/09/2026, retour de Charles-Henri) : au lieu d'un
-   * chiffre "📅 Aujourd'hui" qui peut grimper sans limite, 3 tâches au plus, choisies
-   * automatiquement mais modifiables d'un clic — le choix hybride retenu plutôt qu'une liste
-   * 100% automatique ou 100% manuelle. L'échéance complète du jour reste accessible juste en
-   * dessous, rien n'est masqué.
+   * chiffre "📅 Aujourd'hui" qui peut grimper sans limite, une liste choisie automatiquement
+   * mais complétable d'un clic — le choix hybride retenu plutôt qu'une liste 100% automatique
+   * ou 100% manuelle. L'échéance complète du jour reste accessible juste en dessous, rien
+   * n'est masqué.
+   *
+   * Vague 37 (retour de Charles-Henri, 08/09/2026 — "il manque sur l'accueil en focus les
+   * tâches qui sont à l'échéance du jour, toutes ne remontent pas") : le plafond fixe à 3 a
+   * été supprimé. Le Focus remonte désormais TOUTES les tâches en retard (`tasksApi.isLate`)
+   * + TOUTES les tâches à échéance aujourd'hui (`isDueToday`), sans limite de nombre. Si cette
+   * liste est vide (rien en retard, rien dû aujourd'hui), on retombe sur l'ancien comportement
+   * : les 3 tâches les plus urgentes proposées par la matrice de priorisation, pour ne jamais
+   * laisser un bloc vide démotivant. Le bouton 🔀, qui remplaçait auparavant une ligne parmi 3,
+   * est remplacé par un bouton ➕ global qui sert à AJOUTER une tâche en plus de cette
+   * sélection automatique (voir `openFocusAddModal` plus bas) — `focusOverride.addedTaskIds`
+   * (js/domain/preferences.js) ne porte donc plus que ces ajouts, jamais la sélection
+   * automatique elle-même.
    *
    * Tri : matrice de priorisation (vague 33, retour de Charles-Henri, 07/09/2026 — "au lieu de
    * juste trier par échéance, elle croiserait urgence, impact [...] et niveau de blocage")
    * plutôt que le simple tri "en retard d'abord, puis échéance la plus proche" d'avant cette
    * vague — voir js/domain/priorisation.js, seul endroit où vit la formule. `focusRanked()`
    * donne accès au détail du score (`why`) pour la phrase affichée sous chaque tâche ci-dessous ;
-   * `focusCandidates()` en garde juste les tâches, pour ne rien changer à la logique de swap
+   * `focusCandidates()` en garde juste les tâches, pour ne rien changer à la logique d'ajout
    * manuel plus bas qui raisonne déjà en tâches brutes.
    */
   function focusRanked() {
@@ -898,27 +910,45 @@ export function renderDashboard(container) {
   function renderFocusSection() {
     const rankedCandidates = focusRanked();
     const candidates = rankedCandidates.map((r) => r.task);
-    let chosen;
-    if (focusOverride.date === todayDateKey() && (focusOverride.taskIds || []).length) {
+
+    // Sélection automatique (vague 37) : tout ce qui est en retard ou dû aujourd'hui, sans
+    // plafond — l'ordre de `candidates` (déjà trié par la matrice de priorisation) est
+    // préservé à l'intérieur de ce sous-ensemble.
+    const dueOrLate = candidates.filter((t) => tasksApi.isLate(t) || isDueToday(t));
+    let chosen = dueOrLate.length ? dueOrLate.slice() : candidates.slice(0, 3);
+    const isAutoFallback = !dueOrLate.length;
+
+    // Ajouts manuels du jour (bouton ➕ — voir openFocusAddModal) : uniquement des tâches qui
+    // ne sont pas déjà dans la sélection automatique, jamais de doublon par id. `addedIds`
+    // sert ensuite à distinguer, ligne par ligne, ce qui peut être retiré (un ajout manuel) de
+    // ce qui ne peut pas l'être (une tâche en retard ou due aujourd'hui, jamais retirable à la
+    // main du Focus).
+    const addedIds = new Set();
+    if (focusOverride.date === todayDateKey() && (focusOverride.addedTaskIds || []).length) {
       const byId = new Map(candidates.map((t) => [t.id, t]));
-      chosen = focusOverride.taskIds.map((id) => byId.get(id)).filter(Boolean);
-      // Complète depuis la sélection automatique si une tâche choisie a été terminée/
-      // supprimée entre-temps — jamais moins de 3 par la faute d'un id devenu invalide.
-      for (const t of candidates) {
-        if (chosen.length >= 3) break;
-        if (!chosen.some((c) => c.id === t.id)) chosen.push(t);
+      const chosenIds = new Set(chosen.map((t) => t.id));
+      for (const id of focusOverride.addedTaskIds) {
+        const t = byId.get(id);
+        if (t && !chosenIds.has(id)) {
+          chosen.push(t);
+          chosenIds.add(id);
+          addedIds.add(id);
+        }
+        // Une tâche ajoutée manuellement puis terminée/supprimée disparaît silencieusement —
+        // jamais recomplétée, contrairement à l'ancien comportement de remplacement : ici ce
+        // n'était qu'un ajout, son absence ne fait jamais redescendre le Focus en dessous de
+        // sa sélection automatique.
       }
-    } else {
-      chosen = candidates.slice(0, 3);
     }
-    chosen = chosen.slice(0, 3);
 
     const todayList = hatFilterTasks(tasks).filter(isDueToday);
 
     focusSection.innerHTML = `
-      <div class="section-title" style="margin-top:0;">🎯 Focus du jour</div>
+      <div class="section-title" style="margin-top:0;">🎯 Focus du jour${chosen.length ? ` (${chosen.length})` : ""}</div>
+      ${isAutoFallback && chosen.length ? `<div class="item-meta" style="margin-bottom:8px;">Rien en retard ni dû aujourd'hui — voici les tâches les plus urgentes en attente.</div>` : ""}
       <div class="card" id="focus-list" style="margin-bottom:8px;"></div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+        <button type="button" id="focus-add-btn" class="btn btn-ghost btn-sm">➕ Ajouter une tâche au Focus</button>
         <button type="button" id="focus-today-link" class="btn btn-ghost btn-sm">📅 Toutes les échéances d'aujourd'hui (${todayList.length})</button>
       </div>
     `;
@@ -945,30 +975,50 @@ export function renderDashboard(container) {
             ${why ? `<div class="item-meta" style="font-style:italic;">🧭 Pourquoi maintenant : ${escapeHtml(why)}</div>` : ""}
           </div>
         `;
-        const swapBtn = document.createElement("button");
-        swapBtn.type = "button";
-        swapBtn.className = "btn btn-ghost btn-sm";
-        swapBtn.setAttribute("aria-label", "Remplacer par une autre tâche");
-        swapBtn.textContent = "🔀";
-        row.appendChild(swapBtn);
         row.querySelector(".item-main").addEventListener("click", () => openTaskDetail(t, projects));
-        swapBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          openFocusSwapModal(t, chosen, candidates);
-        });
+        // Vague 37 : une tâche en retard ou due aujourd'hui n'est plus "remplaçable" (elle
+        // n'est plus dans un plafond fixe) — seule une tâche ajoutée manuellement peut être
+        // retirée. Le cas "fallback" (rien en retard/dû aujourd'hui, 3 tâches urgentes
+        // proposées à la place) garde l'ancien comportement de remplacement, puisqu'on est
+        // alors revenu à l'ancienne logique de sélection plafonnée.
+        if (addedIds.has(t.id)) {
+          const removeBtn = document.createElement("button");
+          removeBtn.type = "button";
+          removeBtn.className = "btn btn-ghost btn-sm";
+          removeBtn.setAttribute("aria-label", "Retirer du Focus");
+          removeBtn.textContent = "✕";
+          row.appendChild(removeBtn);
+          removeBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const newAdded = (focusOverride.addedTaskIds || []).filter((id) => id !== t.id);
+            focusOverride = { date: todayDateKey(), addedTaskIds: newAdded };
+            await preferencesApi.setFocusOverride(focusOverride.date, focusOverride.addedTaskIds);
+            renderFocusSection();
+            showToast("Retiré du Focus");
+          });
+        }
+        // Note : une tâche de la sélection automatique (en retard, due aujourd'hui, ou l'une
+        // des 3 proposées en secours quand rien n'est dû) n'est jamais retirable à la main —
+        // seul un ajout manuel (bouton ➕ ci-dessus) l'est. Avant la vague 37, un bouton 🔀 par
+        // ligne permettait de remplacer une des 3 tâches fixes ; ce plafond n'existant plus,
+        // ce mécanisme n'a plus de sens tel quel et a été retiré au profit de l'ajout global.
         listEl.appendChild(row);
       }
     }
+    focusSection.querySelector("#focus-add-btn").addEventListener("click", () => openFocusAddModal(chosen, candidates));
     focusSection.querySelector("#focus-today-link").addEventListener("click", () => openTaskListModal("📅 Échéances d'aujourd'hui", todayList));
   }
 
-  /** Remplacement manuel d'une des 3 tâches du Focus du jour — persiste pour la journée en
-   *  cours uniquement (voir js/domain/preferences.js#focusOverride), jamais au-delà. */
-  function openFocusSwapModal(currentTask, chosen, candidates) {
+  /** Ajout manuel d'une tâche au Focus du jour, en plus de la sélection automatique (vague 37)
+   *  — persiste pour la journée en cours uniquement (voir js/domain/preferences.js#
+   *  focusOverride), jamais au-delà. `chosen` sert seulement à exclure de la liste ce qui est
+   *  déjà affiché dans le Focus (automatique ou déjà ajouté), pour ne jamais proposer un
+   *  doublon. */
+  function openFocusAddModal(chosen, candidates) {
     const alternatives = candidates.filter((t) => !chosen.some((c) => c.id === t.id));
     const body = document.createElement("div");
     if (!alternatives.length) {
-      body.innerHTML = `<div class="empty-state" style="padding:16px;">Pas d'autre tâche en attente pour remplacer celle-ci.</div>`;
+      body.innerHTML = `<div class="empty-state" style="padding:16px;">Toutes les tâches en attente sont déjà dans le Focus.</div>`;
     } else {
       const list = document.createElement("div");
       list.className = "card";
@@ -983,18 +1033,19 @@ export function renderDashboard(container) {
           </div>
         `;
         row.addEventListener("click", async () => {
-          const newIds = chosen.map((c) => (c.id === currentTask.id ? t.id : c.id));
-          focusOverride = { date: todayDateKey(), taskIds: newIds };
-          await preferencesApi.setFocusOverride(focusOverride.date, focusOverride.taskIds);
+          const current = focusOverride.date === todayDateKey() ? focusOverride.addedTaskIds || [] : [];
+          const newAdded = current.includes(t.id) ? current : [...current, t.id];
+          focusOverride = { date: todayDateKey(), addedTaskIds: newAdded };
+          await preferencesApi.setFocusOverride(focusOverride.date, focusOverride.addedTaskIds);
           closeModal();
           renderFocusSection();
-          showToast("Focus du jour mis à jour");
+          showToast("Ajouté au Focus du jour");
         });
         list.appendChild(row);
       }
       body.appendChild(list);
     }
-    openModal({ title: `Remplacer « ${currentTask.title} »`, body, actions: [{ label: "Fermer", variant: "ghost" }] });
+    openModal({ title: "Ajouter une tâche au Focus", body, actions: [{ label: "Fermer", variant: "ghost" }] });
   }
 
   /**
