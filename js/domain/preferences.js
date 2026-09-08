@@ -24,11 +24,13 @@
 //    partout").
 //
 // Piste TDAH du 01/09/2026 (retour de Charles-Henri, voir claude/etat-avancement-pilotage.md) :
-//  - `focusOverride` : les 3 tâches mises en avant aujourd'hui par la section "🎯 Focus du
-//    jour" de l'Accueil (js/views/dashboard.js) sont proposées automatiquement (en retard
-//    d'abord, puis échéance la plus proche), mais restent modifiables par Charles-Henri d'un
-//    clic — `taskIds` ne vaut que pour `date` (au format YYYY-MM-DD) : dès le lendemain, la
-//    sélection automatique reprend la main sans rien à réinitialiser explicitement.
+//  - `focusOverride` : tâches ajoutées manuellement à la section "🎯 Focus du jour" de
+//    l'Accueil (js/views/dashboard.js), en plus de la sélection automatique (toutes les
+//    tâches en retard + à échéance aujourd'hui, sans plafond depuis la vague 37 — repli sur
+//    les 3 tâches les plus urgentes si rien n'est dû aujourd'hui). `addedTaskIds` ne vaut que
+//    pour `date` (au format YYYY-MM-DD) : dès le lendemain, la sélection automatique reprend
+//    la main sans rien à réinitialiser explicitement. Avant la vague 37, ce champ portait
+//    `taskIds` et remplaçait la sélection automatique plutôt que de la compléter.
 //
 // Deuxième discussion TDAH du 01/09/2026 (permanence/repérage — "je commence un truc mais ne
 // le finis pas et ne sais plus où j'en suis ni comment retrouver mes éléments") :
@@ -84,7 +86,7 @@ export async function getPreferences() {
     dashboardHiddenMigratedV19: false,
     seenHints: {},
     lastWeeklyReviewAt: null,
-    focusOverride: { date: null, taskIds: [] },
+    focusOverride: { date: null, addedTaskIds: [] },
     recentlyViewed: [],
     notifOptIn: null,
     lastNotifShownDate: null,
@@ -218,12 +220,13 @@ export async function markWeeklyReviewDone() {
   return storage.put(COLLECTION, { ...current, lastWeeklyReviewAt: Date.now() });
 }
 
-/** Sélection manuelle du "🎯 Focus du jour" (js/views/dashboard.js) — remplace toujours
- *  l'override du jour en cours plutôt que de l'accumuler ; `date` (YYYY-MM-DD) est ce qui
- *  rend l'override caduc tout seul le lendemain, sans action explicite de remise à zéro. */
-export async function setFocusOverride(date, taskIds) {
+/** Ajouts manuels au "🎯 Focus du jour" (js/views/dashboard.js), en plus de la sélection
+ *  automatique — remplace toujours la liste d'ajouts du jour en cours plutôt que de
+ *  l'accumuler au fil des appels ; `date` (YYYY-MM-DD) est ce qui rend l'override caduc tout
+ *  seul le lendemain, sans action explicite de remise à zéro. */
+export async function setFocusOverride(date, addedTaskIds) {
   const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, focusOverride: { date, taskIds } });
+  return storage.put(COLLECTION, { ...current, focusOverride: { date, addedTaskIds } });
 }
 
 /** Poids de la matrice de priorisation (vague 33, js/domain/priorisation.js) — "le scoring doit
