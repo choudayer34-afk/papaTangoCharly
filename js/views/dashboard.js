@@ -444,11 +444,23 @@ export function renderDashboard(container) {
    * les trois catégories déjà fusionnées le 02/09/2026 — c'est la fusion "modérée" demandée :
    * plus rien de ce qui a besoin de toi n'est laissé dans un coin séparé (le bloc chiffré
    * "🔴 En retard" reste par ailleurs affiché tel quel, cette file ne le remplace pas).
+   *
+   * Vague 37 (retour de Charles-Henri, 08/09/2026) : les tâches à échéance AUJOURD'HUI même
+   * (`isDueToday`) manquaient purement et simplement de cette file — `tasksApi.isLate` exclut
+   * strictement le jour même (`< startOfToday()`) et `dueSoon` exigeait `daysFromToday > 0`
+   * (donc demain au plus tôt), laissant un trou entre les deux. Ajout d'une catégorie
+   * `dueToday` dédiée, même palier d'urgence (0) que `late` : le tri secondaire par date
+   * (`sortKey`) suffit à faire remonter naturellement les tâches en retard avant celles
+   * simplement dues aujourd'hui, puisque leur échéance dépassée porte un horodatage plus
+   * ancien.
    */
   function computeFocusQueue() {
     const lateTasks = hatFilterTasks(tasks)
       .filter((t) => t.status !== "done" && tasksApi.isLate(t))
       .map((t) => ({ kind: "late", urgency: 0, sortKey: new Date(t.dueDate).getTime(), data: t }));
+    const dueTodayTasks = hatFilterTasks(tasks)
+      .filter((t) => isDueToday(t))
+      .map((t) => ({ kind: "dueToday", urgency: 0, sortKey: new Date(t.dueDate).getTime(), data: t }));
     const overdueFollowUps = hatFilterFollowUps(followUps)
       .filter(followUpsApi.isControlDue)
       .map((f) => ({ kind: "followup", urgency: 0, sortKey: f.controlDate ? new Date(f.controlDate).getTime() : 0, data: f }));
@@ -458,7 +470,7 @@ export function renderDashboard(container) {
     const stalledTasks = hatFilterTasks(tasks)
       .filter(tasksApi.isStalled)
       .map((t) => ({ kind: "stalled", urgency: 2, sortKey: t.updatedAt || t.createdAt || 0, data: t }));
-    return [...lateTasks, ...overdueFollowUps, ...dueSoonTasks, ...stalledTasks].sort(
+    return [...lateTasks, ...dueTodayTasks, ...overdueFollowUps, ...dueSoonTasks, ...stalledTasks].sort(
       (a, b) => a.urgency - b.urgency || a.sortKey - b.sortKey
     );
   }
@@ -472,6 +484,16 @@ export function renderDashboard(container) {
       const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
       return {
         why: `🔴 En retard depuis ${daysLate(t.dueDate)} j`,
+        title: escapeHtml(t.title),
+        sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
+        onOpen: () => openTaskDetail(t, projects),
+      };
+    }
+    if (entry.kind === "dueToday") {
+      const t = entry.data;
+      const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+      return {
+        why: `📅 Échéance aujourd'hui`,
         title: escapeHtml(t.title),
         sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
         onOpen: () => openTaskDetail(t, projects),
