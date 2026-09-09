@@ -19,8 +19,8 @@
 // référence Guide/Nouveautés) — cohérent avec le principe "réduire les silos de navigation" :
 // ça vit là où Charles-Henri regarde déjà tous les jours plutôt que dans un endroit à retenir.
 
-import { showToast } from "../components/toast.js";
-import * as pomodoroStore from "../services/pomodoroStore.js";
+import { showToast } from "../components/toast.js?v=3";
+import * as pomodoroStore from "../services/pomodoroStore.js?v=3";
 
 const PAIR_EMOJIS = ["🍎", "🚗", "🎈", "🐳", "⭐", "🎧", "🌵", "🍩", "🎲", "🦊"];
 const SEQUENCE_EMOJIS = ["🔵", "🟢", "🟡", "🟣", "🔴", "🟠"];

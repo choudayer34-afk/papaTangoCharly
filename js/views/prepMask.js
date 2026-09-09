@@ -21,10 +21,10 @@
 // durablement sensible (RH, personnel) reste masqué tant qu'il n'est pas explicitement
 // redécoché, y compris lors d'une prochaine préparation un autre jour.
 
-import * as peopleApi from "../domain/people.js";
-import * as followUpsApi from "../domain/followups.js";
-import * as projectsApi from "../domain/projects.js";
-import { computePrepSections } from "./people.js";
+import * as peopleApi from "../domain/people.js?v=3";
+import * as followUpsApi from "../domain/followups.js?v=3";
+import * as projectsApi from "../domain/projects.js?v=3";
+import { computePrepSections } from "./people.js?v=3";
 
 function escapeHtml(str) {
   const div = document.createElement("div");

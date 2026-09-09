@@ -1,49 +1,67 @@
-// Répartition de la charge entre collaborateurs — vague 34 (retour de Charles-Henri,
-// 07/09/2026, discussion OAD : "un assistant de répartition de charge pour tes décisions de
-// délégation : en regardant les Suivis [...] déjà attribués à chaque collaborateur (volume,
-// retard, stagnation), il te suggérerait à qui confier un nouveau sujet plutôt que de le
-// décider à l'instinct ou par défaut sur la même personne").
-//
-// Une Tâche n'a jamais d'assignee dans cette app (§ toujours "ce que MOI je dois faire", voir
-// js/domain/casquettes.js#taskHat) — seul un Suivi est attribué à une personne. La charge se
-// calcule donc uniquement à partir des Suivis, et seulement ceux de sens "waiting_on"
-// (js/domain/followups.js : "quelqu'un doit faire quelque chose et je dois vérifier") — un
-// suivi "to_tell" est une obligation de CHARLES-HENRI envers la personne (lui dire quelque
-// chose), pas un travail qu'elle porte elle-même : l'inclure fausserait la mesure de charge.
-//
-// Seuls les collaborateurs (`person.type !== "manager"`) entrent dans le classement — on ne
-// répartit jamais une charge sur son propre manager.
+// Section "⚖️ Charge" de l'onglet Équipe — vague 34 (retour de Charles-Henri, 07/09/2026 :
+// assistant de répartition de charge). Même principe que "👔 Mon manager"
+// (js/views/management.js#renderManagerSection, fusionné dans Équipe le 02/09/2026) : un 3e
+// mode du même chip-row plutôt qu'un onglet séparé — `renderWorkloadSection` ne gère pas ses
+// propres abonnements, elle reçoit `people`/`followUps` déjà à jour et dessine dans le
+// conteneur fourni.
 
-import * as followUpsApi from "./followups.js?v=3";
+import * as workloadApi from "../domain/workload.js?v=3";
+import { openPersonDetail, openCreateFollowUpModal } from "./people.js?v=3";
+import { showToast } from "../components/toast.js?v=3";
 
-// Même seuil que tasksApi.isStalled() (5 jours sans mouvement) — une seule définition de
-// "stagnant" dans l'app, voir js/domain/tasks.js pour la justification complète.
-const STALLED_THRESHOLD_MS = 5 * 24 * 60 * 60 * 1000;
-
-function isFollowUpStalled(f) {
-  if (f.status === "done") return false;
-  const lastTouch = f.updatedAt || f.createdAt || 0;
-  return Date.now() - lastTouch > STALLED_THRESHOLD_MS;
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-/** Charge d'UN collaborateur à partir de la liste complète des Suivis — volume (suivis actifs
- *  "waiting_on"), retard (contrôle dépassé) et stagnation (5 j sans mouvement), plus `total`,
- *  une somme simple et transparente des trois plutôt qu'une formule pondérée à régler : chaque
- *  suivi en retard ou stagnant pèse une fois de plus que son simple compte dans le volume,
- *  reflétant qu'il demande plus d'attention qu'un suivi actif ordinaire. */
-export function computeLoad(person, allFollowUps) {
-  const active = allFollowUps.filter((f) => f.personId === person.id && f.direction === "waiting_on" && f.status !== "done");
-  const late = active.filter((f) => followUpsApi.isControlDue(f));
-  const stalled = active.filter((f) => isFollowUpStalled(f));
-  return { person, volume: active.length, late: late.length, stalled: stalled.length, total: active.length + late.length + stalled.length };
-}
+export function renderWorkloadSection(container, people, followUps) {
+  const ranked = workloadApi.rankByLoad(people, followUps);
 
-/** Classement de tous les collaborateurs (jamais les managers) du plus léger au plus chargé —
- *  celui en tête est la suggestion pour confier un nouveau sujet, à égalité départagé par ordre
- *  alphabétique plutôt qu'un tri qui semblerait arbitraire. */
-export function rankByLoad(people, allFollowUps) {
-  return people
-    .filter((p) => p.type !== "manager")
-    .map((p) => computeLoad(p, allFollowUps))
-    .sort((a, b) => a.total - b.total || a.person.name.localeCompare(b.person.name, "fr"));
+  container.innerHTML = "";
+
+  if (!ranked.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.innerHTML = `<span class="emoji">⚖️</span>Ajoute des collaborateurs pour voir comment la charge se répartit entre eux.`;
+    container.appendChild(empty);
+    return;
+  }
+
+  const intro = document.createElement("div");
+  intro.className = "item-meta";
+  intro.style.marginBottom = "12px";
+  intro.textContent = "Suivis actifs que chaque collaborateur te doit (\"j'attends quelque chose de lui\") — volume, en retard, stagnants (5 j sans mouvement). Le plus léger est suggéré pour un nouveau sujet.";
+  container.appendChild(intro);
+
+  const card = document.createElement("div");
+  card.className = "card";
+
+  const maxTotal = Math.max(...ranked.map((r) => r.total), 1);
+  ranked.forEach((r, idx) => {
+    const isLightest = idx === 0 && r.total < ranked[ranked.length - 1].total;
+    const isHeaviest = idx === ranked.length - 1 && r.total > 0 && r.total > ranked[0].total;
+    const row = document.createElement("div");
+    row.className = "item-row";
+    row.style.cursor = "pointer";
+    row.innerHTML = `
+      <div class="item-main">
+        <div class="item-title">👤 ${escapeHtml(r.person.name)}${isLightest ? ` <span class="badge badge-critical">💡 Charge la plus légère</span>` : ""}${isHeaviest ? ` <span class="badge badge-late">⚠️ Charge élevée</span>` : ""}</div>
+        <div class="kanban-card-meta" style="margin:6px 0 0;">
+          <span>📋 ${r.volume} suivi${r.volume > 1 ? "s" : ""} actif${r.volume > 1 ? "s" : ""}</span>
+          ${r.late ? `<span class="badge badge-late">🔴 ${r.late} en retard</span>` : ""}
+          ${r.stalled ? `<span class="badge badge-follow_up">⏸️ ${r.stalled} stagnant${r.stalled > 1 ? "s" : ""}</span>` : ""}
+        </div>
+        <div style="height:6px;background:var(--color-surface-alt);border-radius:var(--radius-pill);overflow:hidden;margin-top:8px;max-width:240px;">
+          <div style="height:100%;width:${Math.round((r.total / maxTotal) * 100)}%;background:${isHeaviest ? "var(--color-danger)" : "var(--color-primary)"};"></div>
+        </div>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm add-followup-btn">+ Suivi</button>
+    `;
+    row.querySelector(".item-main").addEventListener("click", () => openPersonDetail(r.person, followUps));
+    row.querySelector(".add-followup-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openCreateFollowUpModal({ person: r.person, onCreated: () => showToast("Suivi créé") });
+    });
+    card.appendChild(row);
+  });
+  container.appendChild(card);
 }

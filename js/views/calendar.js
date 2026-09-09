@@ -9,17 +9,17 @@
 // glissable vers un autre jour, même mécanique de glisser-déposer que le Kanban
 // (dataTransfer), et met à jour la vraie date de l'entité au drop.
 
-import * as tasksApi from "../domain/tasks.js";
-import * as projectsApi from "../domain/projects.js";
-import * as meetingsApi from "../domain/meetings.js";
-import * as decisionsApi from "../domain/decisions.js";
-import * as followUpsApi from "../domain/followups.js";
-import { openModal, closeModal } from "../components/modal.js";
-import { showToast } from "../components/toast.js";
-import { openTaskDetail } from "./kanban.js";
-import { openRecentDetail } from "./dashboard.js";
-import { openEditFollowUpModal } from "./people.js";
-import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
+import * as tasksApi from "../domain/tasks.js?v=3";
+import * as projectsApi from "../domain/projects.js?v=3";
+import * as meetingsApi from "../domain/meetings.js?v=3";
+import * as decisionsApi from "../domain/decisions.js?v=3";
+import * as followUpsApi from "../domain/followups.js?v=3";
+import { openModal, closeModal } from "../components/modal.js?v=3";
+import { showToast } from "../components/toast.js?v=3";
+import { openTaskDetail } from "./kanban.js?v=3";
+import { openRecentDetail } from "./dashboard.js?v=3";
+import { openEditFollowUpModal } from "./people.js?v=3";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js?v=3";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 

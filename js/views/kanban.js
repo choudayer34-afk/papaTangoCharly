@@ -9,31 +9,31 @@
 // "+ Ajouter une tâche" par groupe. Voir `renderTableView` plus bas et
 // `js/services/pilotageViewStore.js` pour la persistance (localStorage, propre à l'appareil).
 
-import * as tasksApi from "../domain/tasks.js";
-import * as projectsApi from "../domain/projects.js";
-import * as resourcesApi from "../domain/resources.js";
-import * as promptsApi from "../domain/prompts.js";
-import * as historyApi from "../domain/history.js";
-import * as preferencesApi from "../domain/preferences.js";
-import * as casquettesApi from "../domain/casquettes.js";
-import * as pilotageView from "../services/pilotageViewStore.js";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js";
-import { showToast } from "../components/toast.js";
-import { showHintOnce } from "../components/hint.js";
-import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
-import { attachProjectQuickCreate } from "./projects.js";
-import { openChangeTypeModal } from "../components/changeType.js?v=2";
-import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js";
-import { renderHistoryTimeline } from "../components/historyTimeline.js";
-import * as linkedItemsApi from "../components/linkedItems.js";
-import { renderCanevas } from "../components/canevas.js";
-import { renderNotesBlock } from "../components/notesBlock.js";
-import { renderChecklist } from "../components/checklist.js";
-import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
-import { renderInfoTip } from "../components/infoTip.js";
-import { copyEntityLink } from "../components/copyLink.js";
-import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
-import { openDuplicateTaskModal } from "../components/duplicateTask.js";
+import * as tasksApi from "../domain/tasks.js?v=3";
+import * as projectsApi from "../domain/projects.js?v=3";
+import * as resourcesApi from "../domain/resources.js?v=3";
+import * as promptsApi from "../domain/prompts.js?v=3";
+import * as historyApi from "../domain/history.js?v=3";
+import * as preferencesApi from "../domain/preferences.js?v=3";
+import * as casquettesApi from "../domain/casquettes.js?v=3";
+import * as pilotageView from "../services/pilotageViewStore.js?v=3";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js?v=3";
+import { showToast } from "../components/toast.js?v=3";
+import { showHintOnce } from "../components/hint.js?v=3";
+import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js?v=3";
+import { attachProjectQuickCreate } from "./projects.js?v=3";
+import { openChangeTypeModal } from "../components/changeType.js?v=3";
+import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js?v=3";
+import { renderHistoryTimeline } from "../components/historyTimeline.js?v=3";
+import * as linkedItemsApi from "../components/linkedItems.js?v=3";
+import { renderCanevas } from "../components/canevas.js?v=3";
+import { renderNotesBlock } from "../components/notesBlock.js?v=3";
+import { renderChecklist } from "../components/checklist.js?v=3";
+import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js?v=3";
+import { renderInfoTip } from "../components/infoTip.js?v=3";
+import { copyEntityLink } from "../components/copyLink.js?v=3";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js?v=3";
+import { openDuplicateTaskModal } from "../components/duplicateTask.js?v=3";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui

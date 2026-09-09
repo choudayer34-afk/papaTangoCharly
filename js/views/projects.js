@@ -521,16 +521,29 @@ export function renderProjects(container) {
 /**
  * Ajoute une option "+ Nouveau projet…" en fin de la liste d'un `<select>` de rattachement à
  * un projet — la choisir ouvre `openCreateProjectModal` (déjà utilisée partout ailleurs pour
- * créer un projet) SANS fermer ni recharger le formulaire englobant : le projet créé est
- * inséré comme option et sélectionné directement dans ce même `<select>` au retour.
+ * créer un projet).
  *
- * Retour de Charles-Henri, vague 40, 09/09/2026 : "sur tous les éléments qui demandent le
- * rattachement même optionnel à un projet, je dois pouvoir créer un projet à la volée si non
- * présent dans la liste déroulante." Un seul helper partagé plutôt qu'une modale de création
- * dupliquée dans chaque formulaire (Tâche, Suivi, Information/Idée...) qui référence un
- * `<select>` de projet — voir js/views/kanban.js, js/views/dashboard.js, js/views/people.js.
+ * BUG corrigé (retour de Charles-Henri, vague 40 bis, 09/09/2026 : "ça me rattache directement
+ * à ma tâche et revient sur ma tâche en édition ?") : `openModal()` ne permet qu'UNE modale à
+ * la fois — elle ferme systématiquement celle en cours avant d'en ouvrir une nouvelle (voir
+ * js/components/modal.js). La première version de ce helper l'ignorait : choisir "+ Nouveau
+ * projet…" depuis un `<select>` posé DANS une modale (fiche Tâche, formulaire "Nouvelle
+ * réunion"...) fermait donc silencieusement cette modale — sans sauvegarder ce qui y était
+ * saisi — pour ouvrir "Nouveau projet" par-dessus un fond vide, sans jamais revenir nulle part
+ * une fois le projet créé.
+ *
+ * Corrigé avec un contrat explicite à deux cas :
+ * - `reopen` NON fourni (le `<select>` vit hors modale, ex. la cellule "Projet" du tableau des
+ *   tâches) : comportement d'origine — l'option est simplement insérée et sélectionnée dans ce
+ *   même `<select>`, un `change` est redéclenché pour que le code appelant persiste la valeur.
+ * - `reopen(newProjectIdOrNull)` fourni (le `<select>` vit DANS une modale) : à l'appelant de
+ *   reconstruire entièrement son propre formulaire (avec les valeurs déjà saisies dans les
+ *   AUTRES champs, capturées au moment de l'appel — les nœuds DOM détachés gardent leur état,
+ *   donc `body.querySelector(...).value` reste lisible même après fermeture de la modale) et
+ *   d'y présélectionner `newProjectIdOrNull` s'il n'est pas `null` (`null` = création annulée,
+ *   on revient avec la sélection de projet inchangée).
  */
-export function attachProjectQuickCreate(selectEl) {
+export function attachProjectQuickCreate(selectEl, { reopen } = {}) {
   const createOption = document.createElement("option");
   createOption.value = "__create__";
   createOption.textContent = "+ Nouveau projet…";
@@ -542,11 +555,17 @@ export function attachProjectQuickCreate(selectEl) {
       lastRealValue = selectEl.value;
       return;
     }
-    // Ne reste jamais bloqué sur "+ Nouveau projet…" — revient à la sélection précédente
-    // pendant que la modale de création est ouverte (utile si elle est annulée).
+    // Revient à la sélection précédente AVANT d'ouvrir la modale de création (que `reopen` soit
+    // fourni ou non) — un `<select>` détaché garde son `.value` lisible, donc le code de
+    // `reopen` peut relire "quelle était la sélection juste avant le clic" plutôt qu'une valeur
+    // de préremplissage potentiellement périmée.
     selectEl.value = lastRealValue;
     openCreateProjectModal({
       onCreated: (project) => {
+        if (reopen) {
+          reopen(project.id);
+          return;
+        }
         const opt = document.createElement("option");
         opt.value = project.id;
         opt.textContent = project.name;
@@ -555,6 +574,7 @@ export function attachProjectQuickCreate(selectEl) {
         lastRealValue = project.id;
         selectEl.dispatchEvent(new Event("change"));
       },
+      onCancel: () => reopen?.(null),
     });
   });
 }
