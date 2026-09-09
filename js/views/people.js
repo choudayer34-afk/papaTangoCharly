@@ -605,16 +605,7 @@ export function computePrepSections(person, allFollowUps, projects, { includeHid
  * Une vraie modale (js/components/modal.js) vit à l'intérieur de CETTE fenêtre — elle ne
  * peut donc jamais être déplacée sur un second écran indépendamment du reste. Seule une vraie
  * fenêtre de navigateur, ouverte via `window.open()`, peut être glissée par l'OS sur un autre
- * écran pendant que celle-ci reste affichée (et partagée en visio) sur le premier. La fenêtre
- * ouverte ici recharge donc l'app en entier sur la route dédiée `#/prep-mask` (voir
- * js/app.js et js/views/prepMask.js), qui s'arrête avant de monter la navigation/les FAB
- * habituels : un outil ponctuel et concentré, pas un second onglet de travail complet.
- *
- * Le "Point avec X" (openPrepModal, l'écran effectivement partagé) ne s'ouvre qu'une fois cette
- * fenêtre refermée — inutile d'échanger des messages entre les deux fenêtres : le masquage se
- * persiste au fil de l'eau (`followUpsApi.updateFollowUp(..., { hiddenFromPrep })`), donc
- * `openPrepModal`, en relisant les données fraîches, applique déjà le bon filtre dès qu'il
- * s'ouvre à son tour.
+ * écran pendant que celle-ci reste affichée (et partagée en visio) sur le premier.
  *
  * BUG corrigé (retour de Charles-Henri, vague 22 octies : "ça marche pas sur iphone en mode
  * signet sur écran d'accueil") : une PWA iOS lancée depuis l'écran d'accueil (mode "standalone",
@@ -627,14 +618,39 @@ export function computePrepSections(person, allFollowUps, projects, { includeHid
  * jamais diverger) dans une modale in-app classique — le masquage reste disponible partout,
  * seule la présentation "fenêtre à part, déplaçable" est spécifique à un poste avec plusieurs
  * écrans, là où elle a un sens.
+ *
+ * BUG corrigé (retour de Charles-Henri, vague 39, 08/09/2026 : "sur PC en mode installé, la
+ * fenêtre reste bloquée sur le texte d'intro sans jamais afficher la checklist ; sur PC web, ça
+ * finit par s'afficher mais après ~20 secondes"). Racine du problème : la fenêtre séparée
+ * naviguait vers la route dédiée `#/prep-mask`, ce qui rechargeait l'app ENTIÈRE dans cette
+ * nouvelle fenêtre — donc une SECONDE instance de Firebase/Firestore avec sa propre
+ * persistance IndexedDB (voir js/services/firebase.js#persistentMultipleTabManager), en
+ * concurrence avec celle déjà active dans la fenêtre principale. Deux clients Firestore du même
+ * compte doivent négocier entre eux lequel détient le "bail" IndexedDB principal avant de
+ * pouvoir lire quoi que ce soit — une négociation qui prenait ~20 s sur un onglet de navigateur
+ * classique, et qui semblait ne jamais aboutir dans une fenêtre d'app installée (partitionnement
+ * différent selon les versions de Chrome/Edge pour les fenêtres d'app autonomes).
+ *
+ * Corrigé en ouvrant une fenêtre VIERGE (`window.open("", ...)`, pas d'URL, donc aucun
+ * rechargement de l'app ni second client Firestore) et en y construisant directement le DOM
+ * depuis CETTE fenêtre, avec les feuilles de style copiées et le même `renderMaskChecklist` —
+ * la checklist tourne alors sur le client Firestore déjà actif et déjà "primaire" de la fenêtre
+ * principale, sans négociation d'aucune sorte. La route `#/prep-mask` (js/views/prepMask.js#
+ * renderPrepMask) n'est donc plus utilisée par ce chemin ; elle reste en place sans dommage,
+ * simplement inerte, au cas où une ancienne fenêtre garderait ce lien en mémoire.
+ *
+ * Le "Point avec X" (openPrepModal, l'écran effectivement partagé) ne s'ouvre qu'une fois cette
+ * fenêtre refermée (poll sur `win.closed`) — inutile d'échanger des messages entre les deux
+ * fenêtres : le masquage se persiste au fil de l'eau (`followUpsApi.updateFollowUp(...,
+ * { hiddenFromPrep })`), donc `openPrepModal`, en relisant les données fraîches, applique déjà
+ * le bon filtre dès qu'il s'ouvre à son tour.
  */
 function openPrepMaskThenPrep(person, { onDone } = {}) {
   if (window.navigator.standalone === true) {
     openPrepMaskModal(person, { onDone });
     return;
   }
-  const url = location.pathname + "#/prep-mask?person=" + encodeURIComponent(person.id);
-  const win = window.open(url, "prepMask-" + person.id, "width=480,height=760,menubar=no,toolbar=no,location=no,status=no");
+  const win = window.open("", "prepMask-" + person.id, "width=480,height=760,menubar=no,toolbar=no,location=no,status=no");
   if (!win) {
     // Popup bloquée par le navigateur (ou tout autre contexte où window.open ne renvoie
     // simplement rien d'utilisable) : on retombe sur la même modale in-app plutôt que de priver
@@ -642,6 +658,32 @@ function openPrepMaskThenPrep(person, { onDone } = {}) {
     openPrepMaskModal(person, { onDone });
     return;
   }
+  win.document.title = `Masquer — Point avec ${person.name}`;
+  // Copie les feuilles de style de la fenêtre principale (deux seulement, voir index.html) —
+  // `link.href` (propriété résolue) plutôt que l'attribut brut, pour rester correct quel que
+  // soit le chemin de déploiement, la fenêtre neuve n'ayant pas la même URL de base.
+  document.querySelectorAll('link[rel="stylesheet"]').forEach((link) => {
+    const clone = win.document.createElement("link");
+    clone.rel = "stylesheet";
+    clone.href = link.href;
+    win.document.head.appendChild(clone);
+  });
+  const wrapper = win.document.createElement("div");
+  wrapper.className = "view";
+  wrapper.style.cssText = "max-width:520px;margin:0 auto;padding:20px;";
+  wrapper.innerHTML = `
+    <h1 style="margin-top:0;">🙈 Avant de partager</h1>
+    <p class="item-meta" style="margin-bottom:20px;">
+      Cette fenêtre est privée — garde-la sur ton écran, ou déplace-la sur un second si tu en as
+      un. Ferme-la quand tu es prêt : le point s'ouvrira automatiquement dans l'autre fenêtre.
+    </p>
+    <div id="mask-checklist"></div>
+  `;
+  win.document.body.appendChild(wrapper);
+  renderMaskChecklist(wrapper.querySelector("#mask-checklist"), person, {
+    closeLabel: "✅ Terminé — fermer cette fenêtre",
+    onClose: () => win.close(),
+  });
   win.focus();
   const poll = setInterval(() => {
     if (win.closed) {
