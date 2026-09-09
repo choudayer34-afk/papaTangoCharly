@@ -37,10 +37,32 @@ function escapeHtml(str) {
  * où il veut : plein écran d'une fenêtre séparée, ou corps d'une modale in-app). `onClose(hasHidden)`
  * est appelé une seule fois quand la personne clique sur le bouton d'action final ; `hasHidden`
  * (nombre de sujets actuellement masqués) permet à l'appelant d'adapter son propre message.
+ *
+ * BUG corrigé (retour de Charles-Henri, vague 38 : "sur PC en mode installé, j'ai le texte
+ * d'intro mais pas les cases à cocher") : `refresh()` charge les données via deux appels
+ * Firestore (`followUpsApi.listAll()`, `projectsApi.listAll()`) qui pouvaient échouer
+ * silencieusement dans la fenêtre séparée (`renderPrepMask`, une page rechargée à froid — auth
+ * Firebase et cache IndexedDB tout juste réinitialisés, contrairement au repli modal in-app
+ * utilisé sur iPhone qui vit dans l'app déjà montée et authentifiée) : l'exception n'était
+ * jamais interceptée, laissant `container` figé sur son HTML initial (vide) sans le moindre
+ * signal que quelque chose avait échoué. Le `try/catch` ci-dessous rend l'échec visible avec un
+ * bouton "Réessayer" plutôt qu'un silence indiscernable d'un simple ralentissement.
  */
 export async function renderMaskChecklist(container, person, { closeLabel = "✅ Terminé", onClose } = {}) {
   async function refresh() {
-    const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
+    let allFollowUps, projects;
+    try {
+      [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
+    } catch (err) {
+      container.innerHTML = `
+        <div class="empty-state" style="padding:16px;text-align:center;">
+          <div style="margin-bottom:10px;">⚠️ Impossible de charger les sujets à masquer.<br /><span class="item-meta">${escapeHtml(err?.message || String(err))}</span></div>
+          <button type="button" id="mask-retry-btn" class="btn btn-secondary btn-sm">🔄 Réessayer</button>
+        </div>
+      `;
+      container.querySelector("#mask-retry-btn").addEventListener("click", refresh);
+      return;
+    }
     const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects, {
       includeHidden: true,
     });
@@ -80,7 +102,27 @@ export async function renderMaskChecklist(container, person, { closeLabel = "✅
 export async function renderPrepMask(container) {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   const personId = params.get("person");
-  const person = personId ? await peopleApi.getPerson(personId) : null;
+  let person = null;
+  let loadError = null;
+  try {
+    person = personId ? await peopleApi.getPerson(personId) : null;
+  } catch (err) {
+    loadError = err;
+  }
+
+  if (loadError) {
+    // Voir le commentaire de renderMaskChecklist ci-dessus (vague 38) : cette fenêtre est
+    // rechargée à froid, l'authentification Firebase peut ne pas être encore tout à fait prête
+    // au premier essai — un bouton "Réessayer" plutôt qu'un écran figé sans explication.
+    container.innerHTML = `
+      <div class="view" style="max-width:420px;margin:0 auto;padding:15vh 20px 0;text-align:center;">
+        <p>⚠️ Impossible de charger cette fenêtre pour l'instant.<br /><span class="item-meta">${escapeHtml(loadError.message || String(loadError))}</span></p>
+        <button type="button" id="prep-mask-retry-btn" class="btn btn-secondary btn-sm">🔄 Réessayer</button>
+      </div>
+    `;
+    container.querySelector("#prep-mask-retry-btn").addEventListener("click", () => renderPrepMask(container));
+    return null;
+  }
 
   if (!person) {
     container.innerHTML = `
