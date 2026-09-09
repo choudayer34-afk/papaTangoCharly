@@ -5,7 +5,7 @@
 // sur "fetch" plus bas (vague 22 novies) pour le raisonnement complet.
 // Pattern repris d'EnVie (§56/§57 : réutiliser l'existant avant de recréer).
 
-const CACHE_NAME = "pilotage-cache-v33";
+const CACHE_NAME = "pilotage-cache-v34";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -36,9 +36,9 @@ const APP_SHELL = [
   "./js/domain/objectives.js",
   "./js/domain/prompts.js",
   "./js/domain/casquettes.js",
-  "./js/domain/convert.js?v=2",
+  "./js/domain/convert.js?v=3",
   "./js/components/modal.js",
-  "./js/components/changeType.js?v=2",
+  "./js/components/changeType.js?v=3",
   "./js/components/toast.js",
   "./js/components/hint.js",
   "./js/components/infoTip.js",
