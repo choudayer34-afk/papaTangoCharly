@@ -29,6 +29,24 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "9 septembre 2026 (suite)",
+    items: [
+      {
+        type: "fix",
+        title: "Un clic en dehors d'une modale ne fait plus perdre la saisie",
+        text: "Cliquer accidentellement en dehors d'une fenêtre de saisie (changement de fenêtre, clic à côté sur un grand écran) fermait la modale et perdait tout ce qui y était tapé. Toute modale contenant un champ modifiable (texte, date, liste déroulante) ignore désormais le clic en dehors — avec un petit \"shake\" pour signaler que ça n'a pas fonctionné — et ne se ferme plus que via un bouton explicite (Fermer/Annuler) ou Échap. Les modales sans aucune saisie (listes, confirmations) gardent le clic en dehors comme raccourci rapide, sans risque.",
+        gain: "Ne plus jamais perdre 5 minutes de saisie à cause d'un clic malheureux.",
+      },
+      {
+        type: "add",
+        title: "🗒️ Point avec... : chercher dans tous les sujets d'une personne",
+        text: "Un champ de recherche en haut de la modale \"Point avec...\" permet de retrouver n'importe quel sujet déjà traité avec cette personne, y compris les sujets terminés depuis longtemps (au-delà des 5 plus récents affichés normalement) et les sujets masqués du partage à l'écran.",
+        howTo: "Ouvrir \"🗒️ Point avec...\" → champ \"🔎 Chercher dans tous les sujets de...\" en haut.",
+        gain: "Retrouver \"on avait dit quoi déjà sur ce sujet\" sans avoir à rouvrir tout l'historique à la main.",
+      },
+    ],
+  },
+  {
     date: "9 septembre 2026",
     items: [
       {
