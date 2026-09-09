@@ -958,7 +958,7 @@ export async function openCreateTaskModal(prefill = {}) {
     </div>
     <div class="field">
       <label for="new-task-due">Échéance (optionnel)</label>
-      <input id="new-task-due" type="date" />
+      <input id="new-task-due" type="date" value="${prefill.dueDate || ""}" />
     </div>
     <div class="field">
       <label for="new-task-project">Projet (optionnel)</label>
@@ -968,11 +968,22 @@ export async function openCreateTaskModal(prefill = {}) {
       </select>
     </div>
     <div class="field" style="display:flex;align-items:center;gap:8px;">
-      <input id="new-task-communication" type="checkbox" style="width:auto;" />
+      <input id="new-task-communication" type="checkbox" style="width:auto;" ${prefill.communication ? "checked" : ""} />
       <label for="new-task-communication" style="margin:0;">📣 C'est une communication (article, message) — activer son canevas de production</label>
     </div>
   `;
-  attachProjectQuickCreate(body.querySelector("#new-task-project"));
+  attachProjectQuickCreate(body.querySelector("#new-task-project"), {
+    reopen: (newProjectId) => {
+      openCreateTaskModal({
+        ...prefill,
+        title: body.querySelector("#new-task-title").value,
+        description: body.querySelector("#new-task-description").value,
+        dueDate: body.querySelector("#new-task-due").value,
+        communication: body.querySelector("#new-task-communication").checked,
+        projectId: newProjectId !== null ? newProjectId : body.querySelector("#new-task-project").value || null,
+      });
+    },
+  });
   const { bodyEl, close } = openModal({
     title: "Nouvelle tâche",
     body,
@@ -1159,7 +1170,26 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     </div>
   `;
 
-  attachProjectQuickCreate(body.querySelector("#detail-project"));
+  attachProjectQuickCreate(body.querySelector("#detail-project"), {
+    // Contrairement à un simple formulaire de création, cette fiche modifie une Tâche déjà
+    // existante : plutôt que de perdre silencieusement Titre/Description/Critère/Échéance/
+    // Statut/Bloqué en attente de sauvegarde, on les enregistre déjà (mêmes champs que le
+    // bouton "💾 Enregistrer" plus bas) avant de rouvrir la fiche avec le nouveau projet
+    // présélectionné — ou l'ancien, si la création est annulée.
+    reopen: async (newProjectId) => {
+      const patch = {
+        title: body.querySelector("#detail-title").value.trim() || task.title,
+        description: body.querySelector("#detail-description").value,
+        successCriteria: body.querySelector("#detail-criteria").value,
+        dueDate: body.querySelector("#detail-due").value || null,
+        status: body.querySelector("#detail-status").value,
+        isBlocked: body.querySelector("#detail-blocked").checked,
+        projectId: newProjectId !== null ? newProjectId : body.querySelector("#detail-project").value || null,
+      };
+      const updated = await tasksApi.updateTask(task.id, patch);
+      openTaskDetail(updated, projects, { onClose });
+    },
+  });
 
   // Bascule d'onglet : ni framework ni removal du DOM — chaque panneau existe en permanence,
   // seul l'attribut `hidden` change (voir styles/components.css : `.fiche-tabpanel` ne pose
