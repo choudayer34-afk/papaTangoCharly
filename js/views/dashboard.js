@@ -25,7 +25,7 @@ import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { openWeeklyReview } from "../components/weeklyReview.js";
-import { openQualifyChoice, openKeptItemDetail } from "./inbox.js";
+import { openQualifyChoice, openKeptItemDetail, openAllKeptItemsModal } from "./inbox.js";
 import { openCaptureModal } from "../components/capture.js";
 import { getDraft, clearDraft } from "../services/draftStore.js";
 import { renderInfoTip } from "../components/infoTip.js";
@@ -972,6 +972,7 @@ export function renderDashboard(container) {
       <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
         <button type="button" id="focus-add-btn" class="btn btn-ghost btn-sm">➕ Ajouter une tâche au Focus</button>
         <button type="button" id="focus-today-link" class="btn btn-ghost btn-sm">📅 Toutes les échéances d'aujourd'hui (${todayList.length})</button>
+        <button type="button" id="focus-kept-link" class="btn btn-ghost btn-sm">🧠 Informations & idées (${keptItems.length})</button>
       </div>
     `;
 
@@ -1029,6 +1030,12 @@ export function renderDashboard(container) {
     }
     focusSection.querySelector("#focus-add-btn").addEventListener("click", () => openFocusAddModal(chosen, candidates));
     focusSection.querySelector("#focus-today-link").addEventListener("click", () => openTaskListModal("📅 Échéances d'aujourd'hui", todayList));
+    // Retour de Charles-Henri, vague 40, 09/09/2026 : "dans la vue mode d'accueil focus, je
+    // n'ai pas moyen de la retrouver [une information]" — jusqu'ici, la section "🧠 Informations
+    // & idées" n'existait que dans le mode Accueil "classic" (renderKeptSection ci-dessous),
+    // absente du mode "Focus" qui n'affiche jamais cette liste. Même point d'entrée
+    // (`openAllKeptItemsModal`) que le lien "Voir tout" du mode classic.
+    focusSection.querySelector("#focus-kept-link").addEventListener("click", openAllKeptItemsModal);
   }
 
   /** Ajout manuel d'une tâche au Focus du jour, en plus de la sélection automatique (vague 37)
@@ -1086,9 +1093,13 @@ export function renderDashboard(container) {
     keptSection.innerHTML = `
       <details open>
         <summary class="section-title" style="cursor:pointer;">🧠 Informations & idées (${keptItems.length})</summary>
-        <div class="card" id="kept-list" style="margin-top:8px;margin-bottom:16px;"></div>
+        <div class="card" id="kept-list" style="margin-top:8px;margin-bottom:8px;"></div>
+        ${keptItems.length > 8 ? `<button type="button" id="kept-see-all-btn" class="btn btn-ghost btn-sm" style="margin-bottom:16px;">Voir tout (${keptItems.length})</button>` : ""}
       </details>
     `;
+    if (keptItems.length > 8) {
+      keptSection.querySelector("#kept-see-all-btn").addEventListener("click", openAllKeptItemsModal);
+    }
     const list = keptSection.querySelector("#kept-list");
     for (const item of [...keptItems].sort((a, b) => b.createdAt - a.createdAt).slice(0, 8)) {
       const row = document.createElement("div");
@@ -1269,6 +1280,7 @@ export function renderDashboard(container) {
   const unsubKept = inboxApi.subscribeKept((items) => {
     keptItems = items;
     renderKeptSection();
+    renderFocusSection(); // le compteur "🧠 Informations & idées" du mode Focus en dépend aussi
   });
   const unsubProjects = projectsApi.subscribe((items) => {
     projects = items;
@@ -1383,6 +1395,7 @@ export async function openCreateMeetingModal(prefill = {}) {
       </select>
     </div>
   `;
+  attachProjectQuickCreate(body.querySelector("#new-meeting-project"));
   const { bodyEl, close } = openModal({
     title: "Nouvelle réunion",
     body,
@@ -1443,6 +1456,7 @@ export async function openCreateDecisionModal(prefill = {}) {
       </select>
     </div>
   `;
+  attachProjectQuickCreate(body.querySelector("#new-decision-project"));
   const { bodyEl, close } = openModal({
     title: "Nouvelle décision",
     body,
@@ -1550,6 +1564,8 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
       <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
+
+  attachProjectQuickCreate(body.querySelector("#rd-project"));
 
   if (isMeeting) {
     renderCanevas(body.querySelector("#rd-canevas"), data.steps, async (stepKey, done) => {
