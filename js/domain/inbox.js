@@ -41,6 +41,30 @@ export function subscribeKept(callback) {
   return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "kept")));
 }
 
+/**
+ * Retour de Charles-Henri, vague 40, 09/09/2026 : "je n'ai jamais la possibilité de retrouver
+ * une information ailleurs" — une fois auto-archivée après 15 jours (voir
+ * autoArchiveStaleKept() plus bas), une Information/Idée devenait purement et simplement
+ * introuvable : absente de listKept() (donc du Dashboard ET de la recherche globale, voir
+ * js/components/search.js), et sans aucune vue pour parcourir les éléments archivés.
+ *
+ * L'auto-archivage réutilise `qualify(id, "archived")`, le même statut qu'un élément Inbox
+ * classé sans suite (jamais devenu une information) — mais `keptAsType` (posé uniquement par
+ * qualify() vers "kept"/"idea") survit à ce changement de statut puisque `storage.put` ne fait
+ * que fusionner les champs. Sa seule présence permet donc de distinguer, même après archivage,
+ * "c'était une information, juste devenue ancienne" de "classé sans suite, jamais une
+ * information" — sans avoir besoin d'un champ ou d'un statut supplémentaire.
+ */
+export function listKeptIncludingArchived() {
+  return storage.listAll(COLLECTION).then((items) => items.filter((i) => i.status === "kept" || (i.status === "archived" && i.keptAsType)));
+}
+
+export function subscribeKeptIncludingArchived(callback) {
+  return storage.subscribe(COLLECTION, (items) =>
+    callback(items.filter((i) => i.status === "kept" || (i.status === "archived" && i.keptAsType)))
+  );
+}
+
 const KEPT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 
 /**
