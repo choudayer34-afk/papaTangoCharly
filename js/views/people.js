@@ -20,6 +20,7 @@ import * as workloadApi from "../domain/workload.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { renderMaskChecklist } from "./prepMask.js";
+import { openChangeTypeModal } from "../components/changeType.js";
 import { copyEntityLink } from "../components/copyLink.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
@@ -1685,6 +1686,23 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/people", "FollowUp", followUp.id),
+      },
+      {
+        // "🔁 Changer de type" (retour de Charles-Henri, vague 40, 09/09/2026) — voir
+        // js/components/changeType.js et js/domain/convert.js.
+        icon: "🔁",
+        label: "Changer de type",
+        variant: "secondary",
+        compact: true,
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          openChangeTypeModal("followup", followUp, ["task", "kept"], {
+            personName: person?.name || "",
+            onConverted: () => onDone?.(),
+            onCancel: () => openEditFollowUpModal(followUp, { onDone }),
+          });
+        },
       },
       {
         icon: "🗑️",
