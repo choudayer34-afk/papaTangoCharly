@@ -1375,7 +1375,7 @@ export async function openCreateMeetingModal(prefill = {}) {
     </div>
     <div class="field">
       <label for="new-meeting-date">Date</label>
-      <input id="new-meeting-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
+      <input id="new-meeting-date" type="date" value="${prefill.date || new Date().toISOString().slice(0, 10)}" />
     </div>
     <div class="field">
       <label for="new-meeting-objective">Objectif (optionnel)</label>
@@ -1384,7 +1384,7 @@ export async function openCreateMeetingModal(prefill = {}) {
     <div class="field">
       <label for="new-meeting-canevas">Canevas (optionnel)</label>
       <select id="new-meeting-canevas">
-        ${meetingsApi.CANEVAS_OPTIONS.map((c) => `<option value="${c.key}">${c.label}</option>`).join("")}
+        ${meetingsApi.CANEVAS_OPTIONS.map((c) => `<option value="${c.key}" ${c.key === prefill.canevasKey ? "selected" : ""}>${c.label}</option>`).join("")}
       </select>
     </div>
     <div class="field">
@@ -1395,7 +1395,18 @@ export async function openCreateMeetingModal(prefill = {}) {
       </select>
     </div>
   `;
-  attachProjectQuickCreate(body.querySelector("#new-meeting-project"));
+  attachProjectQuickCreate(body.querySelector("#new-meeting-project"), {
+    reopen: (newProjectId) => {
+      openCreateMeetingModal({
+        ...prefill,
+        title: body.querySelector("#new-meeting-title").value,
+        date: body.querySelector("#new-meeting-date").value,
+        objective: body.querySelector("#new-meeting-objective").value,
+        canevasKey: body.querySelector("#new-meeting-canevas").value,
+        projectId: newProjectId !== null ? newProjectId : body.querySelector("#new-meeting-project").value || null,
+      });
+    },
+  });
   const { bodyEl, close } = openModal({
     title: "Nouvelle réunion",
     body,
@@ -1438,15 +1449,15 @@ export async function openCreateDecisionModal(prefill = {}) {
     </div>
     <div class="field">
       <label for="new-decision-decision">Ce qui a été décidé</label>
-      <textarea id="new-decision-decision"></textarea>
+      <textarea id="new-decision-decision">${escapeHtml(prefill.decision || "")}</textarea>
     </div>
     <div class="field">
       <label for="new-decision-context">Contexte (optionnel)</label>
-      <textarea id="new-decision-context"></textarea>
+      <textarea id="new-decision-context">${escapeHtml(prefill.context || "")}</textarea>
     </div>
     <div class="field">
       <label for="new-decision-date">Date</label>
-      <input id="new-decision-date" type="date" value="${new Date().toISOString().slice(0, 10)}" />
+      <input id="new-decision-date" type="date" value="${prefill.date || new Date().toISOString().slice(0, 10)}" />
     </div>
     <div class="field">
       <label for="new-decision-project">Projet (optionnel)</label>
@@ -1456,7 +1467,18 @@ export async function openCreateDecisionModal(prefill = {}) {
       </select>
     </div>
   `;
-  attachProjectQuickCreate(body.querySelector("#new-decision-project"));
+  attachProjectQuickCreate(body.querySelector("#new-decision-project"), {
+    reopen: (newProjectId) => {
+      openCreateDecisionModal({
+        ...prefill,
+        title: body.querySelector("#new-decision-title").value,
+        decision: body.querySelector("#new-decision-decision").value,
+        context: body.querySelector("#new-decision-context").value,
+        date: body.querySelector("#new-decision-date").value,
+        projectId: newProjectId !== null ? newProjectId : body.querySelector("#new-decision-project").value || null,
+      });
+    },
+  });
   const { bodyEl, close } = openModal({
     title: "Nouvelle décision",
     body,
@@ -1565,7 +1587,29 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
     </div>
   `;
 
-  attachProjectQuickCreate(body.querySelector("#rd-project"));
+  attachProjectQuickCreate(body.querySelector("#rd-project"), {
+    // Même principe que la fiche Tâche : on enregistre déjà ce qui est saisi (mêmes champs que
+    // "💾 Enregistrer" plus bas) avant de rouvrir avec le nouveau projet présélectionné, plutôt
+    // que de le perdre en silence.
+    reopen: async (newProjectId) => {
+      const patch = {
+        title: body.querySelector("#rd-title").value.trim() || data.title,
+        date: body.querySelector("#rd-date").value || null,
+        projectId: newProjectId !== null ? newProjectId : body.querySelector("#rd-project").value || null,
+      };
+      let updated;
+      if (isMeeting) {
+        patch.objective = body.querySelector("#rd-objective").value.trim();
+        patch.notes = body.querySelector("#rd-notes").value.trim();
+        updated = await meetingsApi.updateMeeting(data.id, patch);
+      } else {
+        patch.decision = body.querySelector("#rd-decision").value.trim();
+        patch.context = body.querySelector("#rd-context").value.trim();
+        updated = await decisionsApi.updateDecision(data.id, patch);
+      }
+      openRecentDetail({ kind: item.kind, data: updated }, projects, { onClose });
+    },
+  });
 
   if (isMeeting) {
     renderCanevas(body.querySelector("#rd-canevas"), data.steps, async (stepKey, done) => {
