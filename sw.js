@@ -5,7 +5,7 @@
 // sur "fetch" plus bas (vague 22 novies) pour le raisonnement complet.
 // Pattern repris d'EnVie (§56/§57 : réutiliser l'existant avant de recréer).
 
-const CACHE_NAME = "pilotage-cache-v36";
+const CACHE_NAME = "pilotage-cache-v37";
 const APP_SHELL = [
   "./",
   "./index.html",
