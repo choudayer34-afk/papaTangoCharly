@@ -74,7 +74,26 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
   overlay.appendChild(modal);
   if (dismissible) {
     overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) close();
+      if (e.target !== overlay) return;
+      // BUG corrigé (retour de Charles-Henri, vague 41, 09/09/2026 : "je clique en dehors de la
+      // modale par erreur et ça me ferme la modale et je perds ma saisie") : un clic accidentel
+      // en dehors (changement de fenêtre, clic à côté sur un grand écran) ne doit jamais faire
+      // perdre une saisie en cours. Si la modale contient un champ modifiable (texte, date,
+      // liste déroulante...), le clic en dehors ne la ferme plus — seule une action explicite
+      // (bouton Fermer/Annuler, ou Échap) le fait. Les modales sans aucun champ (listes de
+      // choix, confirmations, fiches en lecture seule) gardent le clic en dehors comme
+      // raccourci de fermeture rapide, sans aucun risque de perte.
+      if (bodyEl.querySelector("input, textarea, select")) {
+        modal.classList.remove("modal-nudge");
+        // Force le redémarrage de l'animation même si elle vient déjà de jouer (deux clics en
+        // dehors rapprochés) — un retrait/ajout de classe en 2 temps plutôt qu'un simple
+        // toggle, sinon le navigateur ne rejoue pas une animation déjà terminée sur la même
+        // classe.
+        void modal.offsetWidth;
+        modal.classList.add("modal-nudge");
+        return;
+      }
+      close();
     });
   }
 
