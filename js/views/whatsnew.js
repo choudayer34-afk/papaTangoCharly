@@ -29,6 +29,35 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "8 septembre 2026",
+    items: [
+      {
+        type: "change",
+        title: "🎯 Focus du jour (Accueil) : fini le plafond à 3",
+        text: "Le Focus du jour affiche désormais TOUTES les tâches en retard et à échéance aujourd'hui, sans limite de nombre — auparavant, seules les 3 tâches les mieux classées apparaissaient, les autres restant invisibles sauf à ouvrir la liste complète. Si rien n'est en retard ni dû aujourd'hui, le Focus retombe sur les 3 tâches les plus urgentes proposées automatiquement, comme avant. Le bouton 🔀 devient \"➕ Ajouter une tâche au Focus\" : il sert maintenant à ajouter une tâche en plus de la sélection automatique (visible avec un ✕ pour la retirer), plutôt qu'à remplacer une ligne parmi 3.",
+        howTo: "Accueil → 🎯 Focus du jour. \"➕ Ajouter une tâche au Focus\" pour y placer une tâche qui n'est ni en retard ni due aujourd'hui.",
+        gain: "Ne plus jamais rater une échéance du jour restée invisible sous prétexte qu'elle n'était pas dans le \"top 3\".",
+      },
+      {
+        type: "fix",
+        title: "Mode Accueil \"🎯 Focus\" (file une tâche à la fois) : les échéances du jour même manquaient",
+        text: "Dans le mode d'Accueil \"Focus\" (celui qui montre un sujet à la fois plutôt que la liste classique), une tâche à échéance exactement aujourd'hui tombait dans un trou entre les catégories \"en retard\" et \"à venir\" et n'apparaissait jamais dans la file. Elle y figure maintenant avec le motif \"📅 Échéance aujourd'hui\", juste après les tâches en retard.",
+      },
+      {
+        type: "add",
+        title: "🗒️ Point avec... : ajouter un sujet apparu en direct",
+        text: "Pendant la préparation ou le déroulé d'un point collaborateur, un bouton \"➕ Sujet apparu\" ouvre directement le formulaire de création de Suivi (personne déjà présélectionnée). Une fois créé, le sujet est intégré à la bonne section (🎯 À aborder, groupé par projet comme le reste) et marqué automatiquement \"vu\" — plus besoin de sortir du point pour créer le Suivi ailleurs puis revenir le cocher.",
+        howTo: "Ouvrir \"🗒️ Point avec...\" → bouton \"➕ Sujet apparu\" en bas de la fenêtre.",
+        gain: "Ne rien perdre d'un sujet qui surgit pendant l'échange, sans rupture du fil de la discussion.",
+      },
+      {
+        type: "fix",
+        title: "🙈 Avant de partager (fenêtre de masquage privée) : erreur silencieuse rendue visible",
+        text: "Sur certains postes, la fenêtre séparée \"🙈 Avant de partager\" affichait son texte d'intro mais jamais la liste à cocher, sans aucun message — un échec de chargement des données (probable dans cette fenêtre rechargée à froid) passait inaperçu. Un message d'erreur explicite avec un bouton \"🔄 Réessayer\" apparaît désormais à la place d'un vide silencieux.",
+      },
+    ],
+  },
+  {
     date: "7 septembre 2026",
     items: [
       {
