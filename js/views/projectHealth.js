@@ -24,8 +24,8 @@
 // nécessairement "aussi en péril que possible", mais mérite déjà le maximum d'alerte que CE signal
 // peut donner.
 
-import * as tasksApi from "./tasks.js?v=3";
-import * as followUpsApi from "./followups.js?v=3";
+import * as tasksApi from "./tasks.js";
+import * as followUpsApi from "./followups.js";
 
 const DEDUCTION_CAPS = { late: 40, blocked: 30, stalled: 25, followUps: 20 };
 const POINTS_PER_LATE_DAY = 3;

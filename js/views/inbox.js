@@ -2,21 +2,21 @@
 // Une capture non traitée n'est PAS un retard : pas de badge rouge culpabilisant ici,
 // juste un compteur neutre.
 
-import * as inboxApi from "../domain/inbox.js?v=3";
-import * as peopleApi from "../domain/people.js?v=3";
-import * as preferencesApi from "../domain/preferences.js?v=3";
-import { openModal, closeModal } from "../components/modal.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
-import { showHintOnce } from "../components/hint.js?v=3";
-import { openCreateProjectModal } from "./projects.js?v=3";
-import { openCreateResourceModal } from "./resources.js?v=3";
-import { openCreateFollowUpModal } from "./people.js?v=3";
-import { openCreateTaskModal } from "./kanban.js?v=3";
-import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js?v=3";
-import { renderNotesBlock } from "../components/notesBlock.js?v=3";
-import * as linkedItemsApi from "../components/linkedItems.js?v=3";
-import { copyEntityLink } from "../components/copyLink.js?v=3";
-import { openChangeTypeModal } from "../components/changeType.js?v=3";
+import * as inboxApi from "../domain/inbox.js";
+import * as peopleApi from "../domain/people.js";
+import * as preferencesApi from "../domain/preferences.js";
+import { openModal, closeModal } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
+import { showHintOnce } from "../components/hint.js";
+import { openCreateProjectModal } from "./projects.js";
+import { openCreateResourceModal } from "./resources.js";
+import { openCreateFollowUpModal } from "./people.js";
+import { openCreateTaskModal } from "./kanban.js";
+import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
+import { copyEntityLink } from "../components/copyLink.js";
+import { openChangeTypeModal } from "../components/changeType.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 

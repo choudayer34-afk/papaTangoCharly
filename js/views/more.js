@@ -19,8 +19,8 @@
 // l'onglet ☰ Plus lui-même, qu'il y a du nouveau ; ce repère, une fois DANS l'écran Plus, dit
 // PRÉCISÉMENT quelle ligne regarder plutôt que de laisser deviner parmi les 5.
 
-import * as preferencesApi from "../domain/preferences.js?v=3";
-import { WHATS_NEW_TOTAL_COUNT } from "./whatsnew.js?v=3";
+import * as preferencesApi from "../domain/preferences.js";
+import { WHATS_NEW_TOTAL_COUNT } from "./whatsnew.js";
 
 const ITEMS = [
   { hash: "#/resources", emoji: "📎", title: "Ressources", subtitle: "Bibliothèque de liens et documents, sans duplication" },

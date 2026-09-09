@@ -1,33 +1,33 @@
 // Vue Projets — §36 à §38 : "Où en est Modernisation ?" et la possibilité de descendre
 // jusqu'à la tâche précise (§71).
 
-import * as projectsApi from "../domain/projects.js?v=3";
-import * as tasksApi from "../domain/tasks.js?v=3";
-import * as resourcesApi from "../domain/resources.js?v=3";
-import * as followUpsApi from "../domain/followups.js?v=3";
-import * as peopleApi from "../domain/people.js?v=3";
-import * as meetingsApi from "../domain/meetings.js?v=3";
-import * as decisionsApi from "../domain/decisions.js?v=3";
-import * as historyApi from "../domain/history.js?v=3";
-import * as preferencesApi from "../domain/preferences.js?v=3";
-import * as pilotageView from "../services/pilotageViewStore.js?v=3";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
-import { suggestNextStep } from "../components/suggestNextStep.js?v=3";
-import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js?v=3";
-import { renderHistoryTimeline } from "../components/historyTimeline.js?v=3";
-import * as linkedItemsApi from "../components/linkedItems.js?v=3";
-import { renderCanevas } from "../components/canevas.js?v=3";
-import { renderNotesBlock } from "../components/notesBlock.js?v=3";
-import { openCreateTaskModal, openTaskDetail } from "./kanban.js?v=3";
-import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js?v=3";
-import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js?v=3";
-import { renderInfoTip } from "../components/infoTip.js?v=3";
-import { renderShortcutAssignButton } from "../services/shortcuts.js?v=3";
-import { copyEntityLink } from "../components/copyLink.js?v=3";
-import { renderPilotageSubNav } from "../components/pilotageSubNav.js?v=3";
-import * as projectHealthApi from "../domain/projectHealth.js?v=3";
-import { renderProjectHealth } from "../components/projectHealth.js?v=3";
+import * as projectsApi from "../domain/projects.js";
+import * as tasksApi from "../domain/tasks.js";
+import * as resourcesApi from "../domain/resources.js";
+import * as followUpsApi from "../domain/followups.js";
+import * as peopleApi from "../domain/people.js";
+import * as meetingsApi from "../domain/meetings.js";
+import * as decisionsApi from "../domain/decisions.js";
+import * as historyApi from "../domain/history.js";
+import * as preferencesApi from "../domain/preferences.js";
+import * as pilotageView from "../services/pilotageViewStore.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
+import { suggestNextStep } from "../components/suggestNextStep.js";
+import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
+import { renderCanevas } from "../components/canevas.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
+import { openCreateTaskModal, openTaskDetail } from "./kanban.js";
+import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
+import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
+import { renderInfoTip } from "../components/infoTip.js";
+import { renderShortcutAssignButton } from "../services/shortcuts.js";
+import { copyEntityLink } from "../components/copyLink.js";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
+import * as projectHealthApi from "../domain/projectHealth.js";
+import { renderProjectHealth } from "../components/projectHealth.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —

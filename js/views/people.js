@@ -1,27 +1,27 @@
 // Vue Équipe — §31 (liste) et §32 (fiche collaborateur simplifiée).
 
-import * as peopleApi from "../domain/people.js?v=3";
-import * as followUpsApi from "../domain/followups.js?v=3";
-import * as projectsApi from "../domain/projects.js?v=3";
-import * as historyApi from "../domain/history.js?v=3";
-import * as objectivesApi from "../domain/objectives.js?v=3";
-import * as preferencesApi from "../domain/preferences.js?v=3";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
-import { showHintOnce } from "../components/hint.js?v=3";
-import { renderHistoryTimeline } from "../components/historyTimeline.js?v=3";
-import * as linkedItemsApi from "../components/linkedItems.js?v=3";
-import { renderNotesBlock } from "../components/notesBlock.js?v=3";
-import { renderChecklist } from "../components/checklist.js?v=3";
-import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js?v=3";
-import { renderManagerSection } from "./management.js?v=3";
-import { renderWorkloadSection } from "./workload.js?v=3";
-import * as workloadApi from "../domain/workload.js?v=3";
-import { renderInfoTip } from "../components/infoTip.js?v=3";
-import { renderShortcutAssignButton } from "../services/shortcuts.js?v=3";
-import { renderMaskChecklist } from "./prepMask.js?v=3";
-import { openChangeTypeModal } from "../components/changeType.js?v=3";
-import { copyEntityLink } from "../components/copyLink.js?v=3";
+import * as peopleApi from "../domain/people.js";
+import * as followUpsApi from "../domain/followups.js";
+import * as projectsApi from "../domain/projects.js";
+import * as historyApi from "../domain/history.js";
+import * as objectivesApi from "../domain/objectives.js";
+import * as preferencesApi from "../domain/preferences.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
+import { showHintOnce } from "../components/hint.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
+import { renderChecklist } from "../components/checklist.js";
+import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
+import { renderManagerSection } from "./management.js";
+import { renderWorkloadSection } from "./workload.js";
+import * as workloadApi from "../domain/workload.js";
+import { renderInfoTip } from "../components/infoTip.js";
+import { renderShortcutAssignButton } from "../services/shortcuts.js";
+import { renderMaskChecklist } from "./prepMask.js";
+import { openChangeTypeModal } from "../components/changeType.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà

@@ -12,7 +12,7 @@
 // seule la vague la plus récente est dépliée par défaut, pour ne pas rallonger l'écran (même
 // logique que l'historique des fiches et les casquettes du Guide).
 
-import * as preferencesApi from "../domain/preferences.js?v=3";
+import * as preferencesApi from "../domain/preferences.js";
 
 // Structure enrichie (audit TDAH ciblé du 07/09/2026, retour de Charles-Henri : "ça manque de
 // notes de mises à jour qui informe les utilisateurs [...] ce que ça permet de faire, comment

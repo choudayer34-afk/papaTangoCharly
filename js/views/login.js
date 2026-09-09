@@ -3,8 +3,8 @@
 // l'application ne devrait avoir besoin de connaître Firebase Auth au-delà de ce fichier
 // et de js/app.js (qui décide d'afficher cet écran ou l'app normale).
 
-import { signInGoogle, signInEmail, ADMIN_EMAIL } from "../services/firebase.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
+import { signInGoogle, signInEmail, ADMIN_EMAIL } from "../services/firebase.js";
+import { showToast } from "../components/toast.js";
 
 export function renderLogin(container) {
   container.innerHTML = `

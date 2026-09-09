@@ -5,9 +5,9 @@
 // propres abonnements, elle reçoit `people`/`followUps` déjà à jour et dessine dans le
 // conteneur fourni.
 
-import * as workloadApi from "../domain/workload.js?v=3";
-import { openPersonDetail, openCreateFollowUpModal } from "./people.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
+import * as workloadApi from "../domain/workload.js";
+import { openPersonDetail, openCreateFollowUpModal } from "./people.js";
+import { showToast } from "../components/toast.js";
 
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

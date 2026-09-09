@@ -21,11 +21,11 @@
 // existantes, exactement comme §33 recompose depuis les Suivis — aucune nouvelle donnée
 // stockée pour ces sections-là.
 
-import * as followUpsApi from "../domain/followups.js?v=3";
-import * as tasksApi from "../domain/tasks.js?v=3";
-import { openModal, closeModal } from "../components/modal.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
-import { openPersonDetail, openCreatePersonModal, openCreateFollowUpModal, openEditFollowUpModal } from "./people.js?v=3";
+import * as followUpsApi from "../domain/followups.js";
+import * as tasksApi from "../domain/tasks.js";
+import { openModal, closeModal } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
+import { openPersonDetail, openCreatePersonModal, openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
 
 export function renderManagerSection(container, people, followUps) {
   const managers = people.filter((p) => p.type === "manager");

@@ -1,17 +1,17 @@
 // Vue Ressources — bibliothèque (§43) : Récentes / Par type / Non classées, recherche
 // texte simple sur titre/description/tags (avant-goût de la recherche globale §45).
 
-import * as resourcesApi from "../domain/resources.js?v=3";
-import * as projectsApi from "../domain/projects.js?v=3";
-import * as tasksApi from "../domain/tasks.js?v=3";
-import * as historyApi from "../domain/history.js?v=3";
-import * as preferencesApi from "../domain/preferences.js?v=3";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
-import { renderHistoryTimeline } from "../components/historyTimeline.js?v=3";
-import * as linkedItemsApi from "../components/linkedItems.js?v=3";
-import { renderNotesBlock } from "../components/notesBlock.js?v=3";
-import { copyEntityLink } from "../components/copyLink.js?v=3";
+import * as resourcesApi from "../domain/resources.js";
+import * as projectsApi from "../domain/projects.js";
+import * as tasksApi from "../domain/tasks.js";
+import * as historyApi from "../domain/history.js";
+import * as preferencesApi from "../domain/preferences.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
+import { renderHistoryTimeline } from "../components/historyTimeline.js";
+import * as linkedItemsApi from "../components/linkedItems.js";
+import { renderNotesBlock } from "../components/notesBlock.js";
+import { copyEntityLink } from "../components/copyLink.js";
 
 const FILTERS = [
   { key: "recent", label: "Récentes" },

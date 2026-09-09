@@ -9,9 +9,9 @@
 // pour "📎 Ressources" (openCreateResourceModal/renderResourceList/openResourcePickerModal),
 // réutilisé à l'identique plutôt que dupliqué.
 
-import * as promptsApi from "../domain/prompts.js?v=3";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js?v=3";
-import { showToast } from "../components/toast.js?v=3";
+import * as promptsApi from "../domain/prompts.js";
+import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { showToast } from "../components/toast.js";
 
 export function renderPrompts(container) {
   container.innerHTML = `
