@@ -16,6 +16,7 @@ import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js"
 import { renderNotesBlock } from "../components/notesBlock.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { copyEntityLink } from "../components/copyLink.js";
+import { openChangeTypeModal } from "../components/changeType.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
@@ -366,6 +367,58 @@ function openDecisionFromInboxModal(item) {
  * retoucher la capture brute) — seules deux actions restent possibles : lier/délier, et
  * archiver (même chemin que le bouton "Archiver" déjà existant au Dashboard).
  */
+/**
+ * Parcourir TOUTES les Informations/Idées (retour de Charles-Henri, vague 40, 09/09/2026 :
+ * "je n'ai jamais la possibilité de retrouver une information ailleurs") — contrairement à la
+ * section du Dashboard classique (limitée aux 8 plus récentes, repliable, et absente du mode
+ * Accueil "Focus"), cette modale liste TOUT — y compris les éléments auto-archivés après 15
+ * jours (`listKeptIncludingArchived`, voir js/domain/inbox.js) — avec un filtre texte simple.
+ * Un seul point d'entrée réutilisé par les deux modes d'Accueil (classic et Focus).
+ */
+export async function openAllKeptItemsModal() {
+  const items = (await inboxApi.listKeptIncludingArchived()).sort((a, b) => b.createdAt - a.createdAt);
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="kept-filter" type="text" placeholder="🔎 Filtrer par mot..." />
+    </div>
+    <div class="card" id="kept-all-list"></div>
+  `;
+  const listEl = body.querySelector("#kept-all-list");
+
+  function renderList(filterText) {
+    const needle = filterText.trim().toLowerCase();
+    const filtered = needle ? items.filter((item) => item.rawContent.toLowerCase().includes(needle)) : items;
+    listEl.innerHTML = "";
+    if (!filtered.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">${needle ? "Aucun résultat." : "Rien à afficher pour l'instant."}</div>`;
+      return;
+    }
+    for (const item of filtered) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      const archivedTag = item.status === "archived" ? " · 🗄️ archivée" : "";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(item.rawContent)}</div>
+          <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}${archivedTag}</div>
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openKeptItemDetail(item, { onClose: () => openAllKeptItemsModal() });
+      });
+      listEl.appendChild(row);
+    }
+  }
+  renderList("");
+  body.querySelector("#kept-filter").addEventListener("input", (e) => renderList(e.target.value));
+
+  openModal({ title: `🧠 Informations & idées (${items.length})`, body, actions: [{ label: "Fermer", variant: "ghost" }] });
+}
+
 export function openKeptItemDetail(item, { onClose } = {}) {
   preferencesApi.recordRecentlyViewed("Kept", item.id).catch(() => {});
   const body = document.createElement("div");
@@ -415,6 +468,20 @@ export function openKeptItemDetail(item, { onClose } = {}) {
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
+      {
+        // "🔁 Changer de type" (retour de Charles-Henri, vague 40, 09/09/2026) — voir
+        // js/components/changeType.js et js/domain/convert.js.
+        label: "🔁 Changer de type",
+        variant: "secondary",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          openChangeTypeModal("kept", item, ["task", "followup"], {
+            onConverted: () => onClose?.(),
+            onCancel: () => openKeptItemDetail(item, { onClose }),
+          });
+        },
+      },
       {
         // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
         label: "🔗 Copier le lien",
