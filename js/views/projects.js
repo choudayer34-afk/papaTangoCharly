@@ -518,6 +518,47 @@ export function renderProjects(container) {
  * Catégorie) : le champ propose les catégories déjà utilisées via une datalist, il faut donc
  * les charger avant de construire le formulaire.
  */
+/**
+ * Ajoute une option "+ Nouveau projet…" en fin de la liste d'un `<select>` de rattachement à
+ * un projet — la choisir ouvre `openCreateProjectModal` (déjà utilisée partout ailleurs pour
+ * créer un projet) SANS fermer ni recharger le formulaire englobant : le projet créé est
+ * inséré comme option et sélectionné directement dans ce même `<select>` au retour.
+ *
+ * Retour de Charles-Henri, vague 40, 09/09/2026 : "sur tous les éléments qui demandent le
+ * rattachement même optionnel à un projet, je dois pouvoir créer un projet à la volée si non
+ * présent dans la liste déroulante." Un seul helper partagé plutôt qu'une modale de création
+ * dupliquée dans chaque formulaire (Tâche, Suivi, Information/Idée...) qui référence un
+ * `<select>` de projet — voir js/views/kanban.js, js/views/dashboard.js, js/views/people.js.
+ */
+export function attachProjectQuickCreate(selectEl) {
+  const createOption = document.createElement("option");
+  createOption.value = "__create__";
+  createOption.textContent = "+ Nouveau projet…";
+  selectEl.appendChild(createOption);
+
+  let lastRealValue = selectEl.value === "__create__" ? "" : selectEl.value;
+  selectEl.addEventListener("change", () => {
+    if (selectEl.value !== "__create__") {
+      lastRealValue = selectEl.value;
+      return;
+    }
+    // Ne reste jamais bloqué sur "+ Nouveau projet…" — revient à la sélection précédente
+    // pendant que la modale de création est ouverte (utile si elle est annulée).
+    selectEl.value = lastRealValue;
+    openCreateProjectModal({
+      onCreated: (project) => {
+        const opt = document.createElement("option");
+        opt.value = project.id;
+        opt.textContent = project.name;
+        selectEl.insertBefore(opt, createOption);
+        selectEl.value = project.id;
+        lastRealValue = project.id;
+        selectEl.dispatchEvent(new Event("change"));
+      },
+    });
+  });
+}
+
 export async function openCreateProjectModal(prefill = {}) {
   const prefs = await preferencesApi.getPreferences();
   const categoryNames = Object.keys(prefs.categories || {});
