@@ -11,7 +11,7 @@
 import { openModal, closeModal } from "./modal.js";
 import { showToast } from "./toast.js";
 import * as peopleApi from "../domain/people.js";
-import * as convertApi from "../domain/convert.js";
+import * as convertApi from "../domain/convert.js?v=2";
 
 const TARGET_LABELS = { task: "📝 Tâche", followup: "🔁 Suivi (collaborateur)", kept: "🧠 Information / 💡 Idée" };
 const SHORT_LABELS = { task: "Tâche", followup: "Suivi", kept: "Information/Idée" };
