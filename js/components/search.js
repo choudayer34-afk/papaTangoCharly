@@ -64,7 +64,11 @@ async function runSearch(query) {
     resourcesApi.listAll(),
     meetingsApi.listAll(),
     decisionsApi.listAll(),
-    inboxApi.listKept(),
+    // listKeptIncludingArchived() plutôt que listKept() (retour de Charles-Henri, vague 40,
+    // 09/09/2026 : "je n'ai jamais la possibilité de retrouver une information ailleurs") — une
+    // Information/Idée auto-archivée après 15 jours doit rester trouvable ici, voir
+    // js/domain/inbox.js pour la distinction avec un élément classé sans suite.
+    inboxApi.listKeptIncludingArchived(),
     objectivesApi.listAll(),
   ]);
 
