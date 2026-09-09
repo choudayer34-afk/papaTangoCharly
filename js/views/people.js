@@ -701,7 +701,36 @@ async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   openModal({
     title: `🗒️ Point avec ${person.name}`,
     body,
-    actions: [{ label: "Fermer", variant: "ghost", onClick: () => onDone?.() }],
+    actions: [
+      {
+        // "un sujet peut apparaître pendant le point" (retour de Charles-Henri, vague 38) : un
+        // sujet créé ici suit exactement le même chemin qu'un Suivi créé n'importe où ailleurs
+        // (`openCreateFollowUpModal`, même formulaire, même regroupement par projet au retour) —
+        // aucune saisie parallèle à maintenir. Il est marqué "vu" (`coveredIds`) dès sa création :
+        // il vient d'être discuté en direct, inutile de repasser dessus ensuite dans la même
+        // séance. Note : si plusieurs sujets sont ajoutés à la suite via "+ Encore un suivi"
+        // (voir promptAnotherFollowUp), seul le DERNIER de la série est marqué vu automatiquement
+        // — les précédents apparaissent bien à la reprise (relus depuis le stockage) mais pas
+        // encore cochés ; à cocher à la main si besoin.
+        icon: "➕",
+        label: "Sujet apparu",
+        variant: "secondary",
+        compact: true,
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          openCreateFollowUpModal({
+            person,
+            onCreated: (created) => {
+              if (created) coveredIds.add(created.id);
+              openPrepModal(person, { onDone, coveredIds });
+            },
+            onCancel: () => openPrepModal(person, { onDone, coveredIds }),
+          });
+        },
+      },
+      { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
+    ],
   });
 }
 
