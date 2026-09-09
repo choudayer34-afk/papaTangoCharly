@@ -29,6 +29,32 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "9 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "🔁 Changer le type d'un élément mal qualifié",
+        text: "Une Tâche, un Suivi ou une Information/Idée peut désormais être converti vers un autre de ces trois types directement depuis sa fiche — fini le \"supprimer et recréer\" qui faisait perdre le fil. Titre, description, projet et échéance (quand compatibles) sont repris automatiquement ; l'historique de chaque côté garde une trace du lien entre l'ancien et le nouvel élément. La conversion vers/depuis un Projet n'est volontairement pas proposée (trop de pertes de sens pour une entité aussi structurante).",
+        howTo: "Fiche Tâche, fiche Suivi, ou détail d'une Information/Idée → bouton \"🔁 Changer de type\".",
+        gain: "Corriger une erreur de qualification en 2 clics, sans perdre l'historique ni ressaisir le contenu.",
+      },
+      {
+        type: "add",
+        title: "🧠 Informations & idées : enfin toutes retrouvables",
+        text: "Deux trous corrigés : les informations/idées auto-archivées après 15 jours étaient devenues purement introuvables (absentes de la recherche globale ET de tout affichage) — elles sont maintenant indexées dans la recherche. Et une nouvelle modale \"Voir tout\" (avec filtre texte) donne accès à l'ensemble des informations/idées, y compris les anciennes — accessible aussi bien depuis l'Accueil classique que depuis le mode \"Focus\", qui n'y avait jusqu'ici jamais accès du tout.",
+        howTo: "Accueil (classic ou Focus) → bouton \"🧠 Informations & idées\" / \"Voir tout\".",
+        gain: "Ne plus jamais perdre le fil d'une information capturée, même des semaines après.",
+      },
+      {
+        type: "add",
+        title: "Créer un projet à la volée depuis n'importe quel rattachement",
+        text: "Sur les formulaires de Tâche, Réunion et Décision, la liste déroulante \"Projet\" propose désormais \"+ Nouveau projet…\" en fin de liste : le projet créé est immédiatement sélectionné, sans fermer ni recharger le formulaire en cours. Les formulaires de Suivi disposaient déjà d'un mécanisme équivalent.",
+        howTo: "N'importe quel champ \"Projet (optionnel)\" → dernière option de la liste déroulante.",
+        gain: "Ne plus interrompre une saisie en cours juste parce que le projet n'existe pas encore.",
+      },
+    ],
+  },
+  {
     date: "8 septembre 2026",
     items: [
       {
