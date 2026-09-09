@@ -61,7 +61,7 @@ const APP_SHELL = [
   "./js/components/whatsNewBadge.js",
   "./js/components/pilotageSubNav.js",
   "./js/components/duplicateTask.js",
-  "./js/views/dashboard.js",
+
   "./js/views/inbox.js",
   "./js/views/kanban.js",
   "./js/views/projects.js",
