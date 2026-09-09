@@ -5,7 +5,7 @@
 // sur "fetch" plus bas (vague 22 novies) pour le raisonnement complet.
 // Pattern repris d'EnVie (§56/§57 : réutiliser l'existant avant de recréer).
 
-const CACHE_NAME = "pilotage-cache-v31";
+const CACHE_NAME = "pilotage-cache-v32";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -36,7 +36,9 @@ const APP_SHELL = [
   "./js/domain/objectives.js",
   "./js/domain/prompts.js",
   "./js/domain/casquettes.js",
+  "./js/domain/convert.js",
   "./js/components/modal.js",
+  "./js/components/changeType.js",
   "./js/components/toast.js",
   "./js/components/hint.js",
   "./js/components/infoTip.js",
@@ -157,8 +159,19 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       const networkFetch = fetch(event.request)
         .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          // BUG corrigé (retour de Charles-Henri, vague 42, 09/09/2026 : nouveaux fichiers
+          // affichés avec un encodage cassé / rejetés comme module script "text/html") — cette
+          // mise en cache ne vérifiait jamais `response.ok` avant d'enregistrer la réponse.
+          // Un fichier requêté juste avant la fin de la propagation d'un déploiement (ou
+          // n'existant pas encore) reçoit alors la page de repli SPA (200 OK, mais le mauvais
+          // contenu) — mise en cache SOUS L'URL DU VRAI FICHIER, donc servie en boucle pour de
+          // bon ensuite, même une fois le vrai fichier disponible sur le serveur. Seule une
+          // réponse effectivement réussie (2xx) est désormais mise en cache ; une erreur (404,
+          // 5xx) repart au réseau à la prochaine tentative au lieu de s'y figer.
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
         .catch(() => undefined);
