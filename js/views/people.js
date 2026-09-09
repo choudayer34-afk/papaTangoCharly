@@ -715,20 +715,36 @@ function openPrepMaskModal(person, { onDone } = {}) {
 async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
   const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects);
+  // Tous les sujets de la personne, sans exception (retour de Charles-Henri, vague 41,
+  // 09/09/2026 : "pouvoir faire une recherche lors d'un point [...] sur l'ensemble des sujets
+  // d'une personne") — contrairement aux 4 sections ci-dessus (curatées : "En retard"/"À
+  // transmettre"/"À aborder"/5 derniers "Terminé"), la recherche porte sur TOUT, y compris les
+  // sujets terminés au-delà des 5 plus récents et les sujets masqués du point partagé
+  // (`hiddenFromPrep` — recherche privée pour soi, pas d'enjeu à les exclure ici).
+  const ownAll = allFollowUps.filter((f) => f.personId === person.id).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
 
   const remaining = [...overdue, ...toTell, ...upcoming].filter((f) => !coveredIds.has(f.id)).length;
 
   const body = document.createElement("div");
   body.innerHTML = `
-    <div class="item-meta" style="margin-bottom:12px;">☑️ ${remaining === 0 ? "Tous les sujets ont été vus." : `${remaining} sujet(s) restant(s) à passer.`}</div>
-    <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
-    <div class="card" id="prep-overdue" style="margin-bottom:16px;"></div>
-    <div class="section-title">📣 À transmettre (${toTell.length})</div>
-    <div class="card" id="prep-to-tell" style="margin-bottom:16px;"></div>
-    <div class="section-title">🎯 À aborder (${upcoming.length})</div>
-    <div class="card" id="prep-upcoming" style="margin-bottom:16px;"></div>
-    <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
-    <div class="card" id="prep-done" style="margin-bottom:8px;"></div>
+    <div class="field" style="margin-bottom:12px;">
+      <input id="prep-search" type="text" placeholder="🔎 Chercher dans tous les sujets de ${escapeAttr(person.name)}..." />
+    </div>
+    <div class="item-meta" style="margin-bottom:12px;" id="prep-remaining">☑️ ${remaining === 0 ? "Tous les sujets ont été vus." : `${remaining} sujet(s) restant(s) à passer.`}</div>
+    <div id="prep-sections">
+      <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
+      <div class="card" id="prep-overdue" style="margin-bottom:16px;"></div>
+      <div class="section-title">📣 À transmettre (${toTell.length})</div>
+      <div class="card" id="prep-to-tell" style="margin-bottom:16px;"></div>
+      <div class="section-title">🎯 À aborder (${upcoming.length})</div>
+      <div class="card" id="prep-upcoming" style="margin-bottom:16px;"></div>
+      <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
+      <div class="card" id="prep-done" style="margin-bottom:8px;"></div>
+    </div>
+    <div id="prep-search-results" hidden>
+      <div class="section-title" style="margin-top:0;">🔎 Résultats</div>
+      <div class="card" id="prep-search-list" style="margin-bottom:8px;"></div>
+    </div>
   `;
 
   const openFromPrep = (f) => {
@@ -740,6 +756,27 @@ async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   renderFollowUpList(body.querySelector("#prep-to-tell"), toTell, { onOpen: openFromPrep, coveredIds });
   renderGroupedFollowUpList(body.querySelector("#prep-upcoming"), upcomingGroups, { onOpen: openFromPrep, coveredIds });
   renderFollowUpList(body.querySelector("#prep-done"), recentlyDone, { onOpen: openFromPrep });
+
+  const sectionsEl = body.querySelector("#prep-sections");
+  const remainingEl = body.querySelector("#prep-remaining");
+  const resultsWrap = body.querySelector("#prep-search-results");
+  const resultsList = body.querySelector("#prep-search-list");
+  body.querySelector("#prep-search").addEventListener("input", (e) => {
+    const needle = e.target.value.trim().toLowerCase();
+    if (!needle) {
+      sectionsEl.hidden = false;
+      remainingEl.hidden = false;
+      resultsWrap.hidden = true;
+      return;
+    }
+    sectionsEl.hidden = true;
+    remainingEl.hidden = true;
+    resultsWrap.hidden = false;
+    const matches = ownAll.filter(
+      (f) => f.title.toLowerCase().includes(needle) || (f.description || "").toLowerCase().includes(needle)
+    );
+    renderFollowUpList(resultsList, matches, { onOpen: openFromPrep });
+  });
 
   openModal({
     title: `🗒️ Point avec ${person.name}`,
