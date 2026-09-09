@@ -825,6 +825,12 @@ tbody.drag-over-group {
   .btn-compact .btn-label { display: none; }
 }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalNudge {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+.modal-nudge { animation: modalNudge 0.25s ease-in-out; }
 
 /* ---------- Form fields ---------- */
 .field { margin-bottom: var(--space-3); }
