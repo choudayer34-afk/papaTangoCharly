@@ -8,7 +8,7 @@
 // celle de storage.js — c'est ce qui a permis de basculer d'IndexedDB à Firestore sans
 // toucher à js/domain/*.js ni js/views/*.js.
 
-import { generateId } from "./id.js";
+import { generateId } from "./id.js?v=3";
 
 const DB_NAME = "pilotage";
 const DB_VERSION = 5;

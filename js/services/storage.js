@@ -19,8 +19,8 @@ import {
   deleteDoc,
   onSnapshot,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { auth, db } from "./firebase.js";
-import { generateId } from "./id.js";
+import { auth, db } from "./firebase.js?v=3";
+import { generateId } from "./id.js?v=3";
 
 function requireUid() {
   const uid = auth.currentUser?.uid;
