@@ -21,6 +21,8 @@ import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
+import { attachProjectQuickCreate } from "./projects.js";
+import { openChangeTypeModal } from "../components/changeType.js";
 import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -698,7 +700,9 @@ function renderTableRow(task, projects, visibleColumns, onChange, groupBy) {
       select.innerHTML =
         `<option value="">— Aucun —</option>` +
         projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+      attachProjectQuickCreate(select);
       select.addEventListener("change", async () => {
+        if (select.value === "__create__") return; // géré par attachProjectQuickCreate lui-même
         await tasksApi.updateTask(task.id, { projectId: select.value || null });
         onChange();
       });
@@ -968,6 +972,7 @@ export async function openCreateTaskModal(prefill = {}) {
       <label for="new-task-communication" style="margin:0;">📣 C'est une communication (article, message) — activer son canevas de production</label>
     </div>
   `;
+  attachProjectQuickCreate(body.querySelector("#new-task-project"));
   const { bodyEl, close } = openModal({
     title: "Nouvelle tâche",
     body,
@@ -1154,6 +1159,8 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     </div>
   `;
 
+  attachProjectQuickCreate(body.querySelector("#detail-project"));
+
   // Bascule d'onglet : ni framework ni removal du DOM — chaque panneau existe en permanence,
   // seul l'attribut `hidden` change (voir styles/components.css : `.fiche-tabpanel` ne pose
   // volontairement AUCUN `display` à elle seule, pour ne jamais rejouer le bug déjà rencontré
@@ -1331,6 +1338,22 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         compact: true,
         closesModal: false,
         onClick: () => copyEntityLink("#/kanban", "Task", task.id),
+      },
+      {
+        // "🔁 Changer de type" (retour de Charles-Henri, vague 40, 09/09/2026) — voir
+        // js/components/changeType.js et js/domain/convert.js.
+        icon: "🔁",
+        label: "Changer de type",
+        variant: "secondary",
+        compact: true,
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          openChangeTypeModal("task", task, ["followup", "kept"], {
+            onConverted: () => onClose?.(),
+            onCancel: () => openTaskDetail(task, projects, { onClose }),
+          });
+        },
       },
       {
         // "🗐 Dupliquer" (retour de Charles-Henri, 07/09/2026) — voir
