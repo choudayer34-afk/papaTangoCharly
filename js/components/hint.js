@@ -6,7 +6,7 @@
 // js/domain/preferences.js, même principe que la visite guidée (js/components/onboarding.js).
 // Jamais une modale : ça n'interrompt rien, ça se ferme d'un clic et ça ne bloque aucune saisie.
 
-import * as preferencesApi from "../domain/preferences.js?v=3";
+import * as preferencesApi from "../domain/preferences.js";
 
 /**
  * Insère un bandeau en tête de `container`, une seule fois par `key`. `html` peut contenir du

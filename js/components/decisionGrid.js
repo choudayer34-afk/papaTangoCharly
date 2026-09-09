@@ -18,10 +18,10 @@
 // grille" — même logique que le reste de la fiche, qui exige "💾 Enregistrer" — un indicateur
 // "Modifications non enregistrées" évite que ça se perde silencieusement en attendant.
 
-import * as decisionsApi from "../domain/decisions.js?v=3";
-import { generateId } from "../services/id.js?v=3";
-import { closeModal, confirmDelete } from "./modal.js?v=3";
-import { showToast } from "./toast.js?v=3";
+import * as decisionsApi from "../domain/decisions.js";
+import { generateId } from "../services/id.js";
+import { closeModal, confirmDelete } from "./modal.js";
+import { showToast } from "./toast.js";
 
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));

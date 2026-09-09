@@ -3,7 +3,7 @@
 // domaine : reçoit juste `steps` (déjà chargées) et un callback `onToggle(stepKey, done)`
 // laissé à l'appelant, qui sait lui de quel `toggleStep()` de quel domaine il s'agit.
 
-import { renderInfoTip } from "./infoTip.js?v=3";
+import { renderInfoTip } from "./infoTip.js";
 
 const HELP_HTML =
   "Ce canevas est un <strong>modèle enregistré comme donnée</strong> (§78.9), pas une checklist codée en dur pour cette fiche : Réunion, Point collaborateur, Projet et Communication ont chacun le leur (§15 à §18). Coche les étapes au fur et à mesure — la date de la coche reste affichée à côté. Certaines étapes (ex. « Créer les actions », « Planifier les suivis ») proposent aussitôt de créer la Tâche ou le Suivi qui suit, pour ne pas avoir à s'en souvenir plus tard. L'éditeur de canevas personnalisé (§19) n'existe pas encore — ces modèles sont fixes pour l'instant.";

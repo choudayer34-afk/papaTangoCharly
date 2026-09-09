@@ -10,8 +10,8 @@
 // collection `preferences` (comme inboxBadge.js s'abonne à l'Inbox) pour se mettre à jour tout
 // seul dès que la page Nouveautés est ouverte, sans attendre un changement d'onglet.
 
-import * as storage from "../services/storage.js?v=3";
-import { WHATS_NEW_TOTAL_COUNT } from "../views/whatsnew.js?v=3";
+import * as storage from "../services/storage.js";
+import { WHATS_NEW_TOTAL_COUNT } from "../views/whatsnew.js";
 
 let unsubscribe = null;
 

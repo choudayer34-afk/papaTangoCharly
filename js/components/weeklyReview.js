@@ -15,20 +15,20 @@
 // tête sans traitement spécial). Les rubriques sans date pertinente (Inbox, Projets sans
 // prochaine action, Ressources non classées) restent inchangées.
 
-import * as inboxApi from "../domain/inbox.js?v=3";
-import * as tasksApi from "../domain/tasks.js?v=3";
-import * as projectsApi from "../domain/projects.js?v=3";
-import * as peopleApi from "../domain/people.js?v=3";
-import * as followUpsApi from "../domain/followups.js?v=3";
-import * as resourcesApi from "../domain/resources.js?v=3";
-import * as preferencesApi from "../domain/preferences.js?v=3";
-import { openModal, closeModal } from "./modal.js?v=3";
-import { renderInfoTip } from "./infoTip.js?v=3";
-import { openQualifyModal } from "../views/inbox.js?v=3";
-import { openTaskDetail } from "../views/kanban.js?v=3";
-import { openProjectDetail } from "../views/projects.js?v=3";
-import { openEditFollowUpModal } from "../views/people.js?v=3";
-import { openResourceDetail } from "../views/resources.js?v=3";
+import * as inboxApi from "../domain/inbox.js";
+import * as tasksApi from "../domain/tasks.js";
+import * as projectsApi from "../domain/projects.js";
+import * as peopleApi from "../domain/people.js";
+import * as followUpsApi from "../domain/followups.js";
+import * as resourcesApi from "../domain/resources.js";
+import * as preferencesApi from "../domain/preferences.js";
+import { openModal, closeModal } from "./modal.js";
+import { renderInfoTip } from "./infoTip.js";
+import { openQualifyModal } from "../views/inbox.js";
+import { openTaskDetail } from "../views/kanban.js";
+import { openProjectDetail } from "../views/projects.js";
+import { openEditFollowUpModal } from "../views/people.js";
+import { openResourceDetail } from "../views/resources.js";
 
 export async function openWeeklyReview() {
   // Rappel de rythme (§ piste UX du 31/08/2026, retour de Charles-Henri : "il y a du retard

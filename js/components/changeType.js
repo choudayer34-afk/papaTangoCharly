@@ -8,10 +8,10 @@
 // demanderait d'importer les trois vues (Tâche/Suivi/Inbox) les unes dans les autres en plus de
 // ce composant, pour un gain limité — un simple message indique où retrouver l'élément converti.
 
-import { openModal, closeModal } from "./modal.js?v=3";
-import { showToast } from "./toast.js?v=3";
-import * as peopleApi from "../domain/people.js?v=3";
-import * as convertApi from "../domain/convert.js?v=3";
+import { openModal, closeModal } from "./modal.js";
+import { showToast } from "./toast.js";
+import * as peopleApi from "../domain/people.js";
+import * as convertApi from "../domain/convert.js";
 
 const TARGET_LABELS = { task: "📝 Tâche", followup: "🔁 Suivi (collaborateur)", kept: "🧠 Information / 💡 Idée" };
 const SHORT_LABELS = { task: "Tâche", followup: "Suivi", kept: "Information/Idée" };

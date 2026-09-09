@@ -21,23 +21,23 @@
 // types de l'app absent d'ici. Ajoutés en 9e position ; `onKeydown` plus bas est déjà générique
 // (borné par `SEARCH_TYPES.length`), Alt+9 fonctionne donc sans rien y changer.
 
-import { openModal, closeModal } from "./modal.js?v=3";
-import * as tasksApi from "../domain/tasks.js?v=3";
-import * as projectsApi from "../domain/projects.js?v=3";
-import * as peopleApi from "../domain/people.js?v=3";
-import * as followUpsApi from "../domain/followups.js?v=3";
-import * as resourcesApi from "../domain/resources.js?v=3";
-import * as meetingsApi from "../domain/meetings.js?v=3";
-import * as decisionsApi from "../domain/decisions.js?v=3";
-import * as inboxApi from "../domain/inbox.js?v=3";
-import * as objectivesApi from "../domain/objectives.js?v=3";
-import { openTaskDetail } from "../views/kanban.js?v=3";
-import { openDuplicateTaskModal } from "./duplicateTask.js?v=3";
-import { openProjectDetail } from "../views/projects.js?v=3";
-import { openPersonDetail, openEditFollowUpModal, openObjectiveDetail } from "../views/people.js?v=3";
-import { openResourceDetail } from "../views/resources.js?v=3";
-import { openRecentDetail } from "../views/dashboard.js?v=3";
-import { openKeptItemDetail } from "../views/inbox.js?v=3";
+import { openModal, closeModal } from "./modal.js";
+import * as tasksApi from "../domain/tasks.js";
+import * as projectsApi from "../domain/projects.js";
+import * as peopleApi from "../domain/people.js";
+import * as followUpsApi from "../domain/followups.js";
+import * as resourcesApi from "../domain/resources.js";
+import * as meetingsApi from "../domain/meetings.js";
+import * as decisionsApi from "../domain/decisions.js";
+import * as inboxApi from "../domain/inbox.js";
+import * as objectivesApi from "../domain/objectives.js";
+import { openTaskDetail } from "../views/kanban.js";
+import { openDuplicateTaskModal } from "./duplicateTask.js";
+import { openProjectDetail } from "../views/projects.js";
+import { openPersonDetail, openEditFollowUpModal, openObjectiveDetail } from "../views/people.js";
+import { openResourceDetail } from "../views/resources.js";
+import { openRecentDetail } from "../views/dashboard.js";
+import { openKeptItemDetail } from "../views/inbox.js";
 
 // Ordre = celui des chips affichées et des touches Alt+1…Alt+9 qui leur correspondent.
 const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information/Idée", "Objectif"];

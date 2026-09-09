@@ -9,8 +9,8 @@
 // fait que lire l'état pour s'afficher, ce qui évite tout double toast/notification si les
 // deux sont "actifs" en même temps (le widget tourne toujours, même quand #/memory est ouvert).
 
-import * as pomodoroStore from "../services/pomodoroStore.js?v=3";
-import { showToast } from "./toast.js?v=3";
+import * as pomodoroStore from "../services/pomodoroStore.js";
+import { showToast } from "./toast.js";
 
 let tickInterval = null;
 let widgetEl = null;
