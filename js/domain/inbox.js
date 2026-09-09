@@ -3,9 +3,9 @@
 // CAPTURE → InboxItem (status: pending) → Qualification → Task / Information / Archivé.
 // Le contenu brut original est toujours conservé, quoi qu'il arrive (Règle 3).
 
-import * as storage from "../services/storage.js?v=3";
-import { generateId } from "../services/id.js?v=3";
-import { createTask } from "./tasks.js?v=3";
+import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
+import { createTask } from "./tasks.js";
 
 const COLLECTION = "inboxItems";
 

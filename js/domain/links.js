@@ -10,7 +10,7 @@
 // multi-documents, donc deux tableaux à synchroniser des deux côtés d'un lien pourraient
 // diverger si une des deux écritures échoue.
 
-import * as storage from "../services/storage.js?v=3";
+import * as storage from "../services/storage.js";
 
 const COLLECTION = "links";
 

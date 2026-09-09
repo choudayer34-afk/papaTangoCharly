@@ -18,10 +18,10 @@
 // {type, id} deviennent orphelins après conversion — non traité ici (même limite que la
 // suppression pure et simple déjà existante).
 
-import * as storage from "../services/storage.js?v=3";
-import * as tasksApi from "./tasks.js?v=3";
-import * as followUpsApi from "./followups.js?v=3";
-import * as inboxApi from "./inbox.js?v=3";
+import * as storage from "../services/storage.js";
+import * as tasksApi from "./tasks.js";
+import * as followUpsApi from "./followups.js";
+import * as inboxApi from "./inbox.js";
 
 function taskToRawContent(task) {
   return task.description ? `${task.title}\n\n${task.description}` : task.title;

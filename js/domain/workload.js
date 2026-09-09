@@ -14,7 +14,7 @@
 // Seuls les collaborateurs (`person.type !== "manager"`) entrent dans le classement — on ne
 // répartit jamais une charge sur son propre manager.
 
-import * as followUpsApi from "./followups.js?v=3";
+import * as followUpsApi from "./followups.js";
 
 // Même seuil que tasksApi.isStalled() (5 jours sans mouvement) — une seule définition de
 // "stagnant" dans l'app, voir js/domain/tasks.js pour la justification complète.
