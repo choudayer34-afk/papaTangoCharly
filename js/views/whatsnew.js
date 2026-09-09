@@ -52,8 +52,13 @@ const WHATS_NEW = [
       },
       {
         type: "fix",
-        title: "🙈 Avant de partager (fenêtre de masquage privée) : erreur silencieuse rendue visible",
-        text: "Sur certains postes, la fenêtre séparée \"🙈 Avant de partager\" affichait son texte d'intro mais jamais la liste à cocher, sans aucun message — un échec de chargement des données (probable dans cette fenêtre rechargée à froid) passait inaperçu. Un message d'erreur explicite avec un bouton \"🔄 Réessayer\" apparaît désormais à la place d'un vide silencieux.",
+        title: "🙈 Avant de partager (fenêtre de masquage privée) : correctif définitif de la lenteur/blocage",
+        text: "Diagnostic affiné avec des mesures précises (iPhone instantané, PC web ~20 s, PC installé bloqué indéfiniment) : la fenêtre séparée rechargeait l'app entière sur sa propre route, créant un SECOND client Firestore en concurrence avec celui déjà actif dans la fenêtre principale — les deux devaient négocier lequel détient la persistance locale avant de pouvoir lire quoi que ce soit, d'où la lenteur (et le blocage total sur certaines configurations d'app installée). La fenêtre séparée est désormais vierge (pas de rechargement d'app) et affiche la checklist directement depuis le client Firestore déjà actif de la fenêtre principale : plus de second client, plus de négociation, ouverture instantanée dans tous les contextes.",
+      },
+      {
+        type: "fix",
+        title: "🙈 Avant de partager : erreur silencieuse rendue visible",
+        text: "Sur certains postes, la fenêtre séparée \"🙈 Avant de partager\" affichait son texte d'intro mais jamais la liste à cocher, sans aucun message — un échec de chargement des données passait inaperçu. Un message d'erreur explicite avec un bouton \"🔄 Réessayer\" apparaît désormais à la place d'un vide silencieux (utile si un souci réseau ponctuel survient malgré le correctif ci-dessus).",
       },
     ],
   },
