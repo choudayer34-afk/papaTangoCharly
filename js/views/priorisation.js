@@ -10,16 +10,16 @@
 // (js/domain/priorisation.js) pour ses 3 tâches condensées ; cette vue est l'endroit où on
 // règle les poids et où on voit le classement complet avec la matrice urgence × impact.
 
-import * as tasksApi from "../domain/tasks.js";
-import * as projectsApi from "../domain/projects.js";
-import * as preferencesApi from "../domain/preferences.js";
-import * as casquettesApi from "../domain/casquettes.js";
-import * as priorisationApi from "../domain/priorisation.js";
-import { openModal } from "../components/modal.js";
-import { showToast } from "../components/toast.js";
-import { renderInfoTip } from "../components/infoTip.js";
-import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
-import { openTaskDetail } from "./kanban.js";
+import * as tasksApi from "../domain/tasks.js?v=3";
+import * as projectsApi from "../domain/projects.js?v=3";
+import * as preferencesApi from "../domain/preferences.js?v=3";
+import * as casquettesApi from "../domain/casquettes.js?v=3";
+import * as priorisationApi from "../domain/priorisation.js?v=3";
+import { openModal } from "../components/modal.js?v=3";
+import { showToast } from "../components/toast.js?v=3";
+import { renderInfoTip } from "../components/infoTip.js?v=3";
+import { renderPilotageSubNav } from "../components/pilotageSubNav.js?v=3";
+import { openTaskDetail } from "./kanban.js?v=3";
 
 // Mêmes casquettes affichables que le Kanban (une Tâche ne peut jamais être "Équipe" ni
 // "Manager") — voir js/views/kanban.js#PILOTAGE_HATS pour le même choix et sa justification.
