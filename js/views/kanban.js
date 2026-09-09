@@ -22,7 +22,7 @@ import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
 import { attachProjectQuickCreate } from "./projects.js";
-import { openChangeTypeModal } from "../components/changeType.js";
+import { openChangeTypeModal } from "../components/changeType.js?v=2";
 import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
