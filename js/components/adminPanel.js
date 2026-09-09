@@ -12,10 +12,10 @@
 // Ce n'est volontairement PAS un mécanisme de sécurité — juste un bouton masqué pour les autres
 // — la vraie protection des données reste les règles Firestore, indépendantes de cette UI.
 
-import { openModal } from "./modal.js";
-import { showToast } from "./toast.js";
-import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js";
-import * as usageTrackingApi from "../services/usageTracking.js";
+import { openModal } from "./modal.js?v=3";
+import { showToast } from "./toast.js?v=3";
+import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js?v=3";
+import * as usageTrackingApi from "../services/usageTracking.js?v=3";
 
 // Une entrée par application tierce. `tutorialHtml` répond à un besoin concret et récurrent
 // pour CETTE application précise plutôt qu'à une checklist générique — pour Firebase, c'est la

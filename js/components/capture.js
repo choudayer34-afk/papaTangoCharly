@@ -4,12 +4,12 @@
 // et traiter sont deux choses différentes — la qualification se fait plus tard, dans
 // l'Inbox).
 
-import { openModal } from "./modal.js";
-import { showToast } from "./toast.js";
-import { capture } from "../domain/inbox.js";
-import { openQualifyChoice } from "../views/inbox.js";
-import { saveDraft, getDraft, clearDraft } from "../services/draftStore.js";
-import { showHintOnce } from "./hint.js";
+import { openModal } from "./modal.js?v=3";
+import { showToast } from "./toast.js?v=3";
+import { capture } from "../domain/inbox.js?v=3";
+import { openQualifyChoice } from "../views/inbox.js?v=3";
+import { saveDraft, getDraft, clearDraft } from "../services/draftStore.js?v=3";
+import { showHintOnce } from "./hint.js?v=3";
 
 // Reprise d'une saisie interrompue (piste TDAH du 02/09/2026, retour de Charles-Henri —
 // exemples du yaourt/aspirateur et du café oublié : une interruption efface tout ce qui était

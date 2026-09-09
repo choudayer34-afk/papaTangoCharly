@@ -16,8 +16,8 @@
 // cosmétique dans l'URL copiée (un lien plus lisible/prévisible si on le relit), puisque
 // `maybeOpenDeepLink` résout la fiche visée quel que soit l'onglet réellement rendu.
 
-import { buildDeepLink } from "../services/deeplink.js";
-import { showToast } from "./toast.js";
+import { buildDeepLink } from "../services/deeplink.js?v=3";
+import { showToast } from "./toast.js?v=3";
 
 /**
  * Copie dans le presse-papiers un lien qui rouvre directement cette fiche — collé dans une

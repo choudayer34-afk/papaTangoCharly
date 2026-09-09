@@ -4,8 +4,8 @@
 // donnée métier : il se contente d'expliquer ce qui existe déjà, et de mémoriser (via
 // js/domain/preferences.js) que la visite a été vue pour ne pas la reproposer à chaque fois.
 
-import { openModal, closeModal } from "./modal.js";
-import * as preferencesApi from "../domain/preferences.js";
+import { openModal, closeModal } from "./modal.js?v=3";
+import * as preferencesApi from "../domain/preferences.js?v=3";
 
 const TOUR_STEPS = [
   {

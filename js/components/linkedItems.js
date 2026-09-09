@@ -5,24 +5,24 @@
 // (même modale que si on l'avait trouvée depuis son propre écran) plutôt qu'une vue dupliquée
 // — même principe que components/search.js.
 
-import { openModal, closeModal } from "./modal.js";
-import { showToast } from "./toast.js";
-import * as linksApi from "../domain/links.js";
-import * as tasksApi from "../domain/tasks.js";
-import * as projectsApi from "../domain/projects.js";
-import * as peopleApi from "../domain/people.js";
-import * as followUpsApi from "../domain/followups.js";
-import * as resourcesApi from "../domain/resources.js";
-import * as meetingsApi from "../domain/meetings.js";
-import * as decisionsApi from "../domain/decisions.js";
-import * as inboxApi from "../domain/inbox.js";
-import * as objectivesApi from "../domain/objectives.js";
-import { openTaskDetail, openCreateTaskModal } from "../views/kanban.js";
-import { openProjectDetail, openCreateProjectModal } from "../views/projects.js";
-import { openPersonDetail, openEditFollowUpModal, openCreateFollowUpModal, openObjectiveDetail } from "../views/people.js";
-import { openResourceDetail, openCreateResourceModal } from "../views/resources.js";
-import { openRecentDetail, openCreateMeetingModal, openCreateDecisionModal } from "../views/dashboard.js";
-import { openKeptItemDetail } from "../views/inbox.js";
+import { openModal, closeModal } from "./modal.js?v=3";
+import { showToast } from "./toast.js?v=3";
+import * as linksApi from "../domain/links.js?v=3";
+import * as tasksApi from "../domain/tasks.js?v=3";
+import * as projectsApi from "../domain/projects.js?v=3";
+import * as peopleApi from "../domain/people.js?v=3";
+import * as followUpsApi from "../domain/followups.js?v=3";
+import * as resourcesApi from "../domain/resources.js?v=3";
+import * as meetingsApi from "../domain/meetings.js?v=3";
+import * as decisionsApi from "../domain/decisions.js?v=3";
+import * as inboxApi from "../domain/inbox.js?v=3";
+import * as objectivesApi from "../domain/objectives.js?v=3";
+import { openTaskDetail, openCreateTaskModal } from "../views/kanban.js?v=3";
+import { openProjectDetail, openCreateProjectModal } from "../views/projects.js?v=3";
+import { openPersonDetail, openEditFollowUpModal, openCreateFollowUpModal, openObjectiveDetail } from "../views/people.js?v=3";
+import { openResourceDetail, openCreateResourceModal } from "../views/resources.js?v=3";
+import { openRecentDetail, openCreateMeetingModal, openCreateDecisionModal } from "../views/dashboard.js?v=3";
+import { openKeptItemDetail } from "../views/inbox.js?v=3";
 
 /** Les 7 types liables. Personne n'apparaît pas dans "+ Créer et lier" (rarement une fiche
  *  qu'on crée depuis un autre sujet) mais reste liable à une fiche existante — même chose pour

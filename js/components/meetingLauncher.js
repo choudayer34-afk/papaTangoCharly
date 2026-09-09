@@ -11,10 +11,10 @@
 // (js/domain/tasks.js, addOutlookMeeting) : un fichier .ics standard que n'importe quel
 // client calendrier sait importer, pas une vraie intégration Microsoft Graph.
 
-import { openCreateAndLinkDirect } from "./linkedItems.js";
-import { showToast } from "./toast.js";
-import { buildDeepLink } from "../services/deeplink.js";
-import { generateId } from "../services/id.js";
+import { openCreateAndLinkDirect } from "./linkedItems.js?v=3";
+import { showToast } from "./toast.js?v=3";
+import { buildDeepLink } from "../services/deeplink.js?v=3";
+import { generateId } from "../services/id.js?v=3";
 
 /** Compose le titre — chaque segment absent est simplement omis, jamais de tiret orphelin ni
  *  de "undefined". Ordre fixe demandé par Charles-Henri : Catégorie - Projet - Intitulé -

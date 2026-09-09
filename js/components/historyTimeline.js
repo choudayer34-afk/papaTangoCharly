@@ -3,7 +3,7 @@
 // composant se contente d'afficher les entrées déjà filtrées/triées par l'appelant, dans
 // l'ordre où elles sont fournies.
 
-import * as historyApi from "../domain/history.js";
+import * as historyApi from "../domain/history.js?v=3";
 
 export function renderHistoryTimeline(container, entries) {
   if (!entries.length) {

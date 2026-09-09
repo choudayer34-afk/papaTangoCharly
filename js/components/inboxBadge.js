@@ -11,7 +11,7 @@
 // pastille se met à jour toute seule dès qu'un élément est capturé ou qualifié, sans attendre
 // de changer d'onglet.
 
-import * as inboxApi from "../domain/inbox.js";
+import * as inboxApi from "../domain/inbox.js?v=3";
 
 let unsubscribe = null;
 

@@ -22,12 +22,12 @@
 // (js/domain/prompts.js#linkToTask, vague du 07/09/2026) — ces deux derniers via leur mécanique
 // `taskIds` propre, pas via "🔗 Lié".
 
-import { openModal } from "./modal.js";
-import { showToast } from "./toast.js";
-import * as tasksApi from "../domain/tasks.js";
-import * as resourcesApi from "../domain/resources.js";
-import * as promptsApi from "../domain/prompts.js";
-import * as linksApi from "../domain/links.js";
+import { openModal } from "./modal.js?v=3";
+import { showToast } from "./toast.js?v=3";
+import * as tasksApi from "../domain/tasks.js?v=3";
+import * as resourcesApi from "../domain/resources.js?v=3";
+import * as promptsApi from "../domain/prompts.js?v=3";
+import * as linksApi from "../domain/links.js?v=3";
 
 function todaySuffix() {
   // Format "07/09/2026" (fr-FR par défaut) — court et sans ambiguïté pour un suffixe de titre,

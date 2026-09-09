@@ -6,7 +6,7 @@
 // simplement là où on était. Complète la Revue hebdomadaire (qui ne repasse qu'une fois par
 // semaine) par un rappel au fil de l'eau, au moment où le contexte est encore frais.
 
-import { openModal } from "./modal.js";
+import { openModal } from "./modal.js?v=3";
 
 /**
  * @param {Object} opts

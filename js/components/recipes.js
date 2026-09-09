@@ -5,11 +5,11 @@
 // L'idée n'est pas d'accélérer la saisie (Charles-Henri n'en a pas exprimé le besoin) mais de
 // ne plus avoir à se souvenir soi-même "après avoir créé X, il faut aussi penser à créer Y".
 
-import { openModal, closeModal } from "./modal.js";
-import { showToast } from "./toast.js";
-import * as peopleApi from "../domain/people.js";
-import { openCreateProjectModal } from "../views/projects.js";
-import { openCreateFollowUpModal } from "../views/people.js";
+import { openModal, closeModal } from "./modal.js?v=3";
+import { showToast } from "./toast.js?v=3";
+import * as peopleApi from "../domain/people.js?v=3";
+import { openCreateProjectModal } from "../views/projects.js?v=3";
+import { openCreateFollowUpModal } from "../views/people.js?v=3";
 
 const RECIPES = [
   {
