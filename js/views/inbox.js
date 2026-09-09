@@ -16,7 +16,7 @@ import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js"
 import { renderNotesBlock } from "../components/notesBlock.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { copyEntityLink } from "../components/copyLink.js";
-import { openChangeTypeModal } from "../components/changeType.js";
+import { openChangeTypeModal } from "../components/changeType.js?v=2";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
