@@ -20,7 +20,7 @@ import * as workloadApi from "../domain/workload.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { renderMaskChecklist } from "./prepMask.js";
-import { openChangeTypeModal } from "../components/changeType.js";
+import { openChangeTypeModal } from "../components/changeType.js?v=2";
 import { copyEntityLink } from "../components/copyLink.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
