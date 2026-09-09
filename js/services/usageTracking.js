@@ -31,7 +31,7 @@
 //     allow update, delete: if false;
 //   }
 
-import { recordUsageEvent, listUsageEvents, getCurrentUser, ADMIN_EMAIL } from "./firebase.js?v=3";
+import { recordUsageEvent, listUsageEvents, getCurrentUser, ADMIN_EMAIL } from "./firebase.js";
 
 /**
  * Enregistre la visite d'un écran. Volontairement "fire-and-forget" côté appelant (voir

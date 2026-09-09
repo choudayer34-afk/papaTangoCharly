@@ -23,11 +23,11 @@
 //    `e.getModifierState("AltGraph")` est vérifié partout où un Ctrl+Alt+<touche> est reconnu,
 //    pour ne jamais confondre une vraie assignation avec une simple frappe AltGr.
 
-import { openCaptureModal } from "../components/capture.js?v=3";
-import { openSearchModal } from "../components/search.js?v=3";
-import { triggerLastUndo, showToast } from "../components/toast.js?v=3";
-import { fetchBundle, resolveRef } from "../components/linkedItems.js?v=3";
-import * as preferencesApi from "../domain/preferences.js?v=3";
+import { openCaptureModal } from "../components/capture.js";
+import { openSearchModal } from "../components/search.js";
+import { triggerLastUndo, showToast } from "../components/toast.js";
+import { fetchBundle, resolveRef } from "../components/linkedItems.js";
+import * as preferencesApi from "../domain/preferences.js";
 
 /** Documentation affichée dans le Guide (js/views/guide.js) — une seule source de vérité pour
  *  ne jamais laisser la liste du Guide diverger de ce qui est réellement câblé ci-dessous. */
