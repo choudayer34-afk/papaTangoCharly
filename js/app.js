@@ -2,37 +2,37 @@
 // Attend l'état d'authentification Firebase avant d'afficher l'app (les données sont
 // scopées par utilisateur dans Firestore, voir js/services/storage.js).
 
-import { renderDashboard } from "./views/dashboard.js?v=3";
-import { renderInbox } from "./views/inbox.js?v=3";
-import { renderKanban } from "./views/kanban.js?v=3";
-import { renderProjects } from "./views/projects.js?v=3";
-import { renderPeople } from "./views/people.js?v=3";
-import { renderCalendar } from "./views/calendar.js?v=3";
-import { renderPriorisation } from "./views/priorisation.js?v=3";
-import { renderResources } from "./views/resources.js?v=3";
-import { renderPrompts } from "./views/prompts.js?v=3";
-import { renderMore } from "./views/more.js?v=3";
-import { renderGuide } from "./views/guide.js?v=3";
-import { renderWhatsNew } from "./views/whatsnew.js?v=3";
-import { renderMemoryTraining } from "./views/memory.js?v=3";
-import { renderLogin, renderRestricted } from "./views/login.js?v=3";
-import { renderPrepMask } from "./views/prepMask.js?v=3";
-import { openModal } from "./components/modal.js?v=3";
-import { mountCaptureFab } from "./components/capture.js?v=3";
-import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js?v=3";
-import { mountAdminButton } from "./components/adminPanel.js?v=3";
-import { mountInboxBadge, unmountInboxBadge } from "./components/inboxBadge.js?v=3";
-import { mountWhatsNewBadge, unmountWhatsNewBadge } from "./components/whatsNewBadge.js?v=3";
-import { mountGlobalSearch } from "./components/search.js?v=3";
-import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js?v=3";
-import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js?v=3";
-import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js?v=3";
-import { logView, logLogin } from "./services/usageTracking.js?v=3";
-import { autoArchiveStaleKept } from "./domain/inbox.js?v=3";
-import { fetchBundle, resolveRef } from "./components/linkedItems.js?v=3";
-import { parseOpenParam } from "./services/deeplink.js?v=3";
-import * as tasksApi from "./domain/tasks.js?v=3";
-import * as preferencesApi from "./domain/preferences.js?v=3";
+import { renderDashboard } from "./views/dashboard.js";
+import { renderInbox } from "./views/inbox.js";
+import { renderKanban } from "./views/kanban.js";
+import { renderProjects } from "./views/projects.js";
+import { renderPeople } from "./views/people.js";
+import { renderCalendar } from "./views/calendar.js";
+import { renderPriorisation } from "./views/priorisation.js";
+import { renderResources } from "./views/resources.js";
+import { renderPrompts } from "./views/prompts.js";
+import { renderMore } from "./views/more.js";
+import { renderGuide } from "./views/guide.js";
+import { renderWhatsNew } from "./views/whatsnew.js";
+import { renderMemoryTraining } from "./views/memory.js";
+import { renderLogin, renderRestricted } from "./views/login.js";
+import { renderPrepMask } from "./views/prepMask.js";
+import { openModal } from "./components/modal.js";
+import { mountCaptureFab } from "./components/capture.js";
+import { mountHelpButton, maybeShowFirstRunTour } from "./components/onboarding.js";
+import { mountAdminButton } from "./components/adminPanel.js";
+import { mountInboxBadge, unmountInboxBadge } from "./components/inboxBadge.js";
+import { mountWhatsNewBadge, unmountWhatsNewBadge } from "./components/whatsNewBadge.js";
+import { mountGlobalSearch } from "./components/search.js";
+import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
+import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
+import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
+import { logView, logLogin } from "./services/usageTracking.js";
+import { autoArchiveStaleKept } from "./domain/inbox.js";
+import { fetchBundle, resolveRef } from "./components/linkedItems.js";
+import { parseOpenParam } from "./services/deeplink.js";
+import * as tasksApi from "./domain/tasks.js";
+import * as preferencesApi from "./domain/preferences.js";
 
 // ROUTES reste la table de dispatch COMPLÈTE — toute route qui y figure fonctionne par hash,
 // que son icône apparaisse ou non dans la barre du bas. Distinct de NAV_ITEMS ci-dessous
