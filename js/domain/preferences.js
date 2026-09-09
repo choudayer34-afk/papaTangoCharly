@@ -63,7 +63,7 @@
 //    Synchronisé comme le reste des préférences : un raccourci assigné suit Charles-Henri
 //    d'un appareil à l'autre (au prochain chargement de l'app sur cet autre appareil).
 
-import * as storage from "../services/storage.js";
+import * as storage from "../services/storage.js?v=3";
 
 const COLLECTION = "preferences";
 const DOC_ID = "app";

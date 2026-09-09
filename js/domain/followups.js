@@ -13,8 +13,8 @@
 // difficulté à signaler, décision attendue, sujet à discuter, ou réalisation à mentionner —
 // reste facultatif pour un "to_tell" ordinaire vers un collaborateur ou l'équipe.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
 
 const COLLECTION = "followUps";
 

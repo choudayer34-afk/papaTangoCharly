@@ -3,8 +3,8 @@
 // Règle 8 : une ressource ne doit pas être dupliquée — une même Resource peut être liée à
 // plusieurs projets/tâches via projectIds/taskIds, jamais recréée pour chaque contexte.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
 
 const COLLECTION = "resources";
 

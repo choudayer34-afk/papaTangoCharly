@@ -5,8 +5,8 @@
 // ses propres entrées, jamais partagées ni consultées indépendamment de lui, même principe
 // que `steps` sur Projet/Réunion/Tâche.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
 
 const COLLECTION = "objectives";
 

@@ -4,7 +4,7 @@
 // une vraie question qu'on peut poser à l'app plutôt qu'à sa mémoire (§46, exemple :
 // 25/08 — Demande reçue / 27/08 — Réunion / 27/08 — Décision / 29/08 — Action créée...).
 
-import * as storage from "../services/storage.js";
+import * as storage from "../services/storage.js?v=3";
 
 const COLLECTION = "history";
 

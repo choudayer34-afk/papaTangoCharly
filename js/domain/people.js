@@ -1,7 +1,7 @@
 // Personnes — §31, §32. Collaborateurs suivis ou manager(s) avec qui on a des sujets.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
 
 const COLLECTION = "people";
 

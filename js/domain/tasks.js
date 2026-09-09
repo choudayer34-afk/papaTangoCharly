@@ -2,9 +2,9 @@
 // Statuts centralisés et configurables (§78.8) : le Kanban traduit ces statuts en
 // colonnes, le Dashboard les traduit autrement — une seule source de vérité.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
-import { buildSteps } from "./templates.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
+import { buildSteps } from "./templates.js?v=3";
 
 const COLLECTION = "tasks";
 

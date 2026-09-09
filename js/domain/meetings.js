@@ -5,9 +5,9 @@
 // notes, décisions, actions produites) viendra avec les canevas pilotés par données (§14-19,
 // §78.9) plutôt que d'être codé en dur ici.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
-import { buildSteps } from "./templates.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
+import { buildSteps } from "./templates.js?v=3";
 
 const COLLECTION = "meetings";
 

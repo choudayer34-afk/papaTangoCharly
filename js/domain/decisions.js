@@ -3,8 +3,8 @@
 // projet et/ou une réunion en option, visible via la fiche projet si rattachée, sinon via
 // "🧠 Récemment" au Dashboard tant que la recherche globale (§45/§52) n'existe pas encore.
 
-import * as storage from "../services/storage.js";
-import { generateId } from "../services/id.js";
+import * as storage from "../services/storage.js?v=3";
+import { generateId } from "../services/id.js?v=3";
 
 const COLLECTION = "decisions";
 

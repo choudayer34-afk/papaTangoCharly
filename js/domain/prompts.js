@@ -13,7 +13,7 @@
 // construite en symétrie exacte de "📎 Ressources". Toujours pas de catégorisation : seul le
 // rattachement à une Tâche a été demandé.
 
-import * as storage from "../services/storage.js";
+import * as storage from "../services/storage.js?v=3";
 
 const COLLECTION = "prompts";
 
