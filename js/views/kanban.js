@@ -21,7 +21,7 @@ import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
-import { attachProjectQuickCreate } from "./projects.js";
+import { attachProjectQuickCreate, openProjectDetail } from "./projects.js";
 import { openChangeTypeModal } from "../components/changeType.js";
 import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
@@ -165,6 +165,13 @@ export function renderKanban(container) {
   const viewToggleEl = filtersEl;
   const groupByGroupEl = container.querySelector("#kanban-groupby-group");
   const groupByEl = container.querySelector("#kanban-group-by");
+  // Sélection multiple de la vue Tableau (retour de Charles-Henri, 13/09/2026 : "qu'on puisse
+  // sélectionner plusieurs tâches et [...] modifier des éléments en masse") — vit ici plutôt que
+  // dans renderTableView() elle-même, qui est entièrement redessinée à chaque changement
+  // (tri, glisser-déposer de colonne, édition en ligne...) : sans ça, la sélection serait perdue
+  // à chaque redessin. Un objet (et non un Set brut) pour le passer par référence à
+  // renderTableView/renderBulkToolbar, qui le lisent et le modifient directement.
+  const bulkSelection = { ids: new Set() };
   let latestTasks = [];
   let latestProjects = [];
   let filterWindow = "all";
@@ -388,7 +395,7 @@ export function renderKanban(container) {
     updateViewToggle();
     const activeProjects = latestProjects.filter((p) => !projectsApi.isArchived(p));
     if (viewMode === "table") {
-      renderTableView(tableEl, applyFilters(latestTasks), activeProjects, renderBoard);
+      renderTableView(tableEl, applyFilters(latestTasks), activeProjects, renderBoard, bulkSelection);
     } else {
       render(latestTasks, activeProjects);
     }
@@ -453,7 +460,7 @@ const TABLE_COLUMN_LABELS = { type: "Type", status: "Statut", project: "Projet",
  * plutôt que de garder une copie locale, pour ne jamais désynchroniser l'affichage du réglage
  * réellement enregistré.
  */
-function renderTableView(container, tasks, projects, onChange) {
+function renderTableView(container, tasks, projects, onChange, selection) {
   const { groupBy, sortColumn, sortDir, columnOrder } = pilotageView.getViewState().table;
 
   // Statut/Projet redevient inutile comme colonne quand c'est déjà lui qui structure les
@@ -525,6 +532,8 @@ function renderTableView(container, tasks, projects, onChange) {
     return;
   }
 
+  container.appendChild(renderBulkToolbar(tasks, projects, selection, onChange));
+
   for (const group of groups) {
     const section = document.createElement("div");
     section.className = "pilotage-table-group";
@@ -539,10 +548,10 @@ function renderTableView(container, tasks, projects, onChange) {
     wrap.className = "pilotage-table-wrap";
     const table = document.createElement("table");
     table.className = "pilotage-table";
-    table.appendChild(renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange));
+    table.appendChild(renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange, group.items, selection));
     const tbody = document.createElement("tbody");
     for (const task of group.items) {
-      tbody.appendChild(renderTableRow(task, projects, visibleColumns, onChange, groupBy));
+      tbody.appendChild(renderTableRow(task, projects, visibleColumns, onChange, groupBy, selection));
     }
     tbody.appendChild(renderQuickAddRow(visibleColumns, group, groupBy));
     table.appendChild(tbody);
@@ -590,13 +599,67 @@ function renderTableView(container, tasks, projects, onChange) {
   }
 }
 
-function renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange) {
+/**
+ * Barre d'actions en masse (retour de Charles-Henri, 13/09/2026 : "qu'on puisse sélectionner
+ * plusieurs tâches et [...] modifier des éléments en masse sur un statut, une échéance, un
+ * projet, un critère de clôture, un blocage, une ressource ajoutée ou supprimée, un prompt, ou
+ * ajouter des notes en masse") — cachée dès que rien n'est sélectionné, jamais un espace vide
+ * réservé en permanence. `tasks` est la liste actuellement affichée (déjà filtrée) : sert à la
+ * fois à purger de la sélection toute tâche qui ne correspond plus aux filtres actifs (jamais de
+ * sélection fantôme) et à résoudre les tâches réellement sélectionnées pour la modale.
+ */
+function renderBulkToolbar(tasks, projects, selection, onChange) {
+  const visibleIds = new Set(tasks.map((t) => t.id));
+  for (const id of [...selection.ids]) {
+    if (!visibleIds.has(id)) selection.ids.delete(id);
+  }
+
+  const bar = document.createElement("div");
+  bar.className = "pilotage-bulk-toolbar";
+  bar.hidden = selection.ids.size === 0;
+  bar.innerHTML = `
+    <span class="pilotage-bulk-toolbar-count">${selection.ids.size} tâche${selection.ids.size > 1 ? "s" : ""} sélectionnée${selection.ids.size > 1 ? "s" : ""}</span>
+    <button type="button" id="bulk-edit-btn" class="btn btn-secondary btn-sm">✏️ Modifier en masse</button>
+    <button type="button" id="bulk-clear-btn" class="btn btn-ghost btn-sm">Tout désélectionner</button>
+  `;
+  bar.querySelector("#bulk-edit-btn")?.addEventListener("click", () => {
+    const selectedTasks = tasks.filter((t) => selection.ids.has(t.id));
+    if (!selectedTasks.length) return;
+    openBulkEditModal(selectedTasks, projects, () => {
+      selection.ids.clear();
+      onChange();
+    });
+  });
+  bar.querySelector("#bulk-clear-btn")?.addEventListener("click", () => {
+    selection.ids.clear();
+    onChange();
+  });
+  return bar;
+}
+
+function renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange, groupItems, selection) {
   const thead = document.createElement("thead");
   const tr = document.createElement("tr");
 
   const thTitle = document.createElement("th");
   thTitle.className = "pilotage-table-th-pinned";
-  thTitle.textContent = "Titre";
+  const groupIds = groupItems.map((t) => t.id);
+  const allSelected = groupIds.length > 0 && groupIds.every((id) => selection.ids.has(id));
+  const someSelected = !allSelected && groupIds.some((id) => selection.ids.has(id));
+  const selectAllCheckbox = document.createElement("input");
+  selectAllCheckbox.type = "checkbox";
+  selectAllCheckbox.className = "pilotage-table-checkbox";
+  selectAllCheckbox.checked = allSelected;
+  selectAllCheckbox.indeterminate = someSelected;
+  selectAllCheckbox.title = "Sélectionner tout ce groupe";
+  selectAllCheckbox.addEventListener("click", (e) => e.stopPropagation()); // ne pas déclencher le tri de la colonne
+  selectAllCheckbox.addEventListener("change", () => {
+    if (selectAllCheckbox.checked) groupIds.forEach((id) => selection.ids.add(id));
+    else groupIds.forEach((id) => selection.ids.delete(id));
+    onChange();
+  });
+  thTitle.appendChild(selectAllCheckbox);
+  thTitle.appendChild(document.createTextNode("Titre"));
   tr.appendChild(thTitle);
 
   for (const col of visibleColumns) {
@@ -634,12 +697,24 @@ function renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onCha
   return thead;
 }
 
-function renderTableRow(task, projects, visibleColumns, onChange, groupBy) {
+function renderTableRow(task, projects, visibleColumns, onChange, groupBy, selection) {
   const tr = document.createElement("tr");
   tr.className = "pilotage-table-row";
+  tr.classList.toggle("selected", selection.ids.has(task.id));
 
   const tdTitle = document.createElement("td");
   tdTitle.className = "pilotage-table-td-pinned";
+
+  const selectCheckbox = document.createElement("input");
+  selectCheckbox.type = "checkbox";
+  selectCheckbox.className = "pilotage-table-checkbox";
+  selectCheckbox.checked = selection.ids.has(task.id);
+  selectCheckbox.addEventListener("change", () => {
+    if (selectCheckbox.checked) selection.ids.add(task.id);
+    else selection.ids.delete(task.id);
+    onChange();
+  });
+  tdTitle.appendChild(selectCheckbox);
 
   // Poignée de glisser-déposer (retour de Charles-Henri, 02/09/2026 : "basculer par glisser
   // une tâche ailleurs") — un élément dédié plutôt que toute la ligne, pour ne jamais gêner la
@@ -821,6 +896,146 @@ function renderQuickAddRow(visibleColumns, group, groupBy) {
     tr.appendChild(document.createElement("td"));
   }
   return tr;
+}
+
+/**
+ * Édition en masse (retour de Charles-Henri, 13/09/2026 : "qu'on puisse modifier des éléments
+ * en masse sur un statut, une échéance, un projet, un critère de clôture, un blocage, une
+ * ressource ajoutée ou supprimée, un prompt, ou ajouter des notes en masse"). Chaque champ est
+ * désactivé par défaut, derrière sa propre case à cocher "Modifier ce champ" — jamais un champ
+ * appliqué "au cas où" : sans ça, laisser par exemple l'échéance vide écraserait silencieusement
+ * l'échéance déjà en place sur chaque tâche sélectionnée, ce qui irait à l'encontre de la rigueur
+ * que tout le reste de l'app protège (jamais de perte silencieuse). Ressource/Prompt réutilisent
+ * leurs fonctions `linkToTask` respectives (déjà many-to-many, voir js/domain/resources.js et
+ * js/domain/prompts.js) plutôt que la collection `links` générique — même mécanique que la fiche
+ * détail d'une tâche (§ "📎 Ressources"/"🤖 Prompts").
+ */
+async function openBulkEditModal(tasks, projects, onDone) {
+  const [resources, prompts] = await Promise.all([resourcesApi.listAll(), promptsApi.listAll()]);
+
+  function toggleRow(id, label, controlHtml) {
+    return `
+      <div class="field" style="display:flex;align-items:center;gap:8px;">
+        <input id="${id}-on" type="checkbox" style="width:auto;" />
+        <label for="${id}-on" style="margin:0;flex:1;">${label}</label>
+      </div>
+      <div class="field" id="${id}-control" style="display:none;">${controlHtml}</div>
+    `;
+  }
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="item-meta" style="margin-bottom:16px;">${tasks.length} tâche${tasks.length > 1 ? "s" : ""} sélectionnée${tasks.length > 1 ? "s" : ""} — seuls les champs cochés ci-dessous seront modifiés.</div>
+
+    ${toggleRow(
+      "bulk-status",
+      "Statut",
+      `<select id="bulk-status">${tasksApi.STATUSES.map((s) => `<option value="${s}">${tasksApi.STATUS_LABELS[s]}</option>`).join("")}</select>`
+    )}
+    ${toggleRow("bulk-due", "Échéance", `<input id="bulk-due" type="date" />`)}
+    ${toggleRow(
+      "bulk-project",
+      "Projet",
+      `<select id="bulk-project"><option value="">— Aucun —</option>${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>`
+    )}
+    ${toggleRow("bulk-criteria", "Critère de clôture", `<textarea id="bulk-criteria" placeholder="Qu'est-ce qui définit que c'est terminé ?"></textarea>`)}
+    ${toggleRow(
+      "bulk-blocked",
+      "Blocage",
+      `<select id="bulk-blocked"><option value="true">🔴 Bloquée</option><option value="false">Débloquée</option></select>`
+    )}
+    ${toggleRow(
+      "bulk-resource",
+      "Ressource",
+      `<div style="display:flex;gap:8px;">
+        <select id="bulk-resource-mode" style="flex:none;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
+        <select id="bulk-resource" style="flex:1;">${resources.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join("")}</select>
+      </div>`
+    )}
+    ${toggleRow(
+      "bulk-prompt",
+      "Prompt",
+      `<div style="display:flex;gap:8px;">
+        <select id="bulk-prompt-mode" style="flex:none;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
+        <select id="bulk-prompt" style="flex:1;">${prompts.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("")}</select>
+      </div>`
+    )}
+    ${toggleRow("bulk-notes", "Ajouter une note (à toutes)", `<textarea id="bulk-notes" placeholder="Cette note s'ajoute au journal de chaque tâche, sans rien remplacer"></textarea>`)}
+  `;
+
+  // Chaque case à cocher affiche/masque son propre contrôle — jamais les deux à la fois, pour
+  // que "coché" et "un contrôle est visible" restent toujours la même chose à l'œil.
+  for (const id of ["bulk-status", "bulk-due", "bulk-project", "bulk-criteria", "bulk-blocked", "bulk-resource", "bulk-prompt", "bulk-notes"]) {
+    const checkbox = body.querySelector(`#${id}-on`);
+    const control = body.querySelector(`#${id}-control`);
+    checkbox.addEventListener("change", () => {
+      control.style.display = checkbox.checked ? "" : "none";
+    });
+  }
+
+  if (!resources.length) {
+    body.querySelector("#bulk-resource-on").disabled = true;
+    body.querySelector("#bulk-resource-on").nextElementSibling.textContent += " (aucune ressource pour l'instant)";
+  }
+  if (!prompts.length) {
+    body.querySelector("#bulk-prompt-on").disabled = true;
+    body.querySelector("#bulk-prompt-on").nextElementSibling.textContent += " (aucun prompt pour l'instant)";
+  }
+
+  const { bodyEl, close } = openModal({
+    title: `✏️ Modifier ${tasks.length} tâche${tasks.length > 1 ? "s" : ""} en masse`,
+    body,
+    // Pas besoin de dismissible:false ici — le garde-fou déjà en place dans modal.js désactive
+    // automatiquement le clic en dehors dès qu'un champ modifiable est présent (ce qui est
+    // toujours le cas ici), tout en gardant Échap et le bouton "Annuler" disponibles, comme
+    // partout ailleurs dans l'app (voir le correctif du 13/09 sur 🔧 Administration).
+    actions: [
+      { label: "Annuler", variant: "ghost" },
+      {
+        label: "Appliquer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const on = (id) => bodyEl.querySelector(`#${id}-on`).checked;
+
+          const patch = {};
+          if (on("bulk-status")) patch.status = bodyEl.querySelector("#bulk-status").value;
+          if (on("bulk-due")) patch.dueDate = bodyEl.querySelector("#bulk-due").value || null;
+          if (on("bulk-project")) patch.projectId = bodyEl.querySelector("#bulk-project").value || null;
+          if (on("bulk-criteria")) patch.successCriteria = bodyEl.querySelector("#bulk-criteria").value;
+          if (on("bulk-blocked")) patch.isBlocked = bodyEl.querySelector("#bulk-blocked").value === "true";
+
+          const noteText = on("bulk-notes") ? bodyEl.querySelector("#bulk-notes").value.trim() : "";
+          const resourceChange = on("bulk-resource")
+            ? { id: bodyEl.querySelector("#bulk-resource").value, add: bodyEl.querySelector("#bulk-resource-mode").value === "add" }
+            : null;
+          const promptChange = on("bulk-prompt")
+            ? { id: bodyEl.querySelector("#bulk-prompt").value, add: bodyEl.querySelector("#bulk-prompt-mode").value === "add" }
+            : null;
+
+          if (!Object.keys(patch).length && !noteText && !resourceChange && !promptChange) {
+            showToast("Aucun champ coché — rien à appliquer");
+            return;
+          }
+
+          for (const task of tasks) {
+            if (Object.keys(patch).length) {
+              const prevStatus = task.status;
+              await tasksApi.updateTask(task.id, patch);
+              if (patch.status) celebrateIfJustDone(prevStatus, patch.status);
+            }
+            if (noteText) await tasksApi.addNote(task.id, noteText);
+            if (resourceChange?.id) await resourcesApi.linkToTask(resourceChange.id, task.id, resourceChange.add);
+            if (promptChange?.id) await promptsApi.linkToTask(promptChange.id, task.id, promptChange.add);
+          }
+
+          close();
+          showToast(`${tasks.length} tâche${tasks.length > 1 ? "s" : ""} modifiée${tasks.length > 1 ? "s" : ""}`);
+          onDone();
+        },
+      },
+    ],
+  });
 }
 
 /**
@@ -1089,7 +1304,7 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         <textarea id="detail-criteria" placeholder="Comment saurai-je que c'est réellement terminé ?">${escapeHtml(task.successCriteria || "")}</textarea>
       </div>
       <div class="field">
-        <label for="detail-project">Projet</label>
+        <label for="detail-project" id="detail-project-label">Projet</label>
         <select id="detail-project">
           <option value="">— Aucun —</option>
           ${projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
@@ -1189,6 +1404,44 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       const updated = await tasksApi.updateTask(task.id, patch);
       openTaskDetail(updated, projects, { onClose });
     },
+  });
+
+  // "Remonter au projet depuis la Tâche" (retour de Charles-Henri, 13/09/2026 : "quand je suis
+  // sur une tâche je dois pouvoir remonter sur le projet en cliquant par exemple sur le titre
+  // 'Projet' avant la liste déroulante") — le libellé du champ Projet devient un lien quand un
+  // projet EST sélectionné (rien à ouvrir sinon). Se lit sur le `<select>` au moment du clic,
+  // pas sur `taskProject` figé à l'ouverture de la fiche, pour rester cohérent avec un
+  // changement de projet fait dans cette même fiche sans avoir encore cliqué "Enregistrer".
+  // Mêmes champs persistés que "💾 Enregistrer" avant de quitter (même raisonnement que le
+  // rattachement quick-create juste au-dessus) : remonter au projet n'est pas un changement de
+  // nature de l'élément comme "Changer de type"/"Dupliquer"/"Supprimer", qui eux referment sans
+  // sauvegarder — perdre une saisie en cours juste pour consulter le projet parent surprendrait.
+  const projectLabel = body.querySelector("#detail-project-label");
+  const projectSelect = body.querySelector("#detail-project");
+  function refreshProjectLabelLink() {
+    const hasProject = !!projectSelect.value;
+    projectLabel.classList.toggle("field-label-link", hasProject);
+    projectLabel.title = hasProject ? "Ouvrir la fiche du projet" : "";
+  }
+  refreshProjectLabelLink();
+  projectSelect.addEventListener("change", refreshProjectLabelLink);
+  projectLabel.addEventListener("click", async () => {
+    const currentProjectId = projectSelect.value || null;
+    const targetProject = projects.find((p) => p.id === currentProjectId);
+    if (!targetProject) return;
+    const title = bodyEl.querySelector("#detail-title").value.trim() || task.title;
+    await tasksApi.updateTask(task.id, {
+      title,
+      description: bodyEl.querySelector("#detail-description").value,
+      successCriteria: bodyEl.querySelector("#detail-criteria").value,
+      dueDate: bodyEl.querySelector("#detail-due").value || null,
+      status: bodyEl.querySelector("#detail-status").value,
+      isBlocked: bodyEl.querySelector("#detail-blocked").checked,
+      projectId: currentProjectId,
+    });
+    close();
+    const projectTasks = (await tasksApi.listAll()).filter((t) => t.projectId === targetProject.id);
+    openProjectDetail(targetProject, projectTasks);
   });
 
   // Bascule d'onglet : ni framework ni removal du DOM — chaque panneau existe en permanence,

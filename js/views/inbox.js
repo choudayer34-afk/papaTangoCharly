@@ -4,15 +4,17 @@
 
 import * as inboxApi from "../domain/inbox.js";
 import * as peopleApi from "../domain/people.js";
+import * as projectsApi from "../domain/projects.js";
+import * as tasksApi from "../domain/tasks.js";
 import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
-import { openCreateProjectModal } from "./projects.js";
-import { openCreateResourceModal } from "./resources.js";
-import { openCreateFollowUpModal } from "./people.js";
-import { openCreateTaskModal } from "./kanban.js";
-import { openCreateMeetingModal, openCreateDecisionModal } from "./dashboard.js";
+import { openCreateProjectModal, openProjectDetail, attachProjectQuickCreate } from "./projects.js";
+import { openCreateResourceModal, openResourceDetail } from "./resources.js";
+import { openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
+import { openCreateTaskModal, openTaskDetail } from "./kanban.js";
+import { openCreateMeetingModal, openCreateDecisionModal, openRecentDetail } from "./dashboard.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { copyEntityLink } from "../components/copyLink.js";
@@ -270,6 +272,12 @@ async function handleChoice(item, choice) {
   await inboxApi.qualify(item.id, outcome);
   closeModal();
   showToast(outcome === "archived" ? "Archivé" : "Conservé comme information");
+  // "Archivé" = classé sans suite, rien à montrer. "Kept"/idée : même principe que les autres
+  // types ci-dessus — ouvrir la fiche complète plutôt que de s'arrêter au toast. Reconstruit
+  // localement l'état posé par `qualify()` (voir js/domain/inbox.js) plutôt que de re-fetch.
+  if (outcome !== "archived") {
+    openKeptItemDetail({ ...item, status: "kept", keptAsType: outcome });
+  }
 }
 
 /**
@@ -285,6 +293,17 @@ function openTaskFromInboxModal(item) {
     description: item.rawContent,
     createdToast: "Action créée",
     createFn: (payload) => inboxApi.qualify(item.id, "task", payload).then((r) => r.task),
+    // Retour de Charles-Henri, 13/09/2026 : "quand je traite une tâche de l'inbox, je dois à la
+    // fin rentrer dans l'élément en mode complet [...] ne doit pas se fermer de lui-même" —
+    // jusqu'ici, créer depuis l'Inbox refermait tout sur un simple toast, sans jamais montrer la
+    // fiche créée. `openCreateTaskModal` ferme déjà SA propre modale avant d'appeler `onCreated`
+    // (voir js/views/kanban.js), donc ouvrir la fiche complète ici ne referme rien de force —
+    // elle reste ouverte tant que Charles-Henri ne la ferme pas lui-même (comportement normal
+    // de toute fiche, voir js/components/modal.js).
+    onCreated: async (task) => {
+      const projects = await projectsApi.listAll();
+      openTaskDetail(task, projects);
+    },
   });
 }
 
@@ -304,9 +323,12 @@ async function openFollowUpFromInboxModal(item) {
   }
   openCreateFollowUpModal({
     defaultTitle: item.rawContent.slice(0, 120),
+    // Même principe que "Action" ci-dessus : ouvrir la fiche complète du Suivi créé plutôt que
+    // de refermer sur un simple toast.
     onCreated: async (followUp) => {
       await inboxApi.qualify(item.id, "followup", { id: followUp.id });
       showToast("Suivi créé");
+      openEditFollowUpModal(followUp);
     },
   });
 }
@@ -318,6 +340,7 @@ function openProjectFromInboxModal(item) {
     onCreated: async (project) => {
       await inboxApi.qualify(item.id, "project", { id: project.id });
       showToast("Projet créé");
+      openProjectDetail(project, []); // tout juste créé — aucune tâche liée pour l'instant
     },
   });
 }
@@ -330,6 +353,8 @@ function openResourceFromInboxModal(item) {
     onCreated: async (resource) => {
       await inboxApi.qualify(item.id, "resource", { id: resource.id });
       showToast("Ressource ajoutée");
+      const [projects, tasks] = await Promise.all([projectsApi.listAll(), tasksApi.listAll()]);
+      openResourceDetail(resource, projects, tasks);
     },
   });
 }
@@ -342,7 +367,11 @@ function openResourceFromInboxModal(item) {
 function openMeetingFromInboxModal(item) {
   openCreateMeetingModal({
     title: item.rawContent.slice(0, 120),
-    onCreated: (meeting) => inboxApi.qualify(item.id, "meeting", { id: meeting.id }),
+    onCreated: async (meeting) => {
+      await inboxApi.qualify(item.id, "meeting", { id: meeting.id });
+      const projects = await projectsApi.listAll();
+      openRecentDetail({ kind: "meeting", emoji: "🗓️", data: meeting }, projects);
+    },
   });
 }
 
@@ -354,7 +383,11 @@ function openMeetingFromInboxModal(item) {
 function openDecisionFromInboxModal(item) {
   openCreateDecisionModal({
     title: item.rawContent.slice(0, 120),
-    onCreated: (decision) => inboxApi.qualify(item.id, "decision", { id: decision.id }),
+    onCreated: async (decision) => {
+      await inboxApi.qualify(item.id, "decision", { id: decision.id });
+      const projects = await projectsApi.listAll();
+      openRecentDetail({ kind: "decision", emoji: "🗳️", data: decision }, projects);
+    },
   });
 }
 
@@ -377,22 +410,39 @@ function openDecisionFromInboxModal(item) {
  */
 export async function openAllKeptItemsModal() {
   const items = (await inboxApi.listKeptIncludingArchived()).sort((a, b) => b.createdAt - a.createdAt);
+  // Filtre par tag (retour de Charles-Henri, 13/09/2026 : "voir comment retrouver facilement
+  // les éléments d'une catégorie") — en plus du filtre texte déjà existant, jamais à la place :
+  // les deux se combinent (ET). Plusieurs tags peuvent être activés à la fois (un élément
+  // correspond dès qu'il porte AU MOINS un des tags cochés, pas tous).
+  const allTags = await inboxApi.listAllKeptTags();
 
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field" style="margin-bottom:12px;">
       <input id="kept-filter" type="text" placeholder="🔎 Filtrer par mot..." />
     </div>
+    ${
+      allTags.length
+        ? `<div class="chip-row" id="kept-tag-filters" style="margin-bottom:12px;">
+             ${allTags.map((t) => `<button type="button" class="chip" data-tag="${escapeAttr(t)}">🏷️ ${escapeHtml(t)}</button>`).join("")}
+           </div>`
+        : ""
+    }
     <div class="card" id="kept-all-list"></div>
   `;
   const listEl = body.querySelector("#kept-all-list");
+  const activeTags = new Set();
 
   function renderList(filterText) {
     const needle = filterText.trim().toLowerCase();
-    const filtered = needle ? items.filter((item) => item.rawContent.toLowerCase().includes(needle)) : items;
+    const filtered = items.filter((item) => {
+      if (needle && !item.rawContent.toLowerCase().includes(needle)) return false;
+      if (activeTags.size && !(item.tags || []).some((t) => activeTags.has(t))) return false;
+      return true;
+    });
     listEl.innerHTML = "";
     if (!filtered.length) {
-      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">${needle ? "Aucun résultat." : "Rien à afficher pour l'instant."}</div>`;
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;">${needle || activeTags.size ? "Aucun résultat." : "Rien à afficher pour l'instant."}</div>`;
       return;
     }
     for (const item of filtered) {
@@ -400,10 +450,11 @@ export async function openAllKeptItemsModal() {
       row.className = "item-row";
       row.style.cursor = "pointer";
       const archivedTag = item.status === "archived" ? " · 🗄️ archivée" : "";
+      const tagsLine = (item.tags || []).length ? ` · ${item.tags.map((t) => `🏷️ ${escapeHtml(t)}`).join(" ")}` : "";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(item.rawContent)}</div>
-          <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}${archivedTag}</div>
+          <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}${archivedTag}${tagsLine}</div>
         </div>
       `;
       row.addEventListener("click", () => {
@@ -415,12 +466,33 @@ export async function openAllKeptItemsModal() {
   }
   renderList("");
   body.querySelector("#kept-filter").addEventListener("input", (e) => renderList(e.target.value));
+  body.querySelectorAll("#kept-tag-filters .chip").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tag = btn.dataset.tag;
+      if (activeTags.has(tag)) {
+        activeTags.delete(tag);
+        btn.classList.remove("active");
+      } else {
+        activeTags.add(tag);
+        btn.classList.add("active");
+      }
+      renderList(body.querySelector("#kept-filter").value);
+    });
+  });
 
   openModal({ title: `🧠 Informations & idées (${items.length})`, body, actions: [{ label: "Fermer", variant: "ghost" }] });
 }
 
-export function openKeptItemDetail(item, { onClose } = {}) {
+export async function openKeptItemDetail(item, { onClose } = {}) {
   preferencesApi.recordRecentlyViewed("Kept", item.id).catch(() => {});
+  // "Projet" + "Tags" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être
+  // rattachable à un projet" + "pouvoir catégoriser des idées/informations") — chargés ici
+  // plutôt qu'à la qualification (openQualifyChoice) : une capture qualifiée en Information/Idée
+  // reste d'abord un texte brut conservé (Règle 3), le rattachement à un projet et les tags
+  // s'ajoutent ensuite, depuis la fiche détail, jamais obligatoires.
+  const [projects, allTags] = await Promise.all([projectsApi.listAll(), inboxApi.listAllKeptTags()]);
+  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
@@ -428,6 +500,20 @@ export function openKeptItemDetail(item, { onClose } = {}) {
       <p style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(item.rawContent)}</p>
     </div>
     <div class="item-meta" style="margin-bottom:16px;">Capturé le ${formatDate(item.createdAt)}</div>
+    <div class="field">
+      <label for="kept-project">Projet (optionnel)</label>
+      <select id="kept-project">
+        <option value="">— Aucun —</option>
+        ${sortedProjects.map((p) => `<option value="${p.id}" ${p.id === item.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="section-title" style="margin-top:0;">🏷️ Tags</div>
+    <div id="kept-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <input id="kept-tag-input" type="text" placeholder="Ajouter un tag..." list="kept-tag-options" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+      <datalist id="kept-tag-options">${allTags.map((t) => `<option value="${escapeAttr(t)}"></option>`).join("")}</datalist>
+      <button id="kept-tag-add-btn" type="button" class="btn btn-secondary btn-sm">+ Tag</button>
+    </div>
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
@@ -437,6 +523,49 @@ export function openKeptItemDetail(item, { onClose } = {}) {
       <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
+
+  const projectSelectEl = body.querySelector("#kept-project");
+  attachProjectQuickCreate(projectSelectEl);
+  projectSelectEl.addEventListener("change", async () => {
+    if (projectSelectEl.value === "__create__") return; // géré par attachProjectQuickCreate lui-même
+    await inboxApi.setKeptProject(item.id, projectSelectEl.value || null);
+    item.projectId = projectSelectEl.value || null;
+  });
+
+  const tagsEl = body.querySelector("#kept-tags");
+  function renderTags() {
+    tagsEl.innerHTML = "";
+    if (!(item.tags || []).length) {
+      tagsEl.innerHTML = `<span class="item-meta">Aucun tag pour l'instant.</span>`;
+      return;
+    }
+    for (const tag of item.tags) {
+      const chip = document.createElement("span");
+      chip.className = "tag-chip";
+      chip.innerHTML = `${escapeHtml(tag)} <button type="button" title="Retirer ce tag">✕</button>`;
+      chip.querySelector("button").addEventListener("click", async () => {
+        item.tags = await inboxApi.removeKeptTag(item.id, tag);
+        renderTags();
+      });
+      tagsEl.appendChild(chip);
+    }
+  }
+  renderTags();
+  const addTag = async () => {
+    const input = body.querySelector("#kept-tag-input");
+    const value = input.value.trim();
+    if (!value) return;
+    item.tags = await inboxApi.addKeptTag(item.id, value);
+    input.value = "";
+    renderTags();
+  };
+  body.querySelector("#kept-tag-add-btn").addEventListener("click", addTag);
+  body.querySelector("#kept-tag-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addTag();
+    }
+  });
 
   const ref = { type: "Kept", id: item.id };
   const shortLabel = item.rawContent.slice(0, 60);

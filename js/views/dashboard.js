@@ -31,6 +31,7 @@ import { getDraft, clearDraft } from "../services/draftStore.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderDecisionGrid } from "../components/decisionGrid.js";
+import { getTheme, getEffectiveTheme, setTheme } from "../services/themeStore.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -63,9 +64,22 @@ const DEFAULT_HIDDEN_V19 = ["kept", "projects", "recentlyViewed", "recent"];
 export function renderDashboard(container) {
   container.innerHTML = `
     <div class="topbar">
-      <div>
-        <h1>Mon pilotage</h1>
-        <div class="subtitle">${formatToday()}</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <!-- Interrupteur clair/sombre (retour de Charles-Henri, 13/09/2026 : "un petit
+             interrupteur sur l'écran d'accueil en haut à gauche") — voir
+             js/services/themeStore.js et refreshThemeToggleUI() plus bas. -->
+        <div class="theme-toggle" title="Basculer clair / sombre">
+          <span class="theme-toggle-icon" id="theme-toggle-icon-light" aria-hidden="true">☀️</span>
+          <label class="theme-toggle-switch">
+            <input id="theme-toggle-input" type="checkbox" />
+            <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+          </label>
+          <span class="theme-toggle-icon" id="theme-toggle-icon-dark" aria-hidden="true">🌙</span>
+        </div>
+        <div>
+          <h1>Mon pilotage</h1>
+          <div class="subtitle">${formatToday()}</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button id="recipes-btn" class="btn btn-secondary btn-sm">🧩 Recettes</button>
@@ -97,6 +111,33 @@ export function renderDashboard(container) {
   container.querySelector("#weekly-review-btn").addEventListener("click", () => openWeeklyReview());
   container.querySelector("#my-objectives-btn").addEventListener("click", () => openMyObjectivesModal());
   container.querySelector("#dashboard-settings-btn").addEventListener("click", () => openDashboardSettingsModal());
+
+  // Interrupteur clair/sombre — reflète le thème RÉELLEMENT appliqué à l'écran (choix explicite
+  // s'il y en a un, sinon le réglage de l'appareil), jamais seulement "un choix a-t-il déjà été
+  // posé" (voir js/services/themeStore.js#getEffectiveTheme). Écoute aussi les changements de
+  // réglage de l'appareil en direct : tant qu'aucun choix explicite n'a été posé ici, l'app
+  // suit déjà l'appareil via CSS (styles/tokens.css) — l'interrupteur doit rester synchronisé
+  // avec cet état plutôt que de figer sa position au moment du montage.
+  const themeToggleInput = container.querySelector("#theme-toggle-input");
+  const themeToggleLightIcon = container.querySelector("#theme-toggle-icon-light");
+  const themeToggleDarkIcon = container.querySelector("#theme-toggle-icon-dark");
+  function refreshThemeToggleUI() {
+    const dark = getEffectiveTheme() === "dark";
+    themeToggleInput.checked = dark;
+    themeToggleLightIcon.classList.toggle("active", !dark);
+    themeToggleDarkIcon.classList.toggle("active", dark);
+    themeToggleInput.title = dark ? "Passer en mode clair" : "Passer en mode sombre";
+  }
+  refreshThemeToggleUI();
+  themeToggleInput.addEventListener("change", () => {
+    setTheme(themeToggleInput.checked ? "dark" : "light");
+    refreshThemeToggleUI();
+  });
+  const themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const onSystemThemeChange = () => {
+    if (getTheme() === "system") refreshThemeToggleUI();
+  };
+  themeMediaQuery?.addEventListener("change", onSystemThemeChange);
   showHintOnce(
     container.querySelector(".view"),
     "dashboard-hats-v1",
@@ -1319,6 +1360,7 @@ export function renderDashboard(container) {
   return function cleanup() {
     document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
     window.removeEventListener("focus", refreshCaptureDraftBanner);
+    themeMediaQuery?.removeEventListener("change", onSystemThemeChange);
     unsubTasks();
     unsubInbox();
     unsubKept();

@@ -16,6 +16,8 @@ import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderManagerSection } from "./management.js";
 import { renderWorkloadSection } from "./workload.js";
+import { renderFollowUpsOverview } from "./followupsOverview.js";
+import { attachProjectQuickCreate } from "./projects.js";
 import * as workloadApi from "../domain/workload.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { renderShortcutAssignButton } from "../services/shortcuts.js";
@@ -63,6 +65,7 @@ export function renderPeople(container) {
         <button type="button" class="chip" data-mode="all">👥 Tous</button>
         <button type="button" class="chip" data-mode="manager">👔 Mon manager</button>
         <button type="button" class="chip" data-mode="load">⚖️ Charge</button>
+        <button type="button" class="chip" data-mode="followups">👀 Suivis</button>
       </div>
       <div id="people-list"></div>
     </div>
@@ -76,6 +79,7 @@ export function renderPeople(container) {
 
   let people = [];
   let followUps = [];
+  let projects = [];
   let mode = "all";
 
   function updateModeToggle() {
@@ -109,6 +113,18 @@ export function renderPeople(container) {
         ? `${collaborateurs.length} collaborateur${collaborateurs.length > 1 ? "s" : ""}`
         : "Pas encore de collaborateur renseigné";
       renderWorkloadSection(listEl, people, followUps);
+      return;
+    }
+
+    // "👀 Suivis" (retour de Charles-Henri, 13/09/2026 : "disposer d'une vue pour voir les
+    // suivis ou choses à dire", précisé ensuite : une vue TRANSVERSE tous projets/personnes
+    // confondus) — même principe que "⚖️ Charge" juste au-dessus, un 4e mode du même chip-row.
+    if (mode === "followups") {
+      const active = followUps.filter((f) => f.status !== "done");
+      subtitleEl.textContent = active.length
+        ? `${active.length} suivi(s) en cours`
+        : "Rien en cours — tout est réglé";
+      renderFollowUpsOverview(listEl, people, followUps, projects);
       return;
     }
 
@@ -193,10 +209,17 @@ export function renderPeople(container) {
     followUps = items;
     render();
   });
+  // Uniquement pour résoudre le nom de projet affiché par "👀 Suivis" (voir
+  // js/views/followupsOverview.js) — jamais utilisé par les 3 autres modes.
+  const unsubProjects = projectsApi.subscribe((items) => {
+    projects = items;
+    render();
+  });
 
   return function cleanup() {
     unsubPeople();
     unsubFollowUps();
+    unsubProjects();
   };
 }
 
@@ -468,7 +491,7 @@ export async function openPersonDetail(person, allFollowUps) {
   renderShortcutAssignButton(body.querySelector("#person-shortcut"), { type: "Person", id: person.id, label: person.name });
 
   const objectivesEl = body.querySelector("#person-objectives");
-  renderObjectivesList(objectivesEl, objectives, person, reopen);
+  renderObjectivesList(objectivesEl, objectives, person, reopen, allProjects);
   body.querySelector("#add-objective-btn").addEventListener("click", () => {
     closeModal();
     openCreateObjectiveModal(person, { onDone: reopen });
@@ -920,20 +943,21 @@ function renderGroupedFollowUpList(container, groups, { onOpen, coveredIds } = {
 }
 
 /** Objectifs de campagne (§ préparation EADP) : liste + accès à leurs points de suivi datés. */
-function renderObjectivesList(container, objectives, person, reopen) {
+function renderObjectivesList(container, objectives, person, reopen, projects = []) {
   if (!objectives.length) {
     container.innerHTML = `<div class="empty-state" style="padding:16px;">Pas encore d'objectif pour ${escapeHtml(person.name)}.</div>`;
     return;
   }
   container.innerHTML = "";
   for (const o of objectives) {
+    const project = projects.find((p) => p.id === o.projectId);
     const row = document.createElement("div");
     row.className = "item-row";
     row.style.cursor = "pointer";
     row.innerHTML = `
       <div class="item-main">
         <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
-        <div class="item-meta">${(o.entries || []).length} point(s) de suivi</div>
+        <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
       </div>
     `;
     row.addEventListener("click", () => {
@@ -944,14 +968,27 @@ function renderObjectivesList(container, objectives, person, reopen) {
   }
 }
 
-function openCreateObjectiveModal(person, { onDone } = {}) {
+async function openCreateObjectiveModal(person, { onDone } = {}) {
+  // "Projet" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un
+  // projet") — Objectif était, avec les Informations/Idées de l'Inbox, le seul type sans aucun
+  // moyen de se rattacher à un projet. Optionnel, même sélecteur + "+ Nouveau projet…" que
+  // partout ailleurs (js/views/projects.js#attachProjectQuickCreate).
+  const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
       <label for="obj-title">Objectif de ${escapeHtml(person.name)}</label>
       <input id="obj-title" type="text" placeholder="Ex. Monter en autonomie sur le pilotage de projet" />
     </div>
+    <div class="field">
+      <label for="obj-project">Projet (optionnel)</label>
+      <select id="obj-project">
+        <option value="">— Aucun —</option>
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>
   `;
+  attachProjectQuickCreate(body.querySelector("#obj-project"));
   const { bodyEl, close } = openModal({
     title: "Nouvel objectif",
     body,
@@ -964,7 +1001,8 @@ function openCreateObjectiveModal(person, { onDone } = {}) {
         onClick: async () => {
           const title = bodyEl.querySelector("#obj-title").value.trim();
           if (!title) return;
-          await objectivesApi.createObjective({ personId: person.id, title });
+          const projectId = bodyEl.querySelector("#obj-project").value || null;
+          await objectivesApi.createObjective({ personId: person.id, title, projectId });
           close();
           showToast("Objectif ajouté");
           onDone?.();
@@ -974,13 +1012,26 @@ function openCreateObjectiveModal(person, { onDone } = {}) {
   });
 }
 
-export function openObjectiveDetail(objective, person, { onDone } = {}) {
+export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   const entries = [...(objective.entries || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  // "Projet" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un
+  // projet") — chargé ici plutôt que reçu en paramètre : cette fonction est aussi appelée
+  // directement depuis js/components/search.js et js/components/linkedItems.js sans que ces
+  // appelants n'aient de liste de projets sous la main (même principe que
+  // js/views/people.js#openEditFollowUpModal, déjà async et auto-suffisant pour la même raison).
+  const projects = await projectsApi.listAll();
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field" style="display:flex;align-items:center;gap:8px;">
       <input id="obj-done" type="checkbox" style="width:auto;" ${objective.status === "done" ? "checked" : ""} />
       <label for="obj-done" style="margin:0;">✅ Objectif atteint</label>
+    </div>
+    <div class="field">
+      <label for="obj-detail-project">Projet</label>
+      <select id="obj-detail-project">
+        <option value="">— Aucun —</option>
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === objective.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
     </div>
     <div class="section-title" style="margin-top:0;">🕒 Points de suivi (${entries.length})</div>
     <div class="card" id="obj-entries" style="margin-bottom:16px;"></div>
@@ -1025,6 +1076,14 @@ export function openObjectiveDetail(objective, person, { onDone } = {}) {
     renderEntries([...updated.entries].sort((a, b) => new Date(b.date) - new Date(a.date)));
     body.querySelector("#obj-entry-note").value = "";
     showToast("Point de suivi ajouté");
+  });
+
+  const objProjectSelectEl = body.querySelector("#obj-detail-project");
+  attachProjectQuickCreate(objProjectSelectEl);
+  objProjectSelectEl.addEventListener("change", async () => {
+    if (objProjectSelectEl.value === "__create__") return; // géré par attachProjectQuickCreate lui-même
+    await objectivesApi.updateObjective(objective.id, { projectId: objProjectSelectEl.value || null });
+    objective.projectId = objProjectSelectEl.value || null;
   });
 
   const objLinkRef = { type: "Objective", id: objective.id };
