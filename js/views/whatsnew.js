@@ -29,6 +29,42 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "13 septembre 2026 (suite 5)",
+    items: [
+      {
+        type: "add",
+        title: "🏷️ Les tags remontent sur l'Accueil, quel que soit le type de fiche",
+        text: "Une ligne, projet, information/idée, suivi ou réunion affichée sur l'Accueil (⚠️ Ça a besoin de toi, 🧠 Informations & idées, 📦 Mes projets, 🧠 Récemment, 🔄 Reprendre où j'en étais, 🎯 Focus du jour) montre désormais ses tags directement sous son titre, sans avoir à l'ouvrir. Rien n'est affiché quand une fiche ne porte aucun tag.",
+        gain: "Repérer d'un coup d'œil, depuis l'Accueil, tout ce qui touche à un même sujet (ex. #CSE) sans avoir à ouvrir chaque fiche une par une.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026 (suite 4)",
+    items: [
+      {
+        type: "fix",
+        title: "🏷️ L'autocomplétion des tags propose maintenant les tags existants partout",
+        text: "Sur une fiche (Tâche, Projet, Personne...), taper un tag ne proposait jamais les tags déjà utilisés ailleurs — la liste de suggestions comparait des valeurs préfixées \"#\" à une saisie qui n'a jamais le \"#\", donc aucune correspondance ne pouvait matcher. Corrigé sur les 9 types de fiches d'un coup (un seul composant partagé).",
+        gain: "Réutiliser un tag déjà posé ailleurs sans avoir à s'en souvenir mot pour mot ni risquer une variante (ex. \"urgent\" vs \"Urgent\").",
+      },
+      {
+        type: "add",
+        title: "🏷️ Administration des tags : désactiver ou supprimer",
+        text: "Depuis 🔧 Administration → \"🏷️ Gérer les tags\" : la liste de tous les tags utilisés, avec pour chacun le nombre de fiches concernées. \"Désactivé\" retire un tag de l'autocomplétion (utile pour une faute de frappe qu'on ne veut plus voir reproposée) sans toucher aux fiches qui le portent déjà, ni à la recherche. \"Supprimer\" le retire, lui, réellement de toutes les fiches qui le portent — irréversible, une confirmation est demandée.",
+        howTo: "🔧 (bouton flottant, réservé à l'administration) → 🏷️ Gérer les tags → case \"Désactivé\" pour le retirer des suggestions, ou 🗑️ Supprimer pour l'effacer partout.",
+        gain: "Garder la liste de tags propre à l'usage, sans devoir aller corriger fiche par fiche.",
+      },
+      {
+        type: "add",
+        title: "🏷️ Tag ajouté/retiré en une fois sur plusieurs tâches (vue Tableau)",
+        text: "Dans la vue Tableau du Pilotage, l'édition en masse (plusieurs tâches cochées → \"Modifier la sélection\") propose désormais un champ Tag, comme pour les Ressources/Prompts : + Ajouter pose ce tag sur toutes les tâches cochées, − Retirer l'enlève. Dans les deux cas, les autres tags déjà présents sur chaque tâche restent intacts — jamais un remplacement.",
+        howTo: "Vue 📊 Tableau → cocher les tâches → \"Modifier la sélection\" → cocher \"Tag\" → + Ajouter ou − Retirer → nom du tag (autocomplétion incluse) → Appliquer.",
+        gain: "Étiqueter tout un lot de tâches d'un coup (ex. #CSE sur 10 tâches liées à une même réunion) sans les ouvrir une par une.",
+      },
+    ],
+  },
+  {
     date: "13 septembre 2026 (suite 3)",
     items: [
       {

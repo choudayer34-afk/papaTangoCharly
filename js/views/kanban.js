@@ -35,6 +35,7 @@ import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import { openDuplicateTaskModal } from "../components/duplicateTask.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
+import * as tagsApi from "../domain/tags.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -912,7 +913,20 @@ function renderQuickAddRow(visibleColumns, group, groupBy) {
  * détail d'une tâche (§ "📎 Ressources"/"🤖 Prompts").
  */
 async function openBulkEditModal(tasks, projects, onDone) {
-  const [resources, prompts] = await Promise.all([resourcesApi.listAll(), promptsApi.listAll()]);
+  const [resources, prompts, allTags, prefs] = await Promise.all([
+    resourcesApi.listAll(),
+    promptsApi.listAll(),
+    tagsApi.listAll(),
+    preferencesApi.getPreferences(),
+  ]);
+  // Datalist d'autocomplétion (retour de Charles-Henri, 13/09/2026 : "il faut que ce soit le cas
+  // partout") — mêmes tags visibles que sur une fiche individuelle (js/components/tagsEditor.js),
+  // les tags désactivés en administration exclus (voir js/components/adminPanel.js).
+  const bulkTagDatalistId = "bulk-tag-options";
+  const bulkTagOptionsHtml = tagsApi
+    .visibleTagNames(allTags, prefs.disabledTags)
+    .map((t) => `<option value="${escapeHtml(t)}"></option>`)
+    .join("");
 
   function toggleRow(id, label, controlHtml) {
     return `
@@ -961,12 +975,21 @@ async function openBulkEditModal(tasks, projects, onDone) {
         <select id="bulk-prompt" style="flex:1;">${prompts.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("")}</select>
       </div>`
     )}
+    ${toggleRow(
+      "bulk-tags",
+      "Tag",
+      `<div style="display:flex;gap:8px;">
+        <select id="bulk-tags-mode" style="flex:none;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
+        <input id="bulk-tags-value" type="text" placeholder="Nom du tag (sans #)" list="${bulkTagDatalistId}" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <datalist id="${bulkTagDatalistId}">${bulkTagOptionsHtml}</datalist>
+      </div>`
+    )}
     ${toggleRow("bulk-notes", "Ajouter une note (à toutes)", `<textarea id="bulk-notes" placeholder="Cette note s'ajoute au journal de chaque tâche, sans rien remplacer"></textarea>`)}
   `;
 
   // Chaque case à cocher affiche/masque son propre contrôle — jamais les deux à la fois, pour
   // que "coché" et "un contrôle est visible" restent toujours la même chose à l'œil.
-  for (const id of ["bulk-status", "bulk-due", "bulk-project", "bulk-criteria", "bulk-blocked", "bulk-resource", "bulk-prompt", "bulk-notes"]) {
+  for (const id of ["bulk-status", "bulk-due", "bulk-project", "bulk-criteria", "bulk-blocked", "bulk-resource", "bulk-prompt", "bulk-tags", "bulk-notes"]) {
     const checkbox = body.querySelector(`#${id}-on`);
     const control = body.querySelector(`#${id}-control`);
     checkbox.addEventListener("change", () => {
@@ -1013,8 +1036,15 @@ async function openBulkEditModal(tasks, projects, onDone) {
           const promptChange = on("bulk-prompt")
             ? { id: bodyEl.querySelector("#bulk-prompt").value, add: bodyEl.querySelector("#bulk-prompt-mode").value === "add" }
             : null;
+          // Ajouter/Retirer, jamais un remplacement (retour de Charles-Henri : "il faudrait voir
+          // si ça ajoute à l'existant ou remplace") — même mécanique qu'une Ressource/un Prompt
+          // juste au-dessus : les tags déjà posés sur une tâche ne sont jamais écrasés par ce
+          // champ, seul le tag choisi ici est ajouté (ou retiré) sur chaque tâche sélectionnée.
+          const tagChange = on("bulk-tags")
+            ? { value: bodyEl.querySelector("#bulk-tags-value").value.trim(), add: bodyEl.querySelector("#bulk-tags-mode").value === "add" }
+            : null;
 
-          if (!Object.keys(patch).length && !noteText && !resourceChange && !promptChange) {
+          if (!Object.keys(patch).length && !noteText && !resourceChange && !promptChange && !tagChange?.value) {
             showToast("Aucun champ coché — rien à appliquer");
             return;
           }
@@ -1028,6 +1058,10 @@ async function openBulkEditModal(tasks, projects, onDone) {
             if (noteText) await tasksApi.addNote(task.id, noteText);
             if (resourceChange?.id) await resourcesApi.linkToTask(resourceChange.id, task.id, resourceChange.add);
             if (promptChange?.id) await promptsApi.linkToTask(promptChange.id, task.id, promptChange.add);
+            if (tagChange?.value) {
+              if (tagChange.add) await tagsApi.addTag("Task", task.id, tagChange.value);
+              else await tagsApi.removeTagByName("Task", task.id, tagChange.value);
+            }
           }
 
           close();

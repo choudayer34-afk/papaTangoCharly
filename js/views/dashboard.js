@@ -35,6 +35,7 @@ import { getTheme, getEffectiveTheme, setTheme } from "../services/themeStore.js
 import { renderChecklist } from "../components/checklist.js";
 import { generateId } from "../services/id.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
+import * as tagsApi from "../domain/tags.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -251,6 +252,11 @@ export function renderDashboard(container) {
   // ci-dessous ; valeurs par défaut tant que Charles-Henri n'a rien réglé.
   let priorityWeights = priorisationApi.DEFAULT_WEIGHTS;
   let recentlyViewed = [];
+  // Tags de toutes les fiches, tous types confondus (retour de Charles-Henri, 13/09/2026 : "je
+  // veux que remonte les tags sur les fiches présentes quelque soit leur nature dans l'écran
+  // d'accueil") — chargés une fois puis tenus à jour en direct (voir unsubTags plus bas), comme
+  // tasks/projects/etc. juste au-dessus. Voir tagsLineHtml() pour l'affichage lecture seule.
+  let allTags = [];
   // Mode "Focus" (audit TDAH ciblé du 07/09/2026) — voir applyHomeModeVisibility() et
   // renderFocusQueueSection() plus bas. `focusExpanded`/`focusQueueIndex` sont volontairement
   // NON persistés : un état d'affichage transitoire, remis à zéro à chaque montage de l'Accueil,
@@ -442,6 +448,20 @@ export function renderDashboard(container) {
     return true;
   }
 
+  /**
+   * Ligne de tags en lecture seule pour une ligne de l'Accueil (retour de Charles-Henri,
+   * 13/09/2026 : "je veux que remonte les tags sur les fiches présentes quelque soit leur
+   * nature dans l'écran d'accueil") — même collection générique que js/components/tagsEditor.js
+   * (js/domain/tags.js), affichage seul (pas de croix pour retirer, pas de saisie : ce n'est
+   * qu'un aperçu, l'édition reste dans la fiche complète). Chaîne vide si la fiche ne porte
+   * aucun tag, pour ne jamais ajouter un espace vide dans les lignes qui n'en ont pas.
+   */
+  function tagsLineHtml(type, id) {
+    const mine = tagsApi.tagsFor(allTags, type, id);
+    if (!mine.length) return "";
+    return `<div class="item-tags">${mine.map((t) => `<span class="tag-chip-mini">#${escapeHtml(t.tag)}</span>`).join("")}</div>`;
+  }
+
   async function renderRecentlyViewedSection() {
     if (hiddenSections.has("recentlyViewed")) {
       recentViewedSection.innerHTML = "";
@@ -456,7 +476,9 @@ export function renderDashboard(container) {
     const resolved = visibleEntries
       .map((entry) => {
         const r = linkedItemsApi.resolveRef(bundle, { type: entry.type, id: entry.id });
-        return r && { ...r, viewedAt: entry.viewedAt };
+        // type/id conservés (retour.type/retour.id ne sont pas déjà des clés de `r`) pour
+        // pouvoir afficher les tags de la fiche, quel que soit son type — voir tagsLineHtml().
+        return r && { ...r, viewedAt: entry.viewedAt, type: entry.type, id: entry.id };
       })
       .filter(Boolean);
     if (!resolved.length) {
@@ -476,6 +498,7 @@ export function renderDashboard(container) {
         <div class="item-main">
           <div class="item-title">${item.emoji} ${escapeHtml(item.title)}</div>
           <div class="item-meta">${timeAgoLabel(item.viewedAt)}</div>
+          ${tagsLineHtml(item.type, item.id)}
         </div>
       `;
       row.addEventListener("click", () => item.onOpen());
@@ -539,6 +562,7 @@ export function renderDashboard(container) {
           <div class="item-main">
             <div class="item-title">${isToTell ? "📣 " : "👀 "}${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
             <div class="item-meta">Suivi en retard · ${isToTell ? "À dire avant" : "Contrôle prévu"} : ${f.controlDate ? formatDate(f.controlDate) : "?"}</div>
+            ${tagsLineHtml("FollowUp", f.id)}
           </div>
           <span class="badge badge-late">🔴</span>
         `;
@@ -555,6 +579,7 @@ export function renderDashboard(container) {
           <div class="item-main">
             <div class="item-title">🗓️ ${escapeHtml(t.title)}</div>
             <div class="item-meta">Échéance proche · ${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${formatDate(t.dueDate)}</div>
+            ${tagsLineHtml("Task", t.id)}
           </div>
         `;
         row.addEventListener("click", () => openTaskDetail(t, projects));
@@ -566,6 +591,7 @@ export function renderDashboard(container) {
           <div class="item-main">
             <div class="item-title">⏸️ ${escapeHtml(t.title)}</div>
             <div class="item-meta">En pause depuis ${days} j${project ? " · 📦 " + escapeHtml(project.name) : ""}</div>
+            ${tagsLineHtml("Task", t.id)}
           </div>
         `;
         row.addEventListener("click", () => openTaskDetail(t, projects));
@@ -626,6 +652,8 @@ export function renderDashboard(container) {
         title: escapeHtml(t.title),
         sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
         onOpen: () => openTaskDetail(t, projects),
+        type: "Task",
+        id: t.id,
       };
     }
     if (entry.kind === "dueToday") {
@@ -636,6 +664,8 @@ export function renderDashboard(container) {
         title: escapeHtml(t.title),
         sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
         onOpen: () => openTaskDetail(t, projects),
+        type: "Task",
+        id: t.id,
       };
     }
     if (entry.kind === "followup") {
@@ -649,6 +679,8 @@ export function renderDashboard(container) {
         // Ouvre le Suivi lui-même, pas la fiche de la personne — voir même remarque dans
         // renderNeedsAttentionSection() plus haut.
         onOpen: () => openEditFollowUpModal(f),
+        type: "FollowUp",
+        id: f.id,
       };
     }
     if (entry.kind === "dueSoon") {
@@ -659,6 +691,8 @@ export function renderDashboard(container) {
         title: escapeHtml(t.title),
         sub: `${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]}${project ? " · 📦 " + escapeHtml(project.name) : ""}`,
         onOpen: () => openTaskDetail(t, projects),
+        type: "Task",
+        id: t.id,
       };
     }
     const t = entry.data;
@@ -669,6 +703,8 @@ export function renderDashboard(container) {
       title: escapeHtml(t.title),
       sub: project ? `📦 ${escapeHtml(project.name)}` : "",
       onOpen: () => openTaskDetail(t, projects),
+      type: "Task",
+      id: t.id,
     };
   }
 
@@ -702,6 +738,7 @@ export function renderDashboard(container) {
           <div class="item-meta" style="color:var(--color-danger);font-weight:600;">${view.why}</div>
           <div class="item-title" style="margin:6px 0 2px;">${view.title}</div>
           <div class="item-meta">${view.sub}</div>
+          ${view.type ? `<div style="display:flex;justify-content:center;">${tagsLineHtml(view.type, view.id)}</div>` : ""}
           <div style="display:flex;gap:8px;justify-content:center;margin-top:14px;">
             <button type="button" id="focus-queue-skip" class="btn btn-secondary btn-sm">Passer</button>
             <button type="button" id="focus-queue-open" class="btn btn-primary btn-sm">Ouvrir</button>
@@ -732,6 +769,7 @@ export function renderDashboard(container) {
           <div class="item-main" ${view.onOpen ? 'style="cursor:pointer;"' : ""}>
             <div class="item-title">${view.title}</div>
             <div class="item-meta">${view.why} · ${view.sub}</div>
+            ${view.type ? tagsLineHtml(view.type, view.id) : ""}
           </div>
         `;
         if (view.onOpen) row.querySelector(".item-main").addEventListener("click", view.onOpen);
@@ -1315,6 +1353,7 @@ export function renderDashboard(container) {
               ${tasksApi.STATUS_ICONS[t.status]} ${tasksApi.STATUS_LABELS[t.status]} · ${t.dueDate ? formatDate(t.dueDate) : "Pas d'échéance"}${late ? ` · <strong style="color:var(--color-danger);">en retard</strong>` : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
             </div>
             ${why ? `<div class="item-meta" style="font-style:italic;">🧭 Pourquoi maintenant : ${escapeHtml(why)}</div>` : ""}
+            ${tagsLineHtml("Task", t.id)}
           </div>
         `;
         row.querySelector(".item-main").addEventListener("click", () => openTaskDetail(t, projects));
@@ -1428,6 +1467,7 @@ export function renderDashboard(container) {
         <div class="item-main">
           <div class="item-title">${escapeHtml(item.rawContent)}</div>
           <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}</div>
+          ${tagsLineHtml("Kept", item.id)}
         </div>
       `;
       // Clic pour ouvrir sa vraie fiche (§ correction du 31/08 : une Information n'avait
@@ -1499,6 +1539,7 @@ export function renderDashboard(container) {
           <div style="height:5px;background:var(--color-surface-alt);border-radius:var(--radius-pill);overflow:hidden;margin-top:6px;">
             <div style="height:100%;width:${progress.percent}%;background:var(--color-primary);"></div>
           </div>
+          ${tagsLineHtml("Project", project.id)}
         </div>
         <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
       `;
@@ -1566,6 +1607,7 @@ export function renderDashboard(container) {
           <div class="item-meta">
             ${item.label}${item.data.date ? " · " + formatDate(item.data.date) : ""}${project ? " · 📦 " + escapeHtml(project.name) : ""}
           </div>
+          ${tagsLineHtml(item.kind === "meeting" ? "Meeting" : "Decision", item.data.id)}
         </div>
       `;
       row.addEventListener("click", () => openRecentDetail(item, projects));
@@ -1634,6 +1676,19 @@ export function renderDashboard(container) {
     renderNeedsAttentionSection();
     renderFocusQueueSection();
   });
+  // Tags (retour de Charles-Henri, 13/09/2026 : "je veux que remonte les tags sur les fiches
+  // présentes quelque soit leur nature dans l'écran d'accueil") — toutes les sections qui
+  // affichent une fiche d'un type ou d'un autre en dépendent, voir tagsLineHtml() plus haut.
+  const unsubTags = tagsApi.subscribe((items) => {
+    allTags = items;
+    renderRecentlyViewedSection();
+    renderNeedsAttentionSection();
+    renderFocusQueueSection();
+    renderFocusSection();
+    renderKeptSection();
+    renderProjectsSection();
+    renderRecentSection();
+  });
 
   return function cleanup() {
     document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
@@ -1648,6 +1703,7 @@ export function renderDashboard(container) {
     unsubDecisions();
     unsubPeople();
     unsubFollowUps();
+    unsubTags();
   };
 }
 
