@@ -8,8 +8,18 @@
 // par #") — jamais stocké avec le "#", qui n'est qu'un habillage de présentation/saisie (voir
 // js/domain/tags.js#stripHash : la saisie reste tolérante, "urgent" et "#urgent" tapés l'un
 // après l'autre restent le même tag).
+//
+// Correctif (retour de Charles-Henri : "ça ne me propose pas les tags existants en
+// autocomplétion") — la <datalist> proposait des valeurs préfixées "#tagname" alors que ce champ
+// se tape SANS "#" (le "#" n'est ajouté qu'à l'affichage des chips, voir ci-dessus) : la plupart
+// des navigateurs ne filtrent une <datalist> que par préfixe du texte déjà tapé, donc taper "urg"
+// ne faisait jamais correspondre l'option "#urgent" (qui commence par "#", pas par "u") — la
+// suggestion n'apparaissait jamais. Les options portent maintenant le nom du tag tel qu'il se
+// tape, sans "#" (contrairement à js/components/search.js, où le "#" fait partie de la saisie
+// elle-même et doit donc y rester).
 
 import * as tagsApi from "../domain/tags.js";
+import * as preferencesApi from "../domain/preferences.js";
 
 let uidCounter = 0;
 
@@ -53,11 +63,11 @@ export async function renderTagsEditor(container, type, id) {
     }
   }
 
-  const allTags = await tagsApi.listAll();
+  const [allTags, prefs] = await Promise.all([tagsApi.listAll(), preferencesApi.getPreferences()]);
   let mine = tagsApi.tagsFor(allTags, type, id);
   datalistEl.innerHTML = tagsApi
-    .listAllTagNames(allTags)
-    .map((t) => `<option value="#${escapeHtml(t)}"></option>`)
+    .visibleTagNames(allTags, prefs.disabledTags)
+    .map((t) => `<option value="${escapeHtml(t)}"></option>`)
     .join("");
   renderList(mine);
 

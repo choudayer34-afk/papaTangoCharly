@@ -12,10 +12,12 @@
 // Ce n'est volontairement PAS un mécanisme de sécurité — juste un bouton masqué pour les autres
 // — la vraie protection des données reste les règles Firestore, indépendantes de cette UI.
 
-import { openModal } from "./modal.js";
+import { openModal, confirmDelete } from "./modal.js";
 import { showToast } from "./toast.js";
 import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js";
 import * as usageTrackingApi from "../services/usageTracking.js";
+import * as tagsApi from "../domain/tags.js";
+import * as preferencesApi from "../domain/preferences.js";
 
 // Une entrée par application tierce. `tutorialHtml` répond à un besoin concret et récurrent
 // pour CETTE application précise plutôt qu'à une checklist générique — pour Firebase, c'est la
@@ -118,6 +120,10 @@ function openAdminPanel() {
       <label>Suivi d'usage</label>
       <button type="button" id="admin-usage-btn" class="btn btn-secondary">📊 Voir l'activité des comptes</button>
     </div>
+    <div class="field">
+      <label>Tags</label>
+      <button type="button" id="admin-tags-btn" class="btn btn-secondary">🏷️ Gérer les tags</button>
+    </div>
   `;
 
   const listEl = body.querySelector("#admin-apps-list");
@@ -172,6 +178,102 @@ function openAdminPanel() {
   bodyEl.querySelector("#admin-usage-btn").addEventListener("click", () => {
     openUsagePanel();
   });
+  bodyEl.querySelector("#admin-tags-btn").addEventListener("click", () => {
+    openTagsAdminModal();
+  });
+}
+
+/**
+ * Gestion des tags (retour de Charles-Henri, 13/09/2026 : "je dois pouvoir en admin désactiver
+ * ou supprimer des tags") — les tags eux-mêmes (js/domain/tags.js) n'ont pas de fiche propre à
+ * ouvrir comme les 9 autres types de l'app : ce panneau technique est le seul endroit adapté pour
+ * les administrer globalement, dans le même esprit que 📊 Suivi d'usage juste au-dessus (une
+ * vue d'ensemble, pas une fiche par élément).
+ *
+ * Deux actions bien distinctes, pour ne jamais confondre un simple nettoyage de suggestions avec
+ * une suppression réelle :
+ * - "Désactivé" (case à cocher, réversible) : le tag n'est plus proposé en autocomplétion nulle
+ *   part (js/components/tagsEditor.js, recherche globale) mais reste posé sur les fiches qui
+ *   l'ont déjà et reste trouvable par la recherche — un tag créé par erreur ou une faute de
+ *   frappe qu'on ne veut plus voir ressurgir à la saisie, sans toucher aux fiches existantes.
+ * - "🗑️ Supprimer" (irréversible, confirmation) : retire réellement ce tag de TOUTES les fiches
+ *   qui le portent (`tagsApi.deleteTagEverywhere`) — pour un tag qu'on ne veut plus voir du tout.
+ */
+async function openTagsAdminModal() {
+  const body = document.createElement("div");
+  body.innerHTML = `<div class="empty-state" style="padding:16px;">Chargement…</div>`;
+  const { bodyEl } = openModal({
+    title: "🏷️ Gérer les tags",
+    body,
+    dismissible: true,
+    actions: [{ label: "← Retour", variant: "ghost", onClick: () => openAdminPanel() }],
+  });
+
+  async function render() {
+    const [allTags, prefs] = await Promise.all([tagsApi.listAll(), preferencesApi.getPreferences()]);
+    const groups = tagsApi.groupByName(allTags);
+    const disabledSet = new Set(prefs.disabledTags || []);
+
+    if (!groups.length) {
+      bodyEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun tag posé pour l'instant, sur aucune fiche.</div>`;
+      return;
+    }
+
+    bodyEl.innerHTML = `
+      <p class="item-meta" style="margin-bottom:16px;">
+        <strong>Désactivé</strong> : n'apparaît plus en suggestion à la saisie, mais reste sur les fiches qui l'ont déjà et reste trouvable par la recherche.
+        <strong>Supprimer</strong> : retire ce tag de toutes les fiches qui le portent — irréversible.
+      </p>
+      <div id="admin-tags-list"></div>
+    `;
+    const listEl = bodyEl.querySelector("#admin-tags-list");
+    for (const group of groups) {
+      const disabled = disabledSet.has(group.key);
+      const row = document.createElement("div");
+      row.className = "card";
+      row.style.marginBottom = "10px";
+      row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+          <div>
+            <div style="font-weight:600;${disabled ? "color:var(--color-text-muted);" : ""}">#${escapeHtml(group.displayName)}</div>
+            <div class="item-meta">${group.count} fiche${group.count > 1 ? "s" : ""}${disabled ? " · désactivé" : ""}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+            <label style="display:flex;align-items:center;gap:4px;font-size:var(--font-size-sm);margin:0;">
+              <input type="checkbox" class="admin-tag-disable" style="width:auto;" ${disabled ? "checked" : ""} /> Désactivé
+            </label>
+            <button type="button" class="btn btn-ghost btn-sm admin-tag-delete">🗑️ Supprimer</button>
+          </div>
+        </div>
+      `;
+      row.querySelector(".admin-tag-disable").addEventListener("change", async (e) => {
+        const next = new Set(prefs.disabledTags || []);
+        if (e.target.checked) next.add(group.key);
+        else next.delete(group.key);
+        await preferencesApi.setDisabledTags([...next]);
+        render(); // re-render simple : pas de confirmDelete ici, `bodyEl` reste attaché au document.
+      });
+      row.querySelector(".admin-tag-delete").addEventListener("click", () => {
+        // confirmDelete() ouvre sa propre modale — une seule modale active à la fois (voir
+        // modal.js), donc celle-ci (🏷️ Gérer les tags) est détruite dès l'ouverture de la
+        // confirmation, pas juste masquée derrière. On la rouvre entièrement après confirmation
+        // (même principe que "← Retour" ailleurs dans ce panneau) plutôt que de réutiliser
+        // `bodyEl`, qui ne fait plus partie du document à ce moment-là.
+        confirmDelete({
+          title: "Supprimer ce tag ?",
+          message: `"#${group.displayName}" sera retiré de ${group.count} fiche${group.count > 1 ? "s" : ""}. Cette action est irréversible.`,
+          onConfirm: async () => {
+            await tagsApi.deleteTagEverywhere(group.displayName);
+            showToast("Tag supprimé");
+            openTagsAdminModal();
+          },
+        });
+      });
+      listEl.appendChild(row);
+    }
+  }
+
+  render();
 }
 
 // Suivi d'usage superadmin (retour de Charles-Henri, 06/09/2026 : "est-ce que je peux avoir un

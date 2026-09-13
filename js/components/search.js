@@ -32,6 +32,7 @@ import * as decisionsApi from "../domain/decisions.js";
 import * as inboxApi from "../domain/inbox.js";
 import * as objectivesApi from "../domain/objectives.js";
 import * as tagsApi from "../domain/tags.js";
+import * as preferencesApi from "../domain/preferences.js";
 import { openTaskDetail } from "../views/kanban.js";
 import { openDuplicateTaskModal } from "./duplicateTask.js";
 import { openProjectDetail } from "../views/projects.js";
@@ -262,9 +263,9 @@ export function openSearchModal() {
   // (le navigateur filtre lui-même les options selon ce qui est déjà tapé, aucun JS de plus
   // nécessaire ici). Chargée une fois à l'ouverture de la modale, pas à chaque frappe.
   const tagOptionsEl = body.querySelector("#global-search-tag-options");
-  tagsApi.listAll().then((allTags) => {
+  Promise.all([tagsApi.listAll(), preferencesApi.getPreferences()]).then(([allTags, prefs]) => {
     tagOptionsEl.innerHTML = tagsApi
-      .listAllTagNames(allTags)
+      .visibleTagNames(allTags, prefs.disabledTags)
       .map((t) => `<option value="#${escapeHtml(t)}"></option>`)
       .join("");
   });
