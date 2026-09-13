@@ -16,6 +16,11 @@ export async function createObjective(data) {
     title: data.title,
     status: "active", // active | done
     entries: [],
+    // Retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un projet" —
+    // Objectif était, avec les Informations/Idées de l'Inbox, le seul type sans aucun moyen de
+    // se rattacher à un projet (Tâche/Suivi/Réunion/Décision ont un champ direct ; Ressource se
+    // lie a posteriori via `projectIds` + `linkToProject()`). Optionnel, comme partout ailleurs.
+    projectId: data.projectId || null,
   });
   await storage.logHistory("Objective", objective.id, "created", { title: objective.title });
   return objective;

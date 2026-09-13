@@ -191,3 +191,57 @@ export async function qualify(itemId, outcome, extra = {}) {
   await storage.logHistory("InboxItem", item.id, "kept", { asType: outcome });
   return { outcome: "kept" };
 }
+
+// Tags libres et rattachement à un projet sur les Informations/Idées (retour de Charles-Henri,
+// 13/09/2026 : "pouvoir catégoriser des idées/informations et voir comment retrouver facilement
+// les éléments d'une catégorie" + "tout élément doit être rattachable à un projet"). Posés après
+// coup depuis la fiche détail (js/views/inbox.js#openKeptItemDetail), jamais à la qualification
+// elle-même — même principe que addKeptNote() juste au-dessus : qualify() reste la frontière
+// "brut → qualifié", tout le reste s'édite ensuite via des fonctions dédiées plutôt qu'un patch
+// libre.
+//
+// NB : Ressource porte déjà un champ `tags`, mais il n'est câblé à aucune UI (toujours `[]`,
+// jamais éditable) — hors périmètre de cette demande, qui ne portait que sur les
+// Informations/Idées ; non repris ici pour ne pas toucher à un comportement non demandé.
+
+/** Ajoute un tag (sans doublon, insensible à la casse) — jamais un remplacement du tableau
+ *  complet (même principe que addKeptNote/addEntry ailleurs dans le domaine). */
+export async function addKeptTag(id, tag) {
+  const trimmed = (tag || "").trim();
+  if (!trimmed) return null;
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Élément Inbox introuvable : " + id);
+  const tags = current.tags || [];
+  if (tags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return tags;
+  const updated = await storage.put(COLLECTION, { ...current, tags: [...tags, trimmed] });
+  await storage.logHistory("InboxItem", id, "tag_added", { tag: trimmed });
+  return updated.tags;
+}
+
+export async function removeKeptTag(id, tag) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Élément Inbox introuvable : " + id);
+  const tags = (current.tags || []).filter((t) => t !== tag);
+  const updated = await storage.put(COLLECTION, { ...current, tags });
+  await storage.logHistory("InboxItem", id, "tag_removed", { tag });
+  return updated.tags;
+}
+
+/** Tous les tags déjà utilisés (toutes Informations/Idées confondues, y compris archivées), pour
+ *  les proposer à la saisie (autocomplétion) plutôt que de forcer à retaper une catégorie déjà
+ *  créée — sans avoir besoin d'une collection de tags séparée. */
+export async function listAllKeptTags() {
+  const items = await listKeptIncludingArchived();
+  const set = new Set();
+  for (const item of items) for (const t of item.tags || []) set.add(t);
+  return [...set].sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+/** Rattache (ou détache, `projectId: null`) une Information/Idée à un projet. */
+export async function setKeptProject(id, projectId) {
+  const current = await storage.get(COLLECTION, id);
+  if (!current) throw new Error("Élément Inbox introuvable : " + id);
+  const updated = await storage.put(COLLECTION, { ...current, projectId: projectId || null });
+  await storage.logHistory("InboxItem", id, "project_set", { projectId: projectId || null });
+  return updated;
+}
