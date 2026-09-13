@@ -11,6 +11,20 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <link rel="stylesheet" href="./styles/tokens.css" />
   <link rel="stylesheet" href="./styles/components.css" />
+  <!-- Applique le thème choisi AVANT le premier rendu (retour de Charles-Henri, 13/09/2026 :
+       mode sombre avec interrupteur, voir js/services/themeStore.js) — un script classique,
+       synchrone, plutôt qu'attendre le module ES de l'app (chargé en dernier, après tout le
+       reste), pour ne jamais laisser flasher le mauvais thème le temps que l'app démarre. Ne
+       fait QUE rejouer ici la même clé que themeStore.js, qui reste la seule source de vérité
+       pour la lecture/écriture de ce réglage. -->
+  <script>
+    try {
+      var pilotageTheme = localStorage.getItem("pilotage-theme");
+      if (pilotageTheme === "dark" || pilotageTheme === "light") {
+        document.documentElement.dataset.theme = pilotageTheme;
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <div id="app">

@@ -5,7 +5,21 @@
 // sur "fetch" plus bas (vague 22 novies) pour le raisonnement complet.
 // Pattern repris d'EnVie (§56/§57 : réutiliser l'existant avant de recréer).
 
-const CACHE_NAME = "pilotage-cache-v40";
+// Correctif (13/09/2026, audit de reprise après l'incident MIME "text/html" du 09/09) :
+// `APP_SHELL` avait pris du retard sur l'arborescence réelle — 10 fichiers existants
+// (storage-local.js, usageTracking.js, priorisation.js, workload.js, projectHealth.js dans
+// leurs 2-3 dossiers) n'y figuraient pas, exactement la classe de bug déjà documentée plus bas
+// (vague 22 septies). Sans effet visible tant que le réseau répond, mais un fichier absent du
+// précache et jamais encore récupéré avec succès reste vulnérable à un aller-réseau raté au
+// chargement — reconstitué ici par comparaison exhaustive de `find js -name "*.js"` contre
+// cette liste. `CACHE_NAME` incrémenté en conséquence pour forcer la reconstruction du cache
+// chez tout le monde.
+// Correctif (13/09/2026, suite) : nouveau fichier js/views/followupsOverview.js (vue "👀
+// Suivis") ajouté à APP_SHELL dès sa création, cette fois-ci — pour ne pas reproduire l'oubli
+// documenté juste au-dessus.
+// Correctif (13/09/2026, suite — mode sombre) : nouveau fichier js/services/themeStore.js
+// ajouté à APP_SHELL dès sa création, même principe que ci-dessus.
+const CACHE_NAME = "pilotage-cache-v43";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -15,12 +29,15 @@ const APP_SHELL = [
   "./js/app.js",
   "./js/services/id.js",
   "./js/services/storage.js",
+  "./js/services/storage-local.js",
   "./js/services/firebase.js",
   "./js/services/deeplink.js",
   "./js/services/draftStore.js",
   "./js/services/pomodoroStore.js",
   "./js/services/pilotageViewStore.js",
   "./js/services/shortcuts.js",
+  "./js/services/usageTracking.js",
+  "./js/services/themeStore.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
@@ -37,6 +54,9 @@ const APP_SHELL = [
   "./js/domain/prompts.js",
   "./js/domain/casquettes.js",
   "./js/domain/convert.js",
+  "./js/domain/priorisation.js",
+  "./js/domain/workload.js",
+  "./js/domain/projectHealth.js",
   "./js/components/modal.js",
   "./js/components/changeType.js",
   "./js/components/toast.js",
@@ -61,6 +81,8 @@ const APP_SHELL = [
   "./js/components/whatsNewBadge.js",
   "./js/components/pilotageSubNav.js",
   "./js/components/duplicateTask.js",
+  "./js/components/decisionGrid.js",
+  "./js/components/projectHealth.js",
   "./js/views/dashboard.js",
   "./js/views/inbox.js",
   "./js/views/kanban.js",
@@ -76,6 +98,10 @@ const APP_SHELL = [
   "./js/views/memory.js",
   "./js/views/login.js",
   "./js/views/prepMask.js",
+  "./js/views/followupsOverview.js",
+  "./js/views/priorisation.js",
+  "./js/views/workload.js",
+  "./js/views/projectHealth.js",
 ];
 
 self.addEventListener("install", (event) => {
