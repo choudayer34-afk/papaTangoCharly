@@ -1508,6 +1508,26 @@ tbody.drag-over-group {
   box-shadow: 0 0 0 1px currentColor inset;
 }
 
+/* ---------- Liens contextuels vers le Guide (js/views/guide.js#guideLinkHtml) ----------
+   Retour de Charles-Henri, 13/09/2026 : "des liens vers le guide pour indiquer à quoi ça peut
+   servir" — volontairement discret (taille de note, pas un bouton) puisqu'il n'apparaît que sur
+   une poignée d'écrans choisis, pas partout. */
+.guide-link {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.guide-link:hover { text-decoration: underline; }
+
+/* Flash bref sur la rubrique visée par un lien profond `#/guide?topic=...` (voir `openTopic`
+   dans js/views/guide.js) — signale la ligne concernée le temps qu'elle attire l'œil, sans
+   rien déplacer ni bloquer la lecture. */
+.guide-highlight-flash {
+  background: var(--color-primary-light) !important;
+  transition: background var(--transition);
+}
+
 /* ---------- Journal de notes horodaté (js/components/notesBlock.js) ---------- */
 .notes-entry {
   background: var(--color-surface-alt);
