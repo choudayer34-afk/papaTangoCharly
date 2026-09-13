@@ -150,6 +150,14 @@ function openAdminPanel() {
     title: "🔧 Administration",
     body,
     dismissible: true,
+    // Bouton "Fermer" explicite (retour de Charles-Henri, 13/09/2026 : "je suis parfois bloqué
+    // comme sur administration") : cette modale n'avait jamais eu de bouton d'action, et son
+    // champ "Lien de l'application" (readonly) désactivait par erreur le clic en dehors (voir
+    // le correctif dans js/components/modal.js) — ne laissant plus que la touche Échap, jamais
+    // suggérée à l'écran, pour en sortir. Toutes les modales de ce panneau (tutoriels, usage)
+    // en ont une ("← Retour") ; celle-ci n'en avait pas, précisément parce qu'elle est la
+    // première ouverte et n'a nulle part où "retourner".
+    actions: [{ label: "Fermer", variant: "ghost" }],
   });
 
   bodyEl.querySelector("#admin-copy-app-url").addEventListener("click", async () => {

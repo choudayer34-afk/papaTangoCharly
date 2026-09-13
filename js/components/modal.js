@@ -83,7 +83,16 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
       // (bouton Fermer/Annuler, ou Échap) le fait. Les modales sans aucun champ (listes de
       // choix, confirmations, fiches en lecture seule) gardent le clic en dehors comme
       // raccourci de fermeture rapide, sans aucun risque de perte.
-      if (bodyEl.querySelector("input, textarea, select")) {
+      // Correctif (13/09/2026, retour de Charles-Henri : "je suis parfois bloqué comme sur
+      // administration") : le garde-fou ci-dessus visait les champs qu'on peut RENSEIGNER, pas
+      // n'importe quel <input>/<select> — un champ marqué readonly/disabled (ex. le lien de
+      // l'app affiché en lecture seule dans 🔧 Administration) ne peut par définition perdre
+      // aucune saisie, il n'y en a pas. Le compter comme "modale à protéger" revenait à
+      // supprimer le clic en dehors pour des modales purement informatives qui, en plus,
+      // n'avaient pas toutes un bouton d'action explicite — la seule sortie restait alors la
+      // touche Échap, jamais indiquée à l'écran. Voir aussi le bouton "Fermer" ajouté à
+      // js/components/adminPanel.js#openAdminPanel pour ce cas précis.
+      if (bodyEl.querySelector("input:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled]), select:not([disabled])")) {
         modal.classList.remove("modal-nudge");
         // Force le redémarrage de l'animation même si elle vient déjà de jouer (deux clics en
         // dehors rapprochés) — un retrait/ajout de classe en 2 temps plutôt qu'un simple

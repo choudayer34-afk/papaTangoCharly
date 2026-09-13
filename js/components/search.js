@@ -82,6 +82,7 @@ async function runSearch(query) {
         emoji: "✅",
         title: t.title,
         status: `${tasksApi.STATUS_ICONS[t.status] || ""} ${tasksApi.STATUS_LABELS[t.status] || ""}`.trim(),
+        done: t.status === "done",
         onOpen: () => openTaskDetail(t, projects),
         // "🗐 Dupliquer" directement depuis la recherche (retour de Charles-Henri, 07/09/2026 :
         // "que ce soit via la recherche ou la tâche elle-même") — seul type à le proposer, une
@@ -94,11 +95,13 @@ async function runSearch(query) {
     const partsText = (p.parts || []).map((part) => `${part.label} ${notesText(part.notesLog)}`).join(" ");
     if (haystack(p.name, p.objective, p.successCriteria, partsText, notesText(p.notesLog)).includes(q)) {
       const projectTasks = tasks.filter((t) => t.projectId === p.id);
+      const archived = projectsApi.isArchived(p);
       results.push({
         type: "Projet",
         emoji: "📦",
         title: p.name,
-        status: projectsApi.isArchived(p) ? "🗄️ Fermé" : "🟢 Actif",
+        status: archived ? "🗄️ Fermé" : "🟢 Actif",
+        done: archived,
         onOpen: () => openProjectDetail(p, projectTasks),
       });
     }
@@ -122,6 +125,7 @@ async function runSearch(query) {
         title: f.title,
         meta: person ? person.name : "",
         status: followUpsApi.STATUS_LABELS[f.status] || "",
+        done: f.status === "done",
         onOpen: () => openEditFollowUpModal(f),
       });
     }
@@ -160,6 +164,7 @@ async function runSearch(query) {
         type: "Information/Idée",
         emoji: item.keptAsType === "idea" ? "💡" : "🧠",
         title: item.rawContent,
+        done: item.status === "archived",
         onOpen: () => openKeptItemDetail(item),
       });
     }
@@ -176,6 +181,7 @@ async function runSearch(query) {
         emoji: o.status === "done" ? "✅" : "🎯",
         title: o.title,
         meta: owner ? owner.name : "",
+        done: o.status === "done",
         onOpen: () => openObjectiveDetail(o, owner, {}),
       });
     }
@@ -191,12 +197,23 @@ export function openSearchModal() {
       <input id="global-search-input" type="text" placeholder="Rechercher un mot dans tout Pilotage..." />
     </div>
     <div class="chip-row" id="search-type-filter" style="margin-bottom:8px;"></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-bottom:8px;">
+      <input id="search-include-done" type="checkbox" style="width:auto;" />
+      Inclure ce qui est terminé / archivé
+    </label>
     <div id="global-search-results"></div>
   `;
 
   const resultsEl = body.querySelector("#global-search-results");
   const inputEl = body.querySelector("#global-search-input");
   const filterEl = body.querySelector("#search-type-filter");
+  // Par défaut, la recherche ne porte que sur ce qui est encore actif (retour de Charles-Henri,
+  // 13/09/2026 : retrouver un vieux sujet clos ne doit pas noyer ce qu'on cherche activement
+  // aujourd'hui) — cette case à cocher permet de l'élargir ponctuellement sans rien perdre :
+  // aucune donnée n'est exclue de la recherche elle-même (`runSearch` calcule tout), seul
+  // l'affichage filtre selon `r.done` (Tâche/Suivi/Objectif terminés, Projet fermé, Information/
+  // Idée archivée — les autres types n'ont pas cette notion et restent toujours visibles).
+  const includeDoneEl = body.querySelector("#search-include-done");
 
   let lastResults = [];
   const activeTypes = new Set(SEARCH_TYPES);
@@ -221,6 +238,7 @@ export function openSearchModal() {
   }
 
   filterEl.querySelectorAll("[data-type]").forEach((chip) => chip.addEventListener("click", () => toggleType(chip.dataset.type)));
+  includeDoneEl.addEventListener("change", () => renderResults(lastResults, inputEl.value));
 
   function renderResults(results, query) {
     lastResults = results;
@@ -228,7 +246,8 @@ export function openSearchModal() {
       resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Tape un mot-clé — titre, nom, notes, tag...</div>`;
       return;
     }
-    const filtered = results.filter((r) => activeTypes.has(r.type));
+    const includeDone = includeDoneEl.checked;
+    const filtered = results.filter((r) => activeTypes.has(r.type) && (includeDone || !r.done));
     if (!filtered.length) {
       resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ne correspond à « ${escapeHtml(query)} »${
         results.length ? " avec ces filtres." : "."
