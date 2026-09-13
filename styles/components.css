@@ -982,6 +982,29 @@ tbody.drag-over-group {
   color: var(--color-danger, #d33);
 }
 
+/* ---------- Tags en lecture seule sur une ligne de l'Accueil (retour de Charles-Henri,
+   13/09/2026 : "je veux que remonte les tags sur les fiches présentes quelque soit leur nature
+   dans l'écran d'accueil") — même habillage pilule que `.tag-chip` ci-dessus mais sans bouton de
+   suppression (rien à retirer depuis un simple aperçu de liste) et plus compact, pour tenir sur
+   une ligne à côté du titre/de la méta d'un item-row. Voir js/views/dashboard.js#tagsLineHtml. */
+.item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.tag-chip-mini {
+  display: inline-block;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* ---------- Interrupteur clair/sombre (retour de Charles-Henri, 13/09/2026 : "un petit
    interrupteur [...] qu'on comprenne facilement sur quel mode on bascule") ---------- Écran
    d'accueil, en haut à gauche (voir js/views/dashboard.js). Une vraie case à cocher cachée
