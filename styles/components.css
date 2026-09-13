@@ -1406,6 +1406,17 @@ tbody.drag-over-group {
 }
 .review-banner button { flex: none; }
 
+/* ---------- Pense-bête de l'Accueil (retour de Charles-Henri, 13/09/2026, js/views/
+   dashboard.js#renderPostitSection) ---------- */
+/* Liseré + fond légèrement teinté pour se distinguer d'une simple carte de contenu (une vraie
+   rubrique de suivi) sans pour autant copier `.review-banner` ci-dessus (qui, lui, signale un
+   rappel de rythme) — un repère visuel propre au post-it, dans la même famille chaude que
+   l'avertissement "ça peut devenir un fourre-tout" qu'il porte en permanence. */
+.postit-card {
+  border-left: 4px solid var(--color-warning);
+  background: var(--color-surface-alt);
+}
+
 /* ---------- Aide à la demande (js/components/infoTip.js) ---------- */
 .info-tip {
   display: inline-block;
