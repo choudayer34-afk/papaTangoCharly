@@ -12,7 +12,12 @@ const COLLECTION = "objectives";
 
 export async function createObjective(data) {
   const objective = await storage.put(COLLECTION, {
-    personId: data.personId,
+    // `personId` optionnel depuis le 13/09/2026 (retour de Charles-Henri : "comment je suis
+    // l'avancement de mes propres objectifs" → même mécanique que pour un collaborateur, mais
+    // pour soi-même) — `null` désigne un objectif personnel plutôt qu'un objectif de campagne
+    // rattaché à une Personne (voir js/views/dashboard.js#openMyObjectivesModal, qui liste
+    // justement les objectifs SANS personId).
+    personId: data.personId || null,
     title: data.title,
     status: "active", // active | done
     entries: [],

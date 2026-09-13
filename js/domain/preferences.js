@@ -48,11 +48,15 @@
 //
 // "🎯 Mes objectifs" (retour de Charles-Henri, vague 21 : "j'aimerai aussi me noter mes
 // objectifs qq part que ça soit ma ligne directrice") :
-//  - `myObjectives` : un simple texte libre, volontairement PAS structuré comme les objectifs
-//    par Personne (js/domain/objectives.js, qui suivent un collaborateur avec des points de
-//    suivi datés) — ici il n'y a qu'une seule "ligne directrice" à relire, pas une progression
-//    à tracer dans le temps. Accessible depuis l'Accueil (js/views/dashboard.js), comme le
-//    reste des raccourcis de premier niveau.
+//  - `myObjectives` : CHAMP HÉRITÉ, plus affiché depuis le 13/09/2026 (retour de Charles-Henri :
+//    "comment je suis l'avancement de mes propres objectifs") — un simple texte libre sans
+//    aucun suivi ne répondait plus au besoin. "🎯 Mes objectifs" (js/views/dashboard.js) utilise
+//    désormais la même mécanique que les objectifs par Personne (js/domain/objectives.js) : un
+//    Objectif sans `personId` est un objectif personnel, avec statut Actif/Atteint, points de
+//    suivi datés, tags et éléments liés. L'ancien texte, s'il existait, a été repris une seule
+//    fois (voir `markPersonalObjectivesMigratedV1` plus bas) comme premier point de suivi d'un
+//    objectif "Ligne directrice" créé automatiquement — ce champ reste en base (jamais nettoyé,
+//    au cas où) mais n'est plus lu ni écrit par l'interface.
 //
 // "📌 Pense-bête" de l'Accueil personnalisable (retour de Charles-Henri, 13/09/2026 : "une
 // espèce de post-it avec checklist ou en mode écrit de ce que j'ai en tête pour la journée sans
@@ -125,6 +129,7 @@ export async function getPreferences() {
     dashboardOrder: [],
     tagsMigratedV1: false,
     disabledTags: [],
+    personalObjectivesMigratedV1: false,
     ...current,
   };
 }
@@ -392,4 +397,17 @@ export async function markTagsMigratedV1() {
 export async function setDisabledTags(list) {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, disabledTags: list || [] });
+}
+
+/**
+ * Bascule one-shot (retour de Charles-Henri, 13/09/2026 : "comment je suis l'avancement de mes
+ * propres objectifs" → "statuts + point et possibilité de lier des éléments") — protège la
+ * reprise ponctuelle de l'ancien texte libre `myObjectives` (voir ci-dessus) en un premier point
+ * de suivi d'un objectif "Ligne directrice" créé automatiquement (js/views/dashboard.js#
+ * openMyObjectivesModal), pour qu'elle ne tourne qu'une seule fois, jamais à chaque ouverture de
+ * l'écran. Même principe que `tagsMigratedV1`/`postitMigratedV1` avant elle.
+ */
+export async function markPersonalObjectivesMigratedV1() {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, personalObjectivesMigratedV1: true });
 }
