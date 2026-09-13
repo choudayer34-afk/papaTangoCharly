@@ -29,6 +29,7 @@ import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcu
 import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
 import { logView, logLogin } from "./services/usageTracking.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
+import { migrateInboxTags } from "./domain/tags.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
 import { parseOpenParam } from "./services/deeplink.js";
 import * as tasksApi from "./domain/tasks.js";
@@ -203,6 +204,17 @@ function mountApp() {
   // programmés" version retenue : notification navigateur app ouverte uniquement, sans
   // infrastructure serveur). Une fois par montage de l'app, jamais bloquant.
   maybeNotifyStalledOrLate().catch(() => {});
+  // Migration unique des tags (retour de Charles-Henri, 13/09/2026 : généralisation des tags,
+  // jusqu'ici limités aux Informations/Idées, à n'importe quelle fiche — voir js/domain/tags.js)
+  // — reprend les tags déjà posés dans l'ancien tableau `item.tags` vers la nouvelle collection
+  // générique, protégée par un drapeau one-shot (même principe que les migrations précédentes),
+  // jamais bloquante pour l'ouverture de l'app.
+  preferencesApi.getPreferences().then((prefs) => {
+    if (prefs.tagsMigratedV1) return;
+    migrateInboxTags()
+      .then(() => preferencesApi.markTagsMigratedV1())
+      .catch(() => {});
+  });
 }
 
 /**
