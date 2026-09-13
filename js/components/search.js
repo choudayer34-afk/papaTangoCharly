@@ -31,6 +31,7 @@ import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as inboxApi from "../domain/inbox.js";
 import * as objectivesApi from "../domain/objectives.js";
+import * as tagsApi from "../domain/tags.js";
 import { openTaskDetail } from "../views/kanban.js";
 import { openDuplicateTaskModal } from "./duplicateTask.js";
 import { openProjectDetail } from "../views/projects.js";
@@ -52,11 +53,34 @@ function notesText(notesLog) {
   return (notesLog || []).map((n) => n.text).join(" ");
 }
 
+/** Les noms des tags posés sur une fiche donnée (collection générique, voir js/domain/tags.js
+ *  — vague 44 puis généralisée à toute fiche le 13/09/2026), concaténés comme `notesText`
+ *  ci-dessus pour rester injectables dans `haystack`. */
+function tagsTextFor(allTags, type, id) {
+  return tagsApi
+    .tagsFor(allTags, type, id)
+    .map((t) => t.tag)
+    .join(" ");
+}
+
+/**
+ * Recherche globale — deux modes.
+ * - Normal : `query` est comparée au texte habituel de chaque fiche (titre, description,
+ *   notes...) ET à ses tags, comme avant (un tag reste trouvable en tapant simplement son nom).
+ * - "#" (retour de Charles-Henri, 13/09/2026 : "dans la recherche global par tags, ça permet
+ *   éventuellement de retrouver plus rapidement... tout les éléments associés à ce tags") — dès
+ *   que `query` commence par "#", elle ne compare plus QUE les tags de chaque fiche, tous types
+ *   confondus, jamais le reste de son texte : un raccourci dédié pour "quelles fiches portent ce
+ *   tag ?", plutôt qu'une simple variante de la recherche normale.
+ */
 async function runSearch(query) {
-  const q = query.trim().toLowerCase();
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const tagMode = trimmed.startsWith("#");
+  const q = (tagMode ? trimmed.slice(1) : trimmed).trim().toLowerCase();
   if (!q) return [];
 
-  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives] = await Promise.all([
+  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags] = await Promise.all([
     tasksApi.listAll(),
     projectsApi.listAll(),
     peopleApi.listAll(),
@@ -70,13 +94,22 @@ async function runSearch(query) {
     // js/domain/inbox.js pour la distinction avec un élément classé sans suite.
     inboxApi.listKeptIncludingArchived(),
     objectivesApi.listAll(),
+    tagsApi.listAll(),
   ]);
+
+  /** true si la fiche {type,id} correspond à `q` — en mode "#", uniquement par ses tags ; sinon
+   *  par son texte habituel (`textParts`) ET ses tags, comme avant cette vague. */
+  function matches(type, id, ...textParts) {
+    const tagsText = tagsTextFor(allTags, type, id).toLowerCase();
+    if (tagMode) return tagsText.includes(q);
+    return haystack(...textParts, tagsText).includes(q);
+  }
 
   const results = [];
 
   for (const t of tasks) {
     const checklistText = (t.checklist || []).map((c) => c.text).join(" ");
-    if (haystack(t.title, t.description, t.successCriteria, t.waitingOn, checklistText, notesText(t.notesLog)).includes(q)) {
+    if (matches("Task", t.id, t.title, t.description, t.successCriteria, t.waitingOn, checklistText, notesText(t.notesLog))) {
       results.push({
         type: "Tâche",
         emoji: "✅",
@@ -93,7 +126,7 @@ async function runSearch(query) {
   }
   for (const p of projects) {
     const partsText = (p.parts || []).map((part) => `${part.label} ${notesText(part.notesLog)}`).join(" ");
-    if (haystack(p.name, p.objective, p.successCriteria, partsText, notesText(p.notesLog)).includes(q)) {
+    if (matches("Project", p.id, p.name, p.objective, p.successCriteria, partsText, notesText(p.notesLog))) {
       const projectTasks = tasks.filter((t) => t.projectId === p.id);
       const archived = projectsApi.isArchived(p);
       results.push({
@@ -107,7 +140,7 @@ async function runSearch(query) {
     }
   }
   for (const person of people) {
-    if (haystack(person.name, person.role, notesText(person.notesLog)).includes(q)) {
+    if (matches("Person", person.id, person.name, person.role, notesText(person.notesLog))) {
       results.push({
         type: "Personne",
         emoji: person.type === "manager" ? "👔" : "👤",
@@ -117,7 +150,7 @@ async function runSearch(query) {
     }
   }
   for (const f of followUps) {
-    if (haystack(f.title, f.expectedResult, f.successCriteria, f.notes, notesText(f.notesLog)).includes(q)) {
+    if (matches("FollowUp", f.id, f.title, f.expectedResult, f.successCriteria, f.notes, notesText(f.notesLog))) {
       const person = people.find((p) => p.id === f.personId);
       results.push({
         type: "Suivi",
@@ -131,12 +164,12 @@ async function runSearch(query) {
     }
   }
   for (const r of resources) {
-    if (haystack(r.title, r.description, r.url, (r.tags || []).join(" "), notesText(r.notesLog)).includes(q)) {
+    if (matches("Resource", r.id, r.title, r.description, r.url, notesText(r.notesLog))) {
       results.push({ type: "Ressource", emoji: "📎", title: r.title, onOpen: () => openResourceDetail(r, projects, tasks) });
     }
   }
   for (const m of meetings) {
-    if (haystack(m.title, m.objective, m.notes, notesText(m.notesLog)).includes(q)) {
+    if (matches("Meeting", m.id, m.title, m.objective, m.notes, notesText(m.notesLog))) {
       results.push({
         type: "Réunion",
         emoji: "🗓️",
@@ -146,7 +179,7 @@ async function runSearch(query) {
     }
   }
   for (const d of decisions) {
-    if (haystack(d.title, d.decision, d.context, notesText(d.notesLog)).includes(q)) {
+    if (matches("Decision", d.id, d.title, d.decision, d.context, notesText(d.notesLog))) {
       results.push({
         type: "Décision",
         emoji: "🗳️",
@@ -159,7 +192,7 @@ async function runSearch(query) {
   // vague, comme elles l'avaient été du fil conducteur avant la correction du 31/08/2026
   // (même trou d'architecture, même correction : un type de plus à ne jamais oublier).
   for (const item of keptItems) {
-    if (haystack(item.rawContent, notesText(item.notesLog)).includes(q)) {
+    if (matches("Kept", item.id, item.rawContent, notesText(item.notesLog))) {
       results.push({
         type: "Information/Idée",
         emoji: item.keptAsType === "idea" ? "💡" : "🧠",
@@ -174,7 +207,7 @@ async function runSearch(query) {
   // alors qu'il l'est déjà par ouverture directe de la fiche Objectif.
   for (const o of objectives) {
     const entriesText = (o.entries || []).map((e) => e.note).join(" ");
-    if (haystack(o.title, entriesText).includes(q)) {
+    if (matches("Objective", o.id, o.title, entriesText)) {
       const owner = people.find((p) => p.id === o.personId);
       results.push({
         type: "Objectif",
@@ -194,7 +227,8 @@ export function openSearchModal() {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <input id="global-search-input" type="text" placeholder="Rechercher un mot dans tout Pilotage..." />
+      <input id="global-search-input" type="text" placeholder="Rechercher un mot, ou #tag pour cibler un tag..." list="global-search-tag-options" />
+      <datalist id="global-search-tag-options"></datalist>
     </div>
     <div class="chip-row" id="search-type-filter" style="margin-bottom:8px;"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-bottom:8px;">
@@ -222,6 +256,19 @@ export function openSearchModal() {
     (t, i) => `<button type="button" class="chip active" data-type="${escapeHtml(t)}" title="Alt+${i + 1}">${t}</button>`
   ).join("");
 
+  // Autocomplétion "#" (retour de Charles-Henri, 13/09/2026 : "l'auto complession dans le
+  // recherche peut se faire après # et proposer tout les tags dispo en auto compression") — la
+  // <datalist> natif du champ propose tous les tags existants dès que Charles-Henri tape "#"
+  // (le navigateur filtre lui-même les options selon ce qui est déjà tapé, aucun JS de plus
+  // nécessaire ici). Chargée une fois à l'ouverture de la modale, pas à chaque frappe.
+  const tagOptionsEl = body.querySelector("#global-search-tag-options");
+  tagsApi.listAll().then((allTags) => {
+    tagOptionsEl.innerHTML = tagsApi
+      .listAllTagNames(allTags)
+      .map((t) => `<option value="#${escapeHtml(t)}"></option>`)
+      .join("");
+  });
+
   function updateFilterChips() {
     filterEl.querySelectorAll("[data-type]").forEach((chip) => chip.classList.toggle("active", activeTypes.has(chip.dataset.type)));
   }
@@ -242,16 +289,23 @@ export function openSearchModal() {
 
   function renderResults(results, query) {
     lastResults = results;
-    if (!query.trim()) {
-      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Tape un mot-clé — titre, nom, notes, tag...</div>`;
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
+      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Tape un mot-clé — titre, nom, notes, tag... ou # pour chercher directement par tag.</div>`;
       return;
     }
     const includeDone = includeDoneEl.checked;
     const filtered = results.filter((r) => activeTypes.has(r.type) && (includeDone || !r.done));
     if (!filtered.length) {
-      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ne correspond à « ${escapeHtml(query)} »${
-        results.length ? " avec ces filtres." : "."
-      }</div>`;
+      // "#" seul (retour de Charles-Henri : autocomplétion juste après #) : les suggestions
+      // viennent de la <datalist> du champ, pas de ce panneau — message dédié plutôt que
+      // "Rien ne correspond à « # »", qui donnerait l'impression d'une recherche déjà ratée.
+      resultsEl.innerHTML =
+        trimmedQuery === "#"
+          ? `<div class="empty-state" style="padding:16px;">Tape le nom d'un tag après # — les tags déjà utilisés sont proposés en autocomplétion.</div>`
+          : `<div class="empty-state" style="padding:16px;">Rien ne correspond à « ${escapeHtml(query)} »${
+              results.length ? " avec ces filtres." : "."
+            }</div>`;
       return;
     }
     resultsEl.innerHTML = "";
