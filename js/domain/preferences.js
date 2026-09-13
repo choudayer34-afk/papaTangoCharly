@@ -53,6 +53,30 @@
 //    suivi datés) — ici il n'y a qu'une seule "ligne directrice" à relire, pas une progression
 //    à tracer dans le temps. Accessible depuis l'Accueil (js/views/dashboard.js), comme le
 //    reste des raccourcis de premier niveau.
+//
+// "📌 Pense-bête" de l'Accueil personnalisable (retour de Charles-Henri, 13/09/2026 : "une
+// espèce de post-it avec checklist ou en mode écrit de ce que j'ai en tête pour la journée sans
+// que ce soit une tâche") — voir js/views/dashboard.js#renderPostitSection :
+//  - `postitMode` : "text" (texte libre) ou "checklist" (sous-étapes cochables, même composant
+//    que js/components/checklist.js) — un seul mode actif à la fois, jamais les deux affichés
+//    ensemble (Charles-Henri choisit ce qui lui convient ce jour-là).
+//  - `postitText` / `postitChecklist` : le contenu de chaque mode, conservés SÉPARÉMENT même
+//    quand on bascule de l'un à l'autre — changer de mode n'efface jamais ce qui était noté
+//    dans l'autre, pour ne rien perdre par erreur.
+//  - `postitMigratedV1` : bascule one-shot, même principe que `dashboardHiddenMigratedV19` —
+//    le Pense-bête est un module qu'on active soi-même ("c'est un module activable via l'admin
+//    de paramétrage") : masqué par défaut la première fois que cette vague tourne, plutôt que
+//    d'apparaître d'emblée sans que Charles-Henri l'ait demandé. Ne se redéclenche jamais après.
+//
+// "🗂️ Accueil réorganisable" (même retour, second volet — "pouvoir positionner, organiser des
+// rubriques comme je l'entends sur web et mobile") :
+//  - `dashboardOrder` : ordre EXPLICITE des rubriques de l'Accueil (tableau de clés), posé
+//    uniquement quand Charles-Henri déplace lui-même une rubrique (⚙️ Personnaliser). Vide par
+//    défaut : tant qu'aucun ordre explicite n'existe, js/views/dashboard.js applique son propre
+//    ordre par défaut, différent web/mobile (le Pense-bête avant les indicateurs sur grand
+//    écran, juste après sur mobile) — un ordre choisi à la main s'applique en revanche à
+//    l'identique partout, plus simple à retenir qu'un ordre qui varie encore une fois qu'on y a
+//    touché soi-même.
 
 // Raccourcis clavier personnalisés (retour de Charles-Henri, vague 20 : "je veux pouvoir
 // affecter un raccourci moi-même... pour aller directement sur une personne ou un projet") :
@@ -94,6 +118,11 @@ export async function getPreferences() {
     myObjectives: "",
     homeMode: "classic",
     seenWhatsNewCount: 0,
+    postitMode: "text",
+    postitText: "",
+    postitChecklist: [],
+    postitMigratedV1: false,
+    dashboardOrder: [],
     ...current,
   };
 }
@@ -294,4 +323,45 @@ export async function removeCustomShortcut(combo) {
 export function findShortcutForTarget(customShortcuts, type, id) {
   const entry = Object.entries(customShortcuts || {}).find(([, v]) => v.type === type && v.id === id);
   return entry ? entry[0] : null;
+}
+
+/** Bascule le Pense-bête entre texte libre et checklist — le contenu de chaque mode reste en
+ *  mémoire séparément (voir `setPostitText`/`setPostitChecklist`), rebasculer ne perd jamais
+ *  ce qui a été noté dans l'autre mode. */
+export async function setPostitMode(mode) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, postitMode: mode === "checklist" ? "checklist" : "text" });
+}
+
+/** Contenu texte libre du Pense-bête — toujours remplacé en entier, comme `myObjectives`. */
+export async function setPostitText(text) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, postitText: text || "" });
+}
+
+/** Contenu checklist du Pense-bête — un tableau `{id, text, done, doneAt}`, même forme que
+ *  toutes les autres checklists de l'app (js/components/checklist.js). */
+export async function setPostitChecklist(items) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, postitChecklist: items || [] });
+}
+
+/**
+ * Bascule one-shot (retour de Charles-Henri, 13/09/2026 : "c'est un module activable via
+ * l'admin de paramétrage") — masque le Pense-bête par défaut la toute première fois que cette
+ * vague tourne, exactement comme `markDashboardHiddenMigratedV19()` masquait certaines sections
+ * lors de l'audit de simplification. Ne se redéclenche jamais ensuite : une fois ce drapeau
+ * posé, toute personnalisation faite après (l'activer soi-même via ⚙️) est respectée.
+ */
+export async function markPostitMigratedV1() {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, postitMigratedV1: true });
+}
+
+/** Ordre explicite des rubriques de l'Accueil (⚙️ Personnaliser → "Ordre des rubriques") —
+ *  toujours remplacé en entier ; un tableau vide signifie "pas d'ordre choisi", auquel cas
+ *  js/views/dashboard.js applique son propre ordre par défaut (différent web/mobile). */
+export async function setDashboardOrder(order) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, dashboardOrder: order || [] });
 }
