@@ -123,6 +123,7 @@ export async function getPreferences() {
     postitChecklist: [],
     postitMigratedV1: false,
     dashboardOrder: [],
+    tagsMigratedV1: false,
     ...current,
   };
 }
@@ -364,4 +365,16 @@ export async function markPostitMigratedV1() {
 export async function setDashboardOrder(order) {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, dashboardOrder: order || [] });
+}
+
+/**
+ * Bascule one-shot (retour de Charles-Henri, 13/09/2026 : généralisation des tags à toute
+ * fiche, voir js/domain/tags.js) — protège la migration ponctuelle des tags déjà posés sur les
+ * Informations/Idées (js/domain/tags.js#migrateInboxTags) pour qu'elle ne tourne qu'une seule
+ * fois au démarrage, jamais à chaque ouverture de l'app. Même principe que
+ * `postitMigratedV1`/`dashboardHiddenMigratedV19` avant elle.
+ */
+export async function markTagsMigratedV1() {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, tagsMigratedV1: true });
 }
