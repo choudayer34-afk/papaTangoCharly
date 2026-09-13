@@ -66,8 +66,20 @@
   --nav-height: 64px;
 }
 
+/* Mode sombre — retour de Charles-Henri, 13/09/2026 : interrupteur clair/sombre sur l'écran
+   d'accueil (voir js/services/themeStore.js). Ces tokens dark existaient déjà avant cette
+   vague, pilotés uniquement par le réglage de l'appareil (`prefers-color-scheme`) — l'ajout de
+   l'interrupteur ne change pas ces valeurs, seulement QUAND elles s'appliquent : trois états
+   possibles plutôt que deux blocs indépendants, pour que le choix explicite l'emporte toujours
+   sur l'appareil, dans les deux sens.
+   - Rien (`data-theme` absent) : ce bloc media suit l'appareil, comme avant cette vague.
+   - `data-theme="light"` : un choix explicite CLAIR qui doit gagner même si l'appareil est en
+     sombre — ce bloc media est donc désactivé par le `:not([data-theme="light"])` ci-dessous.
+   - `data-theme="dark"` : un choix explicite SOMBRE qui doit s'appliquer même si l'appareil est
+     en clair — repris à l'identique, hors media query, dans le bloc `:root[data-theme="dark"]`
+     plus bas. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --color-bg: #15172A;
     --color-surface: #1E2140;
     --color-surface-alt: #262A4D;
@@ -76,4 +88,14 @@
     --color-text-muted: #A2A5C7;
     --color-primary-light: #2A2D5E;
   }
+}
+
+:root[data-theme="dark"] {
+  --color-bg: #15172A;
+  --color-surface: #1E2140;
+  --color-surface-alt: #262A4D;
+  --color-border: #33375C;
+  --color-text: #EDEFFB;
+  --color-text-muted: #A2A5C7;
+  --color-primary-light: #2A2D5E;
 }

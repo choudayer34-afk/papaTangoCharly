@@ -710,6 +710,33 @@ tbody.drag-over-group {
   outline: 2px dashed var(--color-primary);
   outline-offset: -2px;
 }
+/* Sélection multiple + édition en masse (retour de Charles-Henri, 13/09/2026) — voir
+   js/views/kanban.js#renderBulkToolbar/openBulkEditModal. Case à cocher pinned dans la colonne
+   Titre (groupe complet dans l'en-tête, ligne par ligne dans le corps) plutôt qu'une colonne
+   dédiée, pour ne rien ajouter à faire défiler horizontalement. */
+.pilotage-table-checkbox {
+  width: auto;
+  margin: 0 4px 0 0;
+  flex: none;
+}
+.pilotage-table-row.selected td {
+  background: var(--color-primary-light);
+}
+.pilotage-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.pilotage-bulk-toolbar-count {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
 .pilotage-table-td-description {
   max-width: 260px;
   overflow: hidden;
@@ -841,6 +868,17 @@ tbody.drag-over-group {
   color: var(--color-text-muted);
   margin-bottom: var(--space-1);
 }
+/* Libellé de champ cliquable, ex. "Projet" dans la fiche Tâche (retour de Charles-Henri,
+   13/09/2026) — remonter vers l'élément référencé par ce champ plutôt que le modifier ici. */
+.field-label-link {
+  cursor: pointer;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+  width: fit-content;
+}
+.field-label-link:hover { color: var(--color-primary-dark); }
 .field input,
 .field textarea,
 .field select {
@@ -911,6 +949,101 @@ tbody.drag-over-group {
   background: var(--color-primary);
   color: var(--color-text-inverse);
   border-color: var(--color-primary);
+}
+
+/* ---------- Tags libres (Informations/Idées de l'Inbox, retour de Charles-Henri, 13/09/2026)
+   ---------- Même habillage pilule que `.chip` ci-dessus, mais avec un bouton de suppression
+   intégré (`✕`) — un tag existant se retire d'un clic, jamais via une modale de confirmation
+   séparée (ce n'est qu'une catégorisation libre, pas une suppression de contenu). Voir
+   js/views/inbox.js#openKeptItemDetail. */
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  padding: 4px 4px 4px 12px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tag-chip button {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.tag-chip button:hover {
+  color: var(--color-danger, #d33);
+}
+
+/* ---------- Interrupteur clair/sombre (retour de Charles-Henri, 13/09/2026 : "un petit
+   interrupteur [...] qu'on comprenne facilement sur quel mode on bascule") ---------- Écran
+   d'accueil, en haut à gauche (voir js/views/dashboard.js). Une vraie case à cocher cachée
+   visuellement (jamais `display:none`, qui casserait le clavier/lecteur d'écran) pilote le
+   déplacement du curseur via `:checked` — deux icônes fixes de part et d'autre indiquent sans
+   ambiguïté quel côté est clair et quel côté est sombre, l'icône du mode actif étant mise en
+   valeur par JS (voir refreshThemeToggleUI() dans dashboard.js) plutôt que par un sélecteur CSS
+   avancé (`:has()`) qui resterait plus fragile à travers les navigateurs. */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.theme-toggle-icon {
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  opacity: 0.4;
+  filter: grayscale(1);
+  transition: opacity var(--transition), filter var(--transition);
+}
+.theme-toggle-icon.active {
+  opacity: 1;
+  filter: none;
+}
+.theme-toggle-switch {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+}
+.theme-toggle-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+.theme-toggle-track {
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  position: relative;
+}
+.theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  transition: transform var(--transition);
+}
+.theme-toggle-switch input:checked ~ .theme-toggle-track .theme-toggle-thumb {
+  transform: translateX(18px);
+}
+.theme-toggle-switch input:focus-visible ~ .theme-toggle-track {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* ---------- Onglets de fiche (Tâche vague 24, Projet/Personne vague 25) : "segmented control"
