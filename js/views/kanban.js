@@ -34,6 +34,7 @@ import { renderInfoTip } from "../components/infoTip.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import { openDuplicateTaskModal } from "../components/duplicateTask.js";
+import { renderTagsEditor } from "../components/tagsEditor.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -1376,6 +1377,8 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         <summary class="section-title" style="cursor:pointer;">🕒 Historique (${taskHistory.length})</summary>
         <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
       </details>
+      <div class="section-title">🏷️ Tags</div>
+      <div id="detail-tags" style="margin-bottom:16px;"></div>
       <div class="section-title">🔗 Lié</div>
       <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1515,6 +1518,7 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       onCancel: () => openTaskDetail(task, projects, { onClose }),
     });
   });
+  renderTagsEditor(body.querySelector("#detail-tags"), "Task", task.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), { type: "Task", id: task.id });
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();

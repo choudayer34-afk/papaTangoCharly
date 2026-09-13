@@ -12,6 +12,7 @@ import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { copyEntityLink } from "../components/copyLink.js";
+import { renderTagsEditor } from "../components/tagsEditor.js";
 
 const FILTERS = [
   { key: "recent", label: "Récentes" },
@@ -248,6 +249,8 @@ export async function openResourceDetail(resource, projects, tasks) {
       <summary class="section-title" style="cursor:pointer;">🕒 Historique (${resourceHistory.length})</summary>
       <div class="card" id="res-history" style="margin-top:8px;margin-bottom:16px;"></div>
     </details>
+    <div class="section-title">🏷️ Tags</div>
+    <div id="detail-tags" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -267,6 +270,7 @@ export async function openResourceDetail(resource, projects, tasks) {
   });
 
   const linkRef = { type: "Resource", id: resource.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), "Resource", resource.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();

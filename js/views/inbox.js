@@ -19,6 +19,8 @@ import { renderNotesBlock } from "../components/notesBlock.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { openChangeTypeModal } from "../components/changeType.js";
+import * as tagsApi from "../domain/tags.js";
+import { renderTagsEditor } from "../components/tagsEditor.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 
@@ -413,8 +415,12 @@ export async function openAllKeptItemsModal() {
   // Filtre par tag (retour de Charles-Henri, 13/09/2026 : "voir comment retrouver facilement
   // les éléments d'une catégorie") — en plus du filtre texte déjà existant, jamais à la place :
   // les deux se combinent (ET). Plusieurs tags peuvent être activés à la fois (un élément
-  // correspond dès qu'il porte AU MOINS un des tags cochés, pas tous).
-  const allTags = await inboxApi.listAllKeptTags();
+  // correspond dès qu'il porte AU MOINS un des tags cochés, pas tous). Tags désormais posés via
+  // la collection générique js/domain/tags.js (retour de Charles-Henri, même jour : "les tags
+  // peuvent être associé à n'importe quel élément"), plus l'ancien tableau `item.tags`.
+  const allTags = await tagsApi.listAll();
+  const tagNames = tagsApi.listAllTagNames(allTags);
+  const tagsByItem = new Map(items.map((item) => [item.id, tagsApi.tagsFor(allTags, "Kept", item.id).map((t) => t.tag)]));
 
   const body = document.createElement("div");
   body.innerHTML = `
@@ -422,9 +428,9 @@ export async function openAllKeptItemsModal() {
       <input id="kept-filter" type="text" placeholder="🔎 Filtrer par mot..." />
     </div>
     ${
-      allTags.length
+      tagNames.length
         ? `<div class="chip-row" id="kept-tag-filters" style="margin-bottom:12px;">
-             ${allTags.map((t) => `<button type="button" class="chip" data-tag="${escapeAttr(t)}">🏷️ ${escapeHtml(t)}</button>`).join("")}
+             ${tagNames.map((t) => `<button type="button" class="chip" data-tag="${escapeAttr(t)}">#${escapeHtml(t)}</button>`).join("")}
            </div>`
         : ""
     }
@@ -437,7 +443,8 @@ export async function openAllKeptItemsModal() {
     const needle = filterText.trim().toLowerCase();
     const filtered = items.filter((item) => {
       if (needle && !item.rawContent.toLowerCase().includes(needle)) return false;
-      if (activeTags.size && !(item.tags || []).some((t) => activeTags.has(t))) return false;
+      const itemTags = tagsByItem.get(item.id) || [];
+      if (activeTags.size && !itemTags.some((t) => activeTags.has(t))) return false;
       return true;
     });
     listEl.innerHTML = "";
@@ -450,7 +457,8 @@ export async function openAllKeptItemsModal() {
       row.className = "item-row";
       row.style.cursor = "pointer";
       const archivedTag = item.status === "archived" ? " · 🗄️ archivée" : "";
-      const tagsLine = (item.tags || []).length ? ` · ${item.tags.map((t) => `🏷️ ${escapeHtml(t)}`).join(" ")}` : "";
+      const itemTags = tagsByItem.get(item.id) || [];
+      const tagsLine = itemTags.length ? ` · ${itemTags.map((t) => `#${escapeHtml(t)}`).join(" ")}` : "";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(item.rawContent)}</div>
@@ -490,7 +498,7 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
   // plutôt qu'à la qualification (openQualifyChoice) : une capture qualifiée en Information/Idée
   // reste d'abord un texte brut conservé (Règle 3), le rattachement à un projet et les tags
   // s'ajoutent ensuite, depuis la fiche détail, jamais obligatoires.
-  const [projects, allTags] = await Promise.all([projectsApi.listAll(), inboxApi.listAllKeptTags()]);
+  const [projects] = await Promise.all([projectsApi.listAll()]);
   const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
   const body = document.createElement("div");
@@ -508,12 +516,7 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
       </select>
     </div>
     <div class="section-title" style="margin-top:0;">🏷️ Tags</div>
-    <div id="kept-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <input id="kept-tag-input" type="text" placeholder="Ajouter un tag..." list="kept-tag-options" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <datalist id="kept-tag-options">${allTags.map((t) => `<option value="${escapeAttr(t)}"></option>`).join("")}</datalist>
-      <button id="kept-tag-add-btn" type="button" class="btn btn-secondary btn-sm">+ Tag</button>
-    </div>
+    <div id="kept-tags-editor" style="margin-bottom:16px;"></div>
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
@@ -532,40 +535,7 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
     item.projectId = projectSelectEl.value || null;
   });
 
-  const tagsEl = body.querySelector("#kept-tags");
-  function renderTags() {
-    tagsEl.innerHTML = "";
-    if (!(item.tags || []).length) {
-      tagsEl.innerHTML = `<span class="item-meta">Aucun tag pour l'instant.</span>`;
-      return;
-    }
-    for (const tag of item.tags) {
-      const chip = document.createElement("span");
-      chip.className = "tag-chip";
-      chip.innerHTML = `${escapeHtml(tag)} <button type="button" title="Retirer ce tag">✕</button>`;
-      chip.querySelector("button").addEventListener("click", async () => {
-        item.tags = await inboxApi.removeKeptTag(item.id, tag);
-        renderTags();
-      });
-      tagsEl.appendChild(chip);
-    }
-  }
-  renderTags();
-  const addTag = async () => {
-    const input = body.querySelector("#kept-tag-input");
-    const value = input.value.trim();
-    if (!value) return;
-    item.tags = await inboxApi.addKeptTag(item.id, value);
-    input.value = "";
-    renderTags();
-  };
-  body.querySelector("#kept-tag-add-btn").addEventListener("click", addTag);
-  body.querySelector("#kept-tag-input").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addTag();
-    }
-  });
+  renderTagsEditor(body.querySelector("#kept-tags-editor"), "Kept", item.id);
 
   const ref = { type: "Kept", id: item.id };
   const shortLabel = item.rawContent.slice(0, 60);

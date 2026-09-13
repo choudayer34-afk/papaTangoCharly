@@ -29,6 +29,34 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "13 septembre 2026 (suite 3)",
+    items: [
+      {
+        type: "add",
+        title: "🏷️ Tags sur n'importe quelle fiche + recherche par #tag",
+        text: "Les tags — jusqu'ici réservés aux Informations/Idées — se posent désormais sur les 9 types de fiches (Tâche, Projet, Personne, Suivi, Ressource, Réunion, Décision, Objectif, Information/Idée), toujours affichés préfixés \"#\". Dans la recherche globale (🔎), taper \"#\" propose en autocomplétion tous les tags déjà utilisés ; \"#motclé\" ne cherche plus que par tag, tous types confondus, pour retrouver d'un coup tout ce qui porte cette étiquette. Les anciens tags déjà posés sur des Informations/Idées ont été repris automatiquement, rien n'est perdu.",
+        howTo: "Sur n'importe quelle fiche → section \"🏷️ Tags\" → taper un mot (le # est ajouté automatiquement à l'affichage) → + Tag. Pour retrouver : 🔎 Rechercher → \"#\" puis le nom du tag (proposé en autocomplétion).",
+        gain: "Une seule catégorisation libre, cohérente sur toute l'app, pour recouper des sujets qui traversent plusieurs types de fiches (ex. #CSE sur un Projet, une Réunion et un Suivi à la fois).",
+      },
+      {
+        type: "fix",
+        title: "🗓️ Fiche Réunion/Décision : le champ Projet ne plantait plus la fiche",
+        text: "Ouvrir une fiche Réunion ou Décision depuis l'Accueil provoquait une erreur silencieuse (\"attachProjectQuickCreate is not defined\") dès que la fiche essayait d'afficher le champ Projet avec sa création rapide — la fiche restait bloquée avant même d'afficher ses tags ou son fil \"🔗 Lié\". Trouvé en testant la nouveauté ci-dessus. Corrigé par un simple import manquant.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026 (suite 2)",
+    items: [
+      {
+        type: "fix",
+        title: "🔎 La recherche globale trouve maintenant un tag",
+        text: "Les tags libres d'une Information/Idée n'étaient comparés que dans la modale dédiée \"Voir tout\" (filtre par chip) — taper un tag dans la recherche globale (🔎, en haut de l'Accueil) ne remontait rien. Elle regarde désormais les tags comme le reste du contenu.",
+        howTo: "🔎 Rechercher → taper le tag directement, comme un mot-clé normal.",
+      },
+    ],
+  },
+  {
     date: "13 septembre 2026 (suite)",
     items: [
       {

@@ -24,6 +24,7 @@ import { renderShortcutAssignButton } from "../services/shortcuts.js";
 import { renderMaskChecklist } from "./prepMask.js";
 import { openChangeTypeModal } from "../components/changeType.js";
 import { copyEntityLink } from "../components/copyLink.js";
+import { renderTagsEditor } from "../components/tagsEditor.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -400,6 +401,8 @@ export async function openPersonDetail(person, allFollowUps) {
         <summary class="section-title" style="cursor:pointer;margin-top:0;">🕒 Historique (${personHistory.length})</summary>
         <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
       </details>
+      <div class="section-title">🏷️ Tags</div>
+      <div id="detail-tags" style="margin-bottom:16px;"></div>
       <div class="section-title">🔗 Lié</div>
       <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -458,6 +461,7 @@ export async function openPersonDetail(person, allFollowUps) {
   });
 
   const linkRef = { type: "Person", id: person.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), "Person", person.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();
@@ -1040,6 +1044,8 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
       <input id="obj-entry-note" type="text" placeholder="Où en est-on ?" style="flex:2;min-width:160px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       <button id="add-entry-btn" type="button" class="btn btn-secondary btn-sm">+ Point</button>
     </div>
+    <div class="section-title">🏷️ Tags</div>
+    <div id="obj-tags" style="margin-bottom:16px;"></div>
     <!-- "🔗 Lié" (retour de Charles-Henri, 06/09/2026 : "pouvoir y rattacher d'autres projets ou
          faire un suivi") — un Objectif se suit désormais comme les autres fiches : on y attache
          des Projets/Suivis déjà existants (ou on en crée un nouveau déjà lié), même mécanique
@@ -1087,6 +1093,7 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   });
 
   const objLinkRef = { type: "Objective", id: objective.id };
+  renderTagsEditor(body.querySelector("#obj-tags"), "Objective", objective.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#obj-links"), objLinkRef);
   body.querySelector("#obj-link-existing-btn").addEventListener("click", () => {
     closeModal();
@@ -1665,6 +1672,8 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
     </div>
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
+    <div class="section-title">🏷️ Tags</div>
+    <div id="detail-tags" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1753,6 +1762,7 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
   );
 
   const linkRef = { type: "FollowUp", id: followUp.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), "FollowUp", followUp.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();

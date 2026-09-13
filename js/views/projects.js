@@ -28,6 +28,7 @@ import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import * as projectHealthApi from "../domain/projectHealth.js";
 import { renderProjectHealth } from "../components/projectHealth.js";
+import { renderTagsEditor } from "../components/tagsEditor.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -791,6 +792,8 @@ export async function openProjectDetail(project, tasks) {
         <summary class="section-title" style="cursor:pointer;">🕒 Historique (${projectHistory.length})</summary>
         <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
       </details>
+      <div class="section-title">🏷️ Tags</div>
+      <div id="detail-tags" style="margin-bottom:16px;"></div>
       <div class="section-title">🔗 Lié</div>
       <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1040,6 +1043,7 @@ export async function openProjectDetail(project, tasks) {
   });
 
   const linkRef = { type: "Project", id: project.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), "Project", project.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();

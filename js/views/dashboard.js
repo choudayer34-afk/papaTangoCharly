@@ -19,7 +19,7 @@ import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import { openEditFollowUpModal } from "./people.js";
-import { openProjectDetail } from "./projects.js";
+import { openProjectDetail, attachProjectQuickCreate } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
@@ -34,6 +34,7 @@ import { renderDecisionGrid } from "../components/decisionGrid.js";
 import { getTheme, getEffectiveTheme, setTheme } from "../services/themeStore.js";
 import { renderChecklist } from "../components/checklist.js";
 import { generateId } from "../services/id.js";
+import { renderTagsEditor } from "../components/tagsEditor.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -1899,6 +1900,8 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
     ${isMeeting ? `<div id="rd-canevas"></div>` : `<div class="section-title">⚖️ Grille de décision</div><div id="detail-decision-grid" style="margin-bottom:16px;"></div>`}
     <div class="section-title">🗒️ Notes</div>
     <div id="detail-notes" style="margin-bottom:16px;"></div>
+    <div class="section-title">🏷️ Tags</div>
+    <div id="detail-tags" style="margin-bottom:16px;"></div>
     <div class="section-title">🔗 Lié</div>
     <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -1975,6 +1978,7 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
   });
 
   const linkRef = { type: isMeeting ? "Meeting" : "Decision", id: data.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), linkRef.type, data.id);
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();
