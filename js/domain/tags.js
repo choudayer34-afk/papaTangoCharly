@@ -90,6 +90,66 @@ export function entitiesForTag(allTags, rawTag) {
 }
 
 /**
+ * Noms de tags proposés en autocomplétion, en excluant ceux désactivés en administration
+ * (retour de Charles-Henri, 13/09/2026 : "je dois pouvoir en admin désactiver [...] des tags" —
+ * voir js/components/adminPanel.js#openTagsAdminModal et preferencesApi.disabledTags). Un tag
+ * désactivé n'est réservé qu'à cette liste de suggestions : il reste posé sur les fiches qui
+ * l'ont déjà, et reste trouvable par la recherche — "désactiver" n'efface rien, ça évite juste
+ * de le reproposer à la saisie (utile pour un tag créé par erreur ou une faute de frappe qu'on
+ * ne veut plus voir ressurgir, sans pour autant vouloir toucher aux fiches qui le portent déjà).
+ */
+export function visibleTagNames(allTags, disabledTags) {
+  const disabledSet = new Set((disabledTags || []).map((t) => normalize(t)));
+  return listAllTagNames(allTags).filter((name) => !disabledSet.has(normalize(name)));
+}
+
+/**
+ * Vue groupée par nom de tag (normalisé), pour l'écran d'administration : combien de fiches
+ * portent ce tag et sous quelles casses il a été saisi (ex. "Urgent" par endroits, "urgent"
+ * ailleurs — jamais fusionnées silencieusement, juste regroupées ici pour l'affichage/l'action).
+ * `displayName` reprend la casse de la première occurrence rencontrée, uniquement pour l'affichage.
+ */
+export function groupByName(allTags) {
+  const groups = new Map();
+  for (const t of allTags) {
+    const key = normalize(t.tag);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, { key, displayName: t.tag, count: 0 });
+    groups.get(key).count++;
+  }
+  return [...groups.values()].sort((a, b) => a.displayName.localeCompare(b.displayName, "fr"));
+}
+
+/** Retire un tag d'une fiche donnée par son nom plutôt que par le document exact — pratique pour
+ *  un appelant qui ne connaît que {type, id, nom du tag} (ex. l'édition en masse du tableau
+ *  Pilotage, voir js/views/kanban.js#openBulkEditModal) sans avoir à porter le document complet
+ *  d'une fiche à l'autre. Ne fait rien si la fiche ne porte pas ce tag (jamais une erreur). */
+export async function removeTagByName(type, id, rawTag) {
+  const key = normalize(rawTag);
+  if (!key) return;
+  const all = await storage.listAll(COLLECTION);
+  const doc = all.find((t) => t.entityType === type && t.entityId === id && normalize(t.tag) === key);
+  if (doc) await removeTag(doc);
+}
+
+/**
+ * Supprime définitivement un tag de TOUTES les fiches qui le portent (action d'administration,
+ * retour de Charles-Henri : "je dois pouvoir [...] supprimer des tags") — contrairement au
+ * "désactiver" ci-dessus, ceci retire réellement chaque document {entityType, entityId, tag}
+ * correspondant, quelle que soit la casse d'origine. Irréversible — l'appelant (voir
+ * js/components/adminPanel.js) doit faire confirmer avant d'appeler ceci. Retourne le nombre de
+ * fiches concernées, pour le message de confirmation affiché ensuite.
+ */
+export async function deleteTagEverywhere(rawTag) {
+  const key = normalize(rawTag);
+  if (!key) return 0;
+  const all = await storage.listAll(COLLECTION);
+  const docs = all.filter((t) => normalize(t.tag) === key);
+  for (const doc of docs) await removeTag(doc);
+  return docs.length;
+}
+
+/**
  * Migration unique (13/09/2026) : les tags posés sur les Informations/Idées avant l'existence
  * de cette collection générique vivaient dans un tableau `tags` embarqué sur l'InboxItem
  * (js/domain/inbox.js#addKeptTag, vague 44). Reprise ici pour ne perdre aucune donnée déjà

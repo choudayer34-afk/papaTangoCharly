@@ -124,6 +124,7 @@ export async function getPreferences() {
     postitMigratedV1: false,
     dashboardOrder: [],
     tagsMigratedV1: false,
+    disabledTags: [],
     ...current,
   };
 }
@@ -377,4 +378,18 @@ export async function setDashboardOrder(order) {
 export async function markTagsMigratedV1() {
   const current = await getPreferences();
   return storage.put(COLLECTION, { ...current, tagsMigratedV1: true });
+}
+
+/**
+ * Tags désactivés en administration (retour de Charles-Henri, 13/09/2026 : "je dois pouvoir en
+ * admin désactiver [...] des tags") — noms normalisés (sans "#", en minuscules, voir
+ * js/domain/tags.js#stripHash). N'affecte que l'autocomplétion (js/components/tagsEditor.js et
+ * js/components/search.js) : un tag désactivé reste posé sur les fiches qui l'ont déjà et reste
+ * trouvable par la recherche, il n'est simplement plus reproposé à la saisie. Toujours remplacé
+ * en entier depuis l'écran d'administration (js/components/adminPanel.js#openTagsAdminModal), qui
+ * connaît déjà l'état complet de la liste au moment de l'appel.
+ */
+export async function setDisabledTags(list) {
+  const current = await getPreferences();
+  return storage.put(COLLECTION, { ...current, disabledTags: list || [] });
 }
