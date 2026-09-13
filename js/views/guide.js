@@ -8,6 +8,19 @@
 // Volontairement hors de ROUTES (js/app.js) : une page de référence consultée ponctuellement
 // depuis le bouton ❓ Aide, pas un onzième onglet permanent dans la navigation du bas.
 
+import { closeModal } from "../components/modal.js";
+
+// Liens contextuels `.guide-link` (voir `guideLinkHtml` plus bas) : ils peuvent être cliqués
+// depuis N'IMPORTE QUELLE modale ouverte ailleurs dans l'app (Mes objectifs, fiche Personne,
+// Management, création de Projet...). Sans ceci, la modale resterait affichée par-dessus le
+// Guide fraîchement affiché en arrière-plan — son overlay vit dans document.body, indépendant
+// du contenu de la route (js/components/modal.js), et rien dans js/app.js ne ferme les modales
+// au changement de route. Un seul écouteur délégué, posé une fois à l'évaluation de ce module
+// (importé par tous les écrans qui utilisent guideLinkHtml) plutôt que répété à chaque appelant.
+document.addEventListener("click", (e) => {
+  if (e.target.closest?.(".guide-link")) closeModal();
+});
+
 const HATS = [
   { id: "hat-toi", icon: "🧑‍💻", label: "Toi" },
   { id: "hat-equipe", icon: "👥", label: "Ton équipe" },
@@ -27,6 +40,57 @@ const COMPASS = [
   { sit: "Savoir ce que tu dois faire aujourd'hui / cette semaine", hat: "Toi", target: "hat-toi", detail: "Dashboard (Aujourd'hui, 7 jours) + Calendrier" },
   { sit: "Préparer une réunion ou un projet CSE", hat: "CSE", target: "hat-cse", detail: "Catégorie « CSE » sur Projet/Réunion" },
 ];
+
+// "🗓️ Selon le moment" (retour de Charles-Henri, 13/09/2026 : "les bonnes pratiques et les
+// périodes type — préparer EADP, préparer suivi objectifs, préparer suivi, savoir quoi faire,
+// suivre un projet et par où commencer") — même principe que LA BOUSSOLE ci-dessus, mais
+// organisé par CADENCE (quand le faire) plutôt que par situation ponctuelle (quoi faire face à
+// un événement) : les deux index pointent vers les mêmes fiches de détail plutôt que de
+// dupliquer le contenu. `target` doit correspondre à un id posé sur une <details> de casquette
+// (ouverte automatiquement) ou directement sur un cas d'usage précis (juste scrollé jusqu'à
+// lui, sa <details> parente étant alors ouverte par `openTopic`).
+const RITUALS = [
+  { period: "Chaque matin (2 min)", sit: "Savoir ce qu'il y a à faire aujourd'hui", target: "hat-toi", detail: "Accueil : tuiles 🔴 En retard et 📅 Aujourd'hui, puis « 7 jours » si besoin." },
+  { period: "Chaque semaine", sit: "Ne rien laisser filer, remettre à plat", target: "guide-retard", detail: "Revue hebdomadaire guidée (bouton 🧭 sur l'Accueil) : Inbox, retards, suivis à contrôler, projets sans action." },
+  { period: "Avant un 1:1 avec un collaborateur", sit: "Préparer un point individuel", target: "usecase-prep-point", detail: "Sa fiche → « 🗒️ Préparer mon point »." },
+  { period: "Avant ton propre point avec ton manager", sit: "Arriver avec un ordre du jour déjà prêt", target: "usecase-point-manager", detail: "Filtre « 👔 Mon manager » (onglet Équipe) → bouton dédié." },
+  { period: "En fin de campagne", sit: "Préparer l'EADP d'un collaborateur", target: "usecase-eadp", detail: "Sa fiche → « 📋 Préparer l'EADP », après avoir noté du 👍/👎 et des objectifs au fil de l'année." },
+  { period: "Régulièrement, sur la durée", sit: "Suivre l'avancement de tes propres objectifs", target: "usecase-mes-objectifs", detail: "Accueil → « 🎯 Mes objectifs » : statut, points de suivi datés, éléments liés." },
+  { period: "Au lancement d'un projet", sit: "Suivre un projet, par où commencer", target: "usecase-nouveau-projet", detail: "Onglet Projets → + Projet, catégorie, puis sous-parties si besoin." },
+];
+
+// Sommaire (retour de Charles-Henri, 13/09/2026 : "voir les différentes rubriques du guide
+// organisé") — un simple index de navigation, volontairement affiché EN DEHORS de
+// `#guide-searchable` : il reste visible et cliquable même pendant une recherche, plutôt que
+// d'être filtré comme le reste (ce n'est pas du contenu à chercher dedans, juste un plan).
+const TOC = [
+  ["🗓️ Selon le moment", "guide-rituals-title"],
+  ["🧭 La boussole", "guide-compass-title"],
+  ["✅ Tâche ou Suivi ?", "guide-taskfollow-title"],
+  ["🧑‍💻 Toi", "hat-toi"],
+  ["👥 Ton équipe", "hat-equipe"],
+  ["📦 Tes projets", "hat-projets"],
+  ["👔 Ton manager", "hat-manager"],
+  ["🏛️ CSE", "hat-cse"],
+  ["📑 Chaque onglet", "guide-tabs-title"],
+  ["🧩 Fonctions transverses", "guide-topics-title"],
+  ["🔴 Il y a du retard partout", "guide-retard"],
+];
+
+// Lien vers une rubrique précise du guide depuis n'importe quel autre écran (retour de
+// Charles-Henri, 13/09/2026 : "des liens vers le guide pour indiquer à quoi ça peut servir" —
+// mais explicitement PAS partout, seulement là où un doute est probable). Réutilise le même
+// principe de lien profond que js/services/deeplink.js (format `#/route?param=...`), en plus
+// simple : ici la cible est une rubrique du guide, pas une fiche à résoudre via resolveRef,
+// donc pas besoin de passer par ce module. `renderGuide` lit ce paramètre lui-même au chargement
+// (même pattern que js/views/prepMask.js) et ouvre/scrolle jusqu'à la bonne rubrique.
+export function guideTopicHref(topicId) {
+  return `#/guide?topic=${encodeURIComponent(topicId)}`;
+}
+
+export function guideLinkHtml(topicId, label = "📖 Voir dans le guide") {
+  return `<a href="${guideTopicHref(topicId)}" class="guide-link">${label}</a>`;
+}
 
 // 8 → 5 icônes directes depuis la vague 24 (retour de Charles-Henri, sur la base de Material
 // Design/Apple HIG : 3-5 destinations recommandées en barre du bas) — Projets et Calendrier
@@ -111,11 +175,21 @@ export function renderGuide(container) {
       Aucun résultat. Essaie un autre mot — ex. « canevas », « note », « casquette », « retard ».
     </div>
 
+    <div class="section-title" id="guide-toc-title" style="margin-top:0;">📚 Sommaire</div>
+    <div class="card" id="guide-toc" style="margin-bottom:16px;"></div>
+
     <div id="guide-searchable">
-    <div class="section-title" id="guide-compass-title" style="margin-top:0;">🧭 La boussole</div>
+    <div class="section-title" id="guide-rituals-title">🗓️ Selon le moment — les périodes types</div>
+    <p class="item-meta" style="margin-bottom:8px;">
+      Les bonnes pratiques à répéter, rangées par occasion plutôt que par écran — chaque ligne
+      renvoie directement au bon endroit du guide.
+    </p>
+    <div class="card" id="guide-rituals" style="margin-bottom:16px;"></div>
+
+    <div class="section-title" id="guide-compass-title">🧭 La boussole</div>
     <div class="card" id="guide-compass" style="margin-bottom:16px;"></div>
 
-    <div class="section-title">Tâche ou Suivi ? La question qui débloque tout</div>
+    <div class="section-title" id="guide-taskfollow-title">Tâche ou Suivi ? La question qui débloque tout</div>
     <p class="item-meta" style="margin-bottom:8px;">
       C'est très probablement la source de la confusion : deux choses qui se ressemblent
       mais ne se rangent pas au même endroit.
@@ -159,6 +233,24 @@ export function renderGuide(container) {
     </div>
   `;
 
+  // "Selon le moment" : même mécanique que la boussole juste en dessous, mais la puce affiche
+  // la période plutôt que la casquette. Voir le commentaire sur RITUALS plus haut.
+  const ritualsEl = body.querySelector("#guide-rituals");
+  for (const row of RITUALS) {
+    const el = document.createElement("div");
+    el.className = "item-row";
+    el.style.cursor = "pointer";
+    el.innerHTML = `
+      <div class="item-main">
+        <div class="item-title">${escapeHtml(row.sit)}</div>
+        <div class="item-meta">${escapeHtml(row.detail)}</div>
+      </div>
+      <span class="chip" style="pointer-events:none;">${escapeHtml(row.period)}</span>
+    `;
+    el.addEventListener("click", () => openTopic(row.target));
+    ritualsEl.appendChild(el);
+  }
+
   // Boussole : chaque ligne ouvre + scrolle vers la bonne casquette (les casquettes sont
   // repliées par défaut pour ne pas rallonger l'écran — même logique que l'historique des
   // fiches, retour de Charles-Henri sur les pages qui s'allongent).
@@ -174,8 +266,20 @@ export function renderGuide(container) {
       </div>
       <span class="chip" style="pointer-events:none;">${escapeHtml(row.hat)}</span>
     `;
-    el.addEventListener("click", () => openHat(row.target));
+    el.addEventListener("click", () => openTopic(row.target));
     compassEl.appendChild(el);
+  }
+
+  // Sommaire : simple index cliquable, en dehors de la zone filtrée par la recherche (voir TOC
+  // plus haut) — reste utilisable même pendant une recherche en cours.
+  const tocEl = body.querySelector("#guide-toc");
+  for (const [label, target] of TOC) {
+    const el = document.createElement("div");
+    el.className = "item-row";
+    el.style.cursor = "pointer";
+    el.innerHTML = `<div class="item-main"><div class="item-title">${label}</div></div>`;
+    el.addEventListener("click", () => openTopic(target));
+    tocEl.appendChild(el);
   }
 
   const hatsEl = body.querySelector("#guide-hats");
@@ -211,12 +315,31 @@ export function renderGuide(container) {
     topicsEl.appendChild(card);
   }
 
-  function openHat(id) {
+  // Généralisation de l'ancien `openHat` (retour de Charles-Henri, 13/09/2026 : liens profonds
+  // vers une rubrique précise depuis d'autres écrans, voir `guideTopicHref`/`guideLinkHtml`
+  // plus haut) : la cible n'est plus forcément une <details> de casquette — ça peut aussi être
+  // un simple titre de section (Sommaire) ou un cas d'usage précis niché DANS une casquette
+  // repliée (RITUALS), auquel cas sa <details> parente est ouverte d'abord. Un bref flash
+  // visuel (`.guide-highlight-flash`, styles/components.css) signale la ligne visée quand elle
+  // n'est pas elle-même un dépliant qu'on voit s'ouvrir.
+  function openTopic(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.open = true;
+    const parentDetails = el.closest("details");
+    if (parentDetails) parentDetails.open = true;
+    if (el.tagName === "DETAILS") el.open = true;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.classList.add("guide-highlight-flash");
+    setTimeout(() => el.classList.remove("guide-highlight-flash"), 1800);
   }
+
+  // Lien profond `#/guide?topic=<id>` depuis un autre écran (voir `guideLinkHtml` plus haut) —
+  // même pattern de lecture directe de `location.hash` que js/views/prepMask.js, plutôt que de
+  // faire transiter ce paramètre par js/app.js (le guide n'est pas une fiche à résoudre via
+  // resolveRef, ça n'a pas sa place dans js/services/deeplink.js). Jamais bloquant : un id
+  // inconnu ou absent laisse simplement le guide s'afficher normalement, depuis le haut.
+  const topicParam = new URLSearchParams(location.hash.split("?")[1] || "").get("topic");
+  if (topicParam) openTopic(topicParam);
 
   // Recherche dans le guide (retour de Charles-Henri, 01/09/2026 : "une espèce de recherche
   // rapide comme la loupe sur l'accueil mais intégré à l'aide ici uniquement") — même logique
@@ -229,6 +352,7 @@ export function renderGuide(container) {
   // qu'on retrouve "canevas" dedans.
   const searchInput = body.querySelector("#guide-search");
   const searchEmpty = body.querySelector("#guide-search-empty");
+  const ritualsTitle = body.querySelector("#guide-rituals-title");
   const compassTitle = body.querySelector("#guide-compass-title");
   const tabsTitle = body.querySelector("#guide-tabs-title");
   const topicsTitle = body.querySelector("#guide-topics-title");
@@ -243,9 +367,10 @@ export function renderGuide(container) {
   }
 
   function resetSearch() {
-    for (const row of [...compassEl.children, ...tabsEl.children, ...topicsEl.children]) {
+    for (const row of [...ritualsEl.children, ...compassEl.children, ...tabsEl.children, ...topicsEl.children]) {
       row.style.display = "";
     }
+    ritualsTitle.style.display = "";
     compassTitle.style.display = "";
     tabsTitle.style.display = "";
     topicsTitle.style.display = "";
@@ -266,6 +391,13 @@ export function renderGuide(container) {
     }
 
     let anyMatch = false;
+
+    for (const row of ritualsEl.children) {
+      const match = row.textContent.toLowerCase().includes(q);
+      row.style.display = match ? "" : "none";
+      anyMatch = anyMatch || match;
+    }
+    setTitleVisible(ritualsTitle, ritualsEl);
 
     for (const row of compassEl.children) {
       const match = row.textContent.toLowerCase().includes(q);
@@ -306,10 +438,15 @@ export function renderGuide(container) {
   return function cleanup() {};
 }
 
-function usecase(title, situation, steps, gain, caveat) {
+function usecase(title, situation, steps, gain, caveat, id) {
   const div = document.createElement("div");
   div.className = "card";
   div.style.marginBottom = "12px";
+  // `id` optionnel (retour de Charles-Henri, 13/09/2026) : seuls les cas d'usage ciblés par
+  // RITUALS ou par un lien contextuel depuis un autre écran (`guideLinkHtml`) en ont un —
+  // sert d'ancre à `openTopic` pour scroller/ouvrir jusqu'à CE cas d'usage précis plutôt que de
+  // se contenter d'ouvrir toute la casquette.
+  if (id) div.id = id;
   div.innerHTML = `
     <div class="item-title" style="margin-bottom:2px;">${escapeHtml(title)}</div>
     ${situation ? `<div class="item-meta" style="margin-bottom:10px;">${escapeHtml(situation)}</div>` : ""}
@@ -391,6 +528,20 @@ function renderHatToi() {
       "bloquer des créneaux dans Outlook. Pilotage ne pousse rien vers Outlook — seul le sens inverse existe (associer une réunion Outlook déjà créée à une tâche). Le geste reste : tu regardes Pilotage pour savoir <em>quoi</em> bloquer, puis tu crées toi-même le créneau dans Outlook."
     )
   );
+  details.appendChild(
+    usecase(
+      "Suivre l'avancement de tes propres objectifs",
+      "Tu veux ta propre ligne directrice, pas seulement celle de tes collaborateurs.",
+      [
+        "Accueil → « 🎯 Mes objectifs » → « + Nouvel objectif » : un titre, un projet lié si ça se rattache à l'un d'eux.",
+        "Ajoute un point de suivi daté à chaque avancée réelle — pas une case à cocher, une vraie phrase datée, comme pour un objectif de collaborateur.",
+        "Coche « Atteint » quand c'est fait, tague-le si utile, et lie les tâches/projets qui y contribuent depuis « 🔗 Éléments liés ».",
+      ],
+      "le même suivi dans la durée que celui que tu tiens déjà pour les autres, mais pour toi — plus un texte figé qu'on ne relit jamais.",
+      "",
+      "usecase-mes-objectifs"
+    )
+  );
   return details;
 }
 
@@ -413,7 +564,9 @@ function renderHatEquipe() {
       "Préparer un point individuel",
       "Tu as un 1:1 dans 10 minutes.",
       ["Fiche de la personne → bouton « 🗒️ Préparer mon point ».", "L'écran recompose tout seul : en retard de contrôle, à transmettre, à aborder, terminé récemment."],
-      "zéro travail de préparation supplémentaire — une lecture recomposée de ce qui existe déjà."
+      "zéro travail de préparation supplémentaire — une lecture recomposée de ce qui existe déjà.",
+      "",
+      "usecase-prep-point"
     )
   );
   details.appendChild(
@@ -426,7 +579,8 @@ function renderHatEquipe() {
         "Le jour J, bouton « 📋 Préparer l'EADP » → choisis la période → tout ressort trié, avec un résumé copiable.",
       ],
       "plus besoin de rouvrir onze mois d'historique la veille de l'entretien.",
-      "d'export mis en forme ni de comparaison entre campagnes — juste la matière brute, propre et filtrée, à partir de laquelle tu rédiges toi-même (version volontairement simple)."
+      "d'export mis en forme ni de comparaison entre campagnes — juste la matière brute, propre et filtrée, à partir de laquelle tu rédiges toi-même (version volontairement simple).",
+      "usecase-eadp"
     )
   );
   return details;
@@ -436,14 +590,16 @@ function renderHatProjets() {
   const details = hatDetails("hat-projets", "📦", "Piloter un projet transverse", "Ex. la Modernisation, où tu dépends d'autres équipes (marketing, dev) pour avancer, sans levier hiérarchique direct sur elles.");
   details.appendChild(
     usecase(
-      "Monter le projet et suivre son avancement global",
+      "Monter un nouveau projet, par où commencer",
       "",
       [
         "Onglet Projets → + Projet. Donne-lui une catégorie (ex. « Modernisation ») — une icône lui est assignée automatiquement.",
         "Si le projet a des blocs qui avancent sans que tu aies d'action dessus, ajoute-les en 🧩 Sous-parties — un simple statut à trois états, pas une tâche.",
         "L'avancement affiché (%) se calcule automatiquement à partir des tâches rattachées.",
       ],
-      "« Où en est Modernisation ? » a une réponse en un coup d'œil, sans réunion de statut."
+      "« Où en est Modernisation ? » a une réponse en un coup d'œil, sans réunion de statut.",
+      "",
+      "usecase-nouveau-projet"
     )
   );
   details.appendChild(
@@ -494,7 +650,9 @@ function renderHatManager() {
         "Filtre « 👔 Mon manager » (dans l'onglet Équipe) : ajoute au fil de l'eau les sujets à discuter, décisions attendues, difficultés.",
         "Avant le point, bouton dédié pour composer Réalisé / En cours / Difficultés / Décisions attendues / Sujets à discuter / Prochaines étapes.",
       ],
-      "tu arrives avec un ordre du jour déjà structuré, sans le refaire à la main."
+      "tu arrives avec un ordre du jour déjà structuré, sans le refaire à la main.",
+      "",
+      "usecase-point-manager"
     )
   );
   return details;

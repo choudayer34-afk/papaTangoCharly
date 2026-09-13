@@ -25,6 +25,7 @@ import { renderMaskChecklist } from "./prepMask.js";
 import { openChangeTypeModal } from "../components/changeType.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
+import { guideLinkHtml } from "./guide.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -344,10 +345,11 @@ export async function openPersonDetail(person, allFollowUps) {
       <input id="person-detail-role" type="text" value="${escapeAttr(person.role || "")}" />
     </div>
     <div id="person-shortcut" style="margin-bottom:12px;"></div>
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
       <button id="prep-btn" class="btn btn-secondary btn-block">🗒️ Préparer mon point</button>
       <button id="eadp-btn" class="btn btn-secondary btn-block">📋 Préparer l'EADP</button>
     </div>
+    <div style="margin-bottom:16px;">${guideLinkHtml("usecase-eadp", "📖 Bien préparer un point ou une EADP")}</div>
 
     <div class="chip-row fiche-tabs" role="tablist">
       <button type="button" class="chip active" data-tab="followups" role="tab">Suivis</button>

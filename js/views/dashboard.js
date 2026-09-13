@@ -12,16 +12,18 @@ import * as followUpsApi from "../domain/followups.js";
 import * as preferencesApi from "../domain/preferences.js";
 import * as casquettesApi from "../domain/casquettes.js";
 import * as priorisationApi from "../domain/priorisation.js";
+import * as objectivesApi from "../domain/objectives.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
-import { openEditFollowUpModal } from "./people.js";
+import { openEditFollowUpModal, openObjectiveDetail } from "./people.js";
 import { openProjectDetail, attachProjectQuickCreate } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
+import { guideLinkHtml } from "./guide.js";
 import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
 import { openWeeklyReview } from "../components/weeklyReview.js";
@@ -1011,33 +1013,129 @@ export function renderDashboard(container) {
     });
   }
 
-  /** "🎯 Mes objectifs" (retour de Charles-Henri, vague 21 : "j'aimerai aussi me noter mes
-   *  objectifs qq part que ça soit ma ligne directrice") — un texte libre unique, relu et
-   *  réécrit à chaque ouverture, volontairement sans historique ni sous-structure : ce n'est
-   *  pas un suivi daté comme les objectifs par Personne (js/domain/objectives.js), juste une
-   *  ligne directrice qu'on retrouve toujours au même endroit. */
+  /**
+   * "🎯 Mes objectifs" (retour de Charles-Henri, vague 21 : "j'aimerai aussi me noter mes
+   * objectifs qq part que ça soit ma ligne directrice" — puis 13/09/2026 : "comment je suis
+   * l'avancement de mes propres objectifs", réponse retenue : "statuts + point[s de suivi] et
+   * possibilité de lier des éléments") — jusqu'ici un simple texte libre sans aucun suivi
+   * (`preferencesApi.myObjectives`, désormais un champ hérité, voir preferences.js). Réutilise
+   * maintenant EXACTEMENT la même mécanique que les objectifs suivis pour un collaborateur
+   * (js/domain/objectives.js, js/views/people.js#openObjectiveDetail) : un Objectif sans
+   * `personId` (`null`) est un objectif personnel plutôt qu'un objectif de campagne rattaché à
+   * une Personne — même statut Actif/Atteint, mêmes points de suivi datés, mêmes tags, mêmes
+   * éléments liés, même fiche de détail (`openObjectiveDetail` n'utilise d'ailleurs jamais le
+   * paramètre `person` qu'on lui passe, ce qui le rend déjà sûr à appeler avec `null` — vérifié
+   * avant d'y toucher, plutôt que de dupliquer toute la fiche pour ce seul cas).
+   *
+   * Migration : l'ancien texte libre, s'il existait, est repris une seule fois (drapeau
+   * `personalObjectivesMigratedV1`, même principe que `tagsMigratedV1` avant lui) comme premier
+   * point de suivi d'un objectif "Ligne directrice" créé automatiquement — jamais perdu, jamais
+   * dupliqué à une prochaine ouverture.
+   */
   async function openMyObjectivesModal() {
     const prefs = await preferencesApi.getPreferences();
+    if (!prefs.personalObjectivesMigratedV1) {
+      if (prefs.myObjectives && prefs.myObjectives.trim()) {
+        const created = await objectivesApi.createObjective({ personId: null, title: "Ligne directrice" });
+        await objectivesApi.addEntry(created.id, {
+          date: new Date().toISOString().slice(0, 10),
+          note: prefs.myObjectives.trim(),
+        });
+      }
+      await preferencesApi.markPersonalObjectivesMigratedV1();
+    }
+
+    const reopen = () => openMyObjectivesModal();
+    const [allObjectives, allProjects] = await Promise.all([objectivesApi.listAll(), projectsApi.listAll()]);
+    const mine = allObjectives
+      .filter((o) => !o.personId)
+      .sort((a, b) => (a.status === "done" ? 1 : 0) - (b.status === "done" ? 1 : 0) || (b.createdAt || 0) - (a.createdAt || 0));
+
     const body = document.createElement("div");
     body.innerHTML = `
-      <p style="margin-top:0;color:var(--color-text-muted);">Ta ligne directrice — ce que tu veux garder en tête, à relire quand tu perds le fil.</p>
-      <div class="field" style="margin-bottom:0;">
-        <textarea id="my-objectives-text" placeholder="Ex. Faire monter l'équipe en autonomie, sécuriser la refonte X avant fin d'année...">${escapeHtml(prefs.myObjectives || "")}</textarea>
+      <p style="margin-top:0;color:var(--color-text-muted);">Tes objectifs à toi — statut, points de suivi datés, éléments liés : même suivi que celui que tu tiens déjà pour tes collaborateurs. ${guideLinkHtml("usecase-mes-objectifs", "📖 Comment bien les suivre")}</p>
+      <div id="my-objectives-list"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <button type="button" id="add-my-objective-btn" class="btn btn-secondary btn-sm">+ Nouvel objectif</button>
       </div>
     `;
-    const { bodyEl, close } = openModal({
+    const listEl = body.querySelector("#my-objectives-list");
+    if (!mine.length) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:16px;"><span class="emoji">🎯</span>Pas encore d'objectif personnel — le premier clic sur "+ Nouvel objectif" en crée un.</div>`;
+    } else {
+      const list = document.createElement("div");
+      list.className = "card";
+      for (const o of mine) {
+        const project = o.projectId ? allProjects.find((p) => p.id === o.projectId) : null;
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.style.cursor = "pointer";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+            <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
+            ${tagsLineHtml("Objective", o.id)}
+          </div>
+        `;
+        row.addEventListener("click", () => {
+          closeModal();
+          openObjectiveDetail(o, null, { onDone: reopen });
+        });
+        list.appendChild(row);
+      }
+      listEl.appendChild(list);
+    }
+
+    const { close } = openModal({
       title: "🎯 Mes objectifs",
       body,
+      actions: [{ label: "Fermer", variant: "ghost" }],
+    });
+    body.querySelector("#add-my-objective-btn").addEventListener("click", () => {
+      closeModal();
+      openCreatePersonalObjectiveModal(allProjects, { onDone: reopen });
+    });
+  }
+
+  /** Création d'un objectif personnel — même champs que la création d'un objectif de
+   *  collaborateur (js/views/people.js#openCreateObjectiveModal), sans le champ Personne
+   *  puisque `personId` reste `null` (voir openMyObjectivesModal ci-dessus). */
+  function openCreatePersonalObjectiveModal(projects, { onDone } = {}) {
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <div class="field">
+        <label for="my-obj-title">Objectif</label>
+        <input id="my-obj-title" type="text" placeholder="Ex. Passer moins de temps en reporting, sécuriser la refonte X..." />
+      </div>
+      <div class="field">
+        <label for="my-obj-project">Projet (optionnel)</label>
+        <select id="my-obj-project">
+          <option value="">— Aucun —</option>
+          ${[...projects]
+            .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+            .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
+            .join("")}
+        </select>
+      </div>
+    `;
+    attachProjectQuickCreate(body.querySelector("#my-obj-project"));
+    const { bodyEl, close } = openModal({
+      title: "Nouvel objectif",
+      body,
       actions: [
-        { label: "Annuler", variant: "ghost" },
+        { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
         {
-          label: "Enregistrer",
+          label: "Créer",
           variant: "primary",
           closesModal: false,
           onClick: async () => {
-            await preferencesApi.setMyObjectives(bodyEl.querySelector("#my-objectives-text").value.trim());
+            const title = bodyEl.querySelector("#my-obj-title").value.trim();
+            if (!title) return;
+            const projectId = bodyEl.querySelector("#my-obj-project").value || null;
+            await objectivesApi.createObjective({ personId: null, title, projectId });
             close();
-            showToast("Objectifs enregistrés");
+            showToast("Objectif ajouté");
+            onDone?.();
           },
         },
       ],

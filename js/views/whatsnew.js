@@ -29,6 +29,30 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "13 septembre 2026 (suite 7)",
+    items: [
+      {
+        type: "add",
+        title: "📖 Guide : sommaire, rituels par période, et liens depuis l'app",
+        text: "Le Guide s'organise maintenant autour de deux nouveaux index cliquables tout en haut : un « 📚 Sommaire » pour sauter directement à une rubrique (chaque casquette, les onglets, les fonctions transverses...), et « 🗓️ Selon le moment » qui range les bonnes pratiques par occasion plutôt que par écran — préparer un point ou une EADP, suivre tes propres objectifs, lancer un nouveau projet, ta routine quotidienne/hebdomadaire. Quelques écrans (Mes objectifs, fiche Personne, Management, création de Projet) affichent désormais un petit lien « 📖 » qui renvoie directement à la bonne rubrique du Guide, sans en semer partout.",
+        howTo: "☰ Plus → 📖 Guide, ou clique un des liens « 📖 » sur les quelques écrans concernés.",
+        gain: "Retrouver la bonne pratique selon la situation ou la période, sans dérouler tout le Guide à chaque fois.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026 (suite 6)",
+    items: [
+      {
+        type: "add",
+        title: "🎯 Mes objectifs : suivi d'avancement (statut, points de suivi, éléments liés)",
+        text: "\"🎯 Mes objectifs\" n'est plus un simple bloc de texte libre : chaque objectif personnel a désormais un statut (⚪ Actif / ✅ Atteint), des points de suivi datés, des tags et des éléments liés — exactement le même suivi que celui déjà en place pour les objectifs de tes collaborateurs. L'ancien texte, s'il existait, a été repris automatiquement comme premier point de suivi d'un objectif \"Ligne directrice\", rien n'est perdu.",
+        howTo: "🎯 Mes objectifs (Accueil) → + Nouvel objectif, ou clique un objectif existant pour cocher \"Atteint\", ajouter un point de suivi, un tag, ou lier une fiche.",
+        gain: "Savoir où tu en es sur tes propres objectifs, pas seulement ceux que tu suis pour les autres — avec un historique daté à relire plutôt qu'une ligne de texte statique.",
+      },
+    ],
+  },
+  {
     date: "13 septembre 2026 (suite 5)",
     items: [
       {

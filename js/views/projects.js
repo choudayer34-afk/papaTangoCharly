@@ -29,6 +29,7 @@ import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import * as projectHealthApi from "../domain/projectHealth.js";
 import { renderProjectHealth } from "../components/projectHealth.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
+import { guideLinkHtml } from "./guide.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -605,6 +606,7 @@ export async function openCreateProjectModal(prefill = {}) {
       <input id="project-critical" type="checkbox" style="width:auto;" ${prefill.critical ? "checked" : ""} />
       <label for="project-critical" style="margin:0;">⭐ Projet prioritaire (compte dans la Priorisation)</label>
     </div>
+    <div>${guideLinkHtml("usecase-nouveau-projet", "📖 Par où commencer sur un nouveau projet")}</div>
   `;
   const { bodyEl, close } = openModal({
     title: "Nouveau projet",

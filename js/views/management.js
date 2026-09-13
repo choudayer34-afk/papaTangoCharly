@@ -26,6 +26,7 @@ import * as tasksApi from "../domain/tasks.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { openPersonDetail, openCreatePersonModal, openCreateFollowUpModal, openEditFollowUpModal } from "./people.js";
+import { guideLinkHtml } from "./guide.js";
 
 export function renderManagerSection(container, people, followUps) {
   const managers = people.filter((p) => p.type === "manager");
@@ -67,10 +68,11 @@ export function renderManagerSection(container, people, followUps) {
         <span>📌 ${topics.length} sujet(s)</span>
         ${difficulties.length ? `<span class="badge badge-late">⚠️ ${difficulties.length} difficulté(s)</span>` : ""}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
         <button type="button" class="btn btn-secondary btn-sm add-topic-btn">+ Sujet</button>
         <button type="button" class="btn btn-primary btn-sm prep-btn">🗒️ Préparer le point</button>
       </div>
+      <div>${guideLinkHtml("usecase-point-manager", "📖 Bien préparer ce point")}</div>
     `;
     card.querySelector(".item-title").addEventListener("click", () => openPersonDetail(manager, followUps));
     card.querySelector(".add-topic-btn").addEventListener("click", () => {
