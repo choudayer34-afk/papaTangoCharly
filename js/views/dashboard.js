@@ -32,9 +32,47 @@ import { renderInfoTip } from "../components/infoTip.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderDecisionGrid } from "../components/decisionGrid.js";
 import { getTheme, getEffectiveTheme, setTheme } from "../services/themeStore.js";
+import { renderChecklist } from "../components/checklist.js";
+import { generateId } from "../services/id.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
+
+// Accueil personnalisable (retour de Charles-Henri, 13/09/2026 : "pouvoir positionner,
+// organiser des rubriques comme je l'entends sur web et mobile") — la liste COMPLÈTE des blocs
+// dont l'ordre vertical se choisit (voir applyHomeOrder()/openDashboardSettingsModal() plus
+// bas). Volontairement séparée de DASHBOARD_SECTIONS ci-dessous : "statGrid" n'est jamais
+// masquable (même règle que toujours) mais reste déplaçable, et "postit" a ses propres règles
+// de visibilité (voir renderPostitSection) — ces deux clés n'ont donc pas leur place dans
+// DASHBOARD_SECTIONS, qui ne sert qu'à la liste à cocher masquer/afficher.
+const HOME_ORDER_LABELS = {
+  postit: "📌 Pense-bête",
+  statGrid: "🔢 Indicateurs",
+  needsAttention: "⚠️ Ça a besoin de toi",
+  kept: "🧠 Informations & idées",
+  projects: "📦 Mes projets",
+  recentlyViewed: "🔄 Reprendre où j'en étais",
+  recent: "🧠 Récemment",
+};
+const HOME_ORDER_KEYS = Object.keys(HOME_ORDER_LABELS);
+
+// Palier "desktop/tablette" déjà utilisé ailleurs dans l'app pour distinguer web/mobile (voir
+// styles/components.css, modales élargies à partir de ce même seuil) — repris ici pour que
+// "web" et "mobile" désignent toujours la même frontière dans toute l'app.
+const HOME_ORDER_WIDE_QUERY = "(min-width: 640px)";
+
+/** Ordre PAR DÉFAUT tant que Charles-Henri n'a rien réordonné lui-même à la main (voir
+ *  `dashboardOrder` dans js/domain/preferences.js) : sur un écran assez large (web), le
+ *  Pense-bête se place avant le bloc chiffré, pour être le tout premier repère de la journée ;
+ *  sur un écran étroit (mobile), après le bloc chiffré mais avant la première vraie rubrique —
+ *  demande explicite de Charles-Henri ("en haut à gauche par défaut des indicateurs chiffrés
+ *  sur le Web et en dessous des indicateurs sur mobile avant la première section"). */
+function defaultHomeOrder() {
+  const isWide = window.matchMedia && window.matchMedia(HOME_ORDER_WIDE_QUERY).matches;
+  return isWide
+    ? ["postit", "statGrid", "needsAttention", "kept", "projects", "recentlyViewed", "recent"]
+    : ["statGrid", "postit", "needsAttention", "kept", "projects", "recentlyViewed", "recent"];
+}
 
 // Sections repliables/masquables (piste UX du 31/08/2026, retour de Charles-Henri : "l'accueil
 // se rallonge avec les éléments qui prennent de l'ampleur") — chaque section connaît sa propre
@@ -48,6 +86,10 @@ const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 // (voir renderNeedsAttentionSection). "recentlyViewed" ("🔄 Reprendre où j'en étais") devient
 // masquable pour la première fois — elle ne l'était pas avant ce round.
 const DASHBOARD_SECTIONS = [
+  // "postit" en tête (retour de Charles-Henri, 13/09/2026) : contrairement aux quatre autres,
+  // reste affiché en mode Focus (voir applyHomeModeVisibility, qui ne le touche jamais) — d'où
+  // la précision entre parenthèses dans le libellé de la case à cocher.
+  { key: "postit", label: "📌 Pense-bête (aussi visible en mode Focus)" },
   { key: "needsAttention", label: "⚠️ Ça a besoin de toi" },
   { key: "kept", label: "🧠 Informations & idées" },
   { key: "projects", label: "📦 Mes projets" },
@@ -96,14 +138,22 @@ export function renderDashboard(container) {
         <div class="chip-row" id="hat-filter" style="margin-bottom:0;flex:1;min-width:0;"></div>
         <span id="hat-filter-info"></span>
       </div>
-      <div class="stat-grid" id="stat-grid"></div>
-      <div id="recent-viewed-section"></div>
-      <div id="focus-section"></div>
-      <div id="focus-queue-section"></div>
-      <div id="needs-attention-section"></div>
-      <div id="kept-section"></div>
-      <div id="projects-section"></div>
-      <div id="recent-section"></div>
+      <!-- Bloc réordonnable (retour de Charles-Henri, 13/09/2026 : "positionner, organiser des
+           rubriques comme je l'entends") — un simple conteneur flex-colonne dont chaque enfant
+           reçoit un ordre CSS (propriété "order") calculé par applyHomeOrder() ; le HTML garde
+           un ordre source fixe et anodin, tout l'ordre visuel passe par ce style, jamais par
+           une réécriture du DOM (voir applyHomeOrder() plus bas pour le raisonnement complet). -->
+      <div id="home-order-wrapper" style="display:flex;flex-direction:column;">
+        <div id="postit-section"></div>
+        <div class="stat-grid" id="stat-grid"></div>
+        <div id="recent-viewed-section"></div>
+        <div id="focus-section"></div>
+        <div id="focus-queue-section"></div>
+        <div id="needs-attention-section"></div>
+        <div id="kept-section"></div>
+        <div id="projects-section"></div>
+        <div id="recent-section"></div>
+      </div>
     </div>
   `;
 
@@ -138,6 +188,16 @@ export function renderDashboard(container) {
     if (getTheme() === "system") refreshThemeToggleUI();
   };
   themeMediaQuery?.addEventListener("change", onSystemThemeChange);
+
+  // Rebascule l'ordre par défaut Pense-bête/indicateurs en direct si la fenêtre passe le palier
+  // web/mobile (redimensionnement de fenêtre, rotation d'écran) — UNIQUEMENT tant qu'aucun
+  // ordre explicite n'a été choisi à la main (voir applyHomeOrder()) : un ordre personnalisé ne
+  // doit jamais se remettre à varier tout seul juste parce que la fenêtre change de taille.
+  const homeOrderMediaQuery = window.matchMedia ? window.matchMedia(HOME_ORDER_WIDE_QUERY) : null;
+  const onHomeOrderBreakpointChange = () => {
+    if (!dashboardOrder || !dashboardOrder.length) applyHomeOrder();
+  };
+  homeOrderMediaQuery?.addEventListener("change", onHomeOrderBreakpointChange);
   showHintOnce(
     container.querySelector(".view"),
     "dashboard-hats-v1",
@@ -149,6 +209,7 @@ export function renderDashboard(container) {
   const reviewReminderEl = container.querySelector("#review-reminder");
   const notifOptInEl = container.querySelector("#notif-optin");
   const hatFilterEl = container.querySelector("#hat-filter");
+  const postitSection = container.querySelector("#postit-section");
   const statGrid = container.querySelector("#stat-grid");
   const recentViewedSection = container.querySelector("#recent-viewed-section");
   const focusSection = container.querySelector("#focus-section");
@@ -157,6 +218,19 @@ export function renderDashboard(container) {
   const keptSection = container.querySelector("#kept-section");
   const projectsSection = container.querySelector("#projects-section");
   const recentSection = container.querySelector("#recent-section");
+  // Correspondance clé d'ordre → élément DOM réel, pour applyHomeOrder() ci-dessous — seules
+  // les 7 clés de HOME_ORDER_KEYS y figurent ; focus-section/focus-queue-section restent hors
+  // du système d'ordre manuel (mutuellement exclusives avec needsAttentionSection selon le mode,
+  // elles se recalent automatiquement juste avant elle, voir applyHomeOrder()).
+  const homeOrderElements = {
+    postit: postitSection,
+    statGrid: statGrid,
+    needsAttention: needsAttentionSection,
+    kept: keptSection,
+    projects: projectsSection,
+    recentlyViewed: recentViewedSection,
+    recent: recentSection,
+  };
 
   let tasks = [];
   let inboxPendingCount = 0;
@@ -183,6 +257,15 @@ export function renderDashboard(container) {
   let homeMode = "classic";
   let focusExpanded = false;
   let focusQueueIndex = 0;
+  // Pense-bête (retour de Charles-Henri, 13/09/2026) — voir renderPostitSection() plus bas ;
+  // les deux contenus (`postitText`/`postitChecklist`) restent en mémoire séparément, seul
+  // `postitMode` décide lequel est affiché.
+  let postitMode = "text";
+  let postitText = "";
+  let postitChecklist = [];
+  // Ordre explicite des rubriques (même retour, second volet) — vide tant que Charles-Henri n'a
+  // rien déplacé lui-même, voir defaultHomeOrder()/applyHomeOrder().
+  let dashboardOrder = [];
 
   // Lecture locale (localStorage), synchrone — pas besoin d'attendre les préférences
   // Firestore pour afficher ce bandeau, qui doit apparaître le plus tôt possible.
@@ -201,14 +284,27 @@ export function renderDashboard(container) {
     } else {
       hiddenSections = new Set(prefs.dashboardHidden || []);
     }
+    if (!prefs.postitMigratedV1) {
+      // Bascule one-shot (voir js/domain/preferences.js#markPostitMigratedV1) : le Pense-bête
+      // reste masqué tant que Charles-Henri ne l'active pas lui-même via ⚙️, même pour un
+      // compte qui a déjà personnalisé ses sections masquées auparavant.
+      hiddenSections.add("postit");
+      preferencesApi.setDashboardHidden([...hiddenSections]).catch(() => {});
+      preferencesApi.markPostitMigratedV1().catch(() => {});
+    }
     focusOverride = prefs.focusOverride || { date: null, addedTaskIds: [] };
     priorityWeights = prefs.priorityWeights || priorisationApi.DEFAULT_WEIGHTS;
     recentlyViewed = prefs.recentlyViewed || [];
     homeMode = prefs.homeMode || "classic";
+    postitMode = prefs.postitMode || "text";
+    postitText = prefs.postitText || "";
+    postitChecklist = prefs.postitChecklist || [];
+    dashboardOrder = prefs.dashboardOrder || [];
     renderHatFilter();
     renderReviewReminder(prefs.lastWeeklyReviewAt);
     renderNotifOptIn(prefs.notifOptIn);
     renderStats();
+    renderPostitSection();
     renderRecentlyViewedSection();
     renderFocusSection();
     renderNeedsAttentionSection();
@@ -217,6 +313,7 @@ export function renderDashboard(container) {
     renderProjectsSection();
     renderRecentSection();
     applyHomeModeVisibility();
+    applyHomeOrder();
   });
 
   function renderHatFilter() {
@@ -666,6 +763,41 @@ export function renderDashboard(container) {
     projectsSection.hidden = secondaryHidden;
     recentViewedSection.hidden = secondaryHidden;
     recentSection.hidden = secondaryHidden;
+    // Le Pense-bête n'est JAMAIS masqué par le mode Focus (retour de Charles-Henri : "il doit
+    // être présent en focus ou en normal") — sa seule visibilité conditionnelle est la case à
+    // cocher ⚙️ (voir renderPostitSection), déjà gérée là-bas ; rien à faire ici.
+  }
+
+  /**
+   * Applique l'ordre vertical des rubriques de l'Accueil (retour de Charles-Henri, 13/09/2026 :
+   * "positionner, organiser des rubriques comme je l'entends sur web et mobile") en posant un
+   * `order` CSS sur chacune, plutôt que de réordonner le DOM : chaque rubrique garde sa propre
+   * fonction `render*Section()` et son propre élément stable, seul l'ORDRE VISUEL change — un
+   * espacement de 10 entre chaque rang laisse de la place pour recaler focus-section/
+   * focus-queue-section juste avant needsAttentionSection (voir plus bas), où qu'elle ait été
+   * déplacée, puisque ces deux-là ne font pas partie de la liste réordonnable elle-même
+   * (mutuellement exclusives avec elle selon le mode Focus, pas une rubrique au même titre).
+   *
+   * `dashboardOrder` vide (aucune personnalisation manuelle encore faite) : ordre par défaut,
+   * qui dépend lui-même de la largeur d'écran (voir defaultHomeOrder()) — dès que Charles-Henri
+   * déplace une seule rubrique depuis ⚙️, cet ordre devient explicite et fixe, identique sur
+   * web et mobile (plus simple à retenir qu'un ordre qui continuerait à varier tout seul une
+   * fois qu'on y a touché).
+   */
+  function applyHomeOrder() {
+    const explicit = dashboardOrder && dashboardOrder.length ? dashboardOrder : null;
+    const base = explicit || defaultHomeOrder();
+    // Défensif : toute clé absente de la préférence enregistrée (ancienne version, etc.) part
+    // simplement à la fin plutôt que de faire disparaître la rubrique correspondante.
+    const order = [...base, ...HOME_ORDER_KEYS.filter((k) => !base.includes(k))];
+    order.forEach((key, index) => {
+      const el = homeOrderElements[key];
+      if (el) el.style.order = String(index * 10);
+    });
+    const needsAttentionRank = order.indexOf("needsAttention");
+    const beforeNeedsAttention = (needsAttentionRank === -1 ? order.length : needsAttentionRank) * 10 - 5;
+    focusSection.style.order = String(beforeNeedsAttention);
+    focusQueueSection.style.order = String(beforeNeedsAttention);
   }
 
   /** Filtre une liste de Tâches/Suivis sur la casquette active — "all" = pas de filtre.
@@ -719,6 +851,16 @@ export function renderDashboard(container) {
    *  session). */
   function openDashboardSettingsModal() {
     let selectedHomeMode = homeMode;
+    // Ordre de travail LOCAL à la modale (retour de Charles-Henri, 13/09/2026 : "positionner,
+    // organiser des rubriques comme je l'entends") — part de l'ordre explicite déjà choisi s'il
+    // existe, sinon de l'ordre par défaut actuellement affiché (cohérent avec ce que
+    // Charles-Henri voit déjà sur l'Accueil au moment où il ouvre ⚙️). `orderChanged` ne passe
+    // à `true` que sur un vrai clic ▲/▼ : ouvrir la modale et cliquer "Enregistrer" pour une
+    // tout autre raison (juste décocher une section) ne doit JAMAIS figer l'ordre par défaut
+    // réactif web/mobile en un ordre fixe que Charles-Henri n'a pas demandé.
+    let currentOrder = dashboardOrder && dashboardOrder.length ? [...dashboardOrder] : defaultHomeOrder();
+    let orderChanged = false;
+    let resetRequested = false;
     const body = document.createElement("div");
     body.innerHTML = `
       <div class="field" style="margin-bottom:16px;">
@@ -737,6 +879,12 @@ export function renderDashboard(container) {
           <label for="dash-sec-${s.key}" style="margin:0;">${s.label}</label>
         </div>`
       ).join("")}
+      <div class="field" style="margin-top:20px;">
+        <label style="display:block;margin-bottom:6px;">Ordre des rubriques</label>
+        <p class="item-meta" style="margin:0 0 8px;">Par défaut, le Pense-bête se place avant les indicateurs sur ordinateur et juste après sur mobile. Déplace une rubrique ci-dessous si tu préfères un ordre fixe, à toi, identique partout.</p>
+        <div id="home-order-list"></div>
+        <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre automatique web/mobile</button>
+      </div>
     `;
     body.querySelectorAll("#home-mode-row .chip").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -744,6 +892,40 @@ export function renderDashboard(container) {
         body.querySelectorAll("#home-mode-row .chip").forEach((b) => b.classList.toggle("active", b === btn));
       });
     });
+
+    function renderOrderList() {
+      const listEl = body.querySelector("#home-order-list");
+      listEl.innerHTML = currentOrder
+        .map(
+          (key, idx) => `
+        <div class="item-row" style="padding:6px 0;">
+          <div class="item-main"><div class="item-title">${HOME_ORDER_LABELS[key] || key}</div></div>
+          <div style="display:flex;gap:4px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-dir="up" data-idx="${idx}" aria-label="Monter" ${idx === 0 ? "disabled" : ""}>▲</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-dir="down" data-idx="${idx}" aria-label="Descendre" ${idx === currentOrder.length - 1 ? "disabled" : ""}>▼</button>
+          </div>
+        </div>`
+        )
+        .join("");
+      listEl.querySelectorAll("button[data-dir]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.idx);
+          const swapIdx = idx + (btn.dataset.dir === "up" ? -1 : 1);
+          [currentOrder[idx], currentOrder[swapIdx]] = [currentOrder[swapIdx], currentOrder[idx]];
+          orderChanged = true;
+          resetRequested = false;
+          renderOrderList();
+        });
+      });
+    }
+    renderOrderList();
+    body.querySelector("#home-order-reset-btn").addEventListener("click", () => {
+      currentOrder = defaultHomeOrder();
+      orderChanged = false;
+      resetRequested = true;
+      renderOrderList();
+    });
+
     openModal({
       title: "⚙️ Personnaliser l'accueil",
       body,
@@ -766,7 +948,15 @@ export function renderDashboard(container) {
             }
             await preferencesApi.setDashboardHidden(hidden);
             await preferencesApi.setHomeMode(homeMode);
+            if (resetRequested) {
+              dashboardOrder = [];
+              await preferencesApi.setDashboardOrder([]);
+            } else if (orderChanged) {
+              dashboardOrder = currentOrder;
+              await preferencesApi.setDashboardOrder(currentOrder);
+            }
             closeModal();
+            renderPostitSection();
             renderNeedsAttentionSection();
             renderFocusQueueSection();
             renderKeptSection();
@@ -774,6 +964,7 @@ export function renderDashboard(container) {
             renderRecentlyViewedSection();
             renderRecentSection();
             applyHomeModeVisibility();
+            applyHomeOrder();
             showToast("Accueil mis à jour");
           },
         },
@@ -812,6 +1003,92 @@ export function renderDashboard(container) {
         },
       ],
     });
+  }
+
+  /**
+   * "📌 Pense-bête" (retour de Charles-Henri, 13/09/2026 : "une espèce de post-it avec
+   * checklist ou en mode écrit de ce que j'ai en tête pour la journée sans que ce soit une
+   * tâche. Genre acheter un billet d'avion, voir Michel aujourd'hui, etc.") — délibérément SANS
+   * modale : à la différence de "🎯 Mes objectifs" ci-dessus, l'esprit post-it veut qu'on note
+   * et raye directement sur l'Accueil, pas dans un aller-retour de fenêtre. Deux modes, jamais
+   * combinés, chacun avec son propre contenu conservé en mémoire (js/domain/preferences.js) —
+   * `renderChecklist` est le même composant que partout ailleurs dans l'app (js/components/
+   * checklist.js), pour un pense-bête à sous-étapes qui se comporte exactement comme les autres.
+   *
+   * Avertissement explicite affiché en permanence (retour de Charles-Henri lui-même : "ça peut
+   * devenir un fourre-tout") — jamais un simple texte d'aide qu'on ne voit qu'une fois
+   * (js/components/hint.js) : le risque existe à chaque instant, pas seulement à la découverte.
+   */
+  function renderPostitSection() {
+    if (hiddenSections.has("postit")) {
+      postitSection.innerHTML = "";
+      return;
+    }
+    postitSection.innerHTML = `
+      <div class="card postit-card" style="margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+          <div class="section-title" style="margin:0;">📌 Pense-bête</div>
+          <div class="chip-row" id="postit-mode-row" style="margin-bottom:0;">
+            <button type="button" class="chip${postitMode === "text" ? " active" : ""}" data-mode="text">📝 Texte</button>
+            <button type="button" class="chip${postitMode === "checklist" ? " active" : ""}" data-mode="checklist">☑️ Checklist</button>
+          </div>
+        </div>
+        <p class="item-meta" style="margin:8px 0 12px;">Ce que tu as en tête là, maintenant — pas une tâche à piloter : un billet d'avion à acheter, voir Michel aujourd'hui... ⚠️ Attention, ça peut vite devenir un fourre-tout : pense à le vider régulièrement.</p>
+        <div id="postit-body"></div>
+      </div>
+    `;
+    postitSection.querySelectorAll("#postit-mode-row .chip").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (btn.dataset.mode === postitMode) return;
+        postitMode = btn.dataset.mode;
+        await preferencesApi.setPostitMode(postitMode);
+        renderPostitSection();
+      });
+    });
+    const bodyEl = postitSection.querySelector("#postit-body");
+    if (postitMode === "checklist") {
+      renderChecklist(bodyEl, postitChecklist, {
+        emptyLabel: "Rien de noté pour l'instant.",
+        onAdd: async (text) => {
+          postitChecklist = [...postitChecklist, { id: generateId(), text, done: false, doneAt: null }];
+          await preferencesApi.setPostitChecklist(postitChecklist);
+          return postitChecklist;
+        },
+        onToggle: async (itemId, done) => {
+          postitChecklist = postitChecklist.map((it) =>
+            it.id === itemId ? { ...it, done, doneAt: done ? Date.now() : null } : it
+          );
+          await preferencesApi.setPostitChecklist(postitChecklist);
+          return postitChecklist;
+        },
+        onRemove: async (itemId) => {
+          postitChecklist = postitChecklist.filter((it) => it.id !== itemId);
+          await preferencesApi.setPostitChecklist(postitChecklist);
+          return postitChecklist;
+        },
+      });
+    } else {
+      bodyEl.innerHTML = `<div class="field" style="margin-bottom:0;"><textarea id="postit-textarea" placeholder="Ex. Acheter un billet d'avion, voir Michel aujourd'hui..." style="min-height:90px;">${escapeHtml(postitText)}</textarea></div>`;
+      const textarea = bodyEl.querySelector("#postit-textarea");
+      // Sauvegarde automatique (retour à la ligne ou clic ailleurs) — pas de bouton
+      // "Enregistrer" pour un post-it, ça doit rester aussi léger qu'un vrai bout de papier ;
+      // un léger débounce pendant la frappe évite un aller-réseau à chaque caractère, complété
+      // par une sauvegarde immédiate à la perte de focus pour ne jamais perdre la dernière
+      // frappe si on quitte l'Accueil tout de suite après.
+      let saveTimer = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(async () => {
+          postitText = textarea.value;
+          await preferencesApi.setPostitText(postitText);
+        }, 600);
+      });
+      textarea.addEventListener("blur", async () => {
+        clearTimeout(saveTimer);
+        postitText = textarea.value;
+        await preferencesApi.setPostitText(postitText);
+      });
+    }
   }
 
   /** Liste cliquable réutilisée par chaque carte chiffrée (retour de Charles-Henri : les
@@ -1361,6 +1638,7 @@ export function renderDashboard(container) {
     document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
     window.removeEventListener("focus", refreshCaptureDraftBanner);
     themeMediaQuery?.removeEventListener("change", onSystemThemeChange);
+    homeOrderMediaQuery?.removeEventListener("change", onHomeOrderBreakpointChange);
     unsubTasks();
     unsubInbox();
     unsubKept();

@@ -29,6 +29,109 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "13 septembre 2026 (suite)",
+    items: [
+      {
+        type: "add",
+        title: "📌 Pense-bête sur l'Accueil (post-it libre ou checklist)",
+        text: "Une zone libre en haut de l'Accueil pour ce que tu as en tête pour la journée sans que ce soit une tâche à piloter — un billet d'avion à acheter, voir Michel aujourd'hui... Deux modes au choix (texte libre ou petite checklist cochable), chacun avec son propre contenu gardé séparément si tu bascules de l'un à l'autre. Un avertissement reste affiché en permanence : ça peut vite devenir un fourre-tout, à vider régulièrement.",
+        howTo: "⚙️ Personnaliser l'accueil (en haut de l'Accueil) → coche \"📌 Pense-bête\". Se remplit ensuite directement sur l'Accueil, sans fenêtre à part.",
+        gain: "Un endroit unique et toujours visible pour ce qui traîne en tête, sans polluer le pilotage des vraies tâches.",
+      },
+      {
+        type: "add",
+        title: "🗂️ Réorganiser l'Accueil à ta main",
+        text: "Chaque rubrique de l'Accueil (Pense-bête et bloc chiffré compris) peut désormais être déplacée. Par défaut, le Pense-bête se place avant les indicateurs chiffrés sur grand écran et juste après sur mobile — dès que tu en déplaces une toi-même, cet ordre devient fixe et identique partout, avec un bouton pour revenir à l'ordre automatique à tout moment.",
+        howTo: "⚙️ Personnaliser l'accueil → \"Ordre des rubriques\", boutons ▲▼.",
+        gain: "L'Accueil à l'image de ta façon de travailler, plutôt qu'un ordre imposé.",
+      },
+      {
+        type: "add",
+        title: "🌙 Mode sombre, avec interrupteur sur l'Accueil",
+        text: "Un interrupteur ☀️/🌙 en haut à gauche de l'Accueil bascule explicitement entre clair et sombre — avant ce choix, l'app suit déjà le réglage de ton appareil. Le choix posé l'emporte ensuite toujours sur l'appareil, dans les deux sens, sans flash du mauvais thème au chargement.",
+        howTo: "Interrupteur ☀️/🌙 en haut à gauche de l'Accueil, à côté du titre \"Mon pilotage\".",
+        gain: "Un thème sombre disponible quand tu le veux, sans dépendre uniquement du réglage du téléphone ou du PC.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "☑️ Sélection multiple + édition en masse (tableau Pilotage)",
+        text: "Dans la vue Tableau (format Monday), une case à cocher par ligne (et une par groupe pour tout sélectionner d'un coup) fait apparaître une barre d'action \"✏️ Modifier en masse\" : statut, échéance, projet, critère de clôture, blocage, ressource liée, prompt lié ou note peuvent être appliqués à toutes les tâches sélectionnées en une fois — chaque champ reste inactif tant que tu ne coches pas explicitement \"modifier ce champ\", pour ne jamais écraser silencieusement ce que tu n'as pas touché.",
+        howTo: "Onglet Pilotage → Tâches → vue 📊 Tableau → coche des lignes → \"✏️ Modifier en masse\".",
+        gain: "Traiter d'un coup un lot de tâches similaires (reporter une échéance sur 5 tâches, ajouter la même ressource...) plutôt qu'une par une.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "🏷️ Tags libres sur les Informations/Idées",
+        text: "Chaque Information/Idée conservée depuis l'Inbox peut désormais porter ses propres tags libres, avec autocomplétion sur ceux déjà utilisés. La modale \"Voir tout\" propose maintenant un filtre par tag (plusieurs à la fois) en plus du filtre texte déjà existant.",
+        howTo: "Ouvre une Information/Idée → champ tags en bas de la fiche. Filtrer : \"🧠 Informations & idées\" → \"Voir tout\" → clique un ou plusieurs tags.",
+        gain: "Retrouver facilement tout ce qui touche à un même sujet, sans avoir à tout relire.",
+      },
+      {
+        type: "add",
+        title: "📦 Rattacher un Objectif ou une Information/Idée à un projet",
+        text: "Ces deux seuls types qui n'avaient encore aucun moyen de se rattacher à un projet (tous les autres l'avaient déjà) gagnent un sélecteur \"Projet\", avec possibilité d'en créer un directement depuis là. Le badge du projet apparaît ensuite dans la liste des objectifs d'un collaborateur.",
+        howTo: "Création ou fiche détail d'un Objectif, ou fiche détail d'une Information/Idée → champ \"Projet\".",
+        gain: "Vraiment tout élément peut désormais se rattacher à un projet, sans exception restante.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "👀 Suivis (vue globale, onglet Équipe)",
+        text: "Un 4e mode dans l'onglet Équipe qui regroupe, tous projets et personnes confondus, ce que tu attends de quelqu'un et ce que tu dois lui transmettre — trié par urgence (retard de contrôle d'abord), avec ce qui est déjà réglé masqué par défaut.",
+        howTo: "Onglet Équipe → \"👀 Suivis\".",
+        gain: "Voir en un seul écran tous les suivis actifs, sans devoir ouvrir chaque fiche Personne une par une.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "📦 Remonter au projet depuis une fiche Tâche",
+        text: "Le libellé \"Projet\" devient un lien cliquable dès qu'un projet est sélectionné dans le champ juste en dessous, pour ouvrir directement sa fiche.",
+        howTo: "Fiche Tâche → clique le libellé \"Projet\" au-dessus de la liste déroulante.",
+      },
+      {
+        type: "change",
+        title: "🔎 La recherche exclut par défaut ce qui est terminé/archivé",
+        text: "Une case à cocher \"Inclure terminé/archivé\", décochée par défaut, filtre les résultats de la recherche globale — rien n'est perdu, juste masqué tant que tu ne demandes pas à tout voir.",
+        howTo: "Recherche globale → case \"Inclure terminé/archivé\" si besoin.",
+        gain: "Des résultats de recherche qui vont directement à l'essentiel, sans les vieux éléments clos qui les noient.",
+      },
+      {
+        type: "change",
+        title: "📂 Qualifier un item Inbox ouvre sa fiche complète",
+        text: "Qualifier une capture de l'Inbox (Tâche, Suivi, Projet, Ressource, Réunion, Décision, Information/Idée) ouvre maintenant directement la fiche complète créée, au lieu de refermer sur un simple message.",
+        gain: "Continuer à compléter l'élément tout de suite (échéance, description...) sans devoir le rechercher ensuite.",
+      },
+    ],
+  },
+  {
+    date: "13 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "Modale 🔧 Administration parfois impossible à fermer",
+        text: "Corrigé — la fenêtre se ferme désormais normalement dans tous les cas.",
+      },
+    ],
+  },
+  {
     date: "9 septembre 2026 (suite)",
     items: [
       {
