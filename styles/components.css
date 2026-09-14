@@ -733,6 +733,15 @@ tbody.drag-over-group {
   padding: var(--space-2) var(--space-3);
   margin-bottom: var(--space-3);
 }
+/* BUG corrigé (retour de Charles-Henri, 14/09/2026 : "la ligne pour modifier les éléments en
+   masse [...] doit s'enlever quand je n'ai plus de ligne cochée") — même cause exacte que le
+   correctif déjà documenté plus haut sur `.nav-badge[hidden]` : une règle "auteur" qui fixe
+   `display` (ici `display: flex` ci-dessus) l'emporte TOUJOURS sur la règle par défaut du
+   navigateur pour l'attribut `hidden`, à spécificité égale, car elle vient après dans la feuille
+   de style. `renderBulkToolbar()` (js/views/kanban.js) posait pourtant bien `bar.hidden = true`
+   dès que la sélection redevenait vide — sans cette ligne, ça n'avait donc silencieusement aucun
+   effet visuel, la barre restant affichée en permanence. */
+.pilotage-bulk-toolbar[hidden] { display: none; }
 .pilotage-bulk-toolbar-count {
   font-weight: 700;
   font-size: var(--font-size-sm);
