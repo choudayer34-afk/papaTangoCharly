@@ -1429,15 +1429,39 @@ tbody.drag-over-group {
 }
 .review-banner button { flex: none; }
 
-/* ---------- Pense-bête de l'Accueil (retour de Charles-Henri, 13/09/2026, js/views/
-   dashboard.js#renderPostitSection) ---------- */
-/* Liseré + fond légèrement teinté pour se distinguer d'une simple carte de contenu (une vraie
-   rubrique de suivi) sans pour autant copier `.review-banner` ci-dessus (qui, lui, signale un
-   rappel de rythme) — un repère visuel propre au post-it, dans la même famille chaude que
-   l'avertissement "ça peut devenir un fourre-tout" qu'il porte en permanence. */
+/* ---------- Pense-bête + indicateurs, un seul bloc (retour de Charles-Henri, 14/09/2026 :
+   "je l'aurais imaginé un peu plus discret et sur le web [...] sur la gauche de l'écran
+   d'accueil sur la même ligne que les indicateurs") ----------
+   Colonne sur mobile (indicateurs d'abord, Pense-bête juste après — l'ordre d'origine demandé
+   dès la vague précédente), ligne sur web (Pense-bête à gauche, étroit — donc discret —, les
+   indicateurs prenant le reste). `order` plutôt que l'ordre du DOM pour piloter les deux
+   arrangements avec un seul balisage, même technique que le reste du système de rubriques
+   réordonnables de l'Accueil (voir applyHomeOrder() dans js/views/dashboard.js). */
+.postit-statgrid-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.postit-statgrid-row #stat-grid { order: 1; margin-bottom: 0; }
+.postit-statgrid-row #postit-section { order: 2; }
+@media (min-width: 640px) {
+  .postit-statgrid-row { flex-direction: row; align-items: flex-start; }
+  .postit-statgrid-row #postit-section { order: 1; flex: 0 0 260px; max-width: 260px; }
+  .postit-statgrid-row #stat-grid { order: 2; flex: 1 1 auto; min-width: 0; }
+}
+/* Masqué via ⚙️ Personnaliser l'accueil (js/views/dashboard.js#renderPostitSection) — sans ce
+   `display:none`, la colonne réservée au Pense-bête resterait vide mais large sur web au lieu
+   de laisser toute la place aux indicateurs. */
+.postit-statgrid-row.postit-hidden #postit-section { display: none; }
+
+/* Habillage volontairement discret (retour de Charles-Henri, 14/09/2026 : "je l'aurais imaginé
+   un peu plus discret") — un simple liseré fin, sans fond teinté ni ombre, pour rester un repère
+   identifiable au premier coup d'œil (📌 + liseré) sans dominer visuellement la ligne des
+   indicateurs à côté de laquelle il vit maintenant. */
 .postit-card {
-  border-left: 4px solid var(--color-warning);
-  background: var(--color-surface-alt);
+  border-left: 3px solid var(--color-warning);
+  box-shadow: none;
 }
 
 /* ---------- Aide à la demande (js/components/infoTip.js) ---------- */
