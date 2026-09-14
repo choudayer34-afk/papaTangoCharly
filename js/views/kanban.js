@@ -928,6 +928,19 @@ async function openBulkEditModal(tasks, projects, onDone) {
     .map((t) => `<option value="${escapeHtml(t)}"></option>`)
     .join("");
 
+  // BUG corrigé (retour de Charles-Henri, 14/09/2026, capture d'écran : "une scrollbar
+  // horizontale inutile [...] la liste (ajouter/retirer) qui est très large et la sélection de
+  // l'élément est toute petite") — sur les trois champs Ressource/Prompt/Tag plus bas, chaque
+  // select ou input vit dans un .field (voir toggleRow ci-dessous), et le style global .field
+  // select / .field input (styles/components.css) leur donne width: 100% par défaut. Pour le
+  // select "Ajouter/Retirer" posé en flex: none, ce width: 100% hérité devenait sa base flex
+  // (flex-basis: auto reprend le width déclaré) : il réclamait donc 100% de la largeur de la
+  // rangée à lui seul, ne laissant presque rien au select de valeur juste à côté (flex: 1) —
+  // d'où la scrollbar horizontale (la rangée débordait de la modale) et le select de valeur
+  // écrasé à quelques pixels. Corrigé plus bas en fixant width: auto sur le select
+  // "Ajouter/Retirer" (sa base flex redevient son contenu réel, un texte court) et min-width: 0
+  // sur le champ de valeur (un flex item garde sinon sa largeur de contenu comme largeur
+  // plancher, l'empêchant de rétrécir en dessous).
   function toggleRow(id, label, controlHtml) {
     return `
       <div class="field" style="display:flex;align-items:center;gap:8px;">
@@ -963,24 +976,24 @@ async function openBulkEditModal(tasks, projects, onDone) {
       "bulk-resource",
       "Ressource",
       `<div style="display:flex;gap:8px;">
-        <select id="bulk-resource-mode" style="flex:none;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <select id="bulk-resource" style="flex:1;">${resources.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join("")}</select>
+        <select id="bulk-resource-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
+        <select id="bulk-resource" style="flex:1;min-width:0;">${resources.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join("")}</select>
       </div>`
     )}
     ${toggleRow(
       "bulk-prompt",
       "Prompt",
       `<div style="display:flex;gap:8px;">
-        <select id="bulk-prompt-mode" style="flex:none;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <select id="bulk-prompt" style="flex:1;">${prompts.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("")}</select>
+        <select id="bulk-prompt-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
+        <select id="bulk-prompt" style="flex:1;min-width:0;">${prompts.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("")}</select>
       </div>`
     )}
     ${toggleRow(
       "bulk-tags",
       "Tag",
       `<div style="display:flex;gap:8px;">
-        <select id="bulk-tags-mode" style="flex:none;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-tags-value" type="text" placeholder="Nom du tag (sans #)" list="${bulkTagDatalistId}" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <select id="bulk-tags-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
+        <input id="bulk-tags-value" type="text" placeholder="Nom du tag (sans #)" list="${bulkTagDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
         <datalist id="${bulkTagDatalistId}">${bulkTagOptionsHtml}</datalist>
       </div>`
     )}

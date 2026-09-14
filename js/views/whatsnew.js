@@ -32,6 +32,20 @@ const WHATS_NEW = [
     date: "14 septembre 2026",
     items: [
       {
+        type: "fix",
+        title: "🐛 Pilotage (Tableau) : la barre de modification en masse s'efface bien à zéro sélection",
+        text: "La barre \"✏️ Modifier en masse\" restait affichée même quand plus aucune tâche n'était cochée dans la vue Tableau de Pilotage. Corrigé — elle apparaît uniquement dès qu'au moins une ligne est sélectionnée et disparaît dès que la sélection redevient vide, décoche par décoche ou via \"Tout désélectionner\".",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Une barre d'action qui ne reste plus affichée pour rien.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Modifier en masse : la scrollbar horizontale et le sélecteur écrasé sur Ressource/Prompt/Tag",
+        text: "Dans la modale \"Modifier en masse\" (Pilotage, vue Tableau), les champs Ressource, Prompt et Tag affichaient une scrollbar horizontale inutile : le sélecteur \"+ Ajouter / − Retirer\" prenait presque toute la largeur de la ligne, écrasant le choix de la ressource/du prompt/du tag dans quelques pixels à droite. Corrigé — le sélecteur Ajouter/Retirer reprend une largeur compacte, le choix de la valeur prend le reste de la place, plus de scrollbar.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Une modale de modification en masse qui s'affiche correctement, sans élément écrasé ni défilement superflu.",
+      },
+      {
         type: "add",
         title: "☑️ Pense-bête (Checklist) : les cochés descendent en bas + tout supprimer d'un coup",
         text: "Dans le Pense-bête en mode Checklist, cocher un élément le fait maintenant descendre en bas de la liste — les éléments restants à faire sont donc toujours visibles en premier. Un bouton \"🗑️ Supprimer les cochés\" apparaît dès qu'au moins un élément est coché, pour tout vider d'un coup plutôt qu'un par un ; il disparaît de lui-même quand plus rien n'est coché.",
