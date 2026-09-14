@@ -22,7 +22,10 @@
 // Correctif (13/09/2026, suite — tags universels) : deux nouveaux fichiers,
 // js/domain/tags.js et js/components/tagsEditor.js, ajoutés à APP_SHELL dès leur création,
 // même principe que ci-dessus.
-const CACHE_NAME = "pilotage-cache-v44";
+// Correctif (14/09/2026, suite — détection de mise à jour) : `js/app.js` recharge désormais tout
+// seul la page dès qu'une nouvelle version prend le contrôle (voir le commentaire détaillé dans ce
+// fichier) — `CACHE_NAME` incrémenté puisque le contenu de ce fichier précaché a changé.
+const CACHE_NAME = "pilotage-cache-v45";
 const APP_SHELL = [
   "./",
   "./index.html",
