@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "14 septembre 2026",
     items: [
       {
+        type: "fix",
+        title: "🐛 La mise à jour automatique de l'application ne se déclenchait pas",
+        text: "La détection de nouvelle version (voir plus bas \"🔄 Mise à jour automatique de l'application\") ne fonctionnait en réalité que lorsque le fichier technique interne de l'application changeait — ce qui n'était pas le cas des deux dernières vagues (recherche, autocomplétion), qui ne touchaient que des écrans. Résultat : aucun message, aucun rechargement automatique, l'application restait silencieusement sur l'ancienne version. Corrigé — ce fichier change désormais à chaque vague qui modifie quoi que ce soit dans l'application, garantissant que la détection se déclenche à chaque fois. Un réglage de cache a aussi été resserré côté hébergement pour que la vérification porte toujours sur la toute dernière version, jamais une copie en attente.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "La mise à jour automatique fonctionne enfin comme prévu, à chaque nouvelle vague.",
+      },
+      {
         type: "change",
         title: "Modifier en masse : Ressource/Prompt en autocomplétion, tout trié par ordre alphabétique",
         text: "Dans la modale \"Modifier en masse\" (Pilotage, vue Tableau), les champs Ressource et Prompt étaient des listes déroulantes qui s'allongeaient avec la bibliothèque, sans ordre particulier. Ils fonctionnent désormais comme le champ Tag : un champ texte avec autocomplétion, où les titres proposés sont triés par ordre alphabétique. Le champ Projet reste une liste déroulante classique (pour tout voir d'un coup dès le clic, sans avoir à taper), mais ses projets sont maintenant triés par ordre alphabétique eux aussi ; les projets fermés n'y apparaissent toujours pas.",
