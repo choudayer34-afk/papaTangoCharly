@@ -907,7 +907,7 @@ export function renderDashboard(container) {
       ).join("")}
       <div class="field" style="margin-top:20px;">
         <label style="display:block;margin-bottom:6px;">Ordre des rubriques</label>
-        <p class="item-meta" style="margin:0 0 8px;">Le Pense-bête reste toujours à côté des indicateurs (à gauche sur ordinateur, juste en dessous sur mobile) — déplace les autres rubriques ci-dessous si tu préfères un ordre fixe, à toi, identique partout.</p>
+        <p class="item-meta" style="margin:0 0 8px;">Le Pense-bête reste toujours à côté des indicateurs (dans la marge à gauche sur grand écran, en ligne à gauche sur écran plus étroit, juste en dessous sur mobile) — déplace les autres rubriques ci-dessous si tu préfères un ordre fixe, à toi, identique partout.</p>
         <div id="home-order-list"></div>
         <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre par défaut</button>
       </div>

@@ -34,9 +34,9 @@ const WHATS_NEW = [
       {
         type: "fix",
         title: "📌 Pense-bête plus discret, à côté des indicateurs sur ordinateur",
-        text: "Le Pense-bête ne s'affiche plus en pleine largeur au-dessus ou en dessous des indicateurs chiffrés : sur ordinateur, il se place désormais à gauche, sur la même ligne qu'eux, dans une colonne plus étroite — et son habillage (fond, ombre) a été allégé pour rester discret. Sur mobile, l'ordre ne change pas (indicateurs d'abord, Pense-bête juste après).",
+        text: "Le Pense-bête ne s'affiche plus en pleine largeur au-dessus ou en dessous des indicateurs chiffrés : sur ordinateur, il se place désormais à gauche — dans la marge inoccupée sur grand écran, pour laisser les indicateurs sur toute leur largeur habituelle, ou juste à leur gauche sur écran plus étroit — dans une colonne resserrée. Son habillage (fond, ombre) a aussi été allégé pour rester discret. Sur mobile, l'ordre ne change pas (indicateurs d'abord, Pense-bête juste après).",
         howTo: "Rien à faire, c'est automatique. ⚙️ Personnaliser l'accueil permet toujours de le masquer ou de déplacer le bloc \"Indicateurs (avec le Pense-bête)\" par rapport aux autres rubriques.",
-        gain: "Un repère qui reste à portée d'œil sans dominer visuellement l'écran d'accueil.",
+        gain: "Un repère qui reste à portée d'œil sans dominer visuellement l'écran d'accueil, ni grignoter la place des indicateurs.",
       },
       {
         type: "fix",
