@@ -32,6 +32,20 @@ const WHATS_NEW = [
     date: "14 septembre 2026",
     items: [
       {
+        type: "change",
+        title: "Modifier en masse : Ressource/Prompt en autocomplétion, tout trié par ordre alphabétique",
+        text: "Dans la modale \"Modifier en masse\" (Pilotage, vue Tableau), les champs Ressource et Prompt étaient des listes déroulantes qui s'allongeaient avec la bibliothèque, sans ordre particulier. Ils fonctionnent désormais comme le champ Tag : un champ texte avec autocomplétion, où les titres proposés sont triés par ordre alphabétique. Le champ Projet reste une liste déroulante classique (pour tout voir d'un coup dès le clic, sans avoir à taper), mais ses projets sont maintenant triés par ordre alphabétique eux aussi ; les projets fermés n'y apparaissent toujours pas.",
+        howTo: "Pilotage → Tableau → coche des tâches → \"✏️ Modifier en masse\" → Ressource/Prompt : tape le début du titre, choisis parmi les suggestions.",
+        gain: "Retrouver une ressource ou un prompt en tapant son nom plutôt qu'en faisant défiler une liste sans fin, et un ordre alphabétique partout où plusieurs éléments sont proposés.",
+      },
+      {
+        type: "add",
+        title: "🔎 Pilotage : recherche par titre ou description (Trello et Tableau)",
+        text: "Un nouveau champ de recherche apparaît en haut de Pilotage, au-dessus des filtres — tape un mot pour ne garder que les tâches dont le titre ou la description le contiennent. Fonctionne aussi bien en vue Trello qu'en vue Tableau, et se combine avec les autres filtres déjà en place (casquette, projet, échéance...).",
+        howTo: "Pilotage → champ \"🔎 Rechercher (titre, description)...\" en haut de l'écran.",
+        gain: "Retrouver une tâche précise dans une longue liste sans avoir à faire défiler ni à ouvrir chaque filtre.",
+      },
+      {
         type: "add",
         title: "🔄 Mise à jour automatique de l'application",
         text: "Jusqu'ici, une nouvelle version de l'application ne prenait effet qu'en fermant complètement l'app puis en la rouvrant. Désormais, dès qu'une nouvelle version est disponible et détectée, l'application affiche un bref message (\"🔄 Mise à jour disponible — l'application se recharge…\") puis se recharge automatiquement pour l'appliquer — sans avoir à fermer/rouvrir soi-même. La vérification se fait à l'ouverture de l'app et à chaque retour au premier plan (si l'app était restée ouverte en fond).",

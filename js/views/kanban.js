@@ -91,6 +91,17 @@ export function renderKanban(container) {
     </div>
     <div class="view">
       <div id="pilotage-subnav"></div>
+      <!-- Recherche texte (retour de Charles-Henri, 14/09/2026 : "je dois pouvoir filtrer en
+           recherchant sur titre ou description") — un champ toujours visible plutôt que rangé
+           dans le menu Filtrer et trier (contrairement à Casquette/Projet/Échéance ci-dessous,
+           une recherche se tape au clavier, elle ne se coche pas ; la cacher derrière un clic
+           supplémentaire aurait ralenti l'usage courant). Même placement et même intitulé que
+           sur Ressources/Prompts (voir ces deux vues), pour rester cohérent d'un onglet à
+           l'autre. S'applique aux deux vues, Trello ET Tableau, puisque les deux lisent le même
+           applyFilters plus bas dans ce fichier. -->
+      <div class="field">
+        <input id="kanban-search" type="text" placeholder="🔎 Rechercher (titre, description)..." />
+      </div>
       <!-- Une seule rangée "type de vue + Filtrer & trier" (audit du 07/09/2026, retour de
            Charles-Henri : "on s'y perd un peu [...] le type de visualisation, les filtres" —
            Trello/Tableau se confondaient visuellement avec les filtres alors que ce sont deux
@@ -160,6 +171,7 @@ export function renderKanban(container) {
   const filterBadgeEl = container.querySelector("#kanban-filter-badge");
   const projectFilterEl = container.querySelector("#kanban-project-filter");
   const dueFilterEl = container.querySelector("#kanban-due-filter");
+  const searchEl = container.querySelector("#kanban-search");
   // Trello/Tableau vivent maintenant dans la même rangée que "🔧 Filtrer & trier" plutôt que
   // dans leur propre `#kanban-view-toggle` (audit du 07/09/2026) — `filtersEl` sert donc les
   // deux rôles, le sélecteur `[data-view]` ci-dessous ne matchant de toute façon que ces deux
@@ -188,6 +200,9 @@ export function renderKanban(container) {
   // une échéance, ou sans échéance ET avancer normalement — deux questions différentes, donc
   // deux filtres cumulables plutôt qu'un seul bouton fusionné.
   let stalledOnly = false;
+  // Recherche texte titre/description (retour de Charles-Henri, 14/09/2026) — jamais persistée
+  // d'une visite à l'autre, même traitement que les autres filtres de cette vue.
+  let searchQuery = "";
 
   // Vue Trello/Tableau (02/09/2026) : préférence propre à l'appareil (localStorage), pas
   // besoin d'attendre les préférences Firestore pour l'afficher — contrairement à la
@@ -303,6 +318,10 @@ export function renderKanban(container) {
     updateFilterBadge();
     renderBoard();
   });
+  searchEl.addEventListener("input", () => {
+    searchQuery = searchEl.value.trim().toLowerCase();
+    renderBoard();
+  });
 
   function applyFilters(tasks) {
     const projectsById = new Map(latestProjects.map((p) => [p.id, p]));
@@ -321,6 +340,9 @@ export function renderKanban(container) {
     } else if (filterWindow === "none") list = list.filter((t) => !t.dueDate);
     if (hideDone) list = list.filter((t) => t.status !== "done");
     if (stalledOnly) list = list.filter((t) => tasksApi.isStalled(t));
+    if (searchQuery) {
+      list = list.filter((t) => `${t.title} ${t.description || ""}`.toLowerCase().includes(searchQuery));
+    }
     return list;
   }
 
@@ -928,6 +950,31 @@ async function openBulkEditModal(tasks, projects, onDone) {
     .map((t) => `<option value="${escapeHtml(t)}"></option>`)
     .join("");
 
+  // Ressource/Prompt en autocomplétion + tri alphabétique, sur le même principe que le champ Tag
+  // juste en dessous (retour de Charles-Henri, 14/09/2026 : "j'ai une liste déroulante à
+  // rallonge, il faut une liste qui marche en autocomplétion [...] triée par ordre alphabétique.
+  // pour les tags [ça marche déjà comme ça]") — un `<select>` classique listait les ressources/
+  // prompts dans leur ordre de création, jamais trié, et devenait interminable dès que la
+  // bibliothèque grandissait. Remplacé par un champ texte + `<datalist>`, comme Tag ; la
+  // résolution texte saisi → id se fait plus bas via `resourceIdByTitle`/`promptIdByTitle`
+  // (comparaison insensible à la casse), au moment d'appliquer.
+  const sortedResources = [...resources].sort((a, b) => a.title.localeCompare(b.title, "fr"));
+  const sortedPrompts = [...prompts].sort((a, b) => a.title.localeCompare(b.title, "fr"));
+  const resourceIdByTitle = new Map(sortedResources.map((r) => [r.title.trim().toLowerCase(), r.id]));
+  const promptIdByTitle = new Map(sortedPrompts.map((p) => [p.title.trim().toLowerCase(), p.id]));
+  const bulkResourceDatalistId = "bulk-resource-options";
+  const bulkPromptDatalistId = "bulk-prompt-options";
+  const bulkResourceOptionsHtml = sortedResources.map((r) => `<option value="${escapeHtml(r.title)}"></option>`).join("");
+  const bulkPromptOptionsHtml = sortedPrompts.map((p) => `<option value="${escapeHtml(p.title)}"></option>`).join("");
+
+  // Projet trié par ordre alphabétique (retour de Charles-Henri : "les projets doivent aussi
+  // être triés par ordre alphabétique mais pas en autocomplétion [...] je dois tout voir au
+  // début") — reste un `<select>` classique (jamais un champ autocomplété : cliquer dessus
+  // affiche d'emblée tous les projets, sans avoir à taper). `projects` reçu ici est déjà limité
+  // aux projets non fermés par `renderBoard()` (`activeProjects`), donc rien à filtrer de plus
+  // ici — seul le tri manquait.
+  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name, "fr"));
+
   // BUG corrigé (retour de Charles-Henri, 14/09/2026, capture d'écran : "une scrollbar
   // horizontale inutile [...] la liste (ajouter/retirer) qui est très large et la sélection de
   // l'élément est toute petite") — sur les trois champs Ressource/Prompt/Tag plus bas, chaque
@@ -964,7 +1011,7 @@ async function openBulkEditModal(tasks, projects, onDone) {
     ${toggleRow(
       "bulk-project",
       "Projet",
-      `<select id="bulk-project"><option value="">— Aucun —</option>${projects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>`
+      `<select id="bulk-project"><option value="">— Aucun —</option>${sortedProjects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>`
     )}
     ${toggleRow("bulk-criteria", "Critère de clôture", `<textarea id="bulk-criteria" placeholder="Qu'est-ce qui définit que c'est terminé ?"></textarea>`)}
     ${toggleRow(
@@ -977,7 +1024,8 @@ async function openBulkEditModal(tasks, projects, onDone) {
       "Ressource",
       `<div style="display:flex;gap:8px;">
         <select id="bulk-resource-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <select id="bulk-resource" style="flex:1;min-width:0;">${resources.map((r) => `<option value="${r.id}">${escapeHtml(r.title)}</option>`).join("")}</select>
+        <input id="bulk-resource-value" type="text" placeholder="Titre de la ressource" list="${bulkResourceDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <datalist id="${bulkResourceDatalistId}">${bulkResourceOptionsHtml}</datalist>
       </div>`
     )}
     ${toggleRow(
@@ -985,7 +1033,8 @@ async function openBulkEditModal(tasks, projects, onDone) {
       "Prompt",
       `<div style="display:flex;gap:8px;">
         <select id="bulk-prompt-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <select id="bulk-prompt" style="flex:1;min-width:0;">${prompts.map((p) => `<option value="${p.id}">${escapeHtml(p.title)}</option>`).join("")}</select>
+        <input id="bulk-prompt-value" type="text" placeholder="Titre du prompt" list="${bulkPromptDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <datalist id="${bulkPromptDatalistId}">${bulkPromptOptionsHtml}</datalist>
       </div>`
     )}
     ${toggleRow(
@@ -1043,12 +1092,38 @@ async function openBulkEditModal(tasks, projects, onDone) {
           if (on("bulk-blocked")) patch.isBlocked = bodyEl.querySelector("#bulk-blocked").value === "true";
 
           const noteText = on("bulk-notes") ? bodyEl.querySelector("#bulk-notes").value.trim() : "";
-          const resourceChange = on("bulk-resource")
-            ? { id: bodyEl.querySelector("#bulk-resource").value, add: bodyEl.querySelector("#bulk-resource-mode").value === "add" }
-            : null;
-          const promptChange = on("bulk-prompt")
-            ? { id: bodyEl.querySelector("#bulk-prompt").value, add: bodyEl.querySelector("#bulk-prompt-mode").value === "add" }
-            : null;
+
+          // Ressource/Prompt saisis en texte libre (autocomplétion) plutôt que choisis dans un
+          // `<select>` — il faut donc résoudre le titre tapé vers son id avant de pouvoir agir
+          // (retour de Charles-Henri, 14/09/2026). Un champ coché mais laissé vide n'est pas une
+          // erreur (rien à appliquer pour ce champ, comme une note vide) ; un champ coché avec un
+          // texte qui ne correspond à AUCUN titre connu, en revanche, bloque tout l'envoi plutôt
+          // que d'ignorer silencieusement une intention clairement exprimée ("jamais de perte
+          // silencieuse", même principe que partout ailleurs dans l'app).
+          let resourceChange = null;
+          if (on("bulk-resource")) {
+            const typed = bodyEl.querySelector("#bulk-resource-value").value.trim();
+            if (typed) {
+              const id = resourceIdByTitle.get(typed.toLowerCase());
+              if (!id) {
+                showToast(`Ressource introuvable : « ${typed} » — choisis un titre proposé par l'autocomplétion.`);
+                return;
+              }
+              resourceChange = { id, add: bodyEl.querySelector("#bulk-resource-mode").value === "add" };
+            }
+          }
+          let promptChange = null;
+          if (on("bulk-prompt")) {
+            const typed = bodyEl.querySelector("#bulk-prompt-value").value.trim();
+            if (typed) {
+              const id = promptIdByTitle.get(typed.toLowerCase());
+              if (!id) {
+                showToast(`Prompt introuvable : « ${typed} » — choisis un titre proposé par l'autocomplétion.`);
+                return;
+              }
+              promptChange = { id, add: bodyEl.querySelector("#bulk-prompt-mode").value === "add" };
+            }
+          }
           // Ajouter/Retirer, jamais un remplacement (retour de Charles-Henri : "il faudrait voir
           // si ça ajoute à l'existant ou remplace") — même mécanique qu'une Ressource/un Prompt
           // juste au-dessus : les tags déjà posés sur une tâche ne sont jamais écrasés par ce
