@@ -28,6 +28,7 @@ import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodor
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
 import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
 import { logView, logLogin } from "./services/usageTracking.js";
+import { showToast } from "./components/toast.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { migrateInboxTags } from "./domain/tags.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
@@ -348,8 +349,40 @@ onAuthChange(async (user) => {
 });
 
 // PWA : service worker (ne bloque jamais le fonctionnement de base si indisponible).
+//
+// Détection de mise à jour (retour de Charles-Henri, 14/09/2026 : "on est obligé de fermer et
+// réouvrir pour que ça la prenne en compte [...] il faudrait qu'à l'ouverture ça la détecte [...]
+// et que ça recharge l'appli directement à l'ouverture") — `sw.js` appelait déjà `skipWaiting()`
+// puis `clients.claim()` à l'activation (voir ce fichier), donc une nouvelle version prenait bien
+// le contrôle des requêtes réseau sans attendre la fermeture de tous les onglets. Ce qui manquait :
+// personne ne rechargeait la page déjà ouverte, dont le JS chargé en mémoire restait celui de
+// l'ancienne version tant qu'on ne fermait/rouvrait pas soi-même l'app. `clients.claim()`
+// déclenche un événement "controllerchange" sur chaque onglet ouvert au moment précis où la
+// nouvelle version prend le relais : on l'écoute ici pour recharger la page toute seule à ce
+// moment-là, avec un bref toast pour prévenir juste avant plutôt qu'un rafraîchissement silencieux
+// et déroutant. `hadController` distingue ce cas (une mise à jour, une version tournait déjà) du
+// tout premier enregistrement du service worker (première visite) : dans ce second cas il n'y a
+// rien de "mis à jour", donc rien à recharger.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hadController || reloading) return;
+      reloading = true;
+      showToast("🔄 Mise à jour disponible — l'application se recharge…", { duration: 1500 });
+      setTimeout(() => window.location.reload(), 700);
+    });
+
+    navigator.serviceWorker.register("./sw.js").then((registration) => {
+      // Vérification immédiate à l'ouverture plutôt que d'attendre le contrôle périodique du
+      // navigateur (jusqu'à 24h) — répond directement à "à l'ouverture ça la détecte". Rejouée
+      // aussi à chaque retour au premier plan (onglet ou PWA installée qu'on garde ouverte en
+      // fond plutôt que rouverte à chaque fois).
+      registration.update().catch(() => {});
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") registration.update().catch(() => {});
+      });
+    }).catch(() => {});
   });
 }
