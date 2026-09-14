@@ -1,0 +1,19 @@
+# Fichier reconnu nativement par Cloudflare Pages (aucune configuration à faire dans le tableau
+# de bord — il est lu automatiquement à chaque déploiement).
+#
+# Contexte (14/09/2026, "la mise à jour automatique ne marche pas du tout") : `js/app.js` détecte
+# une nouvelle version en comparant le contenu de `sw.js` à chaque ouverture/retour au premier plan
+# (voir `registration.update()` dans ce fichier, et le commentaire détaillé en tête de `sw.js`).
+# Cette comparaison ne sert à rien si le navigateur — ou un cache intermédiaire entre le navigateur
+# et Cloudflare — répond avec une copie de `sw.js` mise en cache plutôt que d'aller vérifier auprès
+# du serveur : le navigateur croit alors comparer la dernière version alors qu'il compare une copie
+# potentiellement périmée. `index.html` a le même besoin : c'est le seul fichier qui référence
+# `sw.js`, donc une copie périmée d'`index.html` peut retarder l'enregistrement d'un `sw.js` pourtant
+# à jour. Les deux fichiers sont minuscules (quelques Ko) : leur imposer une revalidation
+# systématique n'a aucun coût perceptible, contrairement aux gros fichiers applicatifs qui restent
+# volontairement mis en cache (voir la stratégie cache-first dans `sw.js#fetch`).
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache

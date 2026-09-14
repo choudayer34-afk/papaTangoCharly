@@ -25,7 +25,25 @@
 // Correctif (14/09/2026, suite — détection de mise à jour) : `js/app.js` recharge désormais tout
 // seul la page dès qu'une nouvelle version prend le contrôle (voir le commentaire détaillé dans ce
 // fichier) — `CACHE_NAME` incrémenté puisque le contenu de ce fichier précaché a changé.
-const CACHE_NAME = "pilotage-cache-v45b";
+//
+// Correctif (14/09/2026, suite — "la mise à jour automatique ne marche pas du tout") : la
+// détection ci-dessus repose entièrement sur le fait que CE FICHIER (`sw.js`) change d'un octet —
+// c'est la seule chose que le navigateur compare lors d'un `registration.update()` (voir
+// `js/app.js`). Or les deux vagues précédentes (recherche Trello/Tableau, autocomplétion en
+// modification en masse) n'avaient touché QUE des fichiers applicatifs (`js/views/kanban.js`
+// notamment) sans toucher `sw.js` ni `CACHE_NAME` — jugé inutile à l'époque puisqu'aucun nouveau
+// fichier n'était créé. Résultat : le navigateur ne voyait STRICTEMENT AUCUNE différence sur ce
+// fichier, donc aucune nouvelle version de service worker n'était jamais installée, donc
+// `controllerchange` ne se déclenchait jamais, donc ni toast ni rechargement — le mécanisme entier
+// restait silencieux, exactement le symptôme "rien du tout ne se passe" remonté par Charles-Henri.
+// Le rafraîchissement cache-first en tâche de fond (voir "fetch" plus bas) finissait certes par
+// mettre à jour le contenu réel en coulisses, mais sans jamais le signaler ni le charger tant que
+// l'app n'était pas fermée et rouverte plusieurs fois de suite.
+// `CACHE_NAME` incrémenté ici pour donner enfin au mécanisme une vraie différence à détecter — et,
+// point important pour la suite : cette ligne sera désormais incrémentée à CHAQUE vague qui modifie
+// ne serait-ce qu'un seul fichier précaché (`APP_SHELL` plus bas), fichier nouveau ou non, pour que
+// la détection de mise à jour fonctionne vraiment à chaque livraison plutôt que par exception.
+const CACHE_NAME = "pilotage-cache-v46";
 const APP_SHELL = [
   "./",
   "./index.html",
