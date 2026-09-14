@@ -1450,6 +1450,26 @@ tbody.drag-over-group {
   .postit-statgrid-row #postit-section { order: 1; flex: 0 0 260px; max-width: 260px; }
   .postit-statgrid-row #stat-grid { order: 2; flex: 1 1 auto; min-width: 0; }
 }
+/* Sur les très grands écrans, `#app` (max-width 760px, voir styles/components.css) laisse une
+   marge inoccupée de part et d'autre du contenu (retour de Charles-Henri, 14/09/2026, capture
+   d'écran avec une flèche : le Pense-bête doit se nicher dans cette marge à gauche plutôt que de
+   grignoter la largeur des indicateurs — "les indicateurs reprennent leur place"). À partir d'un
+   seuil laissant assez de place pour l'y loger (marge ≥ ~260px + espacement de chaque côté, donc
+   768 + 2*(260+16) ≈ 1320px de fenêtre), le Pense-bête sort du flux (`position: absolute`) et se
+   positionne dans cette marge ; les indicateurs, seuls dans la rangée flex, retrouvent alors toute
+   la largeur de `#app`, exactement comme avant que le Pense-bête ne partage la ligne. En dessous
+   de ce seuil (fenêtre plus étroite, y compris la plupart des ordinateurs portables), le
+   Pense-bête reste en ligne à gauche des indicateurs comme ci-dessus — il n'y a alors pas assez
+   de marge pour l'y loger sans déborder de l'écran. */
+@media (min-width: 1320px) {
+  .postit-statgrid-row { position: relative; }
+  .postit-statgrid-row #postit-section {
+    position: absolute;
+    top: 0;
+    right: calc(100% + var(--space-4));
+    width: 260px;
+  }
+}
 /* Masqué via ⚙️ Personnaliser l'accueil (js/views/dashboard.js#renderPostitSection) — sans ce
    `display:none`, la colonne réservée au Pense-bête resterait vide mais large sur web au lieu
    de laisser toute la place aux indicateurs. */
