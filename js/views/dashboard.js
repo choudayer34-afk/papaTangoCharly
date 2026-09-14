@@ -1182,6 +1182,12 @@ export function renderDashboard(container) {
     if (postitMode === "checklist") {
       renderChecklist(bodyEl, postitChecklist, {
         emptyLabel: "Rien de noté pour l'instant.",
+        // Retour de Charles-Henri, 14/09/2026 : "dès qu'on coche qqch, l'élément coché doit se
+        // positionner en bas de la liste [...] un bouton pour supprimer d'un coup tout ce qui est
+        // coché" — options réservées au Pense-bête (voir js/components/checklist.js), la
+        // checklist d'une Tâche/d'un Suivi n'en a jamais fait la demande et garde son
+        // comportement d'origine.
+        sortDoneToBottom: true,
         onAdd: async (text) => {
           postitChecklist = [...postitChecklist, { id: generateId(), text, done: false, doneAt: null }];
           await preferencesApi.setPostitChecklist(postitChecklist);
@@ -1196,6 +1202,11 @@ export function renderDashboard(container) {
         },
         onRemove: async (itemId) => {
           postitChecklist = postitChecklist.filter((it) => it.id !== itemId);
+          await preferencesApi.setPostitChecklist(postitChecklist);
+          return postitChecklist;
+        },
+        onClearDone: async () => {
+          postitChecklist = postitChecklist.filter((it) => !it.done);
           await preferencesApi.setPostitChecklist(postitChecklist);
           return postitChecklist;
         },

@@ -32,6 +32,20 @@ const WHATS_NEW = [
     date: "14 septembre 2026",
     items: [
       {
+        type: "add",
+        title: "☑️ Pense-bête (Checklist) : les cochés descendent en bas + tout supprimer d'un coup",
+        text: "Dans le Pense-bête en mode Checklist, cocher un élément le fait maintenant descendre en bas de la liste — les éléments restants à faire sont donc toujours visibles en premier. Un bouton \"🗑️ Supprimer les cochés\" apparaît dès qu'au moins un élément est coché, pour tout vider d'un coup plutôt qu'un par un ; il disparaît de lui-même quand plus rien n'est coché.",
+        howTo: "📌 Pense-bête → ☑️ Checklist. Coche un ou plusieurs éléments, puis \"🗑️ Supprimer les cochés\" apparaît au-dessus de la liste.",
+        gain: "Un pense-bête qui reste lisible même chargé, sans avoir à retirer chaque élément coché à la main.",
+      },
+      {
+        type: "change",
+        title: "Checklists : bouton \"+\" compact, et \"élément\" plutôt que \"sous-étape\"",
+        text: "Sur toute checklist de l'app (Tâche, Suivi, Pense-bête), le bouton \"+ Ajouter\" devient un simple \"+\" rond à côté du champ de saisie — il débordait de la fiche dans certaines modales. Le champ s'appelle désormais \"Ajouter un élément\" plutôt que \"Ajouter une sous-étape\", un terme plus neutre pour les trois usages.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Une checklist qui tient toujours dans sa fiche, quelle que soit sa largeur.",
+      },
+      {
         type: "fix",
         title: "📌 Pense-bête plus discret, à côté des indicateurs sur ordinateur",
         text: "Le Pense-bête ne s'affiche plus en pleine largeur au-dessus ou en dessous des indicateurs chiffrés : sur ordinateur, il se place désormais à gauche — dans la marge inoccupée sur grand écran, pour laisser les indicateurs sur toute leur largeur habituelle, ou juste à leur gauche sur écran plus étroit — dans une colonne resserrée. Son habillage (fond, ombre) a aussi été allégé pour rester discret. Sur mobile, l'ordre ne change pas (indicateurs d'abord, Pense-bête juste après).",
