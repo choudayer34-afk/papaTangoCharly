@@ -25,7 +25,7 @@
 // Correctif (14/09/2026, suite — détection de mise à jour) : `js/app.js` recharge désormais tout
 // seul la page dès qu'une nouvelle version prend le contrôle (voir le commentaire détaillé dans ce
 // fichier) — `CACHE_NAME` incrémenté puisque le contenu de ce fichier précaché a changé.
-const CACHE_NAME = "pilotage-cache-v45";
+const CACHE_NAME = "pilotage-cache-v45b";
 const APP_SHELL = [
   "./",
   "./index.html",
