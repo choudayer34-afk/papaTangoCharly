@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "14 septembre 2026",
     items: [
       {
+        type: "add",
+        title: "🔄 Mise à jour automatique de l'application",
+        text: "Jusqu'ici, une nouvelle version de l'application ne prenait effet qu'en fermant complètement l'app puis en la rouvrant. Désormais, dès qu'une nouvelle version est disponible et détectée, l'application affiche un bref message (\"🔄 Mise à jour disponible — l'application se recharge…\") puis se recharge automatiquement pour l'appliquer — sans avoir à fermer/rouvrir soi-même. La vérification se fait à l'ouverture de l'app et à chaque retour au premier plan (si l'app était restée ouverte en fond).",
+        howTo: "Rien à faire, c'est automatique. Si le message apparaît, l'application se recharge d'elle-même dans la seconde qui suit.",
+        gain: "Plus besoin de fermer/rouvrir l'app pour être sûr de travailler sur la dernière version.",
+      },
+      {
         type: "fix",
         title: "🐛 Pilotage (Tableau) : la barre de modification en masse s'efface bien à zéro sélection",
         text: "La barre \"✏️ Modifier en masse\" restait affichée même quand plus aucune tâche n'était cochée dans la vue Tableau de Pilotage. Corrigé — elle apparaît uniquement dès qu'au moins une ligne est sélectionnée et disparaît dès que la sélection redevient vide, décoche par décoche ou via \"Tout désélectionner\".",
