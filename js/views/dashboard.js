@@ -15,7 +15,6 @@ import * as priorisationApi from "../domain/priorisation.js";
 import * as objectivesApi from "../domain/objectives.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
-import { showHintOnce } from "../components/hint.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
@@ -30,7 +29,6 @@ import { openWeeklyReview } from "../components/weeklyReview.js";
 import { openQualifyChoice, openKeptItemDetail, openAllKeptItemsModal } from "./inbox.js";
 import { openCaptureModal } from "../components/capture.js";
 import { getDraft, clearDraft } from "../services/draftStore.js";
-import { renderInfoTip } from "../components/infoTip.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderDecisionGrid } from "../components/decisionGrid.js";
 import { getTheme, getEffectiveTheme, setTheme } from "../services/themeStore.js";
@@ -46,12 +44,18 @@ const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 // organiser des rubriques comme je l'entends sur web et mobile") — la liste COMPLÈTE des blocs
 // dont l'ordre vertical se choisit (voir applyHomeOrder()/openDashboardSettingsModal() plus
 // bas). Volontairement séparée de DASHBOARD_SECTIONS ci-dessous : "statGrid" n'est jamais
-// masquable (même règle que toujours) mais reste déplaçable, et "postit" a ses propres règles
-// de visibilité (voir renderPostitSection) — ces deux clés n'ont donc pas leur place dans
-// DASHBOARD_SECTIONS, qui ne sert qu'à la liste à cocher masquer/afficher.
+// masquable (même règle que toujours) mais reste déplaçable.
+//
+// "postit" n'est PLUS une clé indépendante ici depuis le 14/09/2026 (retour de Charles-Henri :
+// "je l'aurais imaginé un peu plus discret et sur le web [...] sur la gauche de l'écran
+// d'accueil sur la même ligne que les indicateurs") — le Pense-bête vit désormais en permanence
+// à côté du bloc chiffré ("statGrid" pointe vers le conteneur des deux, `#postit-statgrid-row`,
+// voir homeOrderElements et .postit-statgrid-row dans styles/components.css), pas vers le bloc
+// chiffré seul : les deux se déplacent comme une seule unité par rapport aux autres rubriques.
+// Sa visibilité propre (masquer/afficher) reste néanmoins distincte, voir DASHBOARD_SECTIONS et
+// renderPostitSection.
 const HOME_ORDER_LABELS = {
-  postit: "📌 Pense-bête",
-  statGrid: "🔢 Indicateurs",
+  statGrid: "🔢 Indicateurs (avec le Pense-bête)",
   needsAttention: "⚠️ Ça a besoin de toi",
   kept: "🧠 Informations & idées",
   projects: "📦 Mes projets",
@@ -60,22 +64,13 @@ const HOME_ORDER_LABELS = {
 };
 const HOME_ORDER_KEYS = Object.keys(HOME_ORDER_LABELS);
 
-// Palier "desktop/tablette" déjà utilisé ailleurs dans l'app pour distinguer web/mobile (voir
-// styles/components.css, modales élargies à partir de ce même seuil) — repris ici pour que
-// "web" et "mobile" désignent toujours la même frontière dans toute l'app.
-const HOME_ORDER_WIDE_QUERY = "(min-width: 640px)";
-
 /** Ordre PAR DÉFAUT tant que Charles-Henri n'a rien réordonné lui-même à la main (voir
- *  `dashboardOrder` dans js/domain/preferences.js) : sur un écran assez large (web), le
- *  Pense-bête se place avant le bloc chiffré, pour être le tout premier repère de la journée ;
- *  sur un écran étroit (mobile), après le bloc chiffré mais avant la première vraie rubrique —
- *  demande explicite de Charles-Henri ("en haut à gauche par défaut des indicateurs chiffrés
- *  sur le Web et en dessous des indicateurs sur mobile avant la première section"). */
+ *  `dashboardOrder` dans js/domain/preferences.js). Le placement du Pense-bête par rapport au
+ *  bloc chiffré (à gauche sur web, juste en dessous sur mobile) n'en fait plus partie — c'est
+ *  désormais purement du CSS (`.postit-statgrid-row`), plus besoin de recalculer cet ordre
+ *  selon la largeur d'écran comme avant le 14/09/2026. */
 function defaultHomeOrder() {
-  const isWide = window.matchMedia && window.matchMedia(HOME_ORDER_WIDE_QUERY).matches;
-  return isWide
-    ? ["postit", "statGrid", "needsAttention", "kept", "projects", "recentlyViewed", "recent"]
-    : ["statGrid", "postit", "needsAttention", "kept", "projects", "recentlyViewed", "recent"];
+  return ["statGrid", "needsAttention", "kept", "projects", "recentlyViewed", "recent"];
 }
 
 // Sections repliables/masquables (piste UX du 31/08/2026, retour de Charles-Henri : "l'accueil
@@ -138,18 +133,26 @@ export function renderDashboard(container) {
       <div id="capture-draft-banner"></div>
       <div id="review-reminder"></div>
       <div id="notif-optin"></div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div class="chip-row" id="hat-filter" style="margin-bottom:0;flex:1;min-width:0;"></div>
-        <span id="hat-filter-info"></span>
-      </div>
       <!-- Bloc réordonnable (retour de Charles-Henri, 13/09/2026 : "positionner, organiser des
            rubriques comme je l'entends") — un simple conteneur flex-colonne dont chaque enfant
            reçoit un ordre CSS (propriété "order") calculé par applyHomeOrder() ; le HTML garde
            un ordre source fixe et anodin, tout l'ordre visuel passe par ce style, jamais par
            une réécriture du DOM (voir applyHomeOrder() plus bas pour le raisonnement complet). -->
       <div id="home-order-wrapper" style="display:flex;flex-direction:column;">
-        <div id="postit-section"></div>
-        <div class="stat-grid" id="stat-grid"></div>
+        <!-- Pense-bête + indicateurs, un seul bloc réordonnable (retour de Charles-Henri,
+             14/09/2026 : "je l'aurais imaginé un peu plus discret et sur le web [...] sur la
+             gauche de l'écran d'accueil sur la même ligne que les indicateurs") — voir la
+             classe postit-statgrid-row dans styles/components.css : colonne sur mobile
+             (indicateurs d'abord, Pense-bête juste après, comme demandé à l'origine), ligne sur
+             web (Pense-bête à gauche, plus étroit — donc plus discret — pendant que les
+             indicateurs prennent le reste de la largeur). Le Pense-bête n'est donc plus
+             indépendamment réordonnable par rapport aux indicateurs (voir HOME_ORDER_KEYS) :
+             les deux se déplacent désormais comme une seule unité par rapport aux autres
+             rubriques. -->
+        <div id="postit-statgrid-row" class="postit-statgrid-row">
+          <div id="postit-section"></div>
+          <div class="stat-grid" id="stat-grid"></div>
+        </div>
         <div id="recent-viewed-section"></div>
         <div id="focus-section"></div>
         <div id="focus-queue-section"></div>
@@ -193,26 +196,10 @@ export function renderDashboard(container) {
   };
   themeMediaQuery?.addEventListener("change", onSystemThemeChange);
 
-  // Rebascule l'ordre par défaut Pense-bête/indicateurs en direct si la fenêtre passe le palier
-  // web/mobile (redimensionnement de fenêtre, rotation d'écran) — UNIQUEMENT tant qu'aucun
-  // ordre explicite n'a été choisi à la main (voir applyHomeOrder()) : un ordre personnalisé ne
-  // doit jamais se remettre à varier tout seul juste parce que la fenêtre change de taille.
-  const homeOrderMediaQuery = window.matchMedia ? window.matchMedia(HOME_ORDER_WIDE_QUERY) : null;
-  const onHomeOrderBreakpointChange = () => {
-    if (!dashboardOrder || !dashboardOrder.length) applyHomeOrder();
-  };
-  homeOrderMediaQuery?.addEventListener("change", onHomeOrderBreakpointChange);
-  showHintOnce(
-    container.querySelector(".view"),
-    "dashboard-hats-v1",
-    "Le filtre <strong>Toutes / Toi / Équipe / Projets / Manager / CSE</strong> ci-dessous limite l'Accueil à une seule casquette à la fois — il est déduit automatiquement du projet ou de la personne concernée. Le bouton ⚙️ permet de replier les sections dont tu ne te sers pas."
-  );
-  renderInfoTip(container.querySelector("#hat-filter-info"), casquettesApi.HAT_INFO_HTML);
-
   const captureDraftBannerEl = container.querySelector("#capture-draft-banner");
   const reviewReminderEl = container.querySelector("#review-reminder");
   const notifOptInEl = container.querySelector("#notif-optin");
-  const hatFilterEl = container.querySelector("#hat-filter");
+  const postitRowEl = container.querySelector("#postit-statgrid-row");
   const postitSection = container.querySelector("#postit-section");
   const statGrid = container.querySelector("#stat-grid");
   const recentViewedSection = container.querySelector("#recent-viewed-section");
@@ -227,8 +214,9 @@ export function renderDashboard(container) {
   // du système d'ordre manuel (mutuellement exclusives avec needsAttentionSection selon le mode,
   // elles se recalent automatiquement juste avant elle, voir applyHomeOrder()).
   const homeOrderElements = {
-    postit: postitSection,
-    statGrid: statGrid,
+    // "statGrid" déplace désormais le bloc entier Pense-bête + indicateurs (voir
+    // #postit-statgrid-row plus haut) — plus seulement le bloc chiffré seul.
+    statGrid: postitRowEl,
     needsAttention: needsAttentionSection,
     kept: keptSection,
     projects: projectsSection,
@@ -246,6 +234,14 @@ export function renderDashboard(container) {
   let keptItems = [];
   let projectSortMode = "manual";
   let categories = {};
+  // Filtre par casquette retiré de l'Accueil (retour de Charles-Henri, 14/09/2026 : "les
+  // filtres toi, équipe, etc. ne servent pas. Retire-les") — `activeHat` reste figé sur "all"
+  // pour de bon : les nombreuses fonctions `hatFilterTasks`/`hatFilterFollowUps`/etc. plus bas
+  // le lisent encore (leur garde `if (activeHat !== "all")` ne s'active donc plus jamais, tout
+  // reste montré sans filtre), mais rien ne le fait plus varier — plus simple et moins risqué
+  // que de retoucher chacun de ces appels. Le même filtre reste inchangé sur Pilotage/
+  // Priorisation (js/views/kanban.js, js/views/priorisation.js), qui gardent leur propre
+  // préférence `casquette` — seule sa présence sur l'Accueil a été jugée inutile.
   let activeHat = "all";
   let hiddenSections = new Set();
   let focusOverride = { date: null, addedTaskIds: [] };
@@ -283,7 +279,6 @@ export function renderDashboard(container) {
   preferencesApi.getPreferences().then((prefs) => {
     projectSortMode = prefs.projectSort || "manual";
     categories = prefs.categories || {};
-    activeHat = prefs.casquette || "all";
     if (!prefs.dashboardHiddenMigratedV19) {
       // Bascule one-shot vers le profil "épuré" (voir DEFAULT_HIDDEN_V19 ci-dessus) — jamais
       // répétée ensuite, pour respecter toute personnalisation faite après par Charles-Henri.
@@ -308,8 +303,12 @@ export function renderDashboard(container) {
     postitMode = prefs.postitMode || "text";
     postitText = prefs.postitText || "";
     postitChecklist = prefs.postitChecklist || [];
-    dashboardOrder = prefs.dashboardOrder || [];
-    renderHatFilter();
+    // Filtre défensif "postit" (retour de Charles-Henri, 14/09/2026) : un ordre déjà enregistré
+    // avant ce round pouvait contenir cette clé, retirée depuis de HOME_ORDER_KEYS — sans ça,
+    // elle resterait inerte dans le tableau (applyHomeOrder() l'ignore déjà sans planter, voir
+    // sa garde `if (el)`) mais s'afficherait aussi telle quelle, sans libellé, dans la liste
+    // réordonnable de ⚙️ Personnaliser l'accueil.
+    dashboardOrder = (prefs.dashboardOrder || []).filter((k) => k !== "postit");
     renderReviewReminder(prefs.lastWeeklyReviewAt);
     renderNotifOptIn(prefs.notifOptIn);
     renderStats();
@@ -324,20 +323,6 @@ export function renderDashboard(container) {
     applyHomeModeVisibility();
     applyHomeOrder();
   });
-
-  function renderHatFilter() {
-    casquettesApi.renderHatChipRow(hatFilterEl, activeHat, async (hatId) => {
-      activeHat = hatId;
-      renderHatFilter();
-      renderStats();
-      renderFocusSection();
-      renderNeedsAttentionSection();
-      renderFocusQueueSection();
-      renderProjectsSection();
-      renderRecentSection();
-      await preferencesApi.setCasquette(hatId);
-    });
-  }
 
   /**
    * "✏️ Saisie laissée en cours" (piste TDAH du 02/09/2026, retour de Charles-Henri — ses
@@ -922,9 +907,9 @@ export function renderDashboard(container) {
       ).join("")}
       <div class="field" style="margin-top:20px;">
         <label style="display:block;margin-bottom:6px;">Ordre des rubriques</label>
-        <p class="item-meta" style="margin:0 0 8px;">Par défaut, le Pense-bête se place avant les indicateurs sur ordinateur et juste après sur mobile. Déplace une rubrique ci-dessous si tu préfères un ordre fixe, à toi, identique partout.</p>
+        <p class="item-meta" style="margin:0 0 8px;">Le Pense-bête reste toujours à côté des indicateurs (à gauche sur ordinateur, juste en dessous sur mobile) — déplace les autres rubriques ci-dessous si tu préfères un ordre fixe, à toi, identique partout.</p>
         <div id="home-order-list"></div>
-        <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre automatique web/mobile</button>
+        <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre par défaut</button>
       </div>
     `;
     body.querySelectorAll("#home-mode-row .chip").forEach((btn) => {
@@ -1157,20 +1142,31 @@ export function renderDashboard(container) {
    * (js/components/hint.js) : le risque existe à chaque instant, pas seulement à la découverte.
    */
   function renderPostitSection() {
-    if (hiddenSections.has("postit")) {
+    const hidden = hiddenSections.has("postit");
+    // Classe portée par le conteneur PARTAGÉ avec le bloc chiffré (retour de Charles-Henri,
+    // 14/09/2026) — sans elle, la colonne réservée au Pense-bête (`.postit-statgrid-row
+    // #postit-section`, styles/components.css) resterait large et vide sur web dès qu'il est
+    // masqué, au lieu de laisser toute la place aux indicateurs.
+    postitRowEl?.classList.toggle("postit-hidden", hidden);
+    if (hidden) {
       postitSection.innerHTML = "";
       return;
     }
+    // Habillage volontairement discret (retour de Charles-Henri, 14/09/2026 : "je l'aurais
+    // imaginé un peu plus discret") — plus de fond teinté ni de marge propre à la carte (le
+    // conteneur partagé s'en charge désormais), titre en simple texte gras plutôt que le style
+    // "section-title" majuscule/espacé habituel, avertissement raccourci. Voir `.postit-card`
+    // dans styles/components.css pour le liseré (aminci) qui reste l'unique signal visuel fort.
     postitSection.innerHTML = `
-      <div class="card postit-card" style="margin-bottom:16px;">
+      <div class="card postit-card">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-          <div class="section-title" style="margin:0;">📌 Pense-bête</div>
+          <div style="font-weight:600;font-size:var(--font-size-sm);">📌 Pense-bête</div>
           <div class="chip-row" id="postit-mode-row" style="margin-bottom:0;">
             <button type="button" class="chip${postitMode === "text" ? " active" : ""}" data-mode="text">📝 Texte</button>
             <button type="button" class="chip${postitMode === "checklist" ? " active" : ""}" data-mode="checklist">☑️ Checklist</button>
           </div>
         </div>
-        <p class="item-meta" style="margin:8px 0 12px;">Ce que tu as en tête là, maintenant — pas une tâche à piloter : un billet d'avion à acheter, voir Michel aujourd'hui... ⚠️ Attention, ça peut vite devenir un fourre-tout : pense à le vider régulièrement.</p>
+        <p class="item-meta" style="margin:8px 0 10px;">Pas une tâche à piloter. ⚠️ Ça peut vite devenir un fourre-tout : pense à le vider.</p>
         <div id="postit-body"></div>
       </div>
     `;
@@ -1205,7 +1201,7 @@ export function renderDashboard(container) {
         },
       });
     } else {
-      bodyEl.innerHTML = `<div class="field" style="margin-bottom:0;"><textarea id="postit-textarea" placeholder="Ex. Acheter un billet d'avion, voir Michel aujourd'hui..." style="min-height:90px;">${escapeHtml(postitText)}</textarea></div>`;
+      bodyEl.innerHTML = `<div class="field" style="margin-bottom:0;"><textarea id="postit-textarea" placeholder="Ex. Acheter un billet d'avion, voir Michel aujourd'hui..." style="min-height:64px;">${escapeHtml(postitText)}</textarea></div>`;
       const textarea = bodyEl.querySelector("#postit-textarea");
       // Sauvegarde automatique (retour à la ligne ou clic ailleurs) — pas de bouton
       // "Enregistrer" pour un post-it, ça doit rester aussi léger qu'un vrai bout de papier ;
@@ -1792,7 +1788,6 @@ export function renderDashboard(container) {
     document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
     window.removeEventListener("focus", refreshCaptureDraftBanner);
     themeMediaQuery?.removeEventListener("change", onSystemThemeChange);
-    homeOrderMediaQuery?.removeEventListener("change", onHomeOrderBreakpointChange);
     unsubTasks();
     unsubInbox();
     unsubKept();

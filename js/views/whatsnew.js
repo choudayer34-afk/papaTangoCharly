@@ -29,6 +29,25 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "14 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "📌 Pense-bête plus discret, à côté des indicateurs sur ordinateur",
+        text: "Le Pense-bête ne s'affiche plus en pleine largeur au-dessus ou en dessous des indicateurs chiffrés : sur ordinateur, il se place désormais à gauche, sur la même ligne qu'eux, dans une colonne plus étroite — et son habillage (fond, ombre) a été allégé pour rester discret. Sur mobile, l'ordre ne change pas (indicateurs d'abord, Pense-bête juste après).",
+        howTo: "Rien à faire, c'est automatique. ⚙️ Personnaliser l'accueil permet toujours de le masquer ou de déplacer le bloc \"Indicateurs (avec le Pense-bête)\" par rapport aux autres rubriques.",
+        gain: "Un repère qui reste à portée d'œil sans dominer visuellement l'écran d'accueil.",
+      },
+      {
+        type: "fix",
+        title: "Filtre par casquette retiré de l'écran d'accueil",
+        text: "Le filtre Toutes / Toi / Équipe / Projets / Manager / CSE, jugé inutile sur l'Accueil, a été retiré de cet écran — les rubriques (Ça a besoin de toi, Mes projets, etc.) affichent maintenant tout, sans filtre caché à réinitialiser. Il reste disponible tel quel sur Pilotage et sur Priorisation.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Un écran d'accueil plus simple, sans un filtre qui ne servait pas.",
+      },
+    ],
+  },
+  {
     date: "13 septembre 2026 (suite 7)",
     items: [
       {
