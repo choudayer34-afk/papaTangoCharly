@@ -13,26 +13,70 @@
 // date de coche doit être enregistrée... pour toutes les checklists") — horodaté par l'appelant
 // au moment du `onToggle` (même principe que `toggleStep()` dans js/domain/projects.js),
 // affiché ici à côté de chaque élément coché.
+//
+// `sortDoneToBottom`/`onClearDone` (retour de Charles-Henri, 14/09/2026, sur le Pense-bête
+// uniquement : "dès qu'on coche qqch, l'élément coché doit se positionner en bas de la liste
+// [...] un bouton [...] pour supprimer d'un coup tout ce qui est coché") — deux options
+// désactivées par défaut, pour ne rien changer aux checklists de Tâche/Suivi (js/views/kanban.js,
+// js/views/people.js) qui ne les passent pas : leur ordre reste celui dans lequel les sous-étapes
+// ont été tapées, sans bouton de purge groupée, comme avant ce patch.
+//
+// Bouton "+" compact plutôt que "+ Ajouter" en toutes lettres (retour de Charles-Henri,
+// 14/09/2026 : "le + ajouter sort de la modale, il faudrait juste un + à côté du champ") — ce
+// composant vit aussi dans des modales de largeur contrainte (fiche Tâche/Suivi) où le bouton
+// texte débordait. Le libellé du champ passe au passage de "sous-étape" à "élément" (même retour
+// de Charles-Henri), plus neutre pour les trois usages (sous-étapes de Tâche/Suivi, notes libres
+// du Pense-bête).
 
-export function renderChecklist(container, items, { onAdd, onToggle, onRemove, emptyLabel = "Pas encore de sous-étape." } = {}) {
+export function renderChecklist(
+  container,
+  items,
+  { onAdd, onToggle, onRemove, onClearDone, sortDoneToBottom = false, emptyLabel = "Pas encore de sous-étape." } = {}
+) {
   let current = items || [];
   container.innerHTML = `
-    <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <input id="checklist-new-text" type="text" placeholder="Ajouter une sous-étape..." style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <button type="button" id="checklist-add-btn" class="btn btn-secondary btn-sm">+ Ajouter</button>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <input id="checklist-new-text" type="text" placeholder="Ajouter un élément..." style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+      <button type="button" id="checklist-add-btn" class="checklist-add-btn" aria-label="Ajouter un élément" title="Ajouter un élément">+</button>
     </div>
+    ${onClearDone ? `<div id="checklist-clear-done-row" style="margin-bottom:8px;"></div>` : ""}
     <div id="checklist-items"></div>
   `;
 
   const listEl = container.querySelector("#checklist-items");
+  const clearDoneRowEl = container.querySelector("#checklist-clear-done-row");
+
+  function renderClearDoneButton() {
+    if (!clearDoneRowEl) return;
+    const doneCount = current.filter((it) => it.done).length;
+    // Masqué tant que rien n'est coché — jamais un bouton mort en permanence sur le Pense-bête.
+    if (!doneCount) {
+      clearDoneRowEl.innerHTML = "";
+      return;
+    }
+    clearDoneRowEl.innerHTML = `<button type="button" id="checklist-clear-done-btn" class="btn btn-ghost btn-sm">🗑️ Supprimer les cochés (${doneCount})</button>`;
+    clearDoneRowEl.querySelector("#checklist-clear-done-btn").addEventListener("click", async () => {
+      const updated = await onClearDone();
+      current = updated || current;
+      renderList();
+    });
+  }
 
   function renderList() {
+    renderClearDoneButton();
     if (!current.length) {
       listEl.innerHTML = `<div class="empty-state" style="padding:12px;">${emptyLabel}</div>`;
       return;
     }
+    // Les éléments cochés descendent en bas de la liste (retour de Charles-Henri, 14/09/2026 :
+    // "pour que les éléments restants soit toujours visible en premier") — un simple tri stable
+    // par groupe (non cochés puis cochés), qui préserve l'ordre relatif à l'intérieur de chaque
+    // groupe plutôt que de trier par date de coche ou de tout mélanger.
+    const visible = sortDoneToBottom
+      ? [...current.filter((it) => !it.done), ...current.filter((it) => it.done)]
+      : current;
     listEl.innerHTML = "";
-    for (const item of current) {
+    for (const item of visible) {
       const row = document.createElement("div");
       row.className = "checklist-item";
       row.innerHTML = `
@@ -43,7 +87,7 @@ export function renderChecklist(container, items, { onAdd, onToggle, onRemove, e
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "btn btn-ghost btn-sm";
-      removeBtn.setAttribute("aria-label", "Retirer cette sous-étape");
+      removeBtn.setAttribute("aria-label", "Retirer cet élément");
       removeBtn.textContent = "✕";
       row.appendChild(removeBtn);
 
