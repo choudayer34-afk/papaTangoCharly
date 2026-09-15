@@ -15,7 +15,7 @@ import { renderMore } from "./views/more.js";
 import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
-import { renderLogin, renderRestricted } from "./views/login.js";
+import { renderLogin, renderRestricted, renderAuthError } from "./views/login.js";
 import { renderPrepMask } from "./views/prepMask.js";
 import { openModal } from "./components/modal.js";
 import { mountCaptureFab } from "./components/capture.js";
@@ -310,14 +310,28 @@ function unmountApp() {
 
 onAuthChange(async (user) => {
   if (user) {
-    // Ouverture à "quelques personnes précises que je choisis" (retour de Charles-Henri, pas
-    // d'inscription libre) : on vérifie la liste blanche `allowedUsers` AVANT de monter l'app,
-    // pour quiconque s'est authentifié avec succès via Firebase (Google ou email/mot de passe)
-    // mais n'a pas été explicitement autorisé. Ce garde-fou côté client évite d'afficher l'app
-    // à la mauvaise personne, mais ne remplace pas les règles de sécurité Firestore (seul
-    // rempart réel contre quelqu'un qui interrogerait Firestore directement) — voir les
-    // instructions de configuration livrées séparément.
-    const allowed = await isEmailAllowed(user.email);
+    // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : aucun try/catch n'entourait
+    // cette vérification — une coupure réseau ou une erreur Firestore pendant l'appel à
+    // isEmailAllowed() laissait l'écran intégralement blanc (ni app, ni login, ni message),
+    // l'utilisateur authentifié mais bloqué sans le moindre indice sur ce qui se passe. Voir
+    // js/views/login.js#renderAuthError pour l'écran affiché dans ce cas, avec un bouton
+    // "Réessayer" plutôt qu'un blocage muet.
+    let allowed;
+    try {
+      // Ouverture à "quelques personnes précises que je choisis" (retour de Charles-Henri, pas
+      // d'inscription libre) : on vérifie la liste blanche `allowedUsers` AVANT de monter l'app,
+      // pour quiconque s'est authentifié avec succès via Firebase (Google ou email/mot de passe)
+      // mais n'a pas été explicitement autorisé. Ce garde-fou côté client évite d'afficher l'app
+      // à la mauvaise personne, mais ne remplace pas les règles de sécurité Firestore (seul
+      // rempart réel contre quelqu'un qui interrogerait Firestore directement) — voir les
+      // instructions de configuration livrées séparément.
+      allowed = await isEmailAllowed(user.email);
+    } catch (err) {
+      console.error("[app] Vérification de la liste blanche impossible :", err);
+      unmountApp();
+      renderAuthError(appRoot);
+      return;
+    }
     if (!allowed) {
       pendingRestrictedEmail = user.email;
       await signOutUser();
