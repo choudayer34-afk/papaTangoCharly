@@ -43,7 +43,107 @@
 // point important pour la suite : cette ligne sera désormais incrémentée à CHAQUE vague qui modifie
 // ne serait-ce qu'un seul fichier précaché (`APP_SHELL` plus bas), fichier nouveau ou non, pour que
 // la détection de mise à jour fonctionne vraiment à chaque livraison plutôt que par exception.
-const CACHE_NAME = "pilotage-cache-v46";
+//
+// Correctif (14/09/2026, suite — administration des comptes) : nouveau fichier
+// js/services/accountAdmin.js ajouté à APP_SHELL dès sa création, comme la règle ci-dessus
+// l'impose désormais systématiquement.
+//
+// Correctif (15/09/2026, suite — date de contrôle non supprimable + suivi dupliqué) :
+// js/domain/followups.js et js/components/modal.js modifiés (tous deux déjà précachés), comme
+// la règle ci-dessus l'impose systématiquement dès qu'un fichier précaché change de contenu.
+//
+// Correctif (15/09/2026, suite — checklist/notes perdues lors d'un changement de type) :
+// js/domain/convert.js, tasks.js, followups.js, inbox.js et js/components/changeType.js modifiés
+// (tous déjà précachés).
+//
+// Correctif (15/09/2026, suite — audit "anomalies silencieuses" : généralisation de la garde
+// anti-double-clic) : le correctif du 15/09 sur `openModal()` (ci-dessus) ne protégeait que les
+// boutons ouverts via une modale. Or plusieurs boutons d'ajout vivent DANS une fiche déjà ouverte
+// et ne passent jamais par `openModal()` : "+" sous-étape (checklist), "+ Ajouter la note"
+// (notesBlock), "+" sous-partie de projet, rattachement d'une réunion Outlook, création rapide
+// de projet depuis un Suivi (×2 : création et modification), sélection d'un élément à lier. Un
+// double-clic ou un clic suivi d'un Entrée rapproché pouvait donc y créer deux fois le même
+// élément avant que le premier appel asynchrone ne soit terminé — silencieusement, sans erreur
+// visible. Nouvelle fonction partagée `guardClick()` ajoutée à `js/components/modal.js`
+// (même principe que la garde de `openModal()`, généralisée à n'importe quel bouton) et appliquée
+// aux 8 boutons ci-dessus dans `js/components/checklist.js`, `notesBlock.js`, `linkedItems.js`,
+// `js/views/people.js` (×3), `js/views/projects.js` et `js/views/kanban.js`. `CACHE_NAME`
+// incrémenté puisque tous ces fichiers sont précachés.
+//
+// Correctif (15/09/2026, suite — audit "anomalies silencieuses" : doublons dans "Ça a besoin de
+// toi" / Focus) : `js/views/dashboard.js#renderNeedsAttentionSection()` et `#computeFocusQueue()`
+// fusionnaient plusieurs catégories (Suivi en retard, échéance proche, tâche à l'arrêt, tâche en
+// retard, tâche due aujourd'hui) sans dédoublonner — une même Tâche pouvant matcher deux
+// catégories à la fois (ex. échéance proche ET à l'arrêt, ces deux critères étant indépendants),
+// elle apparaissait deux fois dans la liste et faussait le compteur affiché en titre, sans le
+// moindre signe visible du problème. Nouvelle fonction `dedupeByEntity()` qui ne garde qu'une
+// entrée par (type d'entité, id), la plus urgente des deux si duplication il y a. `CACHE_NAME`
+// incrémenté puisque `js/views/dashboard.js` est précaché.
+//
+// Correctif (15/09/2026, suite — audit "anomalies silencieuses" : course lecture-modification-
+// écriture) : chaque `js/domain/*.js` modifie un document existant en le relisant (`get()`) puis
+// en le réécrivant en entier (`put()`) avec le patch calculé dessus — schéma non atomique. Deux
+// telles séquences sur le MÊME document (le plus exposé : `js/domain/preferences.js`, un
+// document UNIQUE partagé par toute l'app — casquette, sections masquées, raccourcis...) pouvaient
+// s'écraser silencieusement l'une l'autre si elles se chevauchaient à quelques millisecondes
+// d'intervalle : la seconde lisait l'état d'avant la première et réécrivait par-dessus, perdant
+// le premier changement sans la moindre erreur visible. Nouvelle fonction `storage.update()`
+// (js/services/storage.js et son miroir storage-local.js) qui sérialise ces séquences par
+// document — un appel ne commence sa lecture qu'une fois l'écriture du précédent appel sur ce
+// même document terminée. Utilisée désormais par toutes les fonctions de lecture-modification-
+// écriture de `js/domain/preferences.js` (~25 réglages), `tasks.js`, `followups.js`,
+// `projects.js`, `decisions.js`, `people.js`, `resources.js`, `meetings.js`, `objectives.js`,
+// `inbox.js` et `prompts.js`. `CACHE_NAME` incrémenté puisque tous ces fichiers (et
+// `storage-local.js`) sont précachés.
+//
+// Correctif (15/09/2026, suite — audit "anomalies silencieuses" : unification du calcul de
+// dates) : au moins trois implémentations indépendantes de "combien de jours avant/après
+// aujourd'hui" cohabitaient (js/domain/tasks.js#isLate, followups.js#isControlDue,
+// projectHealth.js#daysLate/daysUntil, js/views/dashboard.js#daysFromToday, kanban.js#
+// daysFromToday — copie exacte de celle de dashboard.js), la plupart parsant l'échéance en
+// UTC (`new Date(dateStr)`) puis la comparant à un minuit LOCAL — ne se voit que dans un fuseau
+// à décalage négatif (Amériques), où une tâche due aujourd'hui pouvait apparaître en retard.
+// Nouveau fichier `js/services/dateUtils.js` (ajouté à APP_SHELL), qui reprend le parsing local
+// déjà correct de `js/domain/priorisation.js#daysUntil` comme seule référence désormais utilisée
+// par tous ces appelants (`js/components/weeklyReview.js` aussi, dont la fenêtre "7 prochains
+// jours" mélangeait de son côté une échéance parsée en UTC avec `Date.now()`, un instant en
+// temps réel plutôt qu'un début de journée). `js/domain/workload.js` importe désormais
+// `STALLED_THRESHOLD_MS` depuis `tasks.js` au lieu d'en garder sa propre copie en dur. `CACHE_NAME`
+// incrémenté puisque tous ces fichiers sont précachés (et un nouveau fichier vient d'y être
+// ajouté).
+//
+// Correctif (15/09/2026, suite — audit "anomalies silencieuses" : échecs qui disparaissent) :
+// trois points où une erreur technique passait totalement inaperçue. (1) `js/services/
+// storage.js#subscribe()` — chemin de lecture central de toute l'app (Kanban, Projets,
+// Personnes...) — n'avait pas de callback d'erreur sur `onSnapshot()` : une écoute qui échoue
+// (règle Firestore refusée, jeton expiré...) figeait les données affichées sans le moindre
+// signe ; elle journalise et affiche désormais un toast. (2) `js/app.js#onAuthChange` n'avait
+// aucun try/catch autour de la vérification de la liste blanche : une erreur à cet instant
+// laissait l'écran intégralement blanc ; nouvel écran `js/views/login.js#renderAuthError` avec
+// un bouton "Réessayer". (3) `js/services/shortcuts.js` n'avait aucun `catch` dans tout le
+// fichier — un échec pouvait notamment laisser le bouton "⌨️ Assigner un raccourci" bloqué pour
+// de bon sur "Maintiens Ctrl+Alt et appuie sur une touche…" ; try/catch ajoutés sur les 3 points
+// asynchrones (raccourci personnalisé, retrait, assignation), chacun avec un toast et, pour
+// l'assignation, un retour à un état de bouton normal. `CACHE_NAME` incrémenté puisque
+// storage.js, app.js, login.js et shortcuts.js sont tous précachés.
+//
+// Correctif (15/09/2026, suite — audit "anomalies silencieuses" : corrections ponctuelles à
+// faible risque, dernier volet) : (1) `js/domain/inbox.js#autoArchiveStaleKept()` se basait sur
+// `item.createdAt` (date de la capture BRUTE d'origine) plutôt que sur le moment où l'élément
+// est devenu une Information/Idée — une capture qualifiée en "kept" longtemps après sa création
+// se retrouvait auto-archivée dès le balayage suivant ; nouveau champ `keptAt` posé par
+// `qualify()`. (2) `js/domain/history.js#ACTION_META` : ajout des libellés manquants pour les
+// actions déjà journalisées par `convert.js` (conversions), `inbox.js` (texte corrigé, projet
+// rattaché) et `tags.js` (tag ajouté/retiré, y compris pour "Kept" et "Objective", absents des
+// boucles existantes) — ces événements existaient déjà dans l'historique, seul leur affichage
+// retombait sur un libellé générique. (3) `js/domain/projects.js#addPart/updatePartStatus/
+// removePart` et `js/domain/tasks.js#addOutlookMeeting/removeOutlookMeeting` ne journalisaient
+// rien du tout jusqu'ici, contrairement à `addNote()` sur ces mêmes entités — journalisation
+// ajoutée. (4) `js/domain/decisions.js#removeGrid()` journalisait "grid_removed" même quand
+// aucune grille n'avait jamais existé — désormais gardé par une vérification préalable.
+// `CACHE_NAME` incrémenté puisque inbox.js, history.js, projects.js, tasks.js et decisions.js
+// sont tous précachés.
+const CACHE_NAME = "pilotage-cache-v55";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -61,7 +161,9 @@ const APP_SHELL = [
   "./js/services/pilotageViewStore.js",
   "./js/services/shortcuts.js",
   "./js/services/usageTracking.js",
+  "./js/services/accountAdmin.js",
   "./js/services/themeStore.js",
+  "./js/services/dateUtils.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
