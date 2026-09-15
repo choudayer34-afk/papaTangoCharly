@@ -99,6 +99,31 @@ export async function remove(collection, id) {
   notify(collection);
 }
 
+// Correctif (15/09/2026, cohérence d'interface avec storage.js — voir son commentaire détaillé
+// sur `update()`) : même signature et même sérialisation par (collection, id), pour que
+// l'interface StorageAdapter reste strictement identique entre les deux implémentations.
+const updateQueues = new Map();
+
+export async function update(collection, id, mutate) {
+  const key = `${collection}/${id}`;
+  const previous = updateQueues.get(key) || Promise.resolve();
+  const run = previous.catch(() => {}).then(async () => {
+    const current = await get(collection, id);
+    const patch = await mutate(current);
+    if (patch === undefined) return current;
+    const merged = { ...current, ...patch, id };
+    for (const k of Object.keys(patch)) {
+      if (patch[k] === undefined) delete merged[k];
+    }
+    return put(collection, merged);
+  });
+  updateQueues.set(key, run);
+  run.catch(() => {}).finally(() => {
+    if (updateQueues.get(key) === run) updateQueues.delete(key);
+  });
+  return run;
+}
+
 /**
  * S'abonne aux changements d'une collection. Le callback est appelé immédiatement
  * avec l'état courant, puis à chaque écriture/suppression — même contrat qu'un futur

@@ -103,64 +103,74 @@ export function initGlobalShortcuts(routeHashes) {
   handler = async function onKeydown(e) {
     if (capturing) return; // une assignation de raccourci personnalisé est en cours ailleurs
 
-    // Ctrl+Alt+<touche> — raccourci personnalisé vers une Personne/un Projet. Vérifié en
-    // premier : c'est la combinaison la plus spécifique, et elle doit fonctionner même le
-    // focus posé dans un champ de texte (Ctrl+Alt ne tape jamais de caractère par lui-même,
-    // hors AltGr déjà écarté ci-dessus).
-    if (isCustomComboEvent(e)) {
-      const combo = comboFromEvent(e);
-      const prefs = await preferencesApi.getPreferences();
-      const target = (prefs.customShortcuts || {})[combo];
-      if (target) {
-        e.preventDefault();
-        const bundle = await fetchBundle();
-        const resolved = resolveRef(bundle, target);
-        if (resolved) resolved.onOpen();
-        else showToast("Cette fiche n'existe plus — le raccourci est à réassigner.");
+    // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : ce fichier n'avait aucun
+    // try/catch — un échec réseau/Firestore pendant preferencesApi.getPreferences() ou
+    // fetchBundle() (seuls appels asynchrones ci-dessous) faisait disparaître le raccourci
+    // Ctrl+Alt+<touche> en silence (rejet de promesse non intercepté), sans que Charles-Henri
+    // ne sache jamais pourquoi la fiche visée ne s'est pas ouverte.
+    try {
+      // Ctrl+Alt+<touche> — raccourci personnalisé vers une Personne/un Projet. Vérifié en
+      // premier : c'est la combinaison la plus spécifique, et elle doit fonctionner même le
+      // focus posé dans un champ de texte (Ctrl+Alt ne tape jamais de caractère par lui-même,
+      // hors AltGr déjà écarté ci-dessus).
+      if (isCustomComboEvent(e)) {
+        const combo = comboFromEvent(e);
+        const prefs = await preferencesApi.getPreferences();
+        const target = (prefs.customShortcuts || {})[combo];
+        if (target) {
+          e.preventDefault();
+          const bundle = await fetchBundle();
+          const resolved = resolveRef(bundle, target);
+          if (resolved) resolved.onOpen();
+          else showToast("Cette fiche n'existe plus — le raccourci est à réassigner.");
+        }
+        return;
       }
-      return;
-    }
 
-    const mod = e.ctrlKey || e.metaKey;
+      const mod = e.ctrlKey || e.metaKey;
 
-    if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
-      e.preventDefault();
-      openSearchModal();
-      return;
-    }
-
-    if (e.altKey && !mod && !e.shiftKey && e.key.toLowerCase() === "n") {
-      e.preventDefault();
-      openCaptureModal();
-      return;
-    }
-
-    if (e.altKey && !mod && !e.shiftKey && /^[1-5]$/.test(e.key)) {
-      // Jamais changer d'écran sous une fiche ouverte — cohérent avec le principe "une seule
-      // modale à la fois" (js/components/modal.js) : naviguer laisserait la fiche flotter
-      // au-dessus d'un écran qui n'est plus le sien.
-      if (document.querySelector(".modal-overlay")) return;
-      const hash = ROUTE_HASHES[Number(e.key) - 1];
-      if (hash) {
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        location.hash = hash;
+        openSearchModal();
+        return;
       }
-      return;
-    }
 
-    if (mod && !e.altKey && e.key === "Enter") {
-      const btn = document.querySelector(".modal-overlay .btn-primary");
-      if (btn) {
+      if (e.altKey && !mod && !e.shiftKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
-        btn.click();
+        openCaptureModal();
+        return;
       }
-      return;
-    }
 
-    if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "z") {
-      if (isEditableTarget(e.target)) return; // laisse l'annulation native du champ de texte
-      if (triggerLastUndo()) e.preventDefault();
-      return;
+      if (e.altKey && !mod && !e.shiftKey && /^[1-5]$/.test(e.key)) {
+        // Jamais changer d'écran sous une fiche ouverte — cohérent avec le principe "une seule
+        // modale à la fois" (js/components/modal.js) : naviguer laisserait la fiche flotter
+        // au-dessus d'un écran qui n'est plus le sien.
+        if (document.querySelector(".modal-overlay")) return;
+        const hash = ROUTE_HASHES[Number(e.key) - 1];
+        if (hash) {
+          e.preventDefault();
+          location.hash = hash;
+        }
+        return;
+      }
+
+      if (mod && !e.altKey && e.key === "Enter") {
+        const btn = document.querySelector(".modal-overlay .btn-primary");
+        if (btn) {
+          e.preventDefault();
+          btn.click();
+        }
+        return;
+      }
+
+      if (mod && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "z") {
+        if (isEditableTarget(e.target)) return; // laisse l'annulation native du champ de texte
+        if (triggerLastUndo()) e.preventDefault();
+        return;
+      }
+    } catch (err) {
+      console.error("[shortcuts] Raccourci clavier en échec :", err);
+      showToast("⚠️ Ce raccourci n'a pas pu s'exécuter (problème réseau ou technique passager).");
     }
   };
   document.addEventListener("keydown", handler);
@@ -180,9 +190,14 @@ export function teardownGlobalShortcuts() {
  */
 export async function renderShortcutAssignButton(container, target) {
   const prefs = await preferencesApi.getPreferences();
-  paint(prefs.customShortcuts || {});
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : dernier état connu conservé pour
+  // pouvoir réafficher le bouton correctement si save() échoue en cours de route (voir plus bas)
+  // — sans quoi un échec laissait le bouton bloqué sur "Maintiens Ctrl+Alt..." indéfiniment.
+  let lastKnownShortcuts = prefs.customShortcuts || {};
+  paint(lastKnownShortcuts);
 
   function paint(customShortcuts) {
+    lastKnownShortcuts = customShortcuts;
     const existing = preferencesApi.findShortcutForTarget(customShortcuts, target.type, target.id);
     container.innerHTML = "";
     const assignBtn = document.createElement("button");
@@ -197,11 +212,20 @@ export async function renderShortcutAssignButton(container, target) {
       removeBtn.type = "button";
       removeBtn.className = "btn btn-ghost btn-sm";
       removeBtn.textContent = "Retirer";
+      // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : aucun try/catch — un échec
+      // réseau/Firestore ici laissait le bouton "Retirer" sans le moindre retour, avec le
+      // raccourci potentiellement dans un état ambigu (retiré côté serveur ou non, impossible à
+      // savoir depuis l'écran).
       removeBtn.addEventListener("click", async () => {
-        await preferencesApi.removeCustomShortcut(existing);
-        showToast("Raccourci retiré");
-        const fresh = await preferencesApi.getPreferences();
-        paint(fresh.customShortcuts || {});
+        try {
+          await preferencesApi.removeCustomShortcut(existing);
+          showToast("Raccourci retiré");
+          const fresh = await preferencesApi.getPreferences();
+          paint(fresh.customShortcuts || {});
+        } catch (err) {
+          console.error("[shortcuts] Retrait du raccourci en échec :", err);
+          showToast("⚠️ Impossible de retirer ce raccourci pour le moment — réessaie.");
+        }
       });
       container.appendChild(removeBtn);
     }
@@ -241,18 +265,29 @@ export async function renderShortcutAssignButton(container, target) {
     document.addEventListener("keydown", onKeydown, true);
   }
 
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : appelée sans être attendue depuis
+  // startCapture() (cleanup(false) puis save(combo, btn), sans await) — un échec réseau/Firestore
+  // ici laissait le bouton bloqué sur "Maintiens Ctrl+Alt et appuie sur une touche…" pour de bon,
+  // sans le moindre message, `paint()` n'étant sinon jamais rappelée pour le remettre dans un
+  // état normal.
   async function save(combo, btn) {
-    const fresh = await preferencesApi.getPreferences();
-    const holder = (fresh.customShortcuts || {})[combo];
-    if (holder && !(holder.type === target.type && holder.id === target.id)) {
-      showToast(`${comboLabel(combo)} est déjà utilisé pour « ${holder.label} » — choisis-en un autre.`);
-      paint(fresh.customShortcuts || {});
-      return;
+    try {
+      const fresh = await preferencesApi.getPreferences();
+      const holder = (fresh.customShortcuts || {})[combo];
+      if (holder && !(holder.type === target.type && holder.id === target.id)) {
+        showToast(`${comboLabel(combo)} est déjà utilisé pour « ${holder.label} » — choisis-en un autre.`);
+        paint(fresh.customShortcuts || {});
+        return;
+      }
+      await preferencesApi.setCustomShortcut(combo, target);
+      showToast(`⌨️ ${comboLabel(combo)} assigné`);
+      const updated = await preferencesApi.getPreferences();
+      paint(updated.customShortcuts || {});
+    } catch (err) {
+      console.error("[shortcuts] Assignation du raccourci en échec :", err);
+      showToast("⚠️ Impossible d'assigner ce raccourci pour le moment — réessaie.");
+      paint(lastKnownShortcuts);
     }
-    await preferencesApi.setCustomShortcut(combo, target);
-    showToast(`⌨️ ${comboLabel(combo)} assigné`);
-    const updated = await preferencesApi.getPreferences();
-    paint(updated.customShortcuts || {});
   }
 }
 
