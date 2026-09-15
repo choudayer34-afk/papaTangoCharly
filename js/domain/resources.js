@@ -68,18 +68,19 @@ export async function createResource(data) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Ressource introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Ressource introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Resource", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
 
 export async function updateResource(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Ressource introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Ressource introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Resource", id, "updated", { patch });
   return updated;
 }
@@ -102,9 +103,10 @@ export async function removeResource(id) {
 }
 
 export async function touchLastUsed(id) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) return;
-  await storage.put(COLLECTION, { ...current, lastUsedAt: Date.now() });
+  await storage.update(COLLECTION, id, (current) => {
+    if (!current) return undefined;
+    return { lastUsedAt: Date.now() };
+  });
 }
 
 function toggleLink(idList, id, shouldLink) {
@@ -115,15 +117,17 @@ function toggleLink(idList, id, shouldLink) {
 }
 
 export async function linkToProject(resourceId, projectId, shouldLink = true) {
-  const current = await storage.get(COLLECTION, resourceId);
-  if (!current) throw new Error("Ressource introuvable : " + resourceId);
-  return storage.put(COLLECTION, { ...current, projectIds: toggleLink(current.projectIds, projectId, shouldLink) });
+  return storage.update(COLLECTION, resourceId, (current) => {
+    if (!current) throw new Error("Ressource introuvable : " + resourceId);
+    return { projectIds: toggleLink(current.projectIds, projectId, shouldLink) };
+  });
 }
 
 export async function linkToTask(resourceId, taskId, shouldLink = true) {
-  const current = await storage.get(COLLECTION, resourceId);
-  if (!current) throw new Error("Ressource introuvable : " + resourceId);
-  return storage.put(COLLECTION, { ...current, taskIds: toggleLink(current.taskIds, taskId, shouldLink) });
+  return storage.update(COLLECTION, resourceId, (current) => {
+    if (!current) throw new Error("Ressource introuvable : " + resourceId);
+    return { taskIds: toggleLink(current.taskIds, taskId, shouldLink) };
+  });
 }
 
 export function isUnclassified(resource) {

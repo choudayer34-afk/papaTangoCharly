@@ -5,6 +5,7 @@
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
 import { buildSteps } from "./templates.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 const COLLECTION = "tasks";
 
@@ -57,8 +58,12 @@ export async function createTask(data) {
     steps: useCommunicationCanevas ? buildSteps("communication") : [],
     completedAt: null,
     outlookMeetings: [], // référence manuelle (pas de vraie intégration Outlook, voir plus bas)
-    notesLog: [], // journal de notes horodaté, voir addNote() plus bas
-    checklist: [], // sous-étapes courtes libres, voir addChecklistItem() plus bas
+    // `notesLog`/`checklist` acceptent une valeur initiale (retour de Charles-Henri, 15/09/2026 :
+    // un changement de type Suivi→Tâche ne doit pas faire disparaître ce qu'on y avait déjà mis)
+    // — voir js/domain/convert.js#convertFollowUpToTask, seul appelant à s'en servir aujourd'hui.
+    // Vide par défaut pour tous les autres appelants, aucun changement de comportement pour eux.
+    notesLog: data.notesLog || [], // journal de notes horodaté, voir addNote() plus bas
+    checklist: data.checklist || [], // sous-étapes courtes libres, voir addChecklistItem() plus bas
     waitingOn: "", // "⏳ En attente de..." — voir setWaitingNote() plus bas
   });
   await storage.logHistory("Task", task.id, "created", { title: task.title });
@@ -74,10 +79,14 @@ export async function createTask(data) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : storage.update() sérialise la
+  // séquence lecture-modification-écriture par document — voir son commentaire détaillé dans
+  // js/services/storage.js. Deux ajouts (note, sous-étape...) sur la MÊME tâche à quelques
+  // millisecondes d'intervalle ne peuvent plus s'écraser l'un l'autre.
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Task", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
@@ -92,29 +101,30 @@ export async function addNote(id, text) {
 export async function addChecklistItem(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const checklist = [...(current.checklist || []), { id: generateId(), text: trimmed, done: false }];
-  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { checklist: [...(current.checklist || []), { id: generateId(), text: trimmed, done: false }] };
+  });
   return updated.checklist;
 }
 
 export async function toggleChecklistItem(id, itemId, done) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  // `doneAt` (retour de Charles-Henri, vague 21 : "voir quand ça s'est produit à l'affichage")
-  // — même principe que toggleStep() dans js/domain/projects.js : horodaté à la coche, effacé
-  // si on décoche par erreur plutôt que de garder une date qui ne correspond plus à rien.
-  const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c));
-  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    // `doneAt` (retour de Charles-Henri, vague 21 : "voir quand ça s'est produit à l'affichage")
+    // — même principe que toggleStep() dans js/domain/projects.js : horodaté à la coche, effacé
+    // si on décoche par erreur plutôt que de garder une date qui ne correspond plus à rien.
+    const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c));
+    return { checklist };
+  });
   return updated.checklist;
 }
 
 export async function removeChecklistItem(id, itemId) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const checklist = (current.checklist || []).filter((c) => c.id !== itemId);
-  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { checklist: (current.checklist || []).filter((c) => c.id !== itemId) };
+  });
   return updated.checklist;
 }
 
@@ -127,19 +137,20 @@ export async function removeChecklistItem(id, itemId) {
  * une information qu'on ajuste au fil de l'eau, pas un événement à journaliser.
  */
 export async function setWaitingNote(id, text) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  return storage.put(COLLECTION, { ...current, waitingOn: (text || "").trim() });
+  return storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { waitingOn: (text || "").trim() };
+  });
 }
 
 /** Coche/décoche une étape du canevas Communication — même principe que projects.js/meetings.js.
  *  `doneAt` horodate la coche (retour de Charles-Henri : voir à quel moment un point de la
  *  checklist a été traité), affiché par js/components/canevas.js à côté de l'étape cochée. */
 export async function toggleStep(id, stepKey, done) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const steps = (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s));
-  return storage.put(COLLECTION, { ...current, steps });
+  return storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { steps: (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s)) };
+  });
 }
 
 /**
@@ -149,18 +160,28 @@ export async function toggleStep(id, stepKey, done) {
  * depuis la tâche, puisque l'app n'a aucun accès à Outlook lui-même. Un vrai aller-retour
  * avec Outlook serait un chantier à part (OAuth, permissions IT) — voir le doc de suivi.
  */
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : incohérences mineures) : addNote()
+// ci-dessus journalise déjà ses événements — ces deux fonctions ne journalisaient rien, alors
+// qu'une réunion Outlook rattachée/détachée est une information tout aussi structurante pour la
+// tâche que l'ajout d'une note.
 export async function addOutlookMeeting(id, { title, date }) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const outlookMeetings = [...(current.outlookMeetings || []), { id: generateId(), title, date: date || null }];
-  return storage.put(COLLECTION, { ...current, outlookMeetings });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { outlookMeetings: [...(current.outlookMeetings || []), { id: generateId(), title, date: date || null }] };
+  });
+  await storage.logHistory("Task", id, "outlook_meeting_added", { title });
+  return updated;
 }
 
 export async function removeOutlookMeeting(id, outlookId) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
-  const outlookMeetings = (current.outlookMeetings || []).filter((m) => m.id !== outlookId);
-  return storage.put(COLLECTION, { ...current, outlookMeetings });
+  let removedTitle = null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    removedTitle = (current.outlookMeetings || []).find((m) => m.id === outlookId)?.title || null;
+    return { outlookMeetings: (current.outlookMeetings || []).filter((m) => m.id !== outlookId) };
+  });
+  await storage.logHistory("Task", id, "outlook_meeting_removed", { title: removedTitle });
+  return updated;
 }
 
 export function listAll() {
@@ -180,22 +201,26 @@ export function subscribe(callback) {
 const WAITING_NOTE_STATUSES = ["waiting", "follow_up"];
 
 export async function updateTask(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Tâche introuvable : " + id);
+  let previousStatus = null;
+  let statusChanged = false;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    previousStatus = current.status;
 
-  const finalPatch = { ...patch };
-  if (patch.status && patch.status !== current.status) {
-    finalPatch.completedAt = patch.status === "done" ? Date.now() : null;
-    // "⏳ En attente de..." ne vaut que pendant En attente/À suivre — effacé automatiquement
-    // dès qu'on en sort, sauf si ce même appel fixe volontairement une nouvelle valeur.
-    if (!WAITING_NOTE_STATUSES.includes(patch.status) && !("waitingOn" in patch)) {
-      finalPatch.waitingOn = "";
+    const finalPatch = { ...patch };
+    if (patch.status && patch.status !== current.status) {
+      statusChanged = true;
+      finalPatch.completedAt = patch.status === "done" ? Date.now() : null;
+      // "⏳ En attente de..." ne vaut que pendant En attente/À suivre — effacé automatiquement
+      // dès qu'on en sort, sauf si ce même appel fixe volontairement une nouvelle valeur.
+      if (!WAITING_NOTE_STATUSES.includes(patch.status) && !("waitingOn" in patch)) {
+        finalPatch.waitingOn = "";
+      }
     }
-  }
-
-  const updated = await storage.put(COLLECTION, { ...current, ...finalPatch });
-  if (patch.status && patch.status !== current.status) {
-    await storage.logHistory("Task", id, "status_changed", { from: current.status, to: patch.status });
+    return finalPatch;
+  });
+  if (statusChanged) {
+    await storage.logHistory("Task", id, "status_changed", { from: previousStatus, to: patch.status });
   } else {
     await storage.logHistory("Task", id, "updated", { patch });
   }
@@ -217,9 +242,14 @@ export async function removeTask(id) {
   return storage.remove(COLLECTION, id);
 }
 
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
+// voir le commentaire détaillé dans js/services/dateUtils.js. `new Date(task.dueDate)` parsait
+// l'échéance comme minuit UTC alors que `startOfToday()` (retiré d'ici) calculait un minuit
+// LOCAL : dans un fuseau à décalage négatif, une tâche due aujourd'hui pouvait apparaître en
+// retard avant même la fin de la journée.
 export function isLate(task) {
   if (!task.dueDate || task.status === "done") return false;
-  return new Date(task.dueDate).getTime() < startOfToday();
+  return dateUtils.daysFromToday(task.dueDate) < 0;
 }
 
 // "En pause" (piste TDAH du 01/09/2026, discussion permanence/repérage) : une tâche
@@ -228,16 +258,13 @@ export function isLate(task) {
 // posé par storage.put() à CHAQUE mutation (statut, note, sous-étape, édition...), donc aucun
 // nouveau champ à ajouter : "dernière touche" existe déjà de fait, il suffisait de la lire.
 const STALLED_ACTIVE_STATUSES = ["in_progress", "waiting", "follow_up"];
-const STALLED_THRESHOLD_MS = 5 * 24 * 60 * 60 * 1000; // 5 jours
+// Exporté (15/09/2026, audit "anomalies silencieuses") : js/domain/workload.js dupliquait cette
+// même valeur pour son propre calcul de stagnation (sur les Suivis) — une seule définition de
+// "5 jours sans mouvement" pour tout le monde désormais.
+export const STALLED_THRESHOLD_MS = 5 * 24 * 60 * 60 * 1000; // 5 jours
 
 export function isStalled(task) {
   if (!STALLED_ACTIVE_STATUSES.includes(task.status)) return false;
   const lastTouch = task.updatedAt || task.createdAt || 0;
   return Date.now() - lastTouch > STALLED_THRESHOLD_MS;
-}
-
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
 }

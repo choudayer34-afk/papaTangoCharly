@@ -10,11 +10,16 @@ import { createTask } from "./tasks.js";
 const COLLECTION = "inboxItems";
 
 /** Capture express : enregistre le texte brut tel quel, sans qualification. */
-export async function capture(rawContent, source = "manuel") {
+export async function capture(rawContent, source = "manuel", { notesLog } = {}) {
   const item = await storage.put(COLLECTION, {
     rawContent,
     source,
     status: "pending", // pending | processed | archived | kept
+    // `notesLog` optionnel (retour de Charles-Henri, 15/09/2026 : un changement de type
+    // Tâche/Suivi → Information ne doit pas faire disparaître le journal de notes déjà pris) —
+    // voir js/domain/convert.js#convertTaskToKept/convertFollowUpToKept, seuls appelants à s'en
+    // servir aujourd'hui. Absent pour tout appel normal (capture manuelle), comme avant.
+    ...(notesLog && notesLog.length ? { notesLog } : {}),
   });
   await storage.logHistory("InboxItem", item.id, "captured", { source });
   return item;
@@ -76,11 +81,20 @@ const KEPT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
  * une vraie tâche planifiée — un léger différé plutôt qu'un instant exact à J+15, largement
  * suffisant pour ce besoin ("ne pas laisser traîner", pas "supprimer pile à la seconde près").
  * Utilise qualify() comme le bouton "Archiver" manuel existant : même chemin, même historique.
+ *
+ * BUG corrigé (15/09/2026, audit "anomalies silencieuses") : le calcul se basait sur
+ * `item.createdAt` — la date de la capture BRUTE d'origine, pas celle à laquelle l'élément est
+ * devenu une Information/Idée (`qualify()` peut être appelé des jours, voire des semaines, après
+ * la capture initiale si elle a dormi en Inbox). Une capture qualifiée en "kept" 20 jours après
+ * sa création se retrouvait donc auto-archivée dès le balayage suivant, alors qu'elle venait
+ * tout juste de devenir visible — contraire à l'intention "15 jours pour la retrouver". `keptAt`
+ * (posé par qualify() ci-dessus) horodate désormais précisément ce moment ; `item.createdAt` en
+ * repli pour les éléments déjà "kept" avant ce correctif, qui n'ont pas encore ce champ.
  */
 export async function autoArchiveStaleKept() {
   const kept = await listKept();
   const cutoff = Date.now() - KEPT_MAX_AGE_MS;
-  const stale = kept.filter((item) => (item.createdAt || 0) < cutoff);
+  const stale = kept.filter((item) => (item.keptAt || item.createdAt || 0) < cutoff);
   await Promise.all(stale.map((item) => qualify(item.id, "archived")));
   return stale.length;
 }
@@ -98,9 +112,10 @@ export async function autoArchiveStaleKept() {
 export async function updateRawContent(id, rawContent) {
   const trimmed = (rawContent || "").trim();
   if (!trimmed) throw new Error("Le texte ne peut pas être vide");
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Élément Inbox introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, rawContent: trimmed });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Élément Inbox introuvable : " + id);
+    return { rawContent: trimmed };
+  });
   await storage.logHistory("InboxItem", id, "raw_content_edited", {});
   return updated;
 }
@@ -115,10 +130,10 @@ export async function updateRawContent(id, rawContent) {
 export async function addKeptNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Élément Inbox introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Élément Inbox introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("InboxItem", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
@@ -150,45 +165,65 @@ const RESULT_KEY = {
  * Dans tous les cas, la capture brute originale n'est jamais perdue (Règle 3).
  */
 export async function qualify(itemId, outcome, extra = {}) {
-  const item = await storage.get(COLLECTION, itemId);
-  if (!item) throw new Error("Élément Inbox introuvable : " + itemId);
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : lecture et écriture de
+  // l'InboxItem regroupées dans un seul storage.update() sérialisé (voir js/services/
+  // storage.js) — createTask() ci-dessous écrit dans une AUTRE collection (tasks), ce qui reste
+  // sans risque à l'intérieur du callback puisque seule l'écriture sur CET InboxItem est
+  // sérialisée par cette clé.
+  let task = null;
+  await storage.update(COLLECTION, itemId, async (item) => {
+    if (!item) throw new Error("Élément Inbox introuvable : " + itemId);
+
+    if (outcome === "task") {
+      task = await createTask({
+        title: extra.title || item.rawContent.slice(0, 120),
+        // La capture brute part toujours dans la description (Règle 3 : ne jamais rien
+        // perdre), même quand `extra.description` a été retouché à la qualification — pour
+        // ne jamais réduire "titre court" à "seule trace conservée" (retour de
+        // Charles-Henri : le détail semblait tronqué à la transformation en action).
+        description: extra.description !== undefined ? extra.description : item.rawContent,
+        projectId: extra.projectId || null,
+        dueDate: extra.dueDate || null,
+        type: extra.type || "action",
+        sourceInboxItemId: item.id,
+      });
+      return { status: "processed", resultTaskId: task.id };
+    }
+
+    if (RESULT_KEY[outcome]) {
+      const patch = { status: "processed" };
+      if (extra.id) patch[RESULT_KEY[outcome]] = extra.id;
+      return patch;
+    }
+
+    if (outcome === "archived") {
+      return { status: "archived" };
+    }
+
+    // "kept" et tout type non prévu ci-dessus : on conserve l'information brute plutôt que
+    // de la perdre (Règle 3). `keptAt` (15/09/2026, audit "anomalies silencieuses" — voir
+    // autoArchiveStaleKept() plus haut) horodate précisément CE moment, distinct de
+    // `item.createdAt` (date de la capture brute d'origine, potentiellement bien antérieure si
+    // l'élément a dormi en Inbox avant d'être qualifié).
+    return { status: "kept", keptAsType: outcome, keptAt: Date.now() };
+  });
 
   if (outcome === "task") {
-    const task = await createTask({
-      title: extra.title || item.rawContent.slice(0, 120),
-      // La capture brute part toujours dans la description (Règle 3 : ne jamais rien
-      // perdre), même quand `extra.description` a été retouché à la qualification — pour
-      // ne jamais réduire "titre court" à "seule trace conservée" (retour de
-      // Charles-Henri : le détail semblait tronqué à la transformation en action).
-      description: extra.description !== undefined ? extra.description : item.rawContent,
-      projectId: extra.projectId || null,
-      dueDate: extra.dueDate || null,
-      type: extra.type || "action",
-      sourceInboxItemId: item.id,
-    });
-    await storage.put(COLLECTION, { ...item, status: "processed", resultTaskId: task.id });
-    await storage.logHistory("InboxItem", item.id, "qualified_as_task", { taskId: task.id });
+    await storage.logHistory("InboxItem", itemId, "qualified_as_task", { taskId: task.id });
     return { outcome: "task", task };
   }
 
   if (RESULT_KEY[outcome]) {
-    const patch = { status: "processed" };
-    if (extra.id) patch[RESULT_KEY[outcome]] = extra.id;
-    await storage.put(COLLECTION, { ...item, ...patch });
-    await storage.logHistory("InboxItem", item.id, "qualified_as_" + outcome, { id: extra.id });
+    await storage.logHistory("InboxItem", itemId, "qualified_as_" + outcome, { id: extra.id });
     return { outcome };
   }
 
   if (outcome === "archived") {
-    await storage.put(COLLECTION, { ...item, status: "archived" });
-    await storage.logHistory("InboxItem", item.id, "archived", {});
+    await storage.logHistory("InboxItem", itemId, "archived", {});
     return { outcome: "archived" };
   }
 
-  // "kept" et tout type non prévu ci-dessus : on conserve l'information brute plutôt que
-  // de la perdre (Règle 3).
-  await storage.put(COLLECTION, { ...item, status: "kept", keptAsType: outcome });
-  await storage.logHistory("InboxItem", item.id, "kept", { asType: outcome });
+  await storage.logHistory("InboxItem", itemId, "kept", { asType: outcome });
   return { outcome: "kept" };
 }
 
@@ -205,9 +240,10 @@ export async function qualify(itemId, outcome, extra = {}) {
 
 /** Rattache (ou détache, `projectId: null`) une Information/Idée à un projet. */
 export async function setKeptProject(id, projectId) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Élément Inbox introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, projectId: projectId || null });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Élément Inbox introuvable : " + id);
+    return { projectId: projectId || null };
+  });
   await storage.logHistory("InboxItem", id, "project_set", { projectId: projectId || null });
   return updated;
 }

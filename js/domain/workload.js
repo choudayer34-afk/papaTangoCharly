@@ -15,10 +15,10 @@
 // répartit jamais une charge sur son propre manager.
 
 import * as followUpsApi from "./followups.js";
-
-// Même seuil que tasksApi.isStalled() (5 jours sans mouvement) — une seule définition de
-// "stagnant" dans l'app, voir js/domain/tasks.js pour la justification complète.
-const STALLED_THRESHOLD_MS = 5 * 24 * 60 * 60 * 1000;
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses") : ce seuil était dupliqué ici en dur
+// plutôt qu'importé — les deux copies auraient pu diverger silencieusement à la prochaine
+// modification de l'une des deux. Importé désormais depuis js/domain/tasks.js, seule source.
+import { STALLED_THRESHOLD_MS } from "./tasks.js";
 
 function isFollowUpStalled(f) {
   if (f.status === "done") return false;

@@ -101,8 +101,20 @@ const DOC_ID = "app";
 const CATEGORY_ICON_PALETTE = ["🏛️", "🚀", "💡", "🔧", "📊", "🌐", "🎯", "📢", "🧩", "🎨", "📚", "⚙️"];
 export const DEFAULT_CATEGORY_ICON = "📁";
 
-export async function getPreferences() {
-  const current = await storage.get(COLLECTION, DOC_ID);
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : course lecture-modification-écriture) :
+// toutes les fonctions ci-dessous suivaient `const current = await getPreferences(); ...
+// storage.put(COLLECTION, {...current, X})` — or `preferences` est un document UNIQUE partagé
+// par la quasi-totalité de l'application (casquette, sections masquées, raccourcis, Post-it...).
+// Deux réglages modifiés à quelques millisecondes d'intervalle (deux cases cochées vite l'une
+// après l'autre, par exemple) pouvaient donc silencieusement s'écraser l'un l'autre : le second
+// lisait l'état d'avant le premier et réécrivait le document entier par-dessus, perdant le
+// premier changement sans la moindre erreur visible. Passage à `storage.update()` (voir son
+// commentaire détaillé dans js/services/storage.js), qui sérialise les séquences lecture-
+// modification-écriture par document — plus de fenêtre de course possible entre deux réglages.
+// `withDefaults()` isole le remplissage des valeurs par défaut, désormais utilisé à la fois par
+// `getPreferences()` (lecture pure) et par le callback de `storage.update()` de chaque fonction
+// ci-dessous (qui reçoit l'état BRUT, sans les valeurs par défaut, directement depuis storage.js).
+function withDefaults(raw) {
   return {
     id: DOC_ID,
     seenTour: false,
@@ -130,8 +142,13 @@ export async function getPreferences() {
     tagsMigratedV1: false,
     disabledTags: [],
     personalObjectivesMigratedV1: false,
-    ...current,
+    ...raw,
   };
+}
+
+export async function getPreferences() {
+  const current = await storage.get(COLLECTION, DOC_ID);
+  return withDefaults(current);
 }
 
 /**
@@ -145,9 +162,11 @@ export async function getPreferences() {
  * par l'utilisateur lui-même.
  */
 export async function setSeenWhatsNewCount(count) {
-  const current = await getPreferences();
-  if (count <= current.seenWhatsNewCount) return current; // ne revient jamais en arrière
-  return storage.put(COLLECTION, { ...current, seenWhatsNewCount: count });
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    if (count <= current.seenWhatsNewCount) return undefined; // ne revient jamais en arrière, pas d'écriture
+    return { seenWhatsNewCount: count };
+  });
 }
 
 /**
@@ -160,20 +179,17 @@ export async function setSeenWhatsNewCount(count) {
  * js/views/dashboard.js#applyHomeModeVisibility.
  */
 export async function setHomeMode(mode) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, homeMode: mode === "focus" ? "focus" : "classic" });
+  return storage.update(COLLECTION, DOC_ID, () => ({ homeMode: mode === "focus" ? "focus" : "classic" }));
 }
 
 /** "🎯 Mes objectifs" (ligne directrice personnelle de Charles-Henri, vague 21) — un texte
  *  libre unique, toujours remplacé en entier, pas de journal ni de sous-structure. */
 export async function setMyObjectives(text) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, myObjectives: text || "" });
+  return storage.update(COLLECTION, DOC_ID, () => ({ myObjectives: text || "" }));
 }
 
 export async function markTourSeen() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, id: DOC_ID, seenTour: true });
+  return storage.update(COLLECTION, DOC_ID, () => ({ id: DOC_ID, seenTour: true }));
 }
 
 /**
@@ -186,8 +202,7 @@ export async function markTourSeen() {
  * voulu : le suivi était déjà actif pour lui, il doit en être informé lui aussi.
  */
 export async function markUsageNoticeSeen() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, id: DOC_ID, seenUsageNotice: true });
+  return storage.update(COLLECTION, DOC_ID, () => ({ id: DOC_ID, seenUsageNotice: true }));
 }
 
 /**
@@ -198,10 +213,16 @@ export async function markUsageNoticeSeen() {
  */
 export async function registerCategory(name) {
   if (!name) return DEFAULT_CATEGORY_ICON;
-  const current = await getPreferences();
-  if (current.categories[name]) return current.categories[name];
-  const icon = CATEGORY_ICON_PALETTE[Object.keys(current.categories).length % CATEGORY_ICON_PALETTE.length];
-  await storage.put(COLLECTION, { ...current, categories: { ...current.categories, [name]: icon } });
+  let icon;
+  await storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    if (current.categories[name]) {
+      icon = current.categories[name];
+      return undefined; // déjà enregistrée, rien à écrire
+    }
+    icon = CATEGORY_ICON_PALETTE[Object.keys(current.categories).length % CATEGORY_ICON_PALETTE.length];
+    return { categories: { ...current.categories, [name]: icon } };
+  });
   return icon;
 }
 
@@ -211,22 +232,19 @@ export function categoryIcon(categories, name) {
 }
 
 export async function setProjectSort(mode) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, projectSort: mode });
+  return storage.update(COLLECTION, DOC_ID, () => ({ projectSort: mode }));
 }
 
 /** Casquette active sur Accueil/Pilotage (js/domain/casquettes.js) — "all" = pas de filtre. */
 export async function setCasquette(hatId) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, casquette: hatId });
+  return storage.update(COLLECTION, DOC_ID, () => ({ casquette: hatId }));
 }
 
 /** Sections de l'Accueil masquées par choix (bouton ⚙️ Personnaliser) — remplace toujours la
  *  liste complète plutôt que de l'accumuler, la case à cocher côté vue reflète déjà l'état
  *  cible souhaité. */
 export async function setDashboardHidden(keys) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, dashboardHidden: keys });
+  return storage.update(COLLECTION, DOC_ID, () => ({ dashboardHidden: keys }));
 }
 
 /**
@@ -238,22 +256,22 @@ export async function setDashboardHidden(keys) {
  * personnalisation faite après (y compris "tout réafficher") est respectée.
  */
 export async function markDashboardHiddenMigratedV19() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, dashboardHiddenMigratedV19: true });
+  return storage.update(COLLECTION, DOC_ID, () => ({ dashboardHiddenMigratedV19: true }));
 }
 
 /** Marque un bandeau d'aide contextuelle (js/components/hint.js) comme déjà vu — ne
  *  réapparaît plus jamais ensuite pour cette clé. */
 export async function markHintSeen(key) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, seenHints: { ...current.seenHints, [key]: true } });
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    return { seenHints: { ...current.seenHints, [key]: true } };
+  });
 }
 
 /** Horodate le lancement de la Revue hebdomadaire (js/components/weeklyReview.js) — sert
  *  uniquement au rappel de rythme sur l'Accueil, pas à une vraie notion de "session terminée". */
 export async function markWeeklyReviewDone() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, lastWeeklyReviewAt: Date.now() });
+  return storage.update(COLLECTION, DOC_ID, () => ({ lastWeeklyReviewAt: Date.now() }));
 }
 
 /** Ajouts manuels au "🎯 Focus du jour" (js/views/dashboard.js), en plus de la sélection
@@ -261,8 +279,7 @@ export async function markWeeklyReviewDone() {
  *  l'accumuler au fil des appels ; `date` (YYYY-MM-DD) est ce qui rend l'override caduc tout
  *  seul le lendemain, sans action explicite de remise à zéro. */
 export async function setFocusOverride(date, addedTaskIds) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, focusOverride: { date, addedTaskIds } });
+  return storage.update(COLLECTION, DOC_ID, () => ({ focusOverride: { date, addedTaskIds } }));
 }
 
 /** Poids de la matrice de priorisation (vague 33, js/domain/priorisation.js) — "le scoring doit
@@ -270,8 +287,7 @@ export async function setFocusOverride(date, addedTaskIds) {
  *  de Charles-Henri) : réglés depuis l'onglet 🎯 Priorisation, valeurs par défaut sinon
  *  (`priorisationApi.DEFAULT_WEIGHTS`, jamais dupliquées ici). */
 export async function setPriorityWeights(weights) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, priorityWeights: weights });
+  return storage.update(COLLECTION, DOC_ID, () => ({ priorityWeights: weights }));
 }
 
 const RECENTLY_VIEWED_MAX = 3;
@@ -282,24 +298,24 @@ const RECENTLY_VIEWED_MAX = 3;
  *  des 7 types de fiches consultables (Tâche, Suivi, Projet, Personne, Ressource, Réunion,
  *  Décision, Information/Idée). */
 export async function recordRecentlyViewed(type, id) {
-  const current = await getPreferences();
-  const withoutThis = (current.recentlyViewed || []).filter((e) => !(e.type === type && e.id === id));
-  const recentlyViewed = [{ type, id, viewedAt: Date.now() }, ...withoutThis].slice(0, RECENTLY_VIEWED_MAX);
-  return storage.put(COLLECTION, { ...current, recentlyViewed });
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    const withoutThis = (current.recentlyViewed || []).filter((e) => !(e.type === type && e.id === id));
+    const recentlyViewed = [{ type, id, viewedAt: Date.now() }, ...withoutThis].slice(0, RECENTLY_VIEWED_MAX);
+    return { recentlyViewed };
+  });
 }
 
 /** Réponse (une seule fois) à la proposition d'alerte au démarrage — voir le bandeau sur
  *  l'Accueil. `true`/`false`, jamais re-proposé une fois tranché. */
 export async function setNotifOptIn(value) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, notifOptIn: value });
+  return storage.update(COLLECTION, DOC_ID, () => ({ notifOptIn: value }));
 }
 
 /** Marque l'alerte de démarrage comme déjà montrée aujourd'hui (YYYY-MM-DD) — évite de la
  *  répéter à chaque ouverture de l'app dans la même journée. */
 export async function markNotifShown(dateKey) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, lastNotifShownDate: dateKey });
+  return storage.update(COLLECTION, DOC_ID, () => ({ lastNotifShownDate: dateKey }));
 }
 
 /**
@@ -309,21 +325,25 @@ export async function markNotifShown(dateKey) {
  * cohérent avec "un raccourci, une destination" tel qu'on le connaît dans d'autres apps.
  */
 export async function setCustomShortcut(combo, target) {
-  const current = await getPreferences();
-  const customShortcuts = { ...current.customShortcuts };
-  for (const [key, value] of Object.entries(customShortcuts)) {
-    if (value.type === target.type && value.id === target.id) delete customShortcuts[key];
-  }
-  customShortcuts[combo] = target;
-  return storage.put(COLLECTION, { ...current, customShortcuts });
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    const customShortcuts = { ...current.customShortcuts };
+    for (const [key, value] of Object.entries(customShortcuts)) {
+      if (value.type === target.type && value.id === target.id) delete customShortcuts[key];
+    }
+    customShortcuts[combo] = target;
+    return { customShortcuts };
+  });
 }
 
 /** Retire un raccourci personnalisé (bouton "Retirer" sur la fiche qui le porte). */
 export async function removeCustomShortcut(combo) {
-  const current = await getPreferences();
-  const customShortcuts = { ...current.customShortcuts };
-  delete customShortcuts[combo];
-  return storage.put(COLLECTION, { ...current, customShortcuts });
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    const customShortcuts = { ...current.customShortcuts };
+    delete customShortcuts[combo];
+    return { customShortcuts };
+  });
 }
 
 /** Retrouve le raccourci déjà assigné à une fiche donnée (pour l'afficher dessus), ou `null`. */
@@ -336,21 +356,18 @@ export function findShortcutForTarget(customShortcuts, type, id) {
  *  mémoire séparément (voir `setPostitText`/`setPostitChecklist`), rebasculer ne perd jamais
  *  ce qui a été noté dans l'autre mode. */
 export async function setPostitMode(mode) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, postitMode: mode === "checklist" ? "checklist" : "text" });
+  return storage.update(COLLECTION, DOC_ID, () => ({ postitMode: mode === "checklist" ? "checklist" : "text" }));
 }
 
 /** Contenu texte libre du Pense-bête — toujours remplacé en entier, comme `myObjectives`. */
 export async function setPostitText(text) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, postitText: text || "" });
+  return storage.update(COLLECTION, DOC_ID, () => ({ postitText: text || "" }));
 }
 
 /** Contenu checklist du Pense-bête — un tableau `{id, text, done, doneAt}`, même forme que
  *  toutes les autres checklists de l'app (js/components/checklist.js). */
 export async function setPostitChecklist(items) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, postitChecklist: items || [] });
+  return storage.update(COLLECTION, DOC_ID, () => ({ postitChecklist: items || [] }));
 }
 
 /**
@@ -361,16 +378,14 @@ export async function setPostitChecklist(items) {
  * posé, toute personnalisation faite après (l'activer soi-même via ⚙️) est respectée.
  */
 export async function markPostitMigratedV1() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, postitMigratedV1: true });
+  return storage.update(COLLECTION, DOC_ID, () => ({ postitMigratedV1: true }));
 }
 
 /** Ordre explicite des rubriques de l'Accueil (⚙️ Personnaliser → "Ordre des rubriques") —
  *  toujours remplacé en entier ; un tableau vide signifie "pas d'ordre choisi", auquel cas
  *  js/views/dashboard.js applique son propre ordre par défaut (différent web/mobile). */
 export async function setDashboardOrder(order) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, dashboardOrder: order || [] });
+  return storage.update(COLLECTION, DOC_ID, () => ({ dashboardOrder: order || [] }));
 }
 
 /**
@@ -381,8 +396,7 @@ export async function setDashboardOrder(order) {
  * `postitMigratedV1`/`dashboardHiddenMigratedV19` avant elle.
  */
 export async function markTagsMigratedV1() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, tagsMigratedV1: true });
+  return storage.update(COLLECTION, DOC_ID, () => ({ tagsMigratedV1: true }));
 }
 
 /**
@@ -395,8 +409,7 @@ export async function markTagsMigratedV1() {
  * connaît déjà l'état complet de la liste au moment de l'appel.
  */
 export async function setDisabledTags(list) {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, disabledTags: list || [] });
+  return storage.update(COLLECTION, DOC_ID, () => ({ disabledTags: list || [] }));
 }
 
 /**
@@ -408,6 +421,5 @@ export async function setDisabledTags(list) {
  * l'écran. Même principe que `tagsMigratedV1`/`postitMigratedV1` avant elle.
  */
 export async function markPersonalObjectivesMigratedV1() {
-  const current = await getPreferences();
-  return storage.put(COLLECTION, { ...current, personalObjectivesMigratedV1: true });
+  return storage.update(COLLECTION, DOC_ID, () => ({ personalObjectivesMigratedV1: true }));
 }

@@ -37,10 +37,10 @@ export async function reorderPeople(orderedIds) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Personne introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Personne introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Person", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
@@ -54,19 +54,24 @@ export async function addNote(id, text) {
  * fois la migration faite, ou sur une personne créée après ce round).
  */
 export async function migrateLegacyNotes(id) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current || !(current.notes || "").trim()) return current;
-  const text = current.notes.trim();
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text, createdAt: current.createdAt || Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notes: "", notesLog });
-  await storage.logHistory("Person", id, "note_added", { text });
+  let migratedText = null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current || !(current.notes || "").trim()) return undefined; // rien à migrer, pas d'écriture
+    migratedText = current.notes.trim();
+    const notesLog = [...(current.notesLog || []), { id: generateId(), text: migratedText, createdAt: current.createdAt || Date.now() }];
+    return { notes: "", notesLog };
+  });
+  if (migratedText !== null) {
+    await storage.logHistory("Person", id, "note_added", { text: migratedText });
+  }
   return updated;
 }
 
 export async function updatePerson(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Personne introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Personne introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Person", id, "updated", { patch });
   return updated;
 }

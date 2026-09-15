@@ -28,18 +28,19 @@ export async function createDecision(data) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Décision introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Décision introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Decision", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
 
 export async function updateDecision(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Décision introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Décision introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Decision", id, "updated", { patch });
   return updated;
 }
@@ -105,9 +106,10 @@ export function gridRecommendation(grid) {
  *  retrouvable trois mois plus tard" de la demande initiale. Volontairement distincte
  *  d'updateDecision() ci-dessus pour ne jamais doubler l'entrée d'historique. */
 export async function saveGrid(id, grid) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Décision introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, grid });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Décision introuvable : " + id);
+    return { grid };
+  });
   const { totals, bestIndex } = gridRecommendation(grid);
   const summary = grid.options.map((opt, i) => `${opt} ${totals[i].toFixed(1)}/5`).join(" · ");
   await storage.logHistory("Decision", id, "grid_recorded", { recommended: grid.options[bestIndex], summary });
@@ -116,13 +118,24 @@ export async function saveGrid(id, grid) {
 
 /** Retire la grille d'une décision (revient à une simple case "décision + date") — action
  *  distincte d'updateDecision() pour tracer explicitement le retrait plutôt qu'un "modifiée"
- *  générique muet sur ce qui a changé. */
+ *  générique muet sur ce qui a changé. `grid: undefined` supprime le champ (voir le commentaire
+ *  de storage.update() dans js/services/storage.js) au lieu du destructuring `{grid, ...rest}`
+ *  d'avant, qui exigeait un accès direct à `current` incompatible avec la sérialisation. */
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : incohérences mineures) : journalisait
+// systématiquement "grid_removed", même appelée sur une décision qui n'avait jamais eu de grille
+// — un "grid_removed" fantôme dans l'historique, sans grille correspondante jamais enregistrée
+// juste avant. `hadGrid` (capturé dans le callback, où `current` est garanti à jour) ne
+// journalise désormais que si une grille existait réellement.
 export async function removeGrid(id) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Décision introuvable : " + id);
-  const { grid, ...rest } = current;
-  const updated = await storage.put(COLLECTION, rest);
-  await storage.logHistory("Decision", id, "grid_removed", {});
+  let hadGrid = false;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Décision introuvable : " + id);
+    hadGrid = !!current.grid;
+    return { grid: undefined };
+  });
+  if (hadGrid) {
+    await storage.logHistory("Decision", id, "grid_removed", {});
+  }
   return updated;
 }
 

@@ -17,20 +17,20 @@
 // restants), pas d'un simple booléen "en retard ou pas" — le score affine le tri de l'ancien
 // Focus du jour, il ne l'ignore pas.
 
+import * as dateUtils from "../services/dateUtils.js";
+
 export const DEFAULT_WEIGHTS = { urgence: 50, impact: 30, blocage: 20 };
 
-function daysUntil(dueDate) {
-  const due = new Date(dueDate + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((due - today) / 86400000);
-}
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) :
+// cette implémentation locale (parsing local via "T00:00:00") était déjà la bonne — c'est elle
+// qui a servi de référence pour js/services/dateUtils.js#daysFromToday, désormais utilisée ici
+// directement plutôt que dupliquée.
 
 /** Sous-score d'urgence (0 à 1) à partir de l'échéance réelle — plus le retard est important,
  *  plus le score grimpe (plafonné à 1), plutôt qu'un simple "en retard = 1". */
 export function urgencyScore(task) {
   if (!task.dueDate) return 0.05;
-  const days = daysUntil(task.dueDate);
+  const days = dateUtils.daysFromToday(task.dueDate);
   if (days < 0) return Math.min(1, 0.85 + Math.min(-days, 15) * 0.01);
   if (days === 0) return 0.8;
   if (days <= 2) return 0.65;
@@ -72,7 +72,7 @@ export function computeScore(task, project, weights) {
 
 function dueLabel(task) {
   if (!task.dueDate) return "Pas d'échéance";
-  const days = daysUntil(task.dueDate);
+  const days = dateUtils.daysFromToday(task.dueDate);
   if (days < 0) return `Échéance dépassée de ${-days} j`;
   if (days === 0) return "Échéance aujourd'hui";
   if (days === 1) return "Échéance demain";

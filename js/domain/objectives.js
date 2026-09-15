@@ -32,9 +32,10 @@ export async function createObjective(data) {
 }
 
 export async function updateObjective(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Objectif introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Objectif introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Objective", id, "updated", { patch });
   return updated;
 }
@@ -42,19 +43,19 @@ export async function updateObjective(id, patch) {
 /** Ajoute un point de suivi daté sur l'objectif — jamais un remplacement du tableau complet
  *  (même principe que toggleStep sur les canevas). */
 export async function addEntry(id, { date, note }) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Objectif introuvable : " + id);
-  const entries = [...(current.entries || []), { id: generateId(), date: date || new Date().toISOString().slice(0, 10), note, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, entries });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Objectif introuvable : " + id);
+    return { entries: [...(current.entries || []), { id: generateId(), date: date || new Date().toISOString().slice(0, 10), note, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Objective", id, "entry_added", { note });
   return updated;
 }
 
 export async function removeEntry(id, entryId) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Objectif introuvable : " + id);
-  const entries = (current.entries || []).filter((e) => e.id !== entryId);
-  return storage.put(COLLECTION, { ...current, entries });
+  return storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Objectif introuvable : " + id);
+    return { entries: (current.entries || []).filter((e) => e.id !== entryId) };
+  });
 }
 
 export function listAll() {

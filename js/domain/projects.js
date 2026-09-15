@@ -57,31 +57,45 @@ export async function createProject(data) {
  *  vue, pour ne jamais écraser une étape cochée entre-temps par une autre fenêtre/onglet.
  *  `doneAt` horodate la coche (retour de Charles-Henri : voir quand un élément a été traité). */
 export async function toggleStep(id, stepKey, done) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const steps = (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s));
-  return storage.put(COLLECTION, { ...current, steps });
+  return storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { steps: (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s)) };
+  });
 }
 
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : incohérences mineures) : addNote()
+// et addPartNote() ci-dessous journalisent déjà leurs événements dans l'Historique, mais ces
+// trois fonctions-ci — pourtant tout aussi structurantes pour un projet (ajout/statut/retrait
+// d'une sous-partie) — ne journalisaient rien du tout, laissant un trou muet dans le fil de
+// l'Historique d'un projet à sous-parties actif.
 export async function addPart(id, label) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const parts = [...(current.parts || []), { id: generateId(), label, status: "not_started", notesLog: [] }];
-  return storage.put(COLLECTION, { ...current, parts });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { parts: [...(current.parts || []), { id: generateId(), label, status: "not_started", notesLog: [] }] };
+  });
+  await storage.logHistory("Project", id, "part_added", { label });
+  return updated;
 }
 
 export async function updatePartStatus(id, partId, status) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const parts = (current.parts || []).map((p) => (p.id === partId ? { ...p, status } : p));
-  return storage.put(COLLECTION, { ...current, parts });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { parts: (current.parts || []).map((p) => (p.id === partId ? { ...p, status } : p)) };
+  });
+  const part = (updated.parts || []).find((p) => p.id === partId);
+  await storage.logHistory("Project", id, "part_status_changed", { label: part?.label, status });
+  return updated;
 }
 
 export async function removePart(id, partId) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const parts = (current.parts || []).filter((p) => p.id !== partId);
-  return storage.put(COLLECTION, { ...current, parts });
+  let removedLabel = null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    removedLabel = (current.parts || []).find((p) => p.id === partId)?.label || null;
+    return { parts: (current.parts || []).filter((p) => p.id !== partId) };
+  });
+  await storage.logHistory("Project", id, "part_removed", { label: removedLabel });
+  return updated;
 }
 
 /**
@@ -91,10 +105,10 @@ export async function removePart(id, partId) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Project", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
@@ -111,19 +125,22 @@ export async function addNote(id, text) {
 export async function addPartNote(id, partId, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const parts = (current.parts || []).map((p) =>
-    p.id === partId ? { ...p, notesLog: [...(p.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] } : p
-  );
-  const updated = await storage.put(COLLECTION, { ...current, parts });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return {
+      parts: (current.parts || []).map((p) =>
+        p.id === partId ? { ...p, notesLog: [...(p.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] } : p
+      ),
+    };
+  });
   return updated.parts.find((p) => p.id === partId)?.notesLog || [];
 }
 
 export async function updateProject(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Project", id, "updated", { patch });
   return updated;
 }
@@ -141,17 +158,19 @@ export async function updateProject(id, patch) {
  * dédié dans l'onglet Projets.
  */
 export async function closeProject(id) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, status: "archived" });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { status: "archived" };
+  });
   await storage.logHistory("Project", id, "closed", {});
   return updated;
 }
 
 export async function reopenProject(id) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Projet introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, status: "active" });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { status: "active" };
+  });
   await storage.logHistory("Project", id, "reopened", {});
   return updated;
 }

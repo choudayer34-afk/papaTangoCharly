@@ -14,9 +14,18 @@
 // pose un repère explicite des deux côtés ("converted_to_x" / "converted_from_y") pour qu'on
 // puisse au moins retrouver le lien en relisant l'historique de l'ancienne ET de la nouvelle
 // entité, plutôt que la coupure totale du "supprimer puis recréer" d'avant cette vague. Les
-// éléments liés (js/components/linkedItems.js) référençant l'ancienne entité par son
-// {type, id} deviennent orphelins après conversion — non traité ici (même limite que la
-// suppression pure et simple déjà existante).
+// éléments liés (js/components/linkedItems.js) et les tags (js/domain/tags.js) référençant
+// l'ancienne entité par son {type, id} deviennent orphelins après conversion — non traité ici
+// (même limite que la suppression pure et simple déjà existante).
+//
+// BUG corrigé (15/09/2026, retour de Charles-Henri : "il faudrait pas que je perde tout ce que
+// j'y ai mis" en changeant le type d'une Tâche/d'un Suivi) : le journal de notes (`notesLog`) et
+// les sous-étapes (`checklist`) n'étaient PAS repris par les conversions ci-dessous — le texte de
+// la modale (js/components/changeType.js) affirmait pourtant "titre, description, projet et
+// échéance sont repris", laissant croire que c'était tout ce qu'il y avait à perdre. Corrigé pour
+// Tâche ⟷ Suivi (checklist + notesLog repris dans les deux sens) et pour Tâche/Suivi → Information
+// (notesLog seul — une Information/Idée n'a pas de notion de sous-étapes, voir js/domain/inbox.js,
+// donc rien d'équivalent où reprendre une checklist).
 
 import * as storage from "../services/storage.js";
 import * as tasksApi from "./tasks.js";
@@ -41,6 +50,8 @@ export async function convertTaskToFollowUp(task, { personId, direction = "waiti
     description: task.description || "",
     dueDate: task.dueDate || null,
     projectId: task.projectId || null,
+    checklist: task.checklist || [],
+    notesLog: task.notesLog || [],
   });
   await storage.logHistory("Task", task.id, "converted_to_followup", { followUpId: followUp.id });
   await storage.logHistory("FollowUp", followUp.id, "converted_from_task", { taskId: task.id, title: task.title });
@@ -59,6 +70,8 @@ export async function convertFollowUpToTask(followUp, personName = "") {
     description,
     dueDate: followUp.dueDate || null,
     projectId: followUp.projectId || null,
+    checklist: followUp.checklist || [],
+    notesLog: followUp.notesLog || [],
   });
   await storage.logHistory("FollowUp", followUp.id, "converted_to_task", { taskId: task.id });
   await storage.logHistory("Task", task.id, "converted_from_followup", { followUpId: followUp.id, title: followUp.title });
@@ -69,7 +82,7 @@ export async function convertFollowUpToTask(followUp, personName = "") {
 /** Tâche → Information/Idée (§47) : redevient un InboxItem "kept", visible partout où les
  *  informations/idées le sont déjà (Dashboard, recherche globale). */
 export async function convertTaskToKept(task, keptAsType = "kept") {
-  const item = await inboxApi.capture(taskToRawContent(task), "converted");
+  const item = await inboxApi.capture(taskToRawContent(task), "converted", { notesLog: task.notesLog });
   await inboxApi.qualify(item.id, keptAsType);
   await storage.logHistory("Task", task.id, "converted_to_kept", { inboxItemId: item.id, asType: keptAsType });
   await tasksApi.removeTask(task.id);
@@ -80,7 +93,7 @@ export async function convertTaskToKept(task, keptAsType = "kept") {
  *  Information/Idée n'a pas ce concept) ; elle reste néanmoins nommée dans le texte brut. */
 export async function convertFollowUpToKept(followUp, keptAsType = "kept", personName = "") {
   const rawContent = personName ? `${followUpToRawContent(followUp)}\n\n(Suivi initialement rattaché à ${personName})` : followUpToRawContent(followUp);
-  const item = await inboxApi.capture(rawContent, "converted");
+  const item = await inboxApi.capture(rawContent, "converted", { notesLog: followUp.notesLog });
   await inboxApi.qualify(item.id, keptAsType);
   await storage.logHistory("FollowUp", followUp.id, "converted_to_kept", { inboxItemId: item.id, asType: keptAsType });
   await followUpsApi.removeFollowUp(followUp.id);

@@ -37,15 +37,17 @@ function toggleLink(idList, id, shouldLink) {
 
 /** Lie/délie un prompt à une tâche — même signature que resourcesApi.linkToTask. */
 export async function linkToTask(promptId, taskId, shouldLink = true) {
-  const current = await storage.get(COLLECTION, promptId);
-  if (!current) throw new Error("Prompt introuvable : " + promptId);
-  return storage.put(COLLECTION, { ...current, taskIds: toggleLink(current.taskIds, taskId, shouldLink) });
+  return storage.update(COLLECTION, promptId, (current) => {
+    if (!current) throw new Error("Prompt introuvable : " + promptId);
+    return { taskIds: toggleLink(current.taskIds, taskId, shouldLink) };
+  });
 }
 
 export async function updatePrompt(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Prompt introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Prompt introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Prompt", id, "updated", { patch });
   return updated;
 }

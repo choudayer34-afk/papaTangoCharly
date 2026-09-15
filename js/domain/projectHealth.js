@@ -26,6 +26,7 @@
 
 import * as tasksApi from "./tasks.js";
 import * as followUpsApi from "./followups.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 const DEDUCTION_CAPS = { late: 40, blocked: 30, stalled: 25, followUps: 20 };
 const POINTS_PER_LATE_DAY = 3;
@@ -33,18 +34,14 @@ const POINTS_PER_BLOCKED_TASK = 15;
 const POINTS_PER_STALLED_TASK = 10;
 const POINTS_PER_LATE_FOLLOWUP = 10;
 
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
+// voir js/services/dateUtils.js. Même mélange minuit UTC/minuit local que tasksApi.isLate().
 function daysLate(dueDate) {
-  return Math.max(0, Math.round((startOfToday() - new Date(dueDate).getTime()) / 86400000));
+  return Math.max(0, -dateUtils.daysFromToday(dueDate));
 }
 
 function daysUntil(dueDate) {
-  return Math.max(0, Math.round((new Date(dueDate).getTime() - startOfToday()) / 86400000));
+  return Math.max(0, dateUtils.daysFromToday(dueDate));
 }
 
 function plural(n, word) {

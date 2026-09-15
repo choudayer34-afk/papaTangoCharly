@@ -45,6 +45,27 @@ const ACTION_META = {
   // lisible plutôt que noyée dans "Décision modifiée", voir js/domain/decisions.js#saveGrid().
   "Decision:grid_recorded": { emoji: "⚖️", label: "Grille de décision enregistrée" },
   "Decision:grid_removed": { emoji: "⚖️", label: "Grille de décision retirée" },
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : ces actions, journalisées de
+  // longue date par js/domain/convert.js et js/domain/inbox.js, n'avaient jamais leur entrée
+  // ici — elles retombaient sur le libellé générique "EntityType — action" plutôt qu'une icône
+  // et un texte lisibles, seule anomalie visible (aucune perte de données, l'entrée existait
+  // bel et bien dans l'historique, juste mal présentée).
+  "Task:converted_to_followup": { emoji: "🔁", label: "Converti en suivi" },
+  "Task:converted_from_followup": { emoji: "🔁", label: "Devenu une tâche (depuis un suivi)" },
+  "Task:converted_to_kept": { emoji: "🔁", label: "Converti en information/idée" },
+  "FollowUp:converted_from_task": { emoji: "🔁", label: "Devenu un suivi (depuis une tâche)" },
+  "FollowUp:converted_to_task": { emoji: "🔁", label: "Converti en tâche" },
+  "FollowUp:converted_to_kept": { emoji: "🔁", label: "Converti en information/idée" },
+  "InboxItem:raw_content_edited": { emoji: "✏️", label: "Texte de la capture corrigé" },
+  "InboxItem:project_set": { emoji: "📦", label: "Projet rattaché" },
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses" : journalisation manquante) —
+  // js/domain/projects.js#addPart/updatePartStatus/removePart et js/domain/tasks.js#
+  // addOutlookMeeting/removeOutlookMeeting ne journalisaient rien du tout jusqu'ici.
+  "Project:part_added": { emoji: "🧩", label: "Sous-partie ajoutée" },
+  "Project:part_status_changed": { emoji: "🧩", label: "Statut de sous-partie changé" },
+  "Project:part_removed": { emoji: "🧩", label: "Sous-partie retirée" },
+  "Task:outlook_meeting_added": { emoji: "🗓️", label: "Réunion Outlook associée" },
+  "Task:outlook_meeting_removed": { emoji: "🗓️", label: "Réunion Outlook dissociée" },
 };
 
 // Le "fil conducteur" (§ retour de Charles-Henri : "les éléments semblent séparés") ajoute
@@ -58,6 +79,16 @@ for (const type of ["Task", "Project", "Person", "FollowUp", "Resource", "Meetin
 // quel type de fiche apparaît aussi dans son historique, comme n'importe quel autre événement.
 for (const type of ["Task", "Project", "Person", "FollowUp", "Resource", "Meeting", "Decision", "InboxItem"]) {
   ACTION_META[`${type}:note_added`] = { emoji: "🗒️", label: "Note ajoutée" };
+}
+
+// Tags universels (§ retour de Charles-Henri, 13/09/2026, voir js/domain/tags.js) — posés sur
+// les 9 types de fiches qui acceptent un tag (js/components/tagsEditor.js) ; "Kept" est le
+// type utilisé par tags.js pour une Information/Idée, distinct de "InboxItem" (utilisé lui pour
+// ses propres notes/historique) — BUG corrigé (15/09/2026, audit "anomalies silencieuses") :
+// absent d'ici jusqu'ici, comme "Objective".
+for (const type of ["Task", "Project", "Person", "FollowUp", "Resource", "Meeting", "Decision", "Kept", "Objective"]) {
+  ACTION_META[`${type}:tag_added`] = { emoji: "#️⃣", label: "Tag ajouté" };
+  ACTION_META[`${type}:tag_removed`] = { emoji: "#️⃣", label: "Tag retiré" };
 }
 
 export function listAll() {
@@ -79,7 +110,11 @@ export function describe(entry) {
     emoji: "•",
     label: `${entry.entityType} — ${entry.action}`,
   };
-  let detail = entry.metadata?.title || entry.metadata?.name || "";
+  let detail = "";
+  if (entry.action === "part_status_changed" && entry.metadata?.status) {
+    detail = `${entry.metadata.label ? entry.metadata.label + " · " : ""}${entry.metadata.status}`;
+  }
+  if (!detail) detail = entry.metadata?.title || entry.metadata?.name || entry.metadata?.label || "";
   if (!detail && entry.action === "note_added" && entry.metadata?.text) {
     detail = entry.metadata.text.length > 60 ? entry.metadata.text.slice(0, 60) + "…" : entry.metadata.text;
   }
@@ -94,6 +129,9 @@ export function describe(entry) {
   }
   if (!detail && entry.action === "grid_recorded" && entry.metadata?.recommended) {
     detail = `${entry.metadata.recommended} conseillée · ${entry.metadata.summary || ""}`.trim();
+  }
+  if (!detail && (entry.action === "tag_added" || entry.action === "tag_removed") && entry.metadata?.tag) {
+    detail = "#" + entry.metadata.tag;
   }
   return { emoji: meta.emoji, label: meta.label, detail };
 }

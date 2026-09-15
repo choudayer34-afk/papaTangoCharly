@@ -42,10 +42,10 @@ export async function createMeeting(data) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Réunion introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Réunion introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("Meeting", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
@@ -54,16 +54,17 @@ export async function addNote(id, text) {
  *  remplacement complet du tableau). `doneAt` horodate la coche (affiché par
  *  js/components/canevas.js). */
 export async function toggleStep(id, stepKey, done) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Réunion introuvable : " + id);
-  const steps = (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s));
-  return storage.put(COLLECTION, { ...current, steps });
+  return storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Réunion introuvable : " + id);
+    return { steps: (current.steps || []).map((s) => (s.key === stepKey ? { ...s, done, doneAt: done ? Date.now() : null } : s)) };
+  });
 }
 
 export async function updateMeeting(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Réunion introuvable : " + id);
-  const updated = await storage.put(COLLECTION, { ...current, ...patch });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Réunion introuvable : " + id);
+    return patch;
+  });
   await storage.logHistory("Meeting", id, "updated", { patch });
   return updated;
 }

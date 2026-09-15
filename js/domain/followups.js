@@ -15,6 +15,7 @@
 
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 const COLLECTION = "followUps";
 
@@ -92,9 +93,26 @@ export const NOTABLE_LABELS = { positive: "👍 Notable positif", negative: "�
 // voir plus bas). Factorisé ici pour être appliqué de façon identique à la création
 // (`createFollowUp`) et à la modification (`updateFollowUp`) plutôt que dans chaque formulaire
 // appelant (js/views/people.js) — un seul endroit qui fait foi, jamais désynchronisable.
-function resolveControlDate(dueDate, controlDate) {
+//
+// BUG corrigé (15/09/2026, retour de Charles-Henri : "je n'arrive pas à supprimer une date de
+// contrôle même après enregistrer ça reste présent" + "quand je clique sur réinitialiser sur la
+// date, ça réinitialise mais ça ne s'enregistre pas") : la règle ci-dessus a été écrite pour le
+// cas "je viens de saisir une échéance, la date de contrôle n'a encore jamais été renseignée" —
+// mais elle était appliquée à l'identique à CHAQUE enregistrement du formulaire d'édition
+// (js/views/people.js#openEditFollowUpModal), qui renvoie systématiquement `dueDate` dans son
+// patch, changée ou non. Résultat : vider le champ "Prochain contrôle" sans toucher à l'échéance
+// tombait dans le même cas que "jamais saisie" ci-dessus, et la date de contrôle repartait
+// silencieusement caler sur l'échéance — impossible de la vider pour de bon tant qu'une échéance
+// restait présente, sans le moindre message expliquant pourquoi. Le correctif distingue
+// maintenant explicitement les deux cas via `dueDateChanged` : si l'échéance elle-même change de
+// valeur, une date de contrôle vide est toujours calée dessus par défaut (comportement de
+// départ, inchangé) ; si l'échéance ne change pas, vider la date de contrôle la vide réellement —
+// seul le plafond ("jamais après l'échéance") reste appliqué quand une date de contrôle est
+// explicitement saisie.
+function resolveControlDate(dueDate, controlDate, { dueDateChanged = true } = {}) {
   if (!dueDate) return controlDate || null;
-  if (!controlDate || new Date(controlDate).getTime() > new Date(dueDate).getTime()) return dueDate;
+  if (!controlDate) return dueDateChanged ? dueDate : null;
+  if (new Date(controlDate).getTime() > new Date(dueDate).getTime()) return dueDate;
   return controlDate;
 }
 
@@ -112,8 +130,13 @@ export async function createFollowUp(data) {
     status: data.status || "waiting",
     successCriteria: data.successCriteria || "",
     projectId: data.projectId || null,
-    notesLog: [], // journal de notes horodaté, voir addNote() plus bas
-    checklist: [], // sous-étapes courtes libres, même principe que Task.checklist (js/domain/tasks.js)
+    // `notesLog`/`checklist` acceptent une valeur initiale (retour de Charles-Henri, 15/09/2026 :
+    // un changement de type Tâche→Suivi ne doit pas faire disparaître ce qu'on y avait déjà mis)
+    // — voir js/domain/convert.js#convertTaskToFollowUp, seul appelant à s'en servir aujourd'hui.
+    // Vide par défaut pour tous les autres appelants (création normale depuis people.js), aucun
+    // changement de comportement pour eux.
+    notesLog: data.notesLog || [], // journal de notes horodaté, voir addNote() plus bas
+    checklist: data.checklist || [], // sous-étapes courtes libres, même principe que Task.checklist (js/domain/tasks.js)
   });
   await storage.logHistory("FollowUp", followUp.id, "created", { title: followUp.title });
   return followUp;
@@ -130,26 +153,26 @@ export async function createFollowUp(data) {
 export async function addChecklistItem(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Suivi introuvable : " + id);
-  const checklist = [...(current.checklist || []), { id: generateId(), text: trimmed, done: false, doneAt: null }];
-  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { checklist: [...(current.checklist || []), { id: generateId(), text: trimmed, done: false, doneAt: null }] };
+  });
   return updated.checklist;
 }
 
 export async function toggleChecklistItem(id, itemId, done) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Suivi introuvable : " + id);
-  const checklist = (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c));
-  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { checklist: (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c)) };
+  });
   return updated.checklist;
 }
 
 export async function removeChecklistItem(id, itemId) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Suivi introuvable : " + id);
-  const checklist = (current.checklist || []).filter((c) => c.id !== itemId);
-  const updated = await storage.put(COLLECTION, { ...current, checklist });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { checklist: (current.checklist || []).filter((c) => c.id !== itemId) };
+  });
   return updated.checklist;
 }
 
@@ -158,25 +181,36 @@ export async function removeChecklistItem(id, itemId) {
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Suivi introuvable : " + id);
-  const notesLog = [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }];
-  const updated = await storage.put(COLLECTION, { ...current, notesLog });
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+  });
   await storage.logHistory("FollowUp", id, "note_added", { text: trimmed });
   return updated.notesLog;
 }
 
 export async function updateFollowUp(id, patch) {
-  const current = await storage.get(COLLECTION, id);
-  if (!current) throw new Error("Suivi introuvable : " + id);
-  // Même règle qu'à la création (voir `resolveControlDate` plus haut) — seulement quand
-  // `dueDate` fait partie de CE patch : un appelant qui ne touche pas l'échéance (ex. cocher
-  // "terminé", ajouter une note) ne doit jamais voir sa date de contrôle recalculée dans son
-  // dos.
-  const finalPatch = "dueDate" in patch
-    ? { ...patch, controlDate: resolveControlDate(patch.dueDate, "controlDate" in patch ? patch.controlDate : current.controlDate) }
-    : patch;
-  const updated = await storage.put(COLLECTION, { ...current, ...finalPatch });
+  let finalPatch = patch;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    // Même règle qu'à la création (voir `resolveControlDate` plus haut) — seulement quand
+    // `dueDate` fait partie de CE patch : un appelant qui ne touche pas l'échéance (ex. cocher
+    // "terminé", ajouter une note) ne doit jamais voir sa date de contrôle recalculée dans son
+    // dos. `dueDateChanged` (voir le correctif du 15/09/2026 dans `resolveControlDate`) compare à
+    // la valeur déjà enregistrée plutôt que de supposer un changement : le formulaire d'édition
+    // renvoie `dueDate` à chaque sauvegarde que l'échéance ait bougé ou non, donc seule cette
+    // comparaison permet de distinguer "l'échéance change, caler la date de contrôle vide dessus"
+    // de "l'échéance ne change pas, vider la date de contrôle la vide pour de bon".
+    finalPatch = "dueDate" in patch
+      ? {
+          ...patch,
+          controlDate: resolveControlDate(patch.dueDate, "controlDate" in patch ? patch.controlDate : current.controlDate, {
+            dueDateChanged: patch.dueDate !== (current.dueDate || null),
+          }),
+        }
+      : patch;
+    return finalPatch;
+  });
   await storage.logHistory("FollowUp", id, "updated", { patch: finalPatch });
   return updated;
 }
@@ -199,13 +233,9 @@ export async function removeFollowUp(id) {
   return storage.remove(COLLECTION, id);
 }
 
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
+// voir js/services/dateUtils.js. Même mélange minuit UTC/minuit local que tasksApi.isLate().
 export function isControlDue(followUp) {
   if (!followUp.controlDate || followUp.status === "done") return false;
-  return new Date(followUp.controlDate).getTime() < startOfToday();
-}
-
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+  return dateUtils.daysFromToday(followUp.controlDate) < 0;
 }
