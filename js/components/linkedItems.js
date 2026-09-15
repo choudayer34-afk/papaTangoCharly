@@ -5,7 +5,7 @@
 // (même modale que si on l'avait trouvée depuis son propre écran) plutôt qu'une vue dupliquée
 // — même principe que components/search.js.
 
-import { openModal, closeModal } from "./modal.js";
+import { openModal, closeModal, guardClick } from "./modal.js";
 import { showToast } from "./toast.js";
 import * as linksApi from "../domain/links.js";
 import * as tasksApi from "../domain/tasks.js";
@@ -236,15 +236,22 @@ export function openLinkPickerModal(ref, currentLabel, { onLinked, onCancel } = 
       row.className = "item-row";
       row.style.cursor = "pointer";
       row.innerHTML = `<div class="item-main"><div class="item-title">${resolved.emoji} ${escapeHtml(resolved.title)}</div></div>`;
-      row.addEventListener("click", async () => {
-        await linksApi.createLink(
-          { type: ref.type, id: ref.id, label: currentLabel },
-          { type: r.type, id: r.id, label: resolved.title }
-        );
-        closeModal();
-        showToast("Lien créé");
-        onLinked?.();
-      });
+      // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") :
+      // `linksApi.createLink` n'a aucune vérification d'existence, et rien n'empêchait un
+      // double-clic sur la même ligne avant la fermeture de la modale — deux liens identiques
+      // créés en silence, visibles en double des deux côtés du "🔗 Lié".
+      row.addEventListener(
+        "click",
+        guardClick(row, async () => {
+          await linksApi.createLink(
+            { type: ref.type, id: ref.id, label: currentLabel },
+            { type: r.type, id: r.id, label: resolved.title }
+          );
+          closeModal();
+          showToast("Lien créé");
+          onLinked?.();
+        })
+      );
       card.appendChild(row);
     }
     resultsEl.appendChild(card);

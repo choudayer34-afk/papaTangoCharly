@@ -29,6 +29,7 @@ import { openTaskDetail } from "../views/kanban.js";
 import { openProjectDetail } from "../views/projects.js";
 import { openEditFollowUpModal } from "../views/people.js";
 import { openResourceDetail } from "../views/resources.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 export async function openWeeklyReview() {
   // Rappel de rythme (§ piste UX du 31/08/2026, retour de Charles-Henri : "il y a du retard
@@ -53,14 +54,20 @@ export async function openWeeklyReview() {
   const isProjectVisible = (projectId) => !projectId || !projectsApi.isArchived(projectsById.get(projectId));
 
   const late = sortByDateAsc(tasks.filter((t) => tasksApi.isLate(t) && isProjectVisible(t.projectId)), (t) => t.dueDate);
-  const weekEnd = Date.now() + 7 * 24 * 60 * 60 * 1000;
+  // BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
+  // `new Date(dateStr).getTime() <= Date.now() + 7 jours` mélangeait un parsing UTC de
+  // l'échéance avec un instant courant en temps réel (pas un début de journée) : une fenêtre
+  // "7 jours" qui glissait selon l'heure du jour ET le fuseau, au lieu de "au plus 7 jours civils
+  // d'ici" comme partout ailleurs dans l'app (dashboard.js, kanban.js). Remplacé par
+  // dateUtils.daysFromToday(...) <= 7, cohérent avec le reste de l'app — voir
+  // js/services/dateUtils.js.
   // "Cette semaine (hors équipe)" (retour de Charles-Henri, 06/09/2026 : "il manque les
   // éléments qui ont une échéance dans la semaine hors équipe") — les Tâches (jamais des
   // Suivis, déjà couverts par "Équipe" ci-dessous) dont l'échéance tombe dans les 7 prochains
   // jours mais qui ne sont pas encore en retard (sinon déjà dans "🔴 Retards" ci-dessus).
   const dueSoonTasks = sortByDateAsc(
     tasks.filter(
-      (t) => t.dueDate && t.status !== "done" && !tasksApi.isLate(t) && new Date(t.dueDate).getTime() <= weekEnd && isProjectVisible(t.projectId)
+      (t) => t.dueDate && t.status !== "done" && !tasksApi.isLate(t) && dateUtils.daysFromToday(t.dueDate) <= 7 && isProjectVisible(t.projectId)
     ),
     (t) => t.dueDate
   );
@@ -75,7 +82,7 @@ export async function openWeeklyReview() {
   );
   const teamThisWeek = sortByDateAsc(
     followUps.filter(
-      (f) => f.status !== "done" && f.controlDate && new Date(f.controlDate).getTime() <= weekEnd && isProjectVisible(f.projectId)
+      (f) => f.status !== "done" && f.controlDate && dateUtils.daysFromToday(f.controlDate) <= 7 && isProjectVisible(f.projectId)
     ),
     (f) => f.controlDate
   );

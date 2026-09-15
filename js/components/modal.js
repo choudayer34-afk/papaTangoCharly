@@ -62,9 +62,34 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
       } else {
         btn.textContent = action.label;
       }
-      btn.addEventListener("click", () => {
-        action.onClick?.();
-        if (action.closesModal !== false) close();
+      // BUG corrigé (15/09/2026, retour de Charles-Henri : suivi créé en double dans "Ça a
+      // besoin de toi", faussant l'indicateur) : une action `closesModal: false` (ex. "Créer"/
+      // "Enregistrer" sur une fiche) garde la modale ouverte pendant que son `onClick` (souvent
+      // async — écriture Firestore) s'exécute, sans jamais désactiver son propre bouton entre
+      // temps. Un double clic ou un double tap pendant cette fenêtre (l'utilisateur ne voit
+      // encore aucun changement à l'écran, donc clique une seconde fois en pensant que le
+      // premier clic n'est pas parti) déclenchait deux fois `onClick` — donc deux fois
+      // `createFollowUp` (ou l'équivalent Tâche/Projet/etc.), avec deux id générés séparément :
+      // deux fiches strictement identiques, silencieusement. Une action qui ferme la modale
+      // elle-même (`closesModal: false`) est désormais désactivée dès le premier clic et
+      // réactivée seulement si la modale est encore là une fois `onClick` retourné (ex. un
+      // garde-fou de validation type `if (!title) return;` qui n'a pas fermé la modale) — pour
+      // ne jamais laisser l'utilisateur bloqué sur un bouton mort. Les actions par défaut
+      // (`closesModal` absent ou `true`, ex. "Annuler"/"Fermer") ferment la modale de façon
+      // synchrone comme avant, sans fenêtre où un double clic pourrait rejouer deux fois.
+      btn.addEventListener("click", async () => {
+        if (action.closesModal === false) {
+          if (btn.disabled) return;
+          btn.disabled = true;
+          try {
+            await action.onClick?.();
+          } finally {
+            if (overlay.isConnected) btn.disabled = false;
+          }
+        } else {
+          action.onClick?.();
+          close();
+        }
       });
       actionsRow.appendChild(btn);
     }
@@ -148,6 +173,36 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
 // `closed`, donc sûre même appelée deux fois) plutôt que de manipuler l'overlay à la main.
 export function closeModal() {
   activeClose?.();
+}
+
+// Garde anti-double-clic générique (15/09/2026, retour de Charles-Henri : "refait une revue de
+// code entière... anomalies d'usage ou d'enregistrement en silence") — même principe que la
+// garde posée plus haut sur les actions `closesModal: false` d'`openModal()` (patch 0026 :
+// un double-clic sur "Créer"/"Enregistrer" créait une fiche en double), mais pour les boutons
+// d'ajout qui ne passent PAS par `openModal()` : "+" d'une checklist, d'un journal de notes,
+// d'une sous-partie de projet, d'un point de suivi d'objectif, association d'une réunion
+// Outlook, sélection d'un élément à lier... Tous partagent le même défaut trouvé en audit : le
+// bouton n'est jamais désactivé pendant l'écriture (souvent asynchrone), donc un double-clic ou
+// un double-Entrée déclenche deux fois l'ajout — un doublon silencieux dans un tableau existant
+// plutôt qu'une fiche racine dupliquée, mais la même famille de bug.
+/**
+ * @param {HTMLElement} el - l'élément à désactiver pendant l'exécution (bouton, ou tout élément
+ *   portant une propriété `disabled`).
+ * @param {Function} handler - fonction (éventuellement async) à protéger contre un rejeu.
+ * @returns {Function} un handler prêt à être passé à `addEventListener`.
+ */
+export function guardClick(el, handler) {
+  return async (...args) => {
+    if (el.disabled) return;
+    el.disabled = true;
+    try {
+      return await handler(...args);
+    } finally {
+      // Ne réactive que si l'élément est toujours dans le document — s'il a disparu (ex. la
+      // modale qui le contenait vient de se fermer), il n'y a rien à réactiver.
+      if (el.isConnected) el.disabled = false;
+    }
+  };
 }
 
 /**

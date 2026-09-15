@@ -31,9 +31,11 @@ export async function openChangeTypeModal(sourceType, entity, targets, { personN
   const body = document.createElement("div");
   body.innerHTML = `
     <p class="item-meta" style="margin-bottom:16px;">
-      Titre, description, projet et échéance (quand compatibles avec le nouveau type) sont
-      repris. L'élément d'origine est supprimé après la conversion ; son historique garde une
-      trace du lien vers le nouvel élément.
+      Titre, description, projet, échéance, sous-étapes et notes (quand compatibles avec le
+      nouveau type) sont repris — une Information/Idée n'a pas de sous-étapes, celles-ci ne
+      peuvent donc pas la suivre dans ce cas précis. L'élément d'origine est supprimé après la
+      conversion ; son historique garde une trace du lien vers le nouvel élément, mais pas ses
+      tags ni ses éléments liés (🔗), qui restent orphelins.
     </p>
     <div class="field">
       <label for="convert-target">Nouveau type</label>

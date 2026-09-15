@@ -28,6 +28,8 @@
 // de Charles-Henri), plus neutre pour les trois usages (sous-étapes de Tâche/Suivi, notes libres
 // du Pense-bête).
 
+import { guardClick } from "./modal.js";
+
 export function renderChecklist(
   container,
   items,
@@ -117,11 +119,20 @@ export function renderChecklist(
     input.focus();
   }
 
-  container.querySelector("#checklist-add-btn").addEventListener("click", addFromInput);
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : ni le
+  // bouton ni le champ n'étaient désactivés pendant `onAdd` (souvent une écriture Firestore) —
+  // un double-clic sur "+", ou un double-Entrée, déclenchait deux fois l'ajout avant que
+  // `input.value = ""` n'ait eu le temps de s'exécuter : une sous-étape identique dupliquée en
+  // silence. `guardClick` désactive le bouton "+" le temps de l'ajout, et la même fonction
+  // protégée est utilisée pour le clic ET pour Entrée, pour qu'aucun des deux chemins ne
+  // contourne l'autre.
+  const addBtn = container.querySelector("#checklist-add-btn");
+  const guardedAdd = guardClick(addBtn, addFromInput);
+  addBtn.addEventListener("click", guardedAdd);
   container.querySelector("#checklist-new-text").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      addFromInput();
+      guardedAdd();
     }
   });
 }

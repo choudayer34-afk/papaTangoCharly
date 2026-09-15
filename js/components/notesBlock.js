@@ -13,6 +13,8 @@
 // daté, voir js/views/people.js) : les deux coexistent, ce journal est un complément, pas un
 // remplacement.
 
+import { guardClick } from "./modal.js";
+
 export function renderNotesBlock(container, notes, { onAdd, emptyLabel = "Aucune note pour l'instant." } = {}) {
   let current = notes || [];
   container.innerHTML = `
@@ -44,15 +46,22 @@ export function renderNotesBlock(container, notes, { onAdd, emptyLabel = "Aucune
   }
   renderList();
 
-  container.querySelector("#notes-add-btn").addEventListener("click", async () => {
-    const textarea = container.querySelector("#notes-new-text");
-    const text = textarea.value.trim();
-    if (!text) return;
-    const updated = await onAdd(text);
-    current = updated || current;
-    textarea.value = "";
-    renderList();
-  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : le
+  // bouton n'était pas désactivé pendant `onAdd` — un double-clic créait une note dupliquée en
+  // silence (même famille que le correctif équivalent dans checklist.js).
+  const addBtn = container.querySelector("#notes-add-btn");
+  addBtn.addEventListener(
+    "click",
+    guardClick(addBtn, async () => {
+      const textarea = container.querySelector("#notes-new-text");
+      const text = textarea.value.trim();
+      if (!text) return;
+      const updated = await onAdd(text);
+      current = updated || current;
+      textarea.value = "";
+      renderList();
+    })
+  );
 }
 
 function formatDateTime(ts) {

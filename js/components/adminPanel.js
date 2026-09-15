@@ -16,6 +16,7 @@ import { openModal, confirmDelete } from "./modal.js";
 import { showToast } from "./toast.js";
 import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js";
 import * as usageTrackingApi from "../services/usageTracking.js";
+import * as accountAdminApi from "../services/accountAdmin.js";
 import * as tagsApi from "../domain/tags.js";
 import * as preferencesApi from "../domain/preferences.js";
 
@@ -38,11 +39,12 @@ const THIRD_PARTY_APPS = [
         <li>Ouvre (ou crée) la collection <code>allowedUsers</code>.</li>
         <li>Clique <strong>Ajouter un document</strong> : comme ID de document, mets son email
           <strong>en minuscules</strong> (ex. <code>alice.dupont@gmail.com</code>). Le contenu
-          du document n'a pas d'importance, seule son existence compte.</li>
+          du document n'a pas d'importance au moment de la création, seule son existence compte.</li>
       </ol>
-      <p><strong>Retirer un accès :</strong> supprime son document dans <code>allowedUsers</code>.
-        Si la personne a déjà une session ouverte dans son navigateur, ça ne coupe qu'à sa
-        prochaine reconnexion, pas immédiatement.</p>
+      <p><strong>Fermer/ouvrir un accès, ou supprimer tout le contenu d'un compte :</strong> ça
+        se fait maintenant directement dans l'app, depuis "👥 Comptes" juste au-dessus. Fermer un
+        accès ne coupe qu'à la prochaine reconnexion si la personne a déjà une session ouverte
+        dans son navigateur, pas immédiatement.</p>
       <p><strong>Créer un compte email/mot de passe</strong> (si la personne n'a pas de compte
         Google) : <strong>Authentication</strong> → <strong>Users</strong> →
         <strong>Add user</strong>. Sans ça, elle se connecte simplement avec
@@ -50,6 +52,28 @@ const THIRD_PARTY_APPS = [
       <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">Les règles de
         sécurité Firestore (onglet <strong>Rules</strong>) sont ce qui protège réellement les
         données de chacun — cette liste blanche seule n'est qu'un confort d'usage.</p>
+      <p><strong>Règle à poser une fois pour que "👥 Comptes" fonctionne</strong> (retour du
+        14/09/2026 : fermer/ouvrir un compte puis supprimer son contenu) — colle ceci dans
+        <strong>Rules</strong>, à l'intérieur du bloc <code>service cloud.firestore { match
+        /databases/{database}/documents { ... } }</code> déjà en place, à côté des règles
+        existantes (ne remplace rien d'autre) :</p>
+      <pre style="background:var(--color-bg-alt);padding:10px;border-radius:var(--radius-sm);overflow-x:auto;font-size:var(--font-size-sm);">match /allowedUsers/{email} {
+  allow get: if request.auth != null;
+  allow list: if request.auth != null
+                && request.auth.token.email.lower() == "${ADMIN_EMAIL}";
+  allow write: if false; // Charles-Henri gère l'invitation à la main, voir plus haut.
+}
+
+match /users/{uid}/{document=**} {
+  allow read, write: if request.auth != null && request.auth.uid == uid;
+  allow read, write: if request.auth != null
+                        && request.auth.token.email.lower() == "${ADMIN_EMAIL}";
+}</pre>
+      <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">La deuxième règle
+        (<code>users/{uid}</code>) donne à ton propre compte un accès de secours à TOUTES les
+        données de tout le monde — nécessaire pour exporter/supprimer le contenu d'un compte
+        depuis "👥 Comptes", mais à garder en tête : c'est un accès large, pas limité à une seule
+        action ponctuelle.</p>
     `,
   },
   {
@@ -121,6 +145,10 @@ function openAdminPanel() {
       <button type="button" id="admin-usage-btn" class="btn btn-secondary">📊 Voir l'activité des comptes</button>
     </div>
     <div class="field">
+      <label>Comptes</label>
+      <button type="button" id="admin-accounts-btn" class="btn btn-secondary">👥 Comptes</button>
+    </div>
+    <div class="field">
       <label>Tags</label>
       <button type="button" id="admin-tags-btn" class="btn btn-secondary">🏷️ Gérer les tags</button>
     </div>
@@ -178,8 +206,158 @@ function openAdminPanel() {
   bodyEl.querySelector("#admin-usage-btn").addEventListener("click", () => {
     openUsagePanel();
   });
+  bodyEl.querySelector("#admin-accounts-btn").addEventListener("click", () => {
+    openAccountsAdminModal();
+  });
   bodyEl.querySelector("#admin-tags-btn").addEventListener("click", () => {
     openTagsAdminModal();
+  });
+}
+
+/**
+ * Gestion des comptes (retour de Charles-Henri, 14/09/2026 : "en tant qu'administrateur je veux
+ * pouvoir fermer / ouvrir un compte puis supprimer tout son contenu pour libérer l'espace sur
+ * firebase si besoin") — voir js/services/accountAdmin.js pour toute la logique et les garde-fous
+ * (compte fermé + sauvegarde téléchargée avant toute suppression). Même structure que
+ * "🏷️ Gérer les tags" juste au-dessus : une liste de cartes, "← Retour" vers le panneau.
+ */
+async function openAccountsAdminModal() {
+  const body = document.createElement("div");
+  body.innerHTML = `<div class="empty-state" style="padding:16px;">Chargement…</div>`;
+  const { bodyEl } = openModal({
+    title: "👥 Comptes",
+    body,
+    dismissible: true,
+    actions: [{ label: "← Retour", variant: "ghost", onClick: () => openAdminPanel() }],
+  });
+
+  await renderAccountsList(bodyEl);
+}
+
+async function renderAccountsList(bodyEl) {
+  let accounts;
+  try {
+    accounts = await accountAdminApi.listAccounts();
+  } catch {
+    bodyEl.innerHTML = `<div class="empty-state" style="padding:16px;">Impossible de charger les comptes — vérifie la règle de sécurité Firestore pour "allowedUsers" (voir le tutoriel 🔥 Firebase, "← Retour" puis clique 🔥 Firebase).</div>`;
+    return;
+  }
+  if (!accounts.length) {
+    bodyEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun compte autorisé pour l'instant (voir le tutoriel 🔥 Firebase pour en inviter un).</div>`;
+    return;
+  }
+
+  bodyEl.innerHTML = `
+    <p class="item-meta" style="margin-bottom:16px;">
+      <strong>Fermer</strong> : empêche une prochaine connexion (une session déjà ouverte ailleurs n'est coupée qu'à sa reconnexion suivante).
+      <strong>Supprimer tout son contenu</strong> : irréversible, disponible uniquement une fois le compte fermé.
+    </p>
+    <div id="admin-accounts-list"></div>
+  `;
+  const listEl = bodyEl.querySelector("#admin-accounts-list");
+  for (const acc of accounts) {
+    const row = document.createElement("div");
+    row.className = "card";
+    row.style.marginBottom = "10px";
+    const statusLabel = acc.disabled ? "🔒 Fermé" : "🔓 Ouvert";
+    const wipedLabel = acc.contentWipedAt ? ` · 🗑️ vidé le ${formatDate(acc.contentWipedAt)}` : "";
+    const seenLabel = acc.lastSeen ? `Dernière activité : ${formatDateTime(acc.lastSeen)}` : "Jamais connecté";
+    row.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:600;${acc.disabled ? "color:var(--color-text-muted);" : ""}">${escapeHtml(acc.email)}</div>
+          <div class="item-meta">${statusLabel}${wipedLabel} · ${seenLabel}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button type="button" class="btn btn-secondary btn-sm admin-account-toggle">${acc.disabled ? "🔓 Ouvrir" : "🔒 Fermer"}</button>
+          ${acc.disabled && acc.uid ? `<button type="button" class="btn btn-ghost btn-sm admin-account-wipe">🗑️ Supprimer tout son contenu</button>` : ""}
+        </div>
+      </div>
+    `;
+    row.querySelector(".admin-account-toggle").addEventListener("click", async () => {
+      if (acc.disabled) await accountAdminApi.reopenAccount(acc.email);
+      else await accountAdminApi.closeAccount(acc.email);
+      renderAccountsList(bodyEl);
+    });
+    row.querySelector(".admin-account-wipe")?.addEventListener("click", () => {
+      openDeleteAccountContentModal(acc);
+    });
+    listEl.appendChild(row);
+  }
+}
+
+/**
+ * Confirmation renforcée avant suppression définitive — bien plus qu'un simple `confirmDelete()`
+ * (voir js/components/modal.js), volontairement, puisqu'il s'agit ici de la TOTALITÉ des
+ * données de quelqu'un d'autre plutôt que d'un seul élément. Deux verrous cumulatifs avant que
+ * le bouton "Supprimer définitivement" ne s'active : une sauvegarde JSON doit avoir été
+ * téléchargée dans CETTE modale, ET l'email du compte doit être retapé à l'identique.
+ */
+function openDeleteAccountContentModal(account) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <p>Supprime définitivement TOUT le contenu applicatif de <strong>${escapeHtml(account.email)}</strong> :
+      tâches, projets, personnes, suivis, ressources, réunions, décisions, objectifs, tags,
+      éléments liés, historique de fiches, préférences, prompts et éléments Inbox.
+      Cette action est irréversible.</p>
+    <p class="item-meta">L'historique d'activité (connexions, écrans consultés, visible dans
+      "📊 Voir l'activité des comptes") n'est pas supprimé et reste consultable.</p>
+    <div class="field">
+      <button type="button" id="admin-wipe-backup-btn" class="btn btn-secondary">📥 Télécharger une sauvegarde (JSON) d'abord</button>
+      <div id="admin-wipe-backup-status" class="item-meta" style="margin-top:6px;">Sauvegarde non téléchargée — requise avant de pouvoir supprimer.</div>
+    </div>
+    <div class="field">
+      <label for="admin-wipe-confirm-email">Tape l'email du compte pour confirmer</label>
+      <input id="admin-wipe-confirm-email" type="text" placeholder="${escapeHtml(account.email)}" autocomplete="off" />
+    </div>
+    <div class="field">
+      <button type="button" id="admin-wipe-confirm-btn" class="btn btn-danger" disabled>Supprimer définitivement</button>
+    </div>
+  `;
+
+  const { bodyEl, close } = openModal({
+    title: "🗑️ Supprimer tout le contenu",
+    body,
+    dismissible: true,
+    actions: [{ label: "Annuler", variant: "ghost" }],
+  });
+
+  let backupDownloaded = false;
+  const emailInput = bodyEl.querySelector("#admin-wipe-confirm-email");
+  const confirmBtn = bodyEl.querySelector("#admin-wipe-confirm-btn");
+  const backupStatus = bodyEl.querySelector("#admin-wipe-backup-status");
+
+  function updateConfirmState() {
+    const typed = emailInput.value.trim().toLowerCase();
+    confirmBtn.disabled = !(backupDownloaded && typed === account.email.toLowerCase());
+  }
+
+  bodyEl.querySelector("#admin-wipe-backup-btn").addEventListener("click", async (e) => {
+    e.target.disabled = true;
+    try {
+      await accountAdminApi.downloadAccountBackup(account);
+      backupDownloaded = true;
+      backupStatus.textContent = "✅ Sauvegarde téléchargée.";
+      updateConfirmState();
+    } catch (err) {
+      showToast(err.message || "Impossible de générer la sauvegarde — vérifie la règle de sécurité Firestore (tutoriel 🔥 Firebase).");
+      e.target.disabled = false;
+    }
+  });
+
+  emailInput.addEventListener("input", updateConfirmState);
+
+  confirmBtn.addEventListener("click", async () => {
+    confirmBtn.disabled = true;
+    try {
+      const count = await accountAdminApi.deleteAccountContent(account);
+      showToast(`Contenu supprimé (${count} document${count > 1 ? "s" : ""}).`);
+      close();
+      openAccountsAdminModal();
+    } catch (err) {
+      showToast(err.message || "Échec de la suppression.");
+      confirmBtn.disabled = false;
+    }
   });
 }
 
