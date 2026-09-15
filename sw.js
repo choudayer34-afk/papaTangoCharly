@@ -141,19 +141,66 @@
 // rien du tout jusqu'ici, contrairement à `addNote()` sur ces mêmes entités — journalisation
 // ajoutée. (4) `js/domain/decisions.js#removeGrid()` journalisait "grid_removed" même quand
 // aucune grille n'avait jamais existé — désormais gardé par une vérification préalable.
-// `CACHE_NAME` incrémenté puisque inbox.js, history.js, projects.js, tasks.js et decisions.js
-// sont tous précachés.
-const CACHE_NAME = "pilotage-cache-v55";
+// Corrections de performance (15/09/2026, audit "performance hors-ligne") : (1) fusion des 3
+// abonnements Firestore parallèles sur `inboxItems` en un seul (js/domain/inbox.js) ; (2)
+// anti-rebond (150ms) sur les 7 champs de recherche qui relançaient un filtrage à chaque
+// frappe (kanban.js, resources.js, people.js — prep-search —, prompts.js — x2 —, guide.js,
+// linkedItems.js) ; (3) les fiches Tâche/Ressource/Personne/Projet ne rechargent plus tout
+// l'historique de l'application (`listAll()`) pour n'en garder que quelques lignes — nouvelles
+// requêtes ciblées `listForEntity`/`listForEntities` (js/domain/history.js, js/services/
+// storage.js#listWhere) ; (4) la recherche globale (js/components/search.js) charge maintenant
+// ses données une seule fois à l'ouverture de la modale au lieu de tout recharger à chaque
+// frappe. `CACHE_NAME` incrémenté puisque tous ces fichiers sont précachés.
+//
+// Ajouts "usage hors-ligne" (15/09/2026, audit "performance hors-ligne") : (1) bandeau visible
+// quand l'appareil perd la connexion (js/services/onlineStatus.js — nouveau fichier, précaché
+// ci-dessous —, js/app.js, styles/components.css) ; (2) un bouton d'action qui n'attend jamais
+// de confirmation (`closesModal: false`, ex. Enregistrer/Convertir) affiche désormais un message
+// explicite après 2,5s hors-ligne au lieu de rester silencieusement bloqué en attente de
+// l'écriture Firestore (js/components/modal.js). `CACHE_NAME` incrémenté puisque onlineStatus.js
+// est précaché et que modal.js est modifié.
+//
+// Résilience du Service Worker (15/09/2026, audit "usage hors-ligne") : (1) les icônes
+// (icons/icon-192.png, icon-192-maskable.png, icon-512.png), référencées par manifest.json,
+// index.html et js/app.js, n'étaient jamais précachées — icône cassée hors-ligne avant leur
+// premier chargement par le navigateur ; ajoutées ci-dessous. (2) `storage-local.js` a été
+// retiré : ce fichier n'existe plus dans l'application (le mode "stockage local" a été
+// remplacé par Firestore), et le précacher forçait `cache.addAll()` à échouer entièrement dès
+// qu'il était introuvable (voir point 3). (3) `cache.addAll()` est atomique : un seul fichier
+// de APP_SHELL en échec (404, coupure réseau ponctuelle) faisait échouer l'installation ENTIÈRE
+// du Service Worker, sans le moindre message — aucun précache créé pour cette version, pour
+// personne. Chaque fichier est désormais mis en cache individuellement (`Promise.allSettled`) :
+// un échec isolé n'empêche plus les ~90 autres d'être précachés, et le détail de ce qui a échoué
+// est au moins journalisé. `CACHE_NAME` incrémenté puisque la liste APP_SHELL change.
+//
+// BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : une toute première connexion
+// (session jamais mise en cache sur cet appareil) tentée hors-ligne échoue forcément — ça ne
+// peut pas être résolu autrement, une première authentification nécessite le réseau — mais le
+// message affiché jusqu'ici était le texte brut anglais de Firebase ("Firebase: Error
+// (auth/network-request-failed).") au lieu d'expliquer pourquoi (js/views/login.js).
+// `CACHE_NAME` incrémenté puisque ce fichier est précaché.
+//
+// Notes de mise à jour (15/09/2026) : nouvelle vague dans js/views/whatsnew.js décrivant les
+// cinq correctifs ci-dessus (changeType, confirmDelete, bandeau hors-ligne, message de connexion,
+// performances). `CACHE_NAME` incrémenté puisque ce fichier est précaché.
+const CACHE_NAME = "pilotage-cache-v61";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
+  // BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : référencées par manifest.json
+  // et index.html (icône d'onglet/écran d'accueil) et par js/app.js (icône de notification),
+  // mais jamais précachées jusqu'ici — un utilisateur parti hors-ligne avant que le navigateur
+  // les ait chargées une première fois voyait une icône cassée. Purement cosmétique, pas
+  // bloquant pour le fonctionnement de l'app, mais autant le corriger tant qu'on y est.
+  "./icons/icon-192.png",
+  "./icons/icon-192-maskable.png",
+  "./icons/icon-512.png",
   "./styles/tokens.css",
   "./styles/components.css",
   "./js/app.js",
   "./js/services/id.js",
   "./js/services/storage.js",
-  "./js/services/storage-local.js",
   "./js/services/firebase.js",
   "./js/services/deeplink.js",
   "./js/services/draftStore.js",
@@ -164,6 +211,7 @@ const APP_SHELL = [
   "./js/services/accountAdmin.js",
   "./js/services/themeStore.js",
   "./js/services/dateUtils.js",
+  "./js/services/onlineStatus.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
@@ -234,7 +282,14 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const results = await Promise.allSettled(APP_SHELL.map((url) => cache.add(url)));
+      const failed = results.map((r, i) => (r.status === "rejected" ? APP_SHELL[i] : null)).filter(Boolean);
+      if (failed.length) {
+        console.error("[sw] Fichiers non précachés à l'installation :", failed);
+      }
+      return self.skipWaiting();
+    })
   );
 });
 
