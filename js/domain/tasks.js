@@ -188,8 +188,10 @@ export function listAll() {
   return storage.listAll(COLLECTION);
 }
 
-export function subscribe(callback) {
-  return storage.subscribe(COLLECTION, callback);
+// `opts` transmis tel quel à storage.js#subscribe — voir son commentaire ({ sort: false } pour
+// un appelant qui retrie de toute façon, ex. js/views/kanban.js par échéance).
+export function subscribe(callback, opts) {
+  return storage.subscribe(COLLECTION, callback, opts);
 }
 
 /**

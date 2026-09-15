@@ -95,6 +95,37 @@ export function listAll() {
   return storage.listAll(COLLECTION);
 }
 
+// BUG corrigé (15/09/2026, audit performance) : voir le commentaire de storage.js#listWhere —
+// utilisé par les fiches Tâche/Ressource/Personne pour n'aller chercher que LEUR historique
+// plutôt que la collection entière (js/views/kanban.js#openTaskDetail,
+// js/views/resources.js#openResourceDetail, js/views/people.js — fiche Personne). Filtres
+// d'égalité uniquement (entityType + entityId), donc jamais besoin d'index composite.
+export function listForEntity(entityType, entityId) {
+  return storage.listWhere(COLLECTION, [
+    ["entityType", entityType],
+    ["entityId", entityId],
+  ]);
+}
+
+/** Même correctif que `listForEntity` ci-dessus, pour les fiches dont l'historique affiché est
+ *  celui de PLUSIEURS entités à la fois (ex. fiche Personne : elle-même + tous ses Suivis, voir
+ *  js/views/people.js ; fiche Projet : lui-même + ses Tâches/Suivis/Ressources liés, voir
+ *  js/views/projects.js). Une requête par entité plutôt qu'un `in` groupé par type : reste dans
+ *  le cas 100% "filtres d'égalité" qui ne demande jamais d'index composite (voir storage.js#
+ *  listWhere) — le nombre d'entités liées à une fiche reste toujours mesuré en unités, jamais en
+ *  milliers comme l'historique global, donc le coût de plusieurs petites requêtes en parallèle
+ *  reste largement inférieur à celui de tout rapatrier. `refs` = [{entityType, entityId}, ...]. */
+export async function listForEntities(refs) {
+  const results = await Promise.all(refs.map((r) => listForEntity(r.entityType, r.entityId)));
+  return results.flat();
+}
+
+// BUG corrigé (15/09/2026, audit performance) : voir js/views/dashboard.js#openGlobalHistory,
+// qui téléchargeait toute la collection pour n'en garder que les `limitCount` plus récentes.
+export function listRecent(limitCount) {
+  return storage.listRecent(COLLECTION, "date", limitCount);
+}
+
 export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }

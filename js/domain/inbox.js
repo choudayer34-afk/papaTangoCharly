@@ -29,8 +29,48 @@ export function listPending() {
   return storage.listAll(COLLECTION).then((items) => items.filter((i) => i.status === "pending"));
 }
 
+// BUG corrigé (15/09/2026, audit performance) : subscribePending/subscribeKept/
+// subscribeKeptIncludingArchived ouvraient chacune leur propre `storage.subscribe` — donc leur
+// propre `onSnapshot` sur TOUTE la collection `inboxItems` — avec juste un filtre différent
+// appliqué après coup. Le badge de navigation (js/components/inboxBadge.js) reste monté en
+// permanence pour toute la session ; dès que le Dashboard (qui utilise à la fois
+// subscribePending ET subscribeKept) ou l'Inbox (subscribePending) étaient ouverts, ça faisait
+// jusqu'à 3 écoutes temps réel actives en même temps sur la même collection, chacune retriant et
+// redécodant tout à chaque écriture. Un seul flux Firestore partagé désormais : démarré à la
+// première inscription, arrêté à la dernière désinscription (compteur de références via
+// `rawListeners`), chaque abonnement se contentant d'appliquer son propre filtre sur les mêmes
+// données déjà reçues — le badge, le Dashboard et l'Inbox peuvent tous les trois être ouverts en
+// même temps sans jamais dépasser une seule écoute réseau sur cette collection.
+const rawListeners = new Set();
+let rawUnsubscribe = null;
+let lastRawItems = null;
+
+function subscribeFiltered(filterFn, callback) {
+  const listener = (items) => callback(items.filter(filterFn));
+  rawListeners.add(listener);
+  if (!rawUnsubscribe) {
+    rawUnsubscribe = storage.subscribe(COLLECTION, (items) => {
+      lastRawItems = items;
+      for (const l of rawListeners) l(items);
+    });
+  } else if (lastRawItems) {
+    // Le flux existe déjà (un autre abonnement l'a démarré) : `onSnapshot` ne rappellera pas
+    // spontanément pour ce nouveau venu, on reproduit donc à la main la garantie "callback
+    // appelé immédiatement avec l'état courant" que `storage.subscribe` offre normalement.
+    listener(lastRawItems);
+  }
+  return () => {
+    rawListeners.delete(listener);
+    if (rawListeners.size === 0 && rawUnsubscribe) {
+      rawUnsubscribe();
+      rawUnsubscribe = null;
+      lastRawItems = null;
+    }
+  };
+}
+
 export function subscribePending(callback) {
-  return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "pending")));
+  return subscribeFiltered((i) => i.status === "pending", callback);
 }
 
 /**
@@ -43,7 +83,7 @@ export function listKept() {
 }
 
 export function subscribeKept(callback) {
-  return storage.subscribe(COLLECTION, (items) => callback(items.filter((i) => i.status === "kept")));
+  return subscribeFiltered((i) => i.status === "kept", callback);
 }
 
 /**
@@ -65,9 +105,7 @@ export function listKeptIncludingArchived() {
 }
 
 export function subscribeKeptIncludingArchived(callback) {
-  return storage.subscribe(COLLECTION, (items) =>
-    callback(items.filter((i) => i.status === "kept" || (i.status === "archived" && i.keptAsType)))
-  );
+  return subscribeFiltered((i) => i.status === "kept" || (i.status === "archived" && i.keptAsType), callback);
 }
 
 const KEPT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
