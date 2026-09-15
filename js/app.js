@@ -33,6 +33,7 @@ import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { migrateInboxTags } from "./domain/tags.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
 import { parseOpenParam } from "./services/deeplink.js";
+import { subscribeOnline } from "./services/onlineStatus.js";
 import * as tasksApi from "./domain/tasks.js";
 import * as preferencesApi from "./domain/preferences.js";
 
@@ -100,6 +101,25 @@ let appMounted = false;
 // connexion normal au lieu du message "Accès restreint", pour une notification qu'on a
 // nous-mêmes provoquée.
 let pendingRestrictedEmail = null;
+
+// BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : l'app n'affichait strictement
+// rien pour dire qu'elle était hors-ligne — voir js/services/onlineStatus.js pour le détail du
+// problème. Bandeau discret, fixé en haut de l'écran, visible depuis n'importe quel onglet et
+// même par-dessus une modale ouverte (voir styles/components.css .offline-banner) — jamais
+// bloquant, juste informatif : l'app continue de fonctionner normalement hors-ligne (lecture
+// depuis le cache local Firestore), seules les écritures resteront en attente (voir le message
+// complémentaire posé sur les boutons "Créer"/"Enregistrer", js/components/modal.js).
+let unsubOnlineBanner = null;
+function mountOfflineBanner() {
+  const el = document.createElement("div");
+  el.className = "offline-banner";
+  el.textContent = "📡 Hors ligne — les modifications seront synchronisées au retour de la connexion";
+  el.hidden = true;
+  document.body.appendChild(el);
+  unsubOnlineBanner = subscribeOnline((online) => {
+    el.hidden = online;
+  });
+}
 
 function mountNav() {
   const el = document.createElement("nav");
@@ -169,6 +189,7 @@ function mountApp() {
   if (appMounted) return;
   appMounted = true;
   nav = mountNav();
+  mountOfflineBanner();
   mountCaptureFab();
   mountHelpButton();
   mountGlobalSearch();
@@ -297,6 +318,9 @@ function unmountApp() {
   currentCleanup = null;
   nav?.remove();
   nav = null;
+  unsubOnlineBanner?.();
+  unsubOnlineBanner = null;
+  document.querySelector(".offline-banner")?.remove();
   document.querySelector(".fab")?.remove();
   document.querySelector(".help-fab")?.remove();
   document.querySelector(".search-fab")?.remove();
