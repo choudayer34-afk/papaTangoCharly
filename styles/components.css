@@ -1299,6 +1299,25 @@ tbody.drag-over-group {
   margin: var(--space-3) 0 var(--space-2);
 }
 
+/* ---------- Bandeau hors ligne ---------- */
+/* BUG corrigé (15/09/2026, audit "usage en mode déconnecté") — voir js/services/onlineStatus.js
+   et js/app.js#mountOfflineBanner. z-index au-dessus de .modal-overlay (50) ET .toast (60) :
+   reste visible même fiche ouverte, ou en même temps qu'un toast ponctuel en bas d'écran. */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 65;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  text-align: center;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: 6px var(--space-3);
+}
+.offline-banner[hidden] { display: none; }
+
 /* ---------- Toast ---------- */
 .toast {
   position: fixed;
