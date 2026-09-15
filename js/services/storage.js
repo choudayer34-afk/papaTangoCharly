@@ -18,6 +18,10 @@ import {
   setDoc,
   deleteDoc,
   onSnapshot,
+  query,
+  where,
+  orderBy,
+  limit,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { auth, db } from "./firebase.js";
 import { generateId } from "./id.js";
@@ -44,6 +48,31 @@ function sortByUpdatedAtDesc(items) {
 export async function listAll(collectionName) {
   const snap = await getDocs(collectionRef(collectionName));
   return sortByUpdatedAtDesc(snap.docs.map((d) => d.data()));
+}
+
+// BUG corrigé (15/09/2026, audit performance) : plusieurs vues (fiche Tâche, fiche Ressource,
+// fiche Personne...) rechargeaient l'intégralité de la collection `history` — potentiellement
+// plusieurs milliers de documents après des mois d'usage — pour n'en garder qu'une poignée
+// filtrée en mémoire ensuite. `listWhere` filtre côté Firestore, ne transfère que les documents
+// réellement utiles. Volontairement limité à des filtres d'ÉGALITÉ (`==`) uniquement : c'est le
+// seul cas où Firestore ne demande jamais d'index composite à créer manuellement (dès qu'on y
+// mêle un `in`/`array-contains`/une inégalité ou un `orderBy` sur un autre champ, un index dédié
+// peut devenir nécessaire) — n'étends cette fonction à d'autres opérateurs qu'après avoir vérifié
+// qu'aucun index composite n'est requis, sous peine de casser la requête en production.
+export async function listWhere(collectionName, equalityFilters) {
+  const clauses = equalityFilters.map(([field, value]) => where(field, "==", value));
+  const snap = await getDocs(query(collectionRef(collectionName), ...clauses));
+  return sortByUpdatedAtDesc(snap.docs.map((d) => d.data()));
+}
+
+// BUG corrigé (15/09/2026, audit performance) : js/views/dashboard.js#openGlobalHistory
+// téléchargeait l'historique ENTIER de l'app pour n'en garder que les 100 entrées les plus
+// récentes (`.slice(0, 100)` après coup) — un `orderBy`+`limit` uniquement (sans filtre `where`
+// combiné) ne demande jamais d'index composite, contrairement à `listWhere` ci-dessus qu'il ne
+// faut donc pas mélanger avec ceci sans vérifier l'index requis.
+export async function listRecent(collectionName, field, limitCount) {
+  const snap = await getDocs(query(collectionRef(collectionName), orderBy(field, "desc"), limit(limitCount)));
+  return snap.docs.map((d) => d.data());
 }
 
 export async function get(collectionName, id) {
@@ -130,12 +159,20 @@ let lastSubscribeErrorToastAt = 0;
 /**
  * S'abonne aux changements d'une collection (temps réel + cache local hors connexion).
  * Le callback est appelé immédiatement avec l'état courant, puis à chaque écriture.
+ *
+ * BUG corrigé (15/09/2026, audit performance) : le tri par `updatedAt` ci-dessous s'exécutait
+ * systématiquement, à CHAQUE notification, même quand l'appelant retrie de toute façon selon un
+ * autre critère juste après (ex. js/views/kanban.js — tâches retriées par échéance colonne par
+ * colonne). `{ sort: false }` permet à un appelant qui sait déjà ne jamais avoir besoin de cet
+ * ordre-là de s'en passer — `sort: true` reste le défaut pour ne rien changer ailleurs, la
+ * plupart des vues affichant les résultats de `subscribe()` sans retri explicite.
  */
-export function subscribe(collectionName, callback) {
+export function subscribe(collectionName, callback, { sort = true } = {}) {
   return onSnapshot(
     collectionRef(collectionName),
     (snap) => {
-      callback(sortByUpdatedAtDesc(snap.docs.map((d) => d.data())));
+      const items = snap.docs.map((d) => d.data());
+      callback(sort ? sortByUpdatedAtDesc(items) : items);
     },
     (error) => {
       console.error(`[storage] Écoute temps réel interrompue sur "${collectionName}" :`, error);
