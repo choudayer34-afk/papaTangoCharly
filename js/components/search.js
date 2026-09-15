@@ -74,13 +74,15 @@ function tagsTextFor(allTags, type, id) {
  *   confondus, jamais le reste de son texte : un raccourci dédié pour "quelles fiches portent ce
  *   tag ?", plutôt qu'une simple variante de la recherche normale.
  */
-async function runSearch(query) {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-  const tagMode = trimmed.startsWith("#");
-  const q = (tagMode ? trimmed.slice(1) : trimmed).trim().toLowerCase();
-  if (!q) return [];
-
+// BUG corrigé (15/09/2026, audit performance) : `runSearch` rechargeait ces 10 collections
+// ENTIÈRES à chaque frappe (une fois le debounce de 150ms écoulé) — avec un volume de fiches et
+// de tags qui grandit avec l'usage, chaque frappe devenait plus coûteuse que la précédente.
+// Scindé en deux : `loadSearchBundle()` charge une seule fois, à l'ouverture de la modale de
+// recherche ; `filterBundle()` ne fait plus que le filtrage en mémoire (rapide) à chaque frappe,
+// sur les mêmes données déjà chargées. Les nouvelles fiches créées pendant qu'une recherche est
+// ouverte n'apparaîtront qu'à la prochaine ouverture — compromis assumé, une session de
+// recherche est toujours courte.
+async function loadSearchBundle() {
   const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags] = await Promise.all([
     tasksApi.listAll(),
     projectsApi.listAll(),
@@ -97,6 +99,27 @@ async function runSearch(query) {
     objectivesApi.listAll(),
     tagsApi.listAll(),
   ]);
+  return { tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags };
+}
+
+/**
+ * Recherche globale — deux modes.
+ * - Normal : `query` est comparée au texte habituel de chaque fiche (titre, description,
+ *   notes...) ET à ses tags, comme avant (un tag reste trouvable en tapant simplement son nom).
+ * - "#" (retour de Charles-Henri, 13/09/2026 : "dans la recherche global par tags, ça permet
+ *   éventuellement de retrouver plus rapidement... tout les éléments associés à ce tags") — dès
+ *   que `query` commence par "#", elle ne compare plus QUE les tags de chaque fiche, tous types
+ *   confondus, jamais le reste de son texte : un raccourci dédié pour "quelles fiches portent ce
+ *   tag ?", plutôt qu'une simple variante de la recherche normale.
+ */
+function filterBundle(bundle, query) {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const tagMode = trimmed.startsWith("#");
+  const q = (tagMode ? trimmed.slice(1) : trimmed).trim().toLowerCase();
+  if (!q) return [];
+
+  const { tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags } = bundle;
 
   /** true si la fiche {type,id} correspond à `q` — en mode "#", uniquement par ses tags ; sinon
    *  par son texte habituel (`textParts`) ET ses tags, comme avant cette vague. */
@@ -347,13 +370,18 @@ export function openSearchModal() {
 
   renderResults([], "");
 
+  // Chargé une seule fois à l'ouverture (voir le commentaire de `loadSearchBundle` plus haut) —
+  // `bundlePromise` plutôt qu'une variable déjà résolue pour ne jamais perdre une frappe tapée
+  // avant la fin du tout premier chargement (elle attend simplement la même promesse).
+  const bundlePromise = loadSearchBundle();
+
   let debounceTimer = null;
   inputEl.addEventListener("input", () => {
     clearTimeout(debounceTimer);
     const query = inputEl.value;
     debounceTimer = setTimeout(async () => {
-      const results = await runSearch(query);
-      renderResults(results, query);
+      const bundle = await bundlePromise;
+      renderResults(filterBundle(bundle, query), query);
     }, 150);
   });
 

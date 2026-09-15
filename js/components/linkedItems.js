@@ -267,7 +267,13 @@ export function openLinkPickerModal(ref, currentLabel, { onLinked, onCancel } = 
     render(inputEl.value);
   });
 
-  inputEl.addEventListener("input", () => render(inputEl.value));
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur ce champ — chaque
+  // frappe reconstruisait toute la liste de résultats. Voir js/views/kanban.js, même correctif.
+  let linkSearchDebounce = null;
+  inputEl.addEventListener("input", () => {
+    clearTimeout(linkSearchDebounce);
+    linkSearchDebounce = setTimeout(() => render(inputEl.value), 150);
+  });
 
   openModal({
     title: "🔗 Lier une fiche",

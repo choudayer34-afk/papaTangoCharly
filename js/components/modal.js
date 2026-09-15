@@ -2,6 +2,9 @@
 // dans EnVie, et généralise le pattern promptChoice()/promptText() d'eProtec.
 // Un seul composant, réutilisé pour la capture, la qualification, les formulaires, etc.
 
+import { isOnline } from "../services/onlineStatus.js";
+import { showToast } from "./toast.js";
+
 let activeOverlay = null;
 let activeClose = null; // la fonction close() propre à la modale actuellement ouverte — voir closeModal() plus bas
 
@@ -81,9 +84,22 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
         if (action.closesModal === false) {
           if (btn.disabled) return;
           btn.disabled = true;
+          // BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : cette action est
+          // presque toujours une écriture Firestore (`onClick` await un `storage.put`/`update`)
+          // — hors-ligne, cette promesse ne se résout qu'au retour du réseau (voir
+          // js/services/onlineStatus.js), donc le bouton restait grisé indéfiniment sans le
+          // moindre message. Un toast apparaît après 2,5s UNIQUEMENT si on est effectivement
+          // hors-ligne à ce moment-là (jamais pour une simple lenteur réseau passagère) — la
+          // donnée, elle, est déjà bien appliquée localement, seule la confirmation attend.
+          const pendingTimer = setTimeout(() => {
+            if (!isOnline()) {
+              showToast("📡 Hors ligne — sera enregistré au retour de la connexion");
+            }
+          }, 2500);
           try {
             await action.onClick?.();
           } finally {
+            clearTimeout(pendingTimer);
             if (overlay.isConnected) btn.disabled = false;
           }
         } else {
@@ -195,9 +211,18 @@ export function guardClick(el, handler) {
   return async (...args) => {
     if (el.disabled) return;
     el.disabled = true;
+    // BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : même correctif que sur les
+    // actions `closesModal: false` d'`openModal()` ci-dessus — `handler` est presque toujours une
+    // écriture Firestore, qui reste en attente indéfiniment hors-ligne sans le moindre message.
+    const pendingTimer = setTimeout(() => {
+      if (!isOnline()) {
+        showToast("📡 Hors ligne — sera enregistré au retour de la connexion");
+      }
+    }, 2500);
     try {
       return await handler(...args);
     } finally {
+      clearTimeout(pendingTimer);
       // Ne réactive que si l'élément est toujours dans le document — s'il a disparu (ex. la
       // modale qui le contenait vient de se fermer), il n'y a rien à réactiver.
       if (el.isConnected) el.disabled = false;
@@ -216,15 +241,34 @@ export function guardClick(el, handler) {
  * @param {Function} opts.onConfirm
  * @param {Function} [opts.onCancel]
  */
+// BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : le bouton "Supprimer" n'avait
+// PAS `closesModal: false` — `onConfirm` (souvent async, une écriture Firestore) était donc
+// lancé SANS être attendu, et la modale de confirmation se fermait immédiatement, que la
+// suppression ait réellement abouti ou non. Hors-ligne en particulier : la fiche disparaissait
+// (mise à jour optimiste du cache local), la modale se fermait tout de suite, mais le toast de
+// confirmation n'apparaissait que bien plus tard (retour du réseau) — de quoi douter de ce qui a
+// réellement été supprimé. Utilise le `close` propre à CETTE modale (retourné par `openModal`)
+// plutôt que le `closeModal()` global : si `onConfirm` ouvre lui-même une autre modale avant de
+// terminer (ex. js/components/adminPanel.js, qui rouvre l'administration des tags juste après),
+// ce `close()` devient un no-op protégé par le flag `closed` au lieu de fermer par erreur cette
+// modale suivante — jamais besoin que l'appelant s'en soucie.
 export function confirmDelete({ title = "Supprimer ?", message, onConfirm, onCancel }) {
   const body = document.createElement("div");
   body.textContent = message || "Cette action est irréversible.";
-  openModal({
+  const { close } = openModal({
     title,
     body,
     actions: [
       { label: "Annuler", variant: "ghost", onClick: () => onCancel?.() },
-      { label: "Supprimer", variant: "danger", onClick: onConfirm },
+      {
+        label: "Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: async () => {
+          await onConfirm?.();
+          close();
+        },
+      },
     ],
   });
 }

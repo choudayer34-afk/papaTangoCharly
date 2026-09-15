@@ -4,18 +4,26 @@
 // détail d'une Information/Idée (js/views/inbox.js) — un seul composant partagé plutôt que trois
 // modales redondantes, la logique de conversion elle-même vivant dans js/domain/convert.js.
 //
-// Volontairement PAS de réouverture automatique de la nouvelle fiche après conversion : cela
-// demanderait d'importer les trois vues (Tâche/Suivi/Inbox) les unes dans les autres en plus de
-// ce composant, pour un gain limité — un simple message indique où retrouver l'élément converti.
-
+// BUG corrigé (15/09/2026, retour de Charles-Henri : "quand je change le type d'une tâche, je
+// dois arriver sur la tâche basculée, elle ne doit pas se fermer comme actuellement") : la
+// version précédente se contentait de fermer la modale et d'afficher un toast indiquant où
+// retrouver l'élément converti ("retrouvable dans Équipe"...) — charge à l'utilisateur d'aller
+// le rechercher lui-même. Réutilise `fetchBundle`/`resolveRef` (js/components/linkedItems.js,
+// déjà le point de passage unique pour "ouvrir la vraie fiche d'une référence {type, id}" — le
+// fil conducteur et la recherche globale s'en servent déjà) pour rouvrir directement la fiche
+// convertie juste après. Import circulaire avec les vues assumé et sans risque : linkedItems.js
+// importe déjà kanban.js/people.js/inbox.js (et inversement), le même schéma que
+// js/views/dashboard.js#openGlobalHistory utilise déjà avec succès — resolveRef n'est appelé que
+// dans un handler async, jamais à l'évaluation du module.
 import { openModal, closeModal } from "./modal.js";
 import { showToast } from "./toast.js";
 import * as peopleApi from "../domain/people.js";
 import * as convertApi from "../domain/convert.js";
+import { fetchBundle, resolveRef } from "./linkedItems.js";
 
 const TARGET_LABELS = { task: "📝 Tâche", followup: "🔁 Suivi (collaborateur)", kept: "🧠 Information / 💡 Idée" };
 const SHORT_LABELS = { task: "Tâche", followup: "Suivi", kept: "Information/Idée" };
-const WHERE_TO_FIND = { task: "Pilotage", followup: "Équipe", kept: "Accueil, section « 🧠 Informations & idées »" };
+const TARGET_ENTITY_TYPE = { task: "Task", followup: "FollowUp", kept: "Kept" };
 
 /**
  * @param {"task"|"followup"|"kept"} sourceType
@@ -92,8 +100,19 @@ export async function openChangeTypeModal(sourceType, entity, targets, { personN
               result = target === "task" ? await convertApi.convertKeptToTask(entity) : await convertApi.convertKeptToFollowUp(entity, { personId });
             }
             closeModal();
-            showToast(`Converti en ${SHORT_LABELS[target]} — retrouvable dans ${WHERE_TO_FIND[target]}`);
+            showToast(`Converti en ${SHORT_LABELS[target]}`);
             onConverted?.(result, target);
+            // Rouvre directement la fiche convertie plutôt que de laisser l'utilisateur la
+            // rechercher — jamais bloquant : un souci de résolution (donnée pas encore visible
+            // localement, fiche filtrée entre-temps) laisse simplement l'utilisateur là où il
+            // est, comme avant ce correctif.
+            try {
+              const bundle = await fetchBundle();
+              const resolved = resolveRef(bundle, { type: TARGET_ENTITY_TYPE[target], id: result.id });
+              resolved?.onOpen();
+            } catch {
+              // silencieux, voir commentaire ci-dessus.
+            }
           } catch (err) {
             showToast(err.message || "Impossible de convertir");
           }
