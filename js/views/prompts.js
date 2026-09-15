@@ -38,9 +38,15 @@ export function renderPrompts(container) {
   let prompts = [];
   let query = "";
 
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur la recherche — chaque
+  // frappe reconstruisait toute la liste. Voir js/views/kanban.js, même correctif.
+  let searchDebounce = null;
   searchEl.addEventListener("input", () => {
-    query = searchEl.value.trim().toLowerCase();
-    render();
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      query = searchEl.value.trim().toLowerCase();
+      render();
+    }, 150);
   });
 
   function matchesQuery(p) {
@@ -314,9 +320,15 @@ export function openPromptPickerModal(candidates, onPick, onCancel) {
     }
   }
 
+  // BUG corrigé (15/09/2026, audit performance) : même anti-rebond manquant que la recherche
+  // principale ci-dessus, sur ce second champ (sélecteur de prompt).
+  let pickerSearchDebounce = null;
   searchEl.addEventListener("input", () => {
-    query = searchEl.value.trim().toLowerCase();
-    renderList();
+    clearTimeout(pickerSearchDebounce);
+    pickerSearchDebounce = setTimeout(() => {
+      query = searchEl.value.trim().toLowerCase();
+      renderList();
+    }, 150);
   });
 
   renderList();

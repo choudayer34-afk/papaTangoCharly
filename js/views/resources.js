@@ -57,9 +57,15 @@ export function renderResources(container) {
       render();
     });
   });
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur la recherche — chaque
+  // frappe reconstruisait toute la liste. Voir js/views/kanban.js, même correctif.
+  let searchDebounce = null;
   searchEl.addEventListener("input", () => {
-    query = searchEl.value.trim().toLowerCase();
-    render();
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      query = searchEl.value.trim().toLowerCase();
+      render();
+    }, 150);
   });
 
   function matchesQuery(r) {
@@ -213,7 +219,10 @@ function openCreateResourceModal(prefill = {}) {
 
 export async function openResourceDetail(resource, projects, tasks) {
   preferencesApi.recordRecentlyViewed("Resource", resource.id).catch(() => {});
-  const allHistory = await historyApi.listAll();
+  // BUG corrigé (15/09/2026, audit performance) : voir js/views/kanban.js#openTaskDetail, même
+  // correctif — l'historique entier de l'app était rechargé pour n'en garder que celui de CETTE
+  // ressource.
+  const allHistory = await historyApi.listForEntity("Resource", resource.id);
   const resourceHistory = allHistory
     .filter((h) => h.entityType === "Resource" && h.entityId === resource.id)
     .sort((a, b) => a.date - b.date);

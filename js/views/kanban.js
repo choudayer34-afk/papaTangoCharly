@@ -319,9 +319,17 @@ export function renderKanban(container) {
     updateFilterBadge();
     renderBoard();
   });
+  // BUG corrigé (15/09/2026, audit performance) : la recherche n'avait aucun anti-rebond —
+  // chaque frappe reconstruisait tout le board (filtrage + tri + toutes les cartes). Même délai
+  // que la recherche globale (js/components/search.js), voir aussi resources.js/prompts.js/
+  // inbox.js/people.js/guide.js/linkedItems.js, même correctif.
+  let searchDebounce = null;
   searchEl.addEventListener("input", () => {
-    searchQuery = searchEl.value.trim().toLowerCase();
-    renderBoard();
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+      searchQuery = searchEl.value.trim().toLowerCase();
+      renderBoard();
+    }, 150);
   });
 
   function applyFilters(tasks) {
@@ -426,6 +434,13 @@ export function renderKanban(container) {
     }
   }
 
+  // Vérifié pendant l'audit (15/09/2026) : la vue Kanban retrie bien les tâches par échéance
+  // (render()), MAIS la vue Tableau (renderTableView#sortRows) retombe sur l'ordre reçu tel
+  // quel quand aucune colonne de tri n'est active (`if (!sortColumn) return rows;`) — retirer le
+  // tri par défaut ici changerait silencieusement cet ordre d'affichage. `storage.js#subscribe`
+  // accepte désormais `{ sort: false }` (voir son commentaire) pour un futur appelant qui peut
+  // prouver ne jamais en dépendre, mais aucun des 6 appelants de tasksApi.subscribe() ne l'est de
+  // façon sûre sans audit un par un — laissé au comportement par défaut (trié) partout.
   const unsubTasks = tasksApi.subscribe((tasks) => {
     latestTasks = tasks;
     renderBoard();
@@ -1358,7 +1373,10 @@ export async function openCreateTaskModal(prefill = {}) {
  */
 export async function openTaskDetail(task, projects, { onClose } = {}) {
   preferencesApi.recordRecentlyViewed("Task", task.id).catch(() => {});
-  const [allResources, allPrompts, allHistory] = await Promise.all([resourcesApi.listAll(), promptsApi.listAll(), historyApi.listAll()]);
+  // BUG corrigé (15/09/2026, audit performance) : rechargeait l'historique ENTIER de l'app
+  // (`historyApi.listAll()`) à chaque ouverture d'une carte pour n'en garder que les quelques
+  // entrées de cette tâche — `listForEntity` filtre désormais côté Firestore.
+  const [allResources, allPrompts, allHistory] = await Promise.all([resourcesApi.listAll(), promptsApi.listAll(), historyApi.listForEntity("Task", task.id)]);
   const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
   const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));
   // "🤖 Prompts" (retour de Charles-Henri, 07/09/2026 : "dans une tâche j'aimerai pouvoir lier

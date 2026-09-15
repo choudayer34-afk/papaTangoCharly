@@ -383,7 +383,15 @@ export function renderGuide(container) {
     searchEmpty.style.display = "none";
   }
 
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur cette recherche —
+  // chaque frappe reparcourait tout le Guide. Voir js/views/kanban.js, même correctif.
+  let guideSearchDebounce = null;
   searchInput.addEventListener("input", () => {
+    clearTimeout(guideSearchDebounce);
+    guideSearchDebounce = setTimeout(runGuideSearch, 150);
+  });
+
+  function runGuideSearch() {
     const q = searchInput.value.trim().toLowerCase();
     if (!q) {
       resetSearch();
@@ -433,7 +441,7 @@ export function renderGuide(container) {
     anyMatch = anyMatch || retardMatch;
 
     searchEmpty.style.display = anyMatch ? "none" : "";
-  });
+  }
 
   return function cleanup() {};
 }

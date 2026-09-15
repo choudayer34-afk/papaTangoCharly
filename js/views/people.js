@@ -290,8 +290,11 @@ export async function openPersonDetail(person, allFollowUps) {
   const own = sortByCreatedDesc(allFollowUps.filter((f) => f.personId === person.id));
   const done = own.filter((f) => f.status === "done");
 
+  // BUG corrigé (15/09/2026, audit performance) : rechargeait l'historique ENTIER de l'app pour
+  // n'en garder que celui de cette personne et de ses Suivis — voir js/domain/history.js#
+  // listForEntities.
   const [allHistory, allObjectives, allProjects] = await Promise.all([
-    historyApi.listAll(),
+    historyApi.listForEntities([{ entityType: "Person", entityId: person.id }, ...own.map((f) => ({ entityType: "FollowUp", entityId: f.id }))]),
     objectivesApi.listAll(),
     projectsApi.listAll(),
   ]);
@@ -790,21 +793,28 @@ async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   const remainingEl = body.querySelector("#prep-remaining");
   const resultsWrap = body.querySelector("#prep-search-results");
   const resultsList = body.querySelector("#prep-search-list");
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur cette recherche — chaque
+  // frappe reconstruisait toute la liste. Voir js/views/kanban.js, même correctif.
+  let prepSearchDebounce = null;
   body.querySelector("#prep-search").addEventListener("input", (e) => {
-    const needle = e.target.value.trim().toLowerCase();
-    if (!needle) {
-      sectionsEl.hidden = false;
-      remainingEl.hidden = false;
-      resultsWrap.hidden = true;
-      return;
-    }
-    sectionsEl.hidden = true;
-    remainingEl.hidden = true;
-    resultsWrap.hidden = false;
-    const matches = ownAll.filter(
-      (f) => f.title.toLowerCase().includes(needle) || (f.description || "").toLowerCase().includes(needle)
-    );
-    renderFollowUpList(resultsList, matches, { onOpen: openFromPrep });
+    const value = e.target.value;
+    clearTimeout(prepSearchDebounce);
+    prepSearchDebounce = setTimeout(() => {
+      const needle = value.trim().toLowerCase();
+      if (!needle) {
+        sectionsEl.hidden = false;
+        remainingEl.hidden = false;
+        resultsWrap.hidden = true;
+        return;
+      }
+      sectionsEl.hidden = true;
+      remainingEl.hidden = true;
+      resultsWrap.hidden = false;
+      const matches = ownAll.filter(
+        (f) => f.title.toLowerCase().includes(needle) || (f.description || "").toLowerCase().includes(needle)
+      );
+      renderFollowUpList(resultsList, matches, { onOpen: openFromPrep });
+    }, 150);
   });
 
   openModal({

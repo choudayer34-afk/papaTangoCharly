@@ -640,13 +640,19 @@ export async function openCreateProjectModal(prefill = {}) {
 export async function openProjectDetail(project, tasks) {
   preferencesApi.recordRecentlyViewed("Project", project.id).catch(() => {});
   const progress = projectsApi.computeProgress(tasks);
-  const [allProjects, allResources, allFollowUps, allMeetings, allDecisions, allHistory, prefs, allPeople] = await Promise.all([
+  // BUG corrigé (15/09/2026, audit performance) : `historyApi.listAll()` rechargeait
+  // l'historique ENTIER de l'app pour n'en garder que celui du projet et de ce qui lui est
+  // rattaché (voir plus bas, `trackedKeys`) — mais ce filtre dépend des tâches/suivis/réunions/
+  // décisions/ressources liés, eux-mêmes connus seulement une fois les collections ci-dessous
+  // chargées. Découpé en deux temps : d'abord ces collections (toujours en parallèle), puis
+  // l'historique ciblé (`listForEntities`, une requête par entité liée plutôt que tout
+  // télécharger — voir js/domain/history.js).
+  const [allProjects, allResources, allFollowUps, allMeetings, allDecisions, prefs, allPeople] = await Promise.all([
     projectsApi.listAll(),
     resourcesApi.listAll(),
     followUpsApi.listAll(),
     meetingsApi.listAll(),
     decisionsApi.listAll(),
-    historyApi.listAll(),
     preferencesApi.getPreferences(),
     peopleApi.listAll(),
   ]);
@@ -666,17 +672,15 @@ export async function openProjectDetail(project, tasks) {
   // est rattaché (tâches, suivis, réunions, décisions, ressources), exactement comme
   // l'exemple du cahier des charges ("Demande reçue → Réunion → Décision → Action créée →
   // Validation → Publication").
-  const trackedKeys = new Set([
-    `Project:${project.id}`,
-    ...tasks.map((t) => `Task:${t.id}`),
-    ...linkedFollowUps.map((f) => `FollowUp:${f.id}`),
-    ...linkedMeetings.map((m) => `Meeting:${m.id}`),
-    ...linkedDecisions.map((d) => `Decision:${d.id}`),
-    ...linkedResources.map((r) => `Resource:${r.id}`),
-  ]);
-  const projectHistory = allHistory
-    .filter((h) => trackedKeys.has(`${h.entityType}:${h.entityId}`))
-    .sort((a, b) => a.date - b.date);
+  const trackedRefs = [
+    { entityType: "Project", entityId: project.id },
+    ...tasks.map((t) => ({ entityType: "Task", entityId: t.id })),
+    ...linkedFollowUps.map((f) => ({ entityType: "FollowUp", entityId: f.id })),
+    ...linkedMeetings.map((m) => ({ entityType: "Meeting", entityId: m.id })),
+    ...linkedDecisions.map((d) => ({ entityType: "Decision", entityId: d.id })),
+    ...linkedResources.map((r) => ({ entityType: "Resource", entityId: r.id })),
+  ];
+  const projectHistory = (await historyApi.listForEntities(trackedRefs)).sort((a, b) => a.date - b.date);
 
   const isArchived = projectsApi.isArchived(project);
 

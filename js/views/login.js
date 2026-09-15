@@ -135,5 +135,11 @@ function friendlyError(err) {
   if (code.includes("invalid-credential") || code.includes("wrong-password")) return "identifiants incorrects";
   if (code.includes("user-not-found")) return "compte inconnu";
   if (code.includes("popup-closed")) return "fenêtre fermée avant la fin";
+  // BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : une toute première connexion
+  // (session jamais mise en cache sur cet appareil) tentée hors-ligne échoue forcément — ça ne
+  // peut pas être résolu autrement, une première authentification nécessite le réseau — mais le
+  // message affiché jusqu'ici était le texte brut anglais de Firebase ("Firebase: Error
+  // (auth/network-request-failed).") au lieu d'expliquer pourquoi.
+  if (code.includes("network-request-failed")) return "pas de connexion internet — la première connexion nécessite d'être en ligne";
   return err?.message || "erreur inconnue";
 }

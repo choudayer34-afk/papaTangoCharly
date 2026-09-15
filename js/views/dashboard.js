@@ -1839,9 +1839,12 @@ export function renderDashboard(container) {
  * sécurité pour retrouver une réunion ou décision au-delà des 8 dernières de "Récemment",
  * en attendant la recherche globale (§45/§52).
  */
+// BUG corrigé (15/09/2026, audit performance) : téléchargeait l'historique ENTIER de l'app
+// (potentiellement plusieurs milliers d'entrées après des mois d'usage) pour n'en garder que
+// les 100 plus récentes — `listRecent` fait désormais ce tri et cette limite côté Firestore,
+// même résultat affiché, beaucoup moins de données transférées.
 async function openGlobalHistory() {
-  const allHistory = await historyApi.listAll();
-  const recent = [...allHistory].sort((a, b) => b.date - a.date).slice(0, 100);
+  const recent = await historyApi.listRecent(100);
 
   const body = document.createElement("div");
   const list = document.createElement("div");

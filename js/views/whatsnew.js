@@ -33,6 +33,46 @@ const WHATS_NEW = [
     items: [
       {
         type: "fix",
+        title: "🐛 \"Changer de type\" refermait la fiche au lieu de rouvrir la fiche convertie",
+        text: "Après \"🔁 Changer de type\" (Tâche ↔ Suivi ↔ Information/Idée), la modale se refermait simplement une fois la conversion faite — il fallait ensuite retrouver soi-même la fiche convertie dans la bonne vue. Elle s'ouvre désormais directement, comme n'importe quelle navigation vers une fiche liée.",
+        howTo: "Fiche → \"🔁 Changer de type\" → choisis le nouveau type.",
+        gain: "Plus besoin de rechercher la fiche qu'on vient tout juste de convertir.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Cliquer \"Supprimer\" pouvait fermer la mauvaise fenêtre",
+        text: "Sur certaines suppressions (ex. suppression d'un tag depuis l'administration), confirmer \"Supprimer\" refermait la fenêtre au moment même du clic, avant que la suppression ne soit vraiment terminée — et si cette suppression rouvrait elle-même une autre fenêtre juste après, c'est CETTE fenêtre-là qui pouvait se refermer par erreur au lieu de celle sur laquelle le clic avait eu lieu. Le clic \"Supprimer\" attend désormais que la suppression soit effectivement terminée avant de fermer sa propre fenêtre, et seulement la sienne.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Une confirmation de suppression ne referme plus jamais une fenêtre qu'elle n'a pas ouverte.",
+      },
+      {
+        type: "add",
+        title: "📡 Bandeau visible quand la connexion est coupée",
+        text: "Un bandeau apparaît désormais en haut de l'écran dès que l'appareil perd sa connexion internet (\"les modifications seront synchronisées au retour de la connexion\"), et disparaît automatiquement dès qu'elle revient. Les boutons \"Enregistrer\"/\"Convertir\"/\"Supprimer\" qui restent en attente plus de 2,5 secondes affichent en plus un message dédié, plutôt que de sembler bloqués sans aucune explication.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Fini de se demander si l'app est plantée ou si elle attend juste le retour du réseau.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Message de connexion hors-ligne incompréhensible",
+        text: "Tenter une toute première connexion sur un appareil (jamais utilisé avec ce compte) sans connexion internet affichait le message brut anglais de Firebase (\"Firebase: Error (auth/network-request-failed).\"). Remplacé par une explication claire : la toute première connexion sur un appareil a besoin d'internet, impossible autrement.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Un message qui dit enfin quoi faire au lieu d'un code d'erreur technique.",
+      },
+      {
+        type: "change",
+        title: "🚀 Plusieurs écrans plus réactifs, notamment hors-ligne / connexion lente",
+        text: "Lot de corrections de performance ciblant les écrans les plus consultés : la recherche (Kanban, Ressources, Personnes, Prompts, Guide, \"🔗 Lier une fiche\", recherche globale) ne relance plus un filtrage complet à chaque frappe ; l'historique affiché sur une fiche (Tâche, Ressource, Personne, Projet) ne recharge plus tout l'historique de l'application ; l'onglet Inbox n'ouvre plus qu'un seul flux de données au lieu de trois en double. Egalement : les icônes de l'app sont maintenant disponibles hors-ligne dès la première visite, et l'installation de l'app ne peut plus échouer intégralement à cause d'un seul fichier indisponible au mauvais moment.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Moins d'attente, surtout sur une connexion lente ou instable — sans rien changer à l'utilisation de l'app.",
+      },
+    ],
+  },
+  {
+    date: "15 septembre 2026",
+    items: [
+      {
+        type: "fix",
         title: "🐛 Impossible de supprimer la date de contrôle d'un Suivi qui a une échéance",
         text: "Dans la fiche d'un Suivi, vider le champ \"Prochain contrôle\" (ou cliquer sur sa croix native) puis Enregistrer semblait ne rien faire tant qu'une échéance restait renseignée : la date de contrôle revenait silencieusement se caler sur l'échéance. C'est corrigé — vider la date de contrôle la vide désormais réellement, du moment que l'échéance elle-même n'a pas changé. Si tu changes l'échéance et laisses le contrôle vide, il continue de se caler dessus par défaut comme avant ; la date de contrôle ne peut toujours pas être postérieure à l'échéance.",
         howTo: "Fiche du Suivi → vide \"Prochain contrôle\" → Enregistrer.",

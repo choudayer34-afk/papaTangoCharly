@@ -473,7 +473,14 @@ export async function openAllKeptItemsModal() {
     }
   }
   renderList("");
-  body.querySelector("#kept-filter").addEventListener("input", (e) => renderList(e.target.value));
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur ce filtre — chaque
+  // frappe reconstruisait toute la liste. Voir js/views/kanban.js, même correctif.
+  let keptFilterDebounce = null;
+  body.querySelector("#kept-filter").addEventListener("input", (e) => {
+    const value = e.target.value;
+    clearTimeout(keptFilterDebounce);
+    keptFilterDebounce = setTimeout(() => renderList(value), 150);
+  });
   body.querySelectorAll("#kept-tag-filters .chip").forEach((btn) => {
     btn.addEventListener("click", () => {
       const tag = btn.dataset.tag;
