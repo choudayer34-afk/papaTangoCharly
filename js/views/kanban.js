@@ -17,7 +17,7 @@ import * as historyApi from "../domain/history.js";
 import * as preferencesApi from "../domain/preferences.js";
 import * as casquettesApi from "../domain/casquettes.js";
 import * as pilotageView from "../services/pilotageViewStore.js";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
@@ -36,6 +36,7 @@ import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import { openDuplicateTaskModal } from "../components/duplicateTask.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 import * as tagsApi from "../domain/tags.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 // Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
 // "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
@@ -442,13 +443,9 @@ export function renderKanban(container) {
   };
 }
 
-function daysFromToday(dateStr) {
-  const d = new Date(dateStr);
-  d.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((d.getTime() - today.getTime()) / 86400000);
-}
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
+// copie exacte de celle de js/views/dashboard.js, même correctif — voir js/services/dateUtils.js.
+const daysFromToday = dateUtils.daysFromToday;
 
 /**
  * Petit retour positif à la clôture d'une tâche (retour de Charles-Henri, 01/09/2026 — piste
@@ -1721,17 +1718,23 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
 
   const outlookEl = body.querySelector("#detail-outlook");
   renderOutlookList(outlookEl, task);
-  body.querySelector("#add-outlook-btn").addEventListener("click", async () => {
-    const title = body.querySelector("#outlook-title").value.trim();
-    if (!title) return;
-    const date = body.querySelector("#outlook-date").value || null;
-    const updated = await tasksApi.addOutlookMeeting(task.id, { title, date });
-    task.outlookMeetings = updated.outlookMeetings;
-    renderOutlookList(outlookEl, task);
-    body.querySelector("#outlook-title").value = "";
-    body.querySelector("#outlook-date").value = "";
-    showToast("Réunion Outlook associée");
-  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
+  // non désactivé pendant l'écriture — un double-clic associait deux fois la même réunion.
+  const addOutlookBtn = body.querySelector("#add-outlook-btn");
+  addOutlookBtn.addEventListener(
+    "click",
+    guardClick(addOutlookBtn, async () => {
+      const title = body.querySelector("#outlook-title").value.trim();
+      if (!title) return;
+      const date = body.querySelector("#outlook-date").value || null;
+      const updated = await tasksApi.addOutlookMeeting(task.id, { title, date });
+      task.outlookMeetings = updated.outlookMeetings;
+      renderOutlookList(outlookEl, task);
+      body.querySelector("#outlook-title").value = "";
+      body.querySelector("#outlook-date").value = "";
+      showToast("Réunion Outlook associée");
+    })
+  );
 
   const { bodyEl, close } = openModal({
     title: "Détail de la tâche",

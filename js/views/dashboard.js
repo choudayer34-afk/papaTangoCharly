@@ -36,6 +36,7 @@ import { renderChecklist } from "../components/checklist.js";
 import { generateId } from "../services/id.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 import * as tagsApi from "../domain/tags.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
@@ -494,6 +495,28 @@ export function renderDashboard(container) {
   }
 
   /**
+   * BUG corrigé (15/09/2026, audit "anomalies silencieuses" : dédoublonnage) : une même Tâche
+   * pouvait matcher plusieurs catégories à la fois — par exemple "à échéance proche" (dueSoon)
+   * ET "en pause depuis un moment" (stalled), les deux critères étant indépendants (l'un porte
+   * sur l'échéance, l'autre sur la date de dernière modification) — et se retrouvait donc
+   * comptée et affichée deux fois dans "⚠️ Ça a besoin de toi" comme dans la file "Focus",
+   * silencieusement (le compteur du titre suivait, lui aussi faussé). On dédoublonne ici par
+   * paire (type d'entité, id), en gardant à chaque fois la version la plus urgente (`urgency`
+   * la plus basse) quand une même Tâche ou un même Suivi matche plusieurs catégories.
+   */
+  function dedupeByEntity(items) {
+    const byKey = new Map();
+    for (const entry of items) {
+      const key = (entry.kind === "followup" ? "followup:" : "task:") + entry.data.id;
+      const existing = byKey.get(key);
+      if (!existing || entry.urgency < existing.urgency) {
+        byKey.set(key, entry);
+      }
+    }
+    return [...byKey.values()];
+  }
+
+  /**
    * "⚠️ Ça a besoin de toi" (audit de simplification du 02/09/2026, retour de Charles-Henri) :
    * fusionne ce qui vivait avant dans trois rubriques séparées — "En pause depuis un moment",
    * "À échéance dans les 7 jours" et "Suivis en retard" — qui répondaient toutes les trois à la
@@ -521,7 +544,7 @@ export function renderDashboard(container) {
       .filter(tasksApi.isStalled)
       .map((t) => ({ kind: "stalled", urgency: 2, sortKey: t.updatedAt || t.createdAt || 0, data: t }));
 
-    const items = [...overdueFollowUps, ...dueSoonTasks, ...stalledTasks].sort(
+    const items = dedupeByEntity([...overdueFollowUps, ...dueSoonTasks, ...stalledTasks]).sort(
       (a, b) => a.urgency - b.urgency || a.sortKey - b.sortKey
     );
 
@@ -622,7 +645,7 @@ export function renderDashboard(container) {
     const stalledTasks = hatFilterTasks(tasks)
       .filter(tasksApi.isStalled)
       .map((t) => ({ kind: "stalled", urgency: 2, sortKey: t.updatedAt || t.createdAt || 0, data: t }));
-    return [...lateTasks, ...dueTodayTasks, ...overdueFollowUps, ...dueSoonTasks, ...stalledTasks].sort(
+    return dedupeByEntity([...lateTasks, ...dueTodayTasks, ...overdueFollowUps, ...dueSoonTasks, ...stalledTasks]).sort(
       (a, b) => a.urgency - b.urgency || a.sortKey - b.sortKey
     );
   }
@@ -2231,13 +2254,11 @@ function daysLate(dateStr) {
   return -daysFromToday(dateStr);
 }
 
-function daysFromToday(dateStr) {
-  const d = new Date(dateStr);
-  d.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((d.getTime() - today.getTime()) / 86400000);
-}
+// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
+// voir js/services/dateUtils.js. Cette version-ci (UTC puis setHours(0,0,0,0)) glissait le jour
+// obtenu d'une unité dans les fuseaux à décalage négatif, contrairement au parsing local
+// désormais utilisé partout via dateUtils.daysFromToday().
+const daysFromToday = dateUtils.daysFromToday;
 
 function formatToday() {
   return new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });

@@ -11,7 +11,7 @@ import * as decisionsApi from "../domain/decisions.js";
 import * as historyApi from "../domain/history.js";
 import * as preferencesApi from "../domain/preferences.js";
 import * as pilotageView from "../services/pilotageViewStore.js";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
@@ -1017,15 +1017,21 @@ export async function openProjectDetail(project, tasks) {
     }
   }
   renderParts();
-  body.querySelector("#add-part-btn").addEventListener("click", async () => {
-    const input = body.querySelector("#new-part-label");
-    const label = input.value.trim();
-    if (!label) return;
-    const updated = await projectsApi.addPart(project.id, label);
-    project.parts = updated.parts;
-    input.value = "";
-    renderParts();
-  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
+  // non désactivé pendant l'écriture — un double-clic dupliquait la sous-partie de projet.
+  const addPartBtn = body.querySelector("#add-part-btn");
+  addPartBtn.addEventListener(
+    "click",
+    guardClick(addPartBtn, async () => {
+      const input = body.querySelector("#new-part-label");
+      const label = input.value.trim();
+      if (!label) return;
+      const updated = await projectsApi.addPart(project.id, label);
+      project.parts = updated.parts;
+      input.value = "";
+      renderParts();
+    })
+  );
 
   body.querySelector("#add-task-inline").addEventListener("click", () => {
     closeModal();

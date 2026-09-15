@@ -97,6 +97,32 @@ export function renderRestricted(container, email) {
   return null; // rien à nettoyer
 }
 
+/**
+ * BUG corrigé (15/09/2026, audit "anomalies silencieuses") : `onAuthChange()` (js/app.js)
+ * n'avait aucun try/catch autour de la vérification de la liste blanche (`isEmailAllowed`) — une
+ * simple coupure réseau ou une erreur Firestore à cet instant précis laissait l'écran
+ * intégralement blanc, sans le moindre message, l'utilisateur authentifié mais sans savoir s'il
+ * doit patienter, recharger ou qu'il y a un vrai problème. Écran dédié, distinct de
+ * renderRestricted() ci-dessus (qui reste pour le cas normal "compte non autorisé") — ici il
+ * s'agit d'un échec technique imprévu pendant la vérification elle-même.
+ */
+export function renderAuthError(container) {
+  container.innerHTML = `
+    <div class="view" style="padding-top: 15vh;">
+      <div class="card" style="max-width:360px;margin:0 auto;text-align:center;">
+        <h1 style="margin-top:0;">⚠️ Connexion interrompue</h1>
+        <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">
+          La vérification de ton accès a échoué (problème réseau ou technique passager).
+          Vérifie ta connexion puis réessaie.
+        </p>
+        <button class="btn btn-primary" id="auth-error-retry">🔄 Réessayer</button>
+      </div>
+    </div>
+  `;
+  container.querySelector("#auth-error-retry").addEventListener("click", () => location.reload());
+  return null; // rien à nettoyer
+}
+
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str || "";

@@ -29,8 +29,83 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "15 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "🐛 Impossible de supprimer la date de contrôle d'un Suivi qui a une échéance",
+        text: "Dans la fiche d'un Suivi, vider le champ \"Prochain contrôle\" (ou cliquer sur sa croix native) puis Enregistrer semblait ne rien faire tant qu'une échéance restait renseignée : la date de contrôle revenait silencieusement se caler sur l'échéance. C'est corrigé — vider la date de contrôle la vide désormais réellement, du moment que l'échéance elle-même n'a pas changé. Si tu changes l'échéance et laisses le contrôle vide, il continue de se caler dessus par défaut comme avant ; la date de contrôle ne peut toujours pas être postérieure à l'échéance.",
+        howTo: "Fiche du Suivi → vide \"Prochain contrôle\" → Enregistrer.",
+        gain: "Un Suivi peut à nouveau garder une échéance sans être forcé d'avoir une date de contrôle qui lui colle dessus.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Un Suivi (ou une fiche) pouvait se créer en double sur un double-clic",
+        text: "Le bouton \"Créer\"/\"Enregistrer\" d'une fiche (Suivi, Tâche, Projet...) ne se désactivait pas pendant l'enregistrement — un double-clic ou un appui un peu long créait deux fiches strictement identiques, sans le moindre signe à l'écran. C'est ce qui pouvait faire apparaître deux fois la même ligne dans \"⚠️ Ça a besoin de toi\" et fausser son compteur. Le bouton se désactive désormais dès le premier clic le temps de l'enregistrement.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Plus de fiches fantômes créées en double, et un compteur \"Ça a besoin de toi\" fiable.",
+      },
+      {
+        type: "fix",
+        title: "🐛 \"Changer de type\" perdait les sous-étapes et les notes",
+        text: "Convertir une Tâche en Suivi (ou l'inverse), ou une Tâche/un Suivi en Information/Idée, effaçait silencieusement les sous-étapes cochables et le journal de notes déjà pris — seuls le titre, la description, le projet et l'échéance survivaient, sans que la fiche \"🔁 Changer de type\" ne le dise. C'est corrigé : sous-étapes et notes suivent désormais la conversion (une Information/Idée n'ayant pas de sous-étapes, seules les notes la suivent dans ce cas précis). Les tags et les éléments liés (🔗) restent en revanche orphelins après une conversion — non repris, comme déjà indiqué.",
+        howTo: "Fiche → \"🔁 Changer de type\".",
+        gain: "Changer le type d'un élément mal qualifié ne fait plus perdre le travail déjà fait dessus.",
+      },
+      {
+        type: "fix",
+        title: "🐛 D'autres boutons \"+\" pouvaient eux aussi dupliquer sur un double-clic",
+        text: "Le correctif ci-dessus sur les créations de fiches ne couvrait que les fiches elles-mêmes : d'autres boutons \"+\" à l'intérieur d'une fiche déjà ouverte pouvaient créer deux fois le même élément sur un double-clic ou un Entrée suivi d'un clic rapproché, tout aussi silencieusement — ajout d'une sous-étape, ajout d'une note, ajout d'une sous-partie de projet, rattachement d'une réunion Outlook, création rapide d'un projet depuis un Suivi, sélection d'un élément à lier. C'est corrigé partout où ce cas se présentait : chaque bouton concerné se désactive désormais le temps de l'enregistrement, comme c'était déjà le cas pour la création d'une fiche.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Plus de sous-étape, note, sous-partie ou lien dupliqué par un clic un peu trop rapide.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Une tâche pouvait apparaître deux fois dans \"⚠️ Ça a besoin de toi\" ou en Focus",
+        text: "Une même tâche pouvait remplir deux critères à la fois — par exemple avoir une échéance proche ET être à l'arrêt depuis un moment, deux critères indépendants l'un de l'autre — et se retrouvait alors listée deux fois dans \"⚠️ Ça a besoin de toi\" (et de même en mode Focus), avec un compteur affiché en titre faussé en conséquence. C'est corrigé : chaque tâche ou Suivi n'apparaît plus qu'une fois, sous la raison la plus urgente des deux.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Le compteur de \"Ça a besoin de toi\" (et la file Focus) reflète enfin le nombre réel de sujets à traiter, sans doublon.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Deux modifications rapprochées pouvaient s'écraser silencieusement l'une l'autre",
+        text: "Modifier deux réglages coup sur coup (ex. changer de casquette puis masquer une rubrique de l'Accueil juste après), ou ajouter une note et une sous-étape presque en même temps sur la même fiche, pouvait faire disparaître la première des deux modifications sans le moindre message d'erreur — la seconde écrivait par-dessus avant que la première n'ait fini d'enregistrer. C'est corrigé pour les réglages personnels (casquette, rubriques masquées, raccourcis, Post-it...) et pour les ajouts sur une fiche (notes, sous-étapes, sous-parties de projet, points de suivi d'objectif...) : chaque modification attend désormais que la précédente sur le même élément soit bien enregistrée avant de démarrer la sienne.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Deux modifications rapprochées sur le même réglage ou la même fiche ne se perdent plus l'une l'autre.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Une tâche due aujourd'hui pouvait apparaître en retard (fuseaux Amérique)",
+        text: "Selon le fuseau horaire du compte, une tâche ou un Suivi dû tout juste \"aujourd'hui\" pouvait s'afficher comme déjà en retard avant même la fin de la journée — plusieurs endroits de l'app (retard, échéance proche, score de santé projet, matrice de priorisation, revue hebdomadaire) calculaient chacun \"combien de jours avant/après aujourd'hui\" un peu différemment. Unifié sur un seul mode de calcul, cohérent quel que soit le fuseau horaire.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Le statut \"en retard\"/\"à échéance\" est désormais fiable toute la journée, quel que soit le fuseau horaire du compte.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Certains échecs techniques passaient totalement inaperçus",
+        text: "Trois cas où un problème réseau ou technique passager ne se voyait absolument pas : les données de l'app pouvaient se figer sur leur dernier état connu sans que rien ne le signale, une vérification de connexion en échec pouvait laisser l'écran entièrement blanc, et le bouton \"⌨️ Assigner un raccourci\" pouvait rester bloqué sur \"Maintiens Ctrl+Alt...\" indéfiniment si l'enregistrement échouait. Les trois cas affichent désormais un message clair (et, pour l'écran blanc, un bouton \"Réessayer\") au lieu de rester muets.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Un problème technique passager se voit maintenant, au lieu de laisser croire que tout va bien ou de bloquer l'écran sans explication.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Petites incohérences (auto-archivage, historique) corrigées",
+        text: "Dernier volet de l'audit du 15/09 : une Information/Idée qualifiée longtemps après sa capture pouvait être auto-archivée dès le balayage suivant, comme si elle traînait déjà depuis 15 jours — c'est désormais la date à laquelle elle est devenue une information qui compte, pas celle de sa capture brute d'origine. Plusieurs événements de l'Historique (conversions Tâche/Suivi, tags, sous-parties de projet, réunions Outlook rattachées/détachées) s'affichaient avec un libellé générique au lieu d'un texte clair — corrigé. Et retirer une grille de décision qui n'en avait jamais eu une ne laisse plus une entrée fantôme dans l'historique.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "L'auto-archivage des informations et le fil de l'Historique sont désormais fidèles à ce qui s'est réellement passé.",
+      },
+    ],
+  },
+  {
     date: "14 septembre 2026",
     items: [
+      {
+        type: "add",
+        title: "👥 Administration : fermer/ouvrir un compte, supprimer tout son contenu",
+        text: "Depuis 🔧 Administration → \"👥 Comptes\" (visible uniquement pour ch-houdayer@hotmail.fr) : chaque compte autorisé peut être fermé (bloque une prochaine connexion, sans effet sur une session déjà ouverte ailleurs jusqu'à sa reconnexion suivante) ou rouvert. Une fois fermé, son contenu applicatif (tâches, projets, personnes, suivis...) peut être supprimé définitivement pour libérer de l'espace Firebase — une sauvegarde JSON téléchargeable est proposée avant, et il faut retaper l'email du compte pour confirmer. L'historique de connexions/écrans consultés n'est jamais supprimé par cette action.",
+        howTo: "🔧 Administration → \"👥 Comptes\" → 🔒 Fermer sur le compte concerné, puis \"🗑️ Supprimer tout son contenu\" si besoin.",
+        gain: "Retirer proprement l'accès et les données d'un compte qui n'en a plus besoin, sans passer par la console Firebase.",
+      },
       {
         type: "fix",
         title: "🐛 La mise à jour automatique de l'application ne se déclenchait pas",

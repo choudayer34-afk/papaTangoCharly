@@ -6,7 +6,7 @@ import * as projectsApi from "../domain/projects.js";
 import * as historyApi from "../domain/history.js";
 import * as objectivesApi from "../domain/objectives.js";
 import * as preferencesApi from "../domain/preferences.js";
-import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
@@ -1075,16 +1075,22 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
     }
   }
   renderEntries(entries);
-  body.querySelector("#add-entry-btn").addEventListener("click", async () => {
-    const note = body.querySelector("#obj-entry-note").value.trim();
-    if (!note) return;
-    const date = body.querySelector("#obj-entry-date").value || null;
-    const updated = await objectivesApi.addEntry(objective.id, { date, note });
-    objective.entries = updated.entries;
-    renderEntries([...updated.entries].sort((a, b) => new Date(b.date) - new Date(a.date)));
-    body.querySelector("#obj-entry-note").value = "";
-    showToast("Point de suivi ajouté");
-  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
+  // non désactivé pendant l'écriture — un double-clic dupliquait le point de suivi.
+  const addEntryBtn = body.querySelector("#add-entry-btn");
+  addEntryBtn.addEventListener(
+    "click",
+    guardClick(addEntryBtn, async () => {
+      const note = body.querySelector("#obj-entry-note").value.trim();
+      if (!note) return;
+      const date = body.querySelector("#obj-entry-date").value || null;
+      const updated = await objectivesApi.addEntry(objective.id, { date, note });
+      objective.entries = updated.entries;
+      renderEntries([...updated.entries].sort((a, b) => new Date(b.date) - new Date(a.date)));
+      body.querySelector("#obj-entry-note").value = "";
+      showToast("Point de suivi ajouté");
+    })
+  );
 
   const objProjectSelectEl = body.querySelector("#obj-detail-project");
   attachProjectQuickCreate(objProjectSelectEl);
@@ -1407,22 +1413,29 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
     row.style.display = row.style.display === "none" ? "flex" : "none";
     if (row.style.display === "flex") body.querySelector("#fu-new-project-name").focus();
   });
-  body.querySelector("#fu-new-project-confirm").addEventListener("click", async () => {
-    const name = body.querySelector("#fu-new-project-name").value.trim();
-    if (!name) return;
-    const project = await projectsApi.createProject({ name });
-    const select = body.querySelector("#fu-project");
-    const option = document.createElement("option");
-    option.value = project.id;
-    option.textContent = project.name;
-    const options = [...select.options].filter((o) => o.value);
-    const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
-    select.insertBefore(option, insertBefore || null);
-    select.value = project.id;
-    body.querySelector("#fu-new-project-name").value = "";
-    body.querySelector("#fu-new-project-row").style.display = "none";
-    showToast("Projet créé");
-  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
+  // non désactivé pendant l'écriture — un double-clic créait deux Projets identiques (l'un
+  // orphelin, jamais sélectionné).
+  const fuNewProjectConfirmBtn = body.querySelector("#fu-new-project-confirm");
+  fuNewProjectConfirmBtn.addEventListener(
+    "click",
+    guardClick(fuNewProjectConfirmBtn, async () => {
+      const name = body.querySelector("#fu-new-project-name").value.trim();
+      if (!name) return;
+      const project = await projectsApi.createProject({ name });
+      const select = body.querySelector("#fu-project");
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = project.name;
+      const options = [...select.options].filter((o) => o.value);
+      const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
+      select.insertBefore(option, insertBefore || null);
+      select.value = project.id;
+      body.querySelector("#fu-new-project-name").value = "";
+      body.querySelector("#fu-new-project-row").style.display = "none";
+      showToast("Projet créé");
+    })
+  );
 
   // "Saisie en masse" (retour de Charles-Henri, vague 22 : "j'aimerai avoir plus de saisie en
   // masse") — première des deux pistes qu'il a choisies parmi celles proposées : dupliquer un
@@ -1689,22 +1702,28 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
     row.style.display = row.style.display === "none" ? "flex" : "none";
     if (row.style.display === "flex") body.querySelector("#fu-edit-new-project-name").focus();
   });
-  body.querySelector("#fu-edit-new-project-confirm").addEventListener("click", async () => {
-    const name = body.querySelector("#fu-edit-new-project-name").value.trim();
-    if (!name) return;
-    const project = await projectsApi.createProject({ name });
-    const select = body.querySelector("#fu-edit-project");
-    const option = document.createElement("option");
-    option.value = project.id;
-    option.textContent = project.name;
-    const options = [...select.options].filter((o) => o.value);
-    const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
-    select.insertBefore(option, insertBefore || null);
-    select.value = project.id;
-    body.querySelector("#fu-edit-new-project-name").value = "";
-    body.querySelector("#fu-edit-new-project-row").style.display = "none";
-    showToast("Projet créé");
-  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : même
+  // correctif que "#fu-new-project-confirm" ci-dessus, sur la variante "Modifier le suivi".
+  const fuEditNewProjectConfirmBtn = body.querySelector("#fu-edit-new-project-confirm");
+  fuEditNewProjectConfirmBtn.addEventListener(
+    "click",
+    guardClick(fuEditNewProjectConfirmBtn, async () => {
+      const name = body.querySelector("#fu-edit-new-project-name").value.trim();
+      if (!name) return;
+      const project = await projectsApi.createProject({ name });
+      const select = body.querySelector("#fu-edit-project");
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = project.name;
+      const options = [...select.options].filter((o) => o.value);
+      const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
+      select.insertBefore(option, insertBefore || null);
+      select.value = project.id;
+      body.querySelector("#fu-edit-new-project-name").value = "";
+      body.querySelector("#fu-edit-new-project-row").style.display = "none";
+      showToast("Projet créé");
+    })
+  );
 
   const checklistTitleEl = body.querySelector("#fu-edit-checklist-title");
   function updateChecklistTitle() {
