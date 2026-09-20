@@ -90,8 +90,8 @@ export async function isEmailAllowed(email) {
 }
 
 /** Liste complète des comptes invités (existence dans `allowedUsers`), réservée à l'admin côté
- * app (le vrai rempart reste la règle Firestore — voir le tutoriel 🔥 Firebase de adminPanel.js,
- * qui doit autoriser un `list`, pas seulement un `get`, sur cette collection pour ADMIN_EMAIL). */
+ * app (le vrai rempart reste la règle Firestore — voir `firestore.rules` à la racine du dépôt,
+ * qui autorise un `list`, pas seulement un `get`, sur cette collection pour ADMIN_EMAIL). */
 export async function listAllowedAccounts() {
   const snap = await getDocs(collection(db, "allowedUsers"));
   return snap.docs.map((d) => ({ email: d.id, ...d.data() }));
@@ -142,7 +142,7 @@ export const USER_DATA_COLLECTIONS = [
 /** Exporte l'intégralité du contenu applicatif d'un compte (les collections ci-dessus, sous
  * users/{uid}/...) — utilisé pour la sauvegarde JSON proposée avant toute suppression (voir
  * accountAdmin.js). Nécessite que ADMIN_EMAIL puisse lire n'importe quel users/{uid}/... — voir
- * le tutoriel 🔥 Firebase de adminPanel.js pour la règle de sécurité exacte à poser à la main. */
+ * `firestore.rules` à la racine du dépôt (et le tutoriel 🔥 Firebase de adminPanel.js). */
 export async function exportAllUserData(uid) {
   const result = {};
   for (const name of USER_DATA_COLLECTIONS) {
