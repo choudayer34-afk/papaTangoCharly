@@ -52,28 +52,39 @@ const THIRD_PARTY_APPS = [
       <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">Les règles de
         sécurité Firestore (onglet <strong>Rules</strong>) sont ce qui protège réellement les
         données de chacun — cette liste blanche seule n'est qu'un confort d'usage.</p>
-      <p><strong>Règle à poser une fois pour que "👥 Comptes" fonctionne</strong> (retour du
-        14/09/2026 : fermer/ouvrir un compte puis supprimer son contenu) — colle ceci dans
-        <strong>Rules</strong>, à l'intérieur du bloc <code>service cloud.firestore { match
-        /databases/{database}/documents { ... } }</code> déjà en place, à côté des règles
-        existantes (ne remplace rien d'autre) :</p>
+      <p><strong>Règle à poser pour que "👥 Comptes" fonctionne</strong> — le texte de
+        référence est désormais versionné dans <code>firestore.rules</code> à la racine du
+        dépôt (source unique, voir TODO_TECHNIQUE.md → TODO-001 : avant ce fichier, ce texte
+        n'existait que recopié ici, sans garantie de rester synchronisé avec ce qui est
+        réellement déployé). Colle-le dans <strong>Rules</strong>, à l'intérieur du bloc
+        <code>service cloud.firestore { match /databases/{database}/documents { ... } }</code>
+        déjà en place (ne remplace rien d'autre que les blocs <code>allowedUsers</code> et
+        <code>users/{uid}</code> déjà présents) :</p>
       <pre style="background:var(--color-bg-alt);padding:10px;border-radius:var(--radius-sm);overflow-x:auto;font-size:var(--font-size-sm);">match /allowedUsers/{email} {
-  allow get: if request.auth != null;
+  allow get: if request.auth != null
+              && request.auth.token.email.lower() == email;
   allow list: if request.auth != null
                 && request.auth.token.email.lower() == "${ADMIN_EMAIL}";
-  allow write: if false; // Charles-Henri gère l'invitation à la main, voir plus haut.
+  allow write: if request.auth != null
+                && request.auth.token.email.lower() == "${ADMIN_EMAIL}";
 }
 
 match /users/{uid}/{document=**} {
-  allow read, write: if request.auth != null && request.auth.uid == uid;
+  allow read, write: if request.auth != null && request.auth.uid == uid
+                        && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.disabled != true;
   allow read, write: if request.auth != null
                         && request.auth.token.email.lower() == "${ADMIN_EMAIL}";
 }</pre>
+      <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">Chacun ne peut
+        désormais consulter que son propre statut dans <code>allowedUsers</code> (seul toi peux
+        lister tous les comptes) ; fermer un compte depuis "👥 Comptes" coupe aussi son accès
+        direct à Firestore, pas seulement l'écran de connexion.</p>
       <p style="color:var(--color-text-muted);font-size:var(--font-size-sm);">La deuxième règle
-        (<code>users/{uid}</code>) donne à ton propre compte un accès de secours à TOUTES les
+        de <code>users/{uid}</code> donne à ton propre compte un accès de secours à TOUTES les
         données de tout le monde — nécessaire pour exporter/supprimer le contenu d'un compte
-        depuis "👥 Comptes", mais à garder en tête : c'est un accès large, pas limité à une seule
-        action ponctuelle.</p>
+        depuis "👥 Comptes". Décision actée le 15/09/2026 : cet accès permanent et large est
+        conservé et assumé comme choix d'architecture, ce n'est pas une exception temporaire à
+        retirer plus tard.</p>
     `,
   },
   {
