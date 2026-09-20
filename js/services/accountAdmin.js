@@ -13,13 +13,13 @@
 // indépendantes de ce champ qui ne gouverne que l'écran de connexion de l'app elle-même.
 //
 // Supprimer le contenu d'un compte, en revanche, exige que l'admin (un uid DIFFÉRENT du
-// propriétaire) puisse lire/écrire sous users/{uid}/... d'un tiers — impossible avec la règle de
-// sécurité "propriétaire uniquement" en place aujourd'hui. Nécessite une règle Firestore
-// supplémentaire, à poser à la main dans la console (voir le tutoriel 🔥 Firebase de
-// adminPanel.js pour le texte exact) — même principe self-serve que pour allowedUsers/
-// usageEvents avant elle. Tant que cette règle n'est pas posée, les fonctions ci-dessous qui en
-// dépendent (listAccounts, exportAccountData, deleteAccountContent) échouent avec une erreur
-// Firestore "permission-denied" plutôt que de renvoyer un résultat silencieusement incomplet.
+// propriétaire) puisse lire/écrire sous users/{uid}/... d'un tiers — règle désormais versionnée
+// dans `firestore.rules` à la racine du dépôt (TODO-001/LOT 0A, voir aussi le tutoriel 🔥
+// Firebase de adminPanel.js) — même principe self-serve que pour allowedUsers/usageEvents avant
+// elle. Tant que cette règle n'est pas confirmée/posée dans la console Firebase (voir
+// TODO_TECHNIQUE.md → TODO-001), les fonctions ci-dessous qui en dépendent (listAccounts,
+// exportAccountData, deleteAccountContent) échouent avec une erreur Firestore
+// "permission-denied" plutôt que de renvoyer un résultat silencieusement incomplet.
 //
 // Volontairement IRRÉVERSIBLE et verrouillé à deux niveaux côté UI (adminPanel.js) : le compte
 // doit déjà être fermé, ET une sauvegarde JSON doit avoir été téléchargée dans la même modale
