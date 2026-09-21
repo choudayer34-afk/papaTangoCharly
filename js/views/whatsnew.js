@@ -33,6 +33,32 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "📅 Reporter une échéance de tâche en 1 clic depuis le Kanban",
+        text: "Chaque carte Tâche du Kanban a désormais un bouton \"📅\" à côté des boutons de statut ‹ › : il ouvre un petit menu \"+1 j / +7 j / Date libre\" pour reporter l'échéance sans ouvrir la fiche complète — jusqu'ici, changer une échéance demandait de rouvrir la fiche, même pour un simple report d'un jour.",
+        howTo: "Onglet Pilotage → Trello → bouton \"📅\" sur la carte.",
+        gain: "Reporter une échéance devient aussi rapide que changer de statut, sans quitter le tableau.",
+      },
+      {
+        type: "add",
+        title: "🔁 Relancer / ✅ Régler un Suivi en 1 clic, sans ouvrir sa fiche",
+        text: "Chaque ligne de Suivi (fiche Personne, onglet Suivis, et liste transverse \"👀 Suivis\") a désormais deux boutons rapides \"🔁\"/\"✅\" pour marquer un suivi comme relancé ou réglé directement depuis la liste — jusqu'ici, il fallait systématiquement rouvrir la fiche complète du suivi pour changer son statut.",
+        howTo: "Fiche Personne → onglet Suivis (ou \"👀 Suivis\") → boutons \"🔁\"/\"✅\" sur la ligne concernée.",
+        gain: "Pointer une relance faite ou un sujet réglé sans le détour par la fiche complète.",
+      },
+      {
+        type: "change",
+        title: "🔔 L'alerte de retard couvre désormais aussi les Suivis",
+        text: "L'alerte de retard/pause au démarrage de l'app (quand elle est activée) ne portait jusqu'ici que sur les Tâches — un Suivi dont la date de contrôle est dépassée ne déclenchait jamais rien. Elle inclut désormais le nombre de suivis en retard de contrôle, au même titre que les tâches en retard ou en pause.",
+        howTo: "Rien à faire, c'est automatique si l'alerte de démarrage est déjà activée.",
+        gain: "Un Suivi oublié ne passe plus sous le radar de la même alerte qui couvre déjà les Tâches.",
+      },
+    ],
+  },
+  {
+    date: "21 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "➕ Nouvelle tâche directement depuis Pilotage",
         text: "Un bouton \"+ Tâche\" apparaît désormais en haut de Pilotage (Trello comme Tableau), à côté de \"🗂️ Trello\"/\"📊 Tableau\" — jusqu'ici, créer une tâche libre sans passer par l'Inbox ou par un projet existant n'avait aucun point d'entrée direct.",
         howTo: "Onglet Pilotage → Tâches → bouton \"+ Tâche\".",
