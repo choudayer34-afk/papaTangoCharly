@@ -38,6 +38,13 @@ const WHATS_NEW = [
         howTo: "Ouvre n'importe quel projet actif, ou regarde l'Accueil → \"📦 Mes projets\" : le badge \"🩺\" est visible sans action supplémentaire.",
         gain: "Repérer une dérive sur un projet sans avoir à ouvrir une vue séparée à chaque fois.",
       },
+      {
+        type: "add",
+        title: "📅 Nouvelle carte \"Échéances du jour\" sur l'Accueil",
+        text: "Une nouvelle carte dans les indicateurs de l'Accueil compte les éléments dont l'échéance tombe aujourd'hui, en deux groupes : les Tâches à faire, puis les Suivis pour lesquels tu dois transmettre quelque chose à quelqu'un aujourd'hui — sans les échéances de contrôle où tu attends une réponse d'un collaborateur, qui restent seulement dans \"📣 Relances dues\".",
+        howTo: "Accueil → carte \"📅 Échéances du jour\" (à côté de \"🔴 En retard\") → clic pour voir le détail des deux groupes.",
+        gain: "Voir en un coup d'œil ce qui tombe aujourd'hui, sans mélanger ce que tu dois faire toi-même et ce que tu attends des autres.",
+      },
     ],
   },
   {
