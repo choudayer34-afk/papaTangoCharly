@@ -472,6 +472,24 @@ export function renderKanban(container) {
 const daysFromToday = dateUtils.daysFromToday;
 
 /**
+ * TODO-003 (LOT 2) : calcule la nouvelle échéance pour un report rapide "+N jours". Base de
+ * calcul : la date d'échéance actuelle si elle existe et n'est pas déjà dépassée, sinon
+ * aujourd'hui — reporter une tâche déjà en retard "+1 jour" doit l'amener à demain, pas la
+ * laisser en retard un jour de plus. Reprend `dateUtils.parseLocalDate` (minuit LOCAL, jamais
+ * `new Date(dateStr)` seul) pour le parsing, et reformate à partir des composants locaux
+ * (jamais `toISOString()`, qui repasse en UTC) — même précaution que documentée dans
+ * js/services/dateUtils.js pour éviter de réintroduire le bug de décalage de jour déjà corrigé.
+ */
+function addDaysToIsoDate(currentIsoDate, days) {
+  const base = currentIsoDate && daysFromToday(currentIsoDate) >= 0
+    ? dateUtils.parseLocalDate(currentIsoDate)
+    : new Date();
+  base.setHours(0, 0, 0, 0);
+  base.setDate(base.getDate() + days);
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Petit retour positif à la clôture d'une tâche (retour de Charles-Henri, 01/09/2026 — piste
  * TDAH : un signal immédiat et visible que quelque chose vient réellement d'être terminé,
  * plutôt qu'un chiffre qui change silencieusement dans un coin). Un seul endroit pour les 3
@@ -1194,6 +1212,14 @@ async function openBulkEditModal(tasks, projects, onDone) {
 // mutation de tâche (storage.subscribe) — replié par défaut, comme l'historique des fiches.
 const expandedChecklists = new Set();
 
+// TODO-003 (LOT 2, 21/09/2026) : cartes dont le menu de report rapide d'échéance ("📅") est
+// actuellement déplié. Même principe que expandedChecklists ci-dessus (état au niveau du
+// module, replié par défaut) — un panneau DÉPLIÉ EN LIGNE (jamais une popover positionnée en
+// absolu) puisque .kanban-column-cards défile en overflow-y:auto : une popover absolue aurait
+// pu être coupée net par ce scroll dès qu'une carte est proche du bas de sa colonne (même classe
+// de bug que celle déjà rencontrée et corrigée sur #kanban-filters, voir styles/components.css).
+const expandedDateMenus = new Set();
+
 function renderCard(task, projects) {
   const card = document.createElement("div");
   card.className = "kanban-card";
@@ -1212,6 +1238,7 @@ function renderCard(task, projects) {
   const checklistDone = checklist.filter((c) => c.done).length;
   const hasChecklist = checklist.length > 0;
   const isExpanded = expandedChecklists.has(task.id);
+  const isDateMenuExpanded = expandedDateMenus.has(task.id);
   // "⏳ En attente de..." (retour de Charles-Henri, 02/09/2026) : n'a de sens que sur ces deux
   // statuts (voir tasksApi.updateTask, qui l'efface automatiquement en sortant) — jamais
   // affiché ailleurs, pour ne pas laisser un champ vide et sans objet sur une tâche "à faire".
@@ -1234,6 +1261,15 @@ function renderCard(task, projects) {
       <button type="button" class="kanban-move-btn" data-dir="prev" aria-label="Statut précédent" ${prevStatus ? "" : "disabled"}>‹</button>
       <span class="kanban-move-label">${tasksApi.STATUS_LABELS[task.status]}</span>
       <button type="button" class="kanban-move-btn" data-dir="next" aria-label="Statut suivant" ${nextStatus ? "" : "disabled"}>›</button>
+      <button type="button" class="kanban-move-btn" data-postpone-toggle aria-label="Reporter l'échéance" title="Reporter l'échéance">📅</button>
+    </div>
+    <div class="kanban-card-postpone" data-postpone-body style="display:${isDateMenuExpanded ? "flex" : "none"};">
+      <button type="button" class="kanban-postpone-btn" data-postpone-offset="1">+1 j</button>
+      <button type="button" class="kanban-postpone-btn" data-postpone-offset="7">+7 j</button>
+      <label class="kanban-postpone-custom">
+        <span>Date libre</span>
+        <input type="date" data-postpone-custom value="${task.dueDate || ""}" aria-label="Échéance — date libre" />
+      </label>
     </div>
     ${hasChecklist ? `
       <div class="kanban-card-checklist" data-checklist-body style="display:${isExpanded ? "block" : "none"};">
@@ -1257,6 +1293,36 @@ function renderCard(task, projects) {
       tasksApi.setStatus(task.id, nextStatus);
       celebrateIfJustDone(task.status, nextStatus);
     }
+  });
+
+  // TODO-003 (LOT 2) : report rapide d'échéance — "+1j / +7j / date libre", symétrique aux
+  // boutons ‹ › ci-dessus. Panneau déplié en ligne (jamais une popover positionnée en absolu —
+  // voir le commentaire sur expandedDateMenus plus haut dans ce fichier).
+  const postponeToggle = card.querySelector("[data-postpone-toggle]");
+  const postponeBody = card.querySelector("[data-postpone-body]");
+  postponeToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const expand = !expandedDateMenus.has(task.id);
+    if (expand) expandedDateMenus.add(task.id);
+    else expandedDateMenus.delete(task.id);
+    postponeBody.style.display = expand ? "flex" : "none";
+  });
+  card.querySelectorAll("[data-postpone-offset]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const newDate = addDaysToIsoDate(task.dueDate, Number(btn.dataset.postponeOffset));
+      tasksApi.updateTask(task.id, { dueDate: newDate });
+      expandedDateMenus.delete(task.id);
+      showToast(`Échéance reportée au ${formatDate(newDate)}`);
+    });
+  });
+  const postponeCustomInput = card.querySelector("[data-postpone-custom]");
+  postponeCustomInput.addEventListener("click", (e) => e.stopPropagation());
+  postponeCustomInput.addEventListener("change", () => {
+    const newDate = postponeCustomInput.value || null;
+    tasksApi.updateTask(task.id, { dueDate: newDate });
+    expandedDateMenus.delete(task.id);
+    showToast(newDate ? `Échéance reportée au ${formatDate(newDate)}` : "Échéance supprimée");
   });
 
   if (hasChecklist) {
