@@ -35,6 +35,7 @@ import { fetchBundle, resolveRef } from "./components/linkedItems.js";
 import { parseOpenParam } from "./services/deeplink.js";
 import { subscribeOnline } from "./services/onlineStatus.js";
 import * as tasksApi from "./domain/tasks.js";
+import * as followUpsApi from "./domain/followups.js";
 import * as preferencesApi from "./domain/preferences.js";
 
 // ROUTES reste la table de dispatch COMPLÈTE — toute route qui y figure fonctionne par hash,
@@ -292,6 +293,10 @@ async function maybeShowUsageNotice() {
  * l'Accueil), le navigateur a effectivement accordé la permission, et elle n'a pas déjà été
  * montrée aujourd'hui (`lastNotifShownDate`) — pour ne jamais répéter la même alerte à chaque
  * ouverture de l'app dans la même journée.
+ * TODO-004 (LOT 2, 21/09/2026) : étendue aux Suivis en retard de contrôle
+ * (`followUpsApi.isControlDue`) — jusqu'ici cette alerte ne couvrait que les Tâches, alors
+ * qu'un Suivi en retard de contrôle ne déclenchait jamais rien, contraire à l'intention
+ * "ne rien oublier" du produit.
  */
 async function maybeNotifyStalledOrLate() {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
@@ -303,11 +308,14 @@ async function maybeNotifyStalledOrLate() {
   const tasks = await tasksApi.listAll();
   const lateCount = tasks.filter(tasksApi.isLate).length;
   const stalledCount = tasks.filter(tasksApi.isStalled).length;
-  if (lateCount + stalledCount === 0) return;
+  const followUps = await followUpsApi.listAll();
+  const followUpLateCount = followUps.filter(followUpsApi.isControlDue).length;
+  if (lateCount + stalledCount + followUpLateCount === 0) return;
 
   const parts = [];
   if (lateCount) parts.push(`${lateCount} en retard`);
   if (stalledCount) parts.push(`${stalledCount} en pause depuis un moment`);
+  if (followUpLateCount) parts.push(`${followUpLateCount} suivi(s) en retard de contrôle`);
   new Notification("Pilotage", { body: parts.join(" · "), icon: "./icons/icon-192.png" });
   await preferencesApi.markNotifShown(todayKey);
 }
