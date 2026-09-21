@@ -690,6 +690,11 @@ export async function openCreateProjectModal(prefill = {}) {
       },
     ],
   });
+  // Autofocus manquant corrigé (LOT 8, TODO-016) : ce formulaire de création n'avait, contrairement
+  // au reste de l'app (capture, recherche, prompts...), aucun focus posé sur son premier champ à
+  // l'ouverture — même pattern (`setTimeout(..., 30)`, le temps que le champ soit bien inséré dans
+  // le DOM) que les autres formulaires de création de l'app.
+  setTimeout(() => bodyEl.querySelector("#project-name")?.focus(), 30);
 }
 
 export async function openProjectDetail(project, tasks) {
