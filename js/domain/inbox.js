@@ -29,6 +29,16 @@ export function listPending() {
   return storage.listAll(COLLECTION).then((items) => items.filter((i) => i.status === "pending"));
 }
 
+// Ajouté le 21/09/2026 (TODO-009A, LOT 4A) : lire UN élément Inbox par son id, pour
+// js/components/linkedItems.js#resolveRef — même besoin que tasksApi.getTask(), voir son
+// commentaire. Accesseur brut, SANS filtre de statut (contrairement à listKept() ci-dessous) :
+// à l'appelant de vérifier `status` si le filtre importe pour son usage (voir resolveRef, qui ne
+// doit résoudre un lien "Kept" que vers un statut "kept", jamais "archived", exactement comme le
+// fait aujourd'hui listKept() en amont de fetchBundle()).
+export function getInboxItem(id) {
+  return storage.get(COLLECTION, id);
+}
+
 // BUG corrigé (15/09/2026, audit performance) : subscribePending/subscribeKept/
 // subscribeKeptIncludingArchived ouvraient chacune leur propre `storage.subscribe` — donc leur
 // propre `onSnapshot` sur TOUTE la collection `inboxItems` — avec juste un filtre différent
