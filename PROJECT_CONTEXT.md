@@ -307,7 +307,7 @@ Trois façons différentes de faire évoluer la forme d'une donnée déjà en ba
 | `rawContent` | string | non | jamais modifié après capture (Règle 3) |
 | `source` | string | non (déf. `"manuel"`) | |
 | `status` | string | non (déf. `"pending"`) | pending \| processed \| archived \| kept |
-| `notesLog` | array `{id, text, createdAt}` | oui (absent sauf report depuis `convert.js`) | uniquement porté par un changement de type vers Information/Idée |
+| `notesLog` | array `{id, text, createdAt}` | oui (absent tant qu'aucune note n'a été ajoutée) | journal actif via `inbox.js#addKeptNote`, câblé à la section "🗒️ Notes" de la fiche Kept (`openKeptItemDetail`) — même principe que les autres `addNote()`, pas seulement un report lors d'un changement de type ; peut aussi être initialisé avec une valeur reprise via `convert.js` (Tâche/Suivi → Information) |
 | `resultTaskId`/`resultFollowUpId`/`resultProjectId`/`resultMeetingId`/`resultDecisionId`/`resultResourceId` | string | oui | posé par `qualify()` selon l'issue choisie, un seul des six présent à la fois |
 | `keptAsType` | string | oui | posé quand `status: "kept"` — le type réel choisi (ex. "kept", "idea") |
 | `keptAt` | number | oui | horodatage de la qualification en "kept", distinct de `createdAt` (capture initiale) |
