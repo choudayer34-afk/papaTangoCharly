@@ -1,1 +1,19 @@
-
+{
+  "name": "pilotage-tests",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Socle de tests P0 (LOT 0B, TODO-002, voir TODO_TECHNIQUE.md) — émulateur Firebase (tests de règles) + 2 parcours E2E cœur. Dossier isolé et versionné séparément de l'application (vanilla JS, sans outillage Node) — décision produit du 20/09/2026.",
+  "scripts": {
+    "emulators:start": "firebase emulators:start --project papatangocharly --only auth,firestore",
+    "test:rules": "firebase emulators:exec --project papatangocharly --only firestore \"node --test rules/\"",
+    "test:e2e": "firebase emulators:exec --project papatangocharly --only auth,firestore \"playwright test\"",
+    "test": "npm run test:rules && npm run test:e2e"
+  },
+  "devDependencies": {
+    "firebase": "^10.12.2",
+    "firebase-tools": "^13.29.0",
+    "@firebase/rules-unit-testing": "^3.0.4",
+    "@playwright/test": "^1.47.0"
+  }
+}
