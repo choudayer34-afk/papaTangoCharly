@@ -274,6 +274,12 @@ a { color: inherit; }
    distincte du warning déjà pris par "🔁 Relancé"/"👀 À suivre", pour ne pas laisser croire à un
    retard : marquer un projet prioritaire est une décision positive, pas un signal d'alerte. */
 .badge-critical { background: var(--color-waiting-bg); color: var(--color-waiting); }
+/* Score de santé projet (TODO-005, LOT 3) — mêmes 3 niveaux et mêmes teintes que
+   js/domain/projectHealth.js#computeHealth (`level` : success/warning/danger), affiché en
+   fiche projet et sur la carte Dashboard, en plus de la vue "🩺 Santé" existante. */
+.badge-health-success { background: var(--color-success-bg); color: var(--color-success); }
+.badge-health-warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-health-danger { background: var(--color-danger-bg); color: var(--color-danger); }
 
 /* ---------- Empty state ---------- */
 .empty-state {
