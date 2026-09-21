@@ -9,6 +9,17 @@
 // réseau — voir tests/README.md). Le clic d'ouverture de la fiche projet/tâche et le texte exact
 // des toasts sont fidèles au code au moment de la rédaction, mais à reconfirmer au premier
 // lancement réel (l'app a pu évoluer depuis).
+//
+// Correction du 21/09/2026 (premier passage réel du workflow GitHub Actions) : sans
+// `page.addInitScript` ci-dessous, `js/services/firebase.js` ne pose jamais la dérogation
+// émulateur (`globalThis.__PILOTAGE_USE_FIREBASE_EMULATOR__`, voir ce fichier) avant de se
+// charger — l'app se serait donc connectée à la vraie production Firebase, où le compte de test
+// alice@example.com n'existe pas, faisant échouer la connexion silencieusement (toast, pas de
+// blocage) et donc tout le reste du parcours. `tests/support/harness.html` posait déjà ce
+// drapeau via un `<script>` classique exécuté avant l'import du module, mais /index.html (page
+// réelle de l'app, chargée ici) n'a pas cet équivalent — `addInitScript` le fait au niveau de
+// Playwright, avant l'exécution de tout script de la page, exactement comme le tuteur `<script>`
+// de harness.html.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -17,6 +28,9 @@ test("Capture → Qualification (Action) → Tâche créée", async ({ page }) =
   const rawText = `Test LOT 0B — capture ${Date.now()}`;
 
   // 1. Connexion (émulateur Auth, compte créé par global-setup.js — jamais un vrai compte Google).
+  await page.addInitScript(() => {
+    window.__PILOTAGE_USE_FIREBASE_EMULATOR__ = true;
+  });
   await page.goto("/index.html");
   await page.fill("#login-email", E2E_TEST_USER.email);
   await page.fill("#login-password", E2E_TEST_USER.password);
