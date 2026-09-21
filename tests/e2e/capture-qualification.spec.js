@@ -28,6 +28,14 @@
 // (`.modal-overlay`) le clic suivant du parcours. Ajout aussi d'une attente du toast de
 // confirmation avant de naviguer vers l'Inbox : sans elle, la navigation pouvait intervenir
 // avant que la modale de capture (fermée de façon asynchrone) n'ait fini de se retirer.
+//
+// Correction du 21/09/2026 (5e passage réel) : l'étape 7 (`getByText(rawText)`) provoquait une
+// "strict mode violation" — le texte capturé apparaît dans DEUX éléments une fois la fiche
+// Tâche ouverte : le champ Description (`#detail-description`, préremplit avec le texte
+// capturé — voir kanban.js#openTaskFromInboxModal) ET une entrée d'activité/historique
+// ("✅ Tâche créée · ..."). Remplacé par une assertion précise sur `#detail-description` lui-
+// même (visible par défaut, sous l'onglet "Détails" actif à l'ouverture), qui vérifie la même
+// chose sans ambiguïté.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -72,6 +80,7 @@ test("Capture → Qualification (Action) → Tâche créée", async ({ page }) =
 
   // 7. La fiche complète de la tâche s'ouvre ensuite automatiquement (retour de Charles-Henri,
   //    13/09/2026, voir openTaskFromInboxModal) — confirmation supplémentaire, indépendante du
-  //    texte exact du toast, que la qualification a bien abouti à une vraie tâche.
-  await expect(page.getByText(rawText)).toBeVisible({ timeout: 10_000 });
+  //    texte exact du toast, que la qualification a bien abouti à une vraie tâche. Le champ
+  //    Description (onglet "Détails", actif par défaut) est préremplit avec le texte capturé.
+  await expect(page.locator("#detail-description")).toHaveValue(rawText, { timeout: 10_000 });
 });
