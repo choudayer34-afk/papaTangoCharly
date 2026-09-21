@@ -14,10 +14,11 @@ import * as projectsApi from "../domain/projects.js";
 import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as followUpsApi from "../domain/followups.js";
+import * as peopleApi from "../domain/people.js";
 import { openModal, closeModal } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
-import { openTaskDetail } from "./kanban.js";
-import { openRecentDetail } from "./dashboard.js";
+import { openTaskDetail, openCreateTaskModal } from "./kanban.js";
+import { openRecentDetail, openCreateMeetingModal } from "./dashboard.js";
 import { openEditFollowUpModal } from "./people.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 
@@ -47,6 +48,37 @@ export function renderCalendar(container) {
       <div class="chip-row" id="cal-view-toggle">
         <button type="button" class="chip active" data-view="month">Mois</button>
         <button type="button" class="chip" data-view="week">Semaine</button>
+        <!-- Filtres Type/Projet/Personne (LOT 7, TODO-015, 21/09/2026 — COMP-UX-005) : réutilise
+             tel quel le menu "🔧 Filtrer" déjà écrit pour Pilotage/Projets
+             (`.filter-popover`/`.filter-popover-panel`, voir styles/components.css et
+             js/views/kanban.js), plutôt que d'inventer un nouveau composant de filtre. -->
+        <details class="filter-popover" id="cal-filter-popover">
+          <summary class="chip">🔧 Filtrer<span class="filter-popover-badge" id="cal-filter-badge" hidden></span></summary>
+          <div class="filter-popover-panel">
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Type</div>
+              <div class="chip-row" id="cal-type-filter">
+                <button type="button" class="chip active" data-type="Task">✅ Tâches</button>
+                <button type="button" class="chip active" data-type="Meeting">🗓️ Réunions</button>
+                <button type="button" class="chip active" data-type="Decision">🗳️ Décisions</button>
+                <button type="button" class="chip active" data-type="FollowUp">👀 Suivis</button>
+              </div>
+            </div>
+            <div class="filter-popover-group">
+              <div class="filter-popover-label">Projet</div>
+              <select id="cal-project-filter"></select>
+            </div>
+            <div class="filter-popover-group">
+              <!-- Ne filtre en pratique que les Suivis (👀), seul type portant réellement une
+                   personne (`personId`) — une Tâche n'en a jamais (voir openTaskDetail dans
+                   kanban.js) et le champ `participants` d'une Réunion n'est pas encore exposé
+                   dans son formulaire de création. Sélectionner une personne masque donc aussi
+                   Tâches/Réunions/Décisions ce jour-là, aucune ne pouvant lui être rattachée. -->
+              <div class="filter-popover-label">Personne</div>
+              <select id="cal-person-filter"></select>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="cal-nav">
         <button id="cal-prev" class="btn btn-ghost btn-sm">‹</button>
@@ -60,14 +92,25 @@ export function renderCalendar(container) {
   renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/calendar");
   const subtitleEl = container.querySelector("#calendar-subtitle");
   const bodyEl = container.querySelector("#calendar-body");
+  const filterPopoverEl = container.querySelector("#cal-filter-popover");
+  const filterBadgeEl = container.querySelector("#cal-filter-badge");
+  const typeFilterEl = container.querySelector("#cal-type-filter");
+  const projectFilterEl = container.querySelector("#cal-project-filter");
+  const personFilterEl = container.querySelector("#cal-person-filter");
 
   let tasks = [];
   let projects = [];
   let meetings = [];
   let decisions = [];
   let followUps = [];
+  let people = [];
   let cursor = startOfDay(new Date());
   let mode = "month"; // "month" | "week"
+  // Filtres Type/Projet/Personne (LOT 7, TODO-015) — jamais persistés d'une visite à l'autre,
+  // même traitement que les filtres équivalents de Kanban/Projets (js/views/kanban.js).
+  const activeTypes = new Set(["Task", "Meeting", "Decision", "FollowUp"]);
+  let filterProjectId = "all";
+  let filterPersonId = "all";
 
   /** Exclut tout élément rattaché à un projet fermé (retour de Charles-Henri, 02/09/2026 —
    *  fermeture de projet : "faire que les éléments sous-jacents et le projet n'apparaissent
@@ -79,46 +122,74 @@ export function renderCalendar(container) {
     return !projectsApi.isArchived(project);
   }
 
+  /** Filtre Projet (toutes les entités calendrier ont un `projectId`) — "all" = pas de filtre,
+   *  même convention que `filterProjectId` côté Kanban (js/views/kanban.js). */
+  function matchesProjectFilter(projectId) {
+    return filterProjectId === "all" || projectId === filterProjectId;
+  }
+
   function allItems() {
     const items = [];
-    for (const t of tasks) {
-      if (!t.dueDate || !isProjectVisible(t.projectId)) continue;
-      items.push({
-        type: "Task",
-        id: t.id,
-        date: t.dueDate,
-        icon: t.isBlocked ? "🔴" : "✅",
-        title: t.title,
-        onOpen: () => openTaskDetail(t, projects),
-        onMove: (newDate) => tasksApi.updateTask(t.id, { dueDate: newDate }),
-      });
+    if (activeTypes.has("Task")) {
+      for (const t of tasks) {
+        if (!t.dueDate || !isProjectVisible(t.projectId)) continue;
+        if (!matchesProjectFilter(t.projectId)) continue;
+        // Une Tâche n'a jamais de personne assignée (voir openTaskDetail, kanban.js) : un
+        // filtre Personne actif l'exclut donc systématiquement, plutôt que de la garder par
+        // défaut alors qu'elle ne peut jamais correspondre à la personne choisie.
+        if (filterPersonId !== "all") continue;
+        items.push({
+          type: "Task",
+          id: t.id,
+          date: t.dueDate,
+          icon: t.isBlocked ? "🔴" : "✅",
+          title: t.title,
+          onOpen: () => openTaskDetail(t, projects),
+          onMove: (newDate) => tasksApi.updateTask(t.id, { dueDate: newDate }),
+        });
+      }
     }
-    for (const m of meetings) {
-      if (!m.date || !isProjectVisible(m.projectId)) continue;
-      items.push({
-        type: "Meeting",
-        id: m.id,
-        date: m.date,
-        icon: "🗓️",
-        title: m.title,
-        onOpen: () => openRecentDetail({ kind: "meeting", emoji: "🗓️", data: m }, projects),
-        onMove: (newDate) => meetingsApi.updateMeeting(m.id, { date: newDate }),
-      });
+    if (activeTypes.has("Meeting")) {
+      for (const m of meetings) {
+        if (!m.date || !isProjectVisible(m.projectId)) continue;
+        if (!matchesProjectFilter(m.projectId)) continue;
+        // `participants` existe dans le modèle (js/domain/meetings.js) mais n'est renseigné par
+        // aucun formulaire exposé à ce jour — un filtre Personne ne peut donc jamais y trouver de
+        // correspondance fiable ; exclue comme la Tâche ci-dessus plutôt que de prétendre filtrer
+        // sur un champ en pratique toujours vide.
+        if (filterPersonId !== "all") continue;
+        items.push({
+          type: "Meeting",
+          id: m.id,
+          date: m.date,
+          icon: "🗓️",
+          title: m.title,
+          onOpen: () => openRecentDetail({ kind: "meeting", emoji: "🗓️", data: m }, projects),
+          onMove: (newDate) => meetingsApi.updateMeeting(m.id, { date: newDate }),
+        });
+      }
     }
-    for (const d of decisions) {
-      if (!d.date || !isProjectVisible(d.projectId)) continue;
-      items.push({
-        type: "Decision",
-        id: d.id,
-        date: d.date,
-        icon: "🗳️",
-        title: d.title,
-        onOpen: () => openRecentDetail({ kind: "decision", emoji: "🗳️", data: d }, projects),
-        onMove: (newDate) => decisionsApi.updateDecision(d.id, { date: newDate }),
-      });
+    if (activeTypes.has("Decision")) {
+      for (const d of decisions) {
+        if (!d.date || !isProjectVisible(d.projectId)) continue;
+        if (!matchesProjectFilter(d.projectId)) continue;
+        if (filterPersonId !== "all") continue; // une Décision n'a pas non plus de personne assignée
+        items.push({
+          type: "Decision",
+          id: d.id,
+          date: d.date,
+          icon: "🗳️",
+          title: d.title,
+          onOpen: () => openRecentDetail({ kind: "decision", emoji: "🗳️", data: d }, projects),
+          onMove: (newDate) => decisionsApi.updateDecision(d.id, { date: newDate }),
+        });
+      }
     }
+    if (!activeTypes.has("FollowUp")) return items;
     for (const f of followUps) {
       if (!f.controlDate || f.status === "done" || !isProjectVisible(f.projectId)) continue;
+      if (!matchesProjectFilter(f.projectId)) continue;
+      if (filterPersonId !== "all" && f.personId !== filterPersonId) continue;
       items.push({
         type: "FollowUp",
         id: f.id,
@@ -132,7 +203,33 @@ export function renderCalendar(container) {
     return items;
   }
 
+  /** Rebâtit les deux `<select>` de filtre à chaque rendu — même convention que
+   *  `projectFilterEl.innerHTML` côté Kanban (js/views/kanban.js#renderBoard) : plus simple et
+   *  plus sûr que de ne mettre à jour que les options ajoutées/retirées, quitte à reconstruire
+   *  à chaque fois (liste jamais assez longue pour que ce soit coûteux). Projets fermés exclus,
+   *  comme le reste du Calendrier (voir isProjectVisible ci-dessus). */
+  function renderFilterSelects() {
+    const visibleProjects = [...projects].filter((p) => !projectsApi.isArchived(p)).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    projectFilterEl.innerHTML =
+      `<option value="all">Tous les projets</option>` +
+      visibleProjects.map((p) => `<option value="${p.id}" ${p.id === filterProjectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+
+    const sortedPeople = peopleApi.sortPeople(people);
+    personFilterEl.innerHTML =
+      `<option value="all">Toutes les personnes</option>` +
+      sortedPeople
+        .map((p) => `<option value="${p.id}" ${p.id === filterPersonId ? "selected" : ""}>${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</option>`)
+        .join("");
+  }
+
+  function updateFilterBadge() {
+    const count = (activeTypes.size < 4 ? 1 : 0) + (filterProjectId !== "all" ? 1 : 0) + (filterPersonId !== "all" ? 1 : 0);
+    filterBadgeEl.textContent = count ? String(count) : "";
+    filterBadgeEl.hidden = count === 0;
+  }
+
   function render() {
+    renderFilterSelects();
     const items = allItems();
     if (mode === "month") {
       subtitleEl.textContent = cursor.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
@@ -143,6 +240,33 @@ export function renderCalendar(container) {
       renderWeek(bodyEl, cursor, items);
     }
   }
+
+  typeFilterEl.querySelectorAll("[data-type]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      const type = chip.dataset.type;
+      if (activeTypes.has(type)) activeTypes.delete(type);
+      else activeTypes.add(type);
+      chip.classList.toggle("active", activeTypes.has(type));
+      updateFilterBadge();
+      render();
+    });
+  });
+  projectFilterEl.addEventListener("change", () => {
+    filterProjectId = projectFilterEl.value;
+    updateFilterBadge();
+    render();
+  });
+  personFilterEl.addEventListener("change", () => {
+    filterPersonId = personFilterEl.value;
+    updateFilterBadge();
+    render();
+  });
+  // Même correctif que `closeFilterPopoverOnOutsideClick` côté Kanban (js/views/kanban.js) : un
+  // <details> ne se referme jamais tout seul au clic en dehors de son contenu.
+  function closeFilterPopoverOnOutsideClick(e) {
+    if (filterPopoverEl.open && !filterPopoverEl.contains(e.target)) filterPopoverEl.open = false;
+  }
+  document.addEventListener("click", closeFilterPopoverOnOutsideClick);
 
   const calViewToggleEl = container.querySelector("#cal-view-toggle");
   function updateCalViewToggle() {
@@ -188,14 +312,20 @@ export function renderCalendar(container) {
     followUps = items;
     render();
   });
+  const unsubPeople = peopleApi.subscribe((items) => {
+    people = items;
+    render();
+  });
 
   return function cleanup() {
     container.classList.remove("app-wide");
+    document.removeEventListener("click", closeFilterPopoverOnOutsideClick);
     unsubTasks();
     unsubProjects();
     unsubMeetings();
     unsubDecisions();
     unsubFollowUps();
+    unsubPeople();
   };
 }
 
@@ -382,7 +512,16 @@ function openDayAgenda(iso, items) {
   openModal({
     title: formatLong(new Date(iso + "T00:00:00")),
     body,
-    actions: [{ label: "Fermer", variant: "ghost" }],
+    // "+ Tâche"/"+ Réunion" (LOT 7, TODO-015, COMP-UX-006) : point de création rapide sur un
+    // jour, réutilisant tel quel les formulaires de création existants (Dépendances du TODO)
+    // avec la date de ce jour déjà pré-remplie — jamais de nouveau formulaire. `openModal()`
+    // ferme toujours la modale précédente avant d'en ouvrir une nouvelle (voir modal.js), donc
+    // cette fiche Agenda du jour se referme normalement dès qu'on clique l'un des deux.
+    actions: [
+      { label: "Fermer", variant: "ghost" },
+      { label: "+ Tâche", onClick: () => openCreateTaskModal({ dueDate: iso }) },
+      { label: "+ Réunion", onClick: () => openCreateMeetingModal({ date: iso }) },
+    ],
   });
 }
 
