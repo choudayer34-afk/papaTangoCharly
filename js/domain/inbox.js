@@ -147,6 +147,20 @@ export async function autoArchiveStaleKept() {
   return stale.length;
 }
 
+// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation uniquement, aucune purge
+// implémentée à ce stade) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section 1) —
+// conservation cible de 24 à 36 mois pour l'Inbox archivée (`status: "archived"`, y compris les
+// Informations/Idées auto-archivées ci-dessus après 15 jours). Au-delà de cette fenêtre, toute
+// purge ou anonymisation ne pourra intervenir qu'après une confirmation explicite de
+// l'utilisateur — jamais une suppression automatique ou silencieuse. Point important à ne pas
+// confondre : `autoArchiveStaleKept()` ci-dessus ne fait que CHANGER LE STATUT d'un élément
+// ("kept" → "archived") après 15 jours, il ne le supprime jamais — la politique de rétention
+// documentée ici porte sur une éventuelle suppression DÉFINITIVE, bien plus tard (24-36 mois), des
+// éléments déjà archivés, distincte et non encore implémentée. Comme pour `history`
+// (js/domain/history.js), rien dans les règles Firestore n'empêche techniquement une suppression
+// ici — seule l'implémentation de l'écran de purge assistée reste à faire, voir TODO-036 (section
+// 5, TODO_TECHNIQUE.md).
+
 /**
  * Corrige le texte brut d'une capture encore en attente (retour de Charles-Henri, 06/09/2026 :
  * "quand on prend une note rapide, quand elle est dans inbox, je dois pouvoir modifier le
