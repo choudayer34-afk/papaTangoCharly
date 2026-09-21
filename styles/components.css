@@ -1209,8 +1209,11 @@ tbody.drag-over-group {
    corrigé en repassant `#kanban-filters` en overflow visible, pour que le panneau flotte
    normalement au-dessus du reste de la page, comme prévu dès sa conception.
    `#projects-controls` (audit du 07/09/2026, même menu "🔧 Filtrer & trier" ajouté côté Projets)
-   a besoin du même correctif, pour la même raison exacte. */
-#kanban-filters, #projects-controls { overflow: visible; }
+   a besoin du même correctif, pour la même raison exacte. `#cal-view-toggle` (LOT 7, TODO-015,
+   21/09/2026 : filtres Type/Projet/Personne du Calendrier, même menu "🔧 Filtrer" réutilisé tel
+   quel) est dans le même cas — sans ce correctif, le panneau flottant serait découpé par la
+   hauteur de la rangée Mois/Semaine qui l'accueille. */
+#kanban-filters, #projects-controls, #cal-view-toggle { overflow: visible; }
 .filter-popover {
   position: relative;
   flex: 0 0 auto;
@@ -1365,6 +1368,16 @@ tbody.drag-over-group {
   text-transform: uppercase;
   color: var(--color-text-muted);
   margin: var(--space-3) 0 var(--space-2);
+}
+/* Cohérence de troncature Mois/Semaine (LOT 7, TODO-015, 21/09/2026) : la vue Mois tronque déjà
+   chaque titre sur une ligne (`.cal-pill` ci-dessus, `text-overflow: ellipsis`) ; la vue Semaine,
+   elle, réutilise `.item-row`/`.item-title` génériques (aucune règle de troncature) et laissait
+   un titre long passer à la ligne — même contenu, deux comportements différents selon la vue.
+   Scopé à `.cal-week-day` pour ne toucher aucun autre usage de `.item-title` ailleurs dans l'app. */
+.cal-week-day .item-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---------- Bandeau hors ligne ---------- */
