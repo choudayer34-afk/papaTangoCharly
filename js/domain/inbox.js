@@ -11,6 +11,7 @@ import * as projectsApi from "./projects.js";
 import * as followUpsApi from "./followups.js";
 import * as meetingsApi from "./meetings.js";
 import * as decisionsApi from "./decisions.js";
+import * as resourcesApi from "./resources.js";
 
 const COLLECTION = "inboxItems";
 
@@ -218,26 +219,31 @@ const RESULT_KEY = {
   resource: "resultResourceId",
 };
 
-// TODO-008 (LOT 6, 21/09/2026) — lien automatique entité créée ↔ projet, uniquement quand un
-// `projectId` de contexte est déjà connu AU MOMENT de la création de l'entité (voir
-// AUDIT_USAGE_EFFICACITE.md, UX-026, et TODO_TECHNIQUE.md, TODO-008 point 2). Limité aux
-// issues dont le formulaire de création permet déjà de choisir un projet : Task, FollowUp,
-// Meeting, Decision (point 2). Project ne se lie pas à lui-même et Resource n'a pas de
-// `projectId` à sa création (point 3) : ni l'un ni l'autre n'a donc d'entrée ici — ce ne sont
-// pas des cas particuliers à gérer, simplement les seules issues concernées. Réutilise
-// linksApi.createLink, exactement le mécanisme déjà écrit pour "+ Créer et lier"
-// (js/components/linkedItems.js#openCreateFormFor / titleField) — pas de nouvelle architecture
-// de gestion des liens (point 5).
-//
-// NE COUVRE PAS le lien InboxItem source ↔ entité créée (TODO-008 point 1) : voir la note en
-// tête de qualify() ci-dessous — ce point reste en attente d'arbitrage.
-const OUTCOME_PROJECT_LINK = {
-  followup: { type: "FollowUp", get: followUpsApi.getFollowUp, titleField: "title" },
-  meeting: { type: "Meeting", get: meetingsApi.getMeeting, titleField: "title" },
-  decision: { type: "Decision", get: decisionsApi.getDecision, titleField: "title" },
+// TODO-008 (LOT 6, 21/09/2026, complété le même jour après arbitrage de Charles-Henri sur le
+// point 1) — table unique décrivant, pour chaque issue de qualification dont l'entité est créée
+// par l'appelant (RESULT_KEY ci-dessus — "task" est traité séparément dans qualify(), l'entité y
+// étant déjà en mémoire), comment la retrouver par son id (`get`, pour lire son `projectId` et
+// son titre) et comment la nommer dans un lien (`titleField`, même principe que le
+// `titleField` déjà utilisé par js/components/linkedItems.js#openCreateFormFor).
+// `projectLinkEligible` marque les issues qui posent EN PLUS un lien vers le projet (point 2 de
+// TODO-008) quand `projectId` est connu à la création — Project (se lierait à lui-même) et
+// Resource (pas de `projectId` à sa création, point 3) en sont exclues, mais les cinq issues
+// restent toutes éligibles au lien InboxItem source ↔ entité créée (point 1), posé dans tous les
+// cas via linkEntityToInboxSource() plus bas.
+const OUTCOME_ENTITY = {
+  followup: { type: "FollowUp", get: followUpsApi.getFollowUp, titleField: "title", projectLinkEligible: true },
+  project: { type: "Project", get: projectsApi.getProject, titleField: "name", projectLinkEligible: false },
+  meeting: { type: "Meeting", get: meetingsApi.getMeeting, titleField: "title", projectLinkEligible: true },
+  decision: { type: "Decision", get: decisionsApi.getDecision, titleField: "title", projectLinkEligible: true },
+  resource: { type: "Resource", get: resourcesApi.getResource, titleField: "title", projectLinkEligible: false },
 };
 
-/** Pose le lien entité créée ↔ projet quand l'entité a effectivement un `projectId` connu. */
+/**
+ * Point 2 de TODO-008 : pose le lien entité créée ↔ projet quand l'entité a effectivement un
+ * `projectId` connu. Réutilise linksApi.createLink, exactement le mécanisme déjà écrit pour
+ * "+ Créer et lier" (js/components/linkedItems.js#openCreateFormFor) — pas de nouvelle
+ * architecture de gestion des liens (point 5 de TODO-008).
+ */
 async function linkEntityToProjectIfKnown(type, entity, titleField) {
   if (!entity || !entity.projectId) return;
   const project = await projectsApi.getProject(entity.projectId);
@@ -245,6 +251,27 @@ async function linkEntityToProjectIfKnown(type, entity, titleField) {
   await linksApi.createLink(
     { type, id: entity.id, label: entity[titleField] },
     { type: "Project", id: project.id, label: project.name }
+  );
+}
+
+/**
+ * Point 1 de TODO-008 (arbitrage de Charles-Henri, 21/09/2026) : pose le lien InboxItem source ↔
+ * entité créée, pour les six entités concernées (Task, FollowUp, Project, Meeting, Decision,
+ * Resource). Réutilise linksApi.createLink comme linkEntityToProjectIfKnown() ci-dessus — seule
+ * la RÉSOLUTION du nouveau type de référence "InboxSource" est ajoutée, dans
+ * js/components/linkedItems.js#resolveRefDirect, résolue directement par son id (`getInboxItem`,
+ * déjà existant), SANS exiger `status === "kept"` (contrairement au type "Kept" existant, qui
+ * reste inchangé — voir son commentaire dans linkedItems.js). Un InboxItem qualifié n'est jamais
+ * transformé en "kept" par ce mécanisme, et la politique d'auto-archivage à 15 jours
+ * (autoArchiveStaleKept() plus haut, qui ne concerne que les Informations/Idées) n'est pas
+ * modifiée : si l'InboxItem source venait à disparaître selon son propre cycle de vie, ce lien se
+ * comporterait comme n'importe quel autre lien vers un élément disparu ("Élément supprimé"),
+ * sans qu'aucune règle de conservation ne soit changée pour l'en préserver.
+ */
+async function linkEntityToInboxSource(type, entityId, entityLabel, inboxItemId, rawContent) {
+  await linksApi.createLink(
+    { type, id: entityId, label: entityLabel },
+    { type: "InboxSource", id: inboxItemId, label: (rawContent || "").slice(0, 120) }
   );
 }
 
@@ -261,13 +288,10 @@ async function linkEntityToProjectIfKnown(type, entity, titleField) {
  * - "archived" → l'élément est classé sans suite.
  * Dans tous les cas, la capture brute originale n'est jamais perdue (Règle 3).
  *
- * TODO-008 (LOT 6, 21/09/2026) : pose aussi, quand elle s'applique, le lien entité créée ↔
- * projet (voir OUTCOME_PROJECT_LINK / linkEntityToProjectIfKnown ci-dessus — point 2 de
- * TODO-008). Le lien InboxItem source ↔ entité créée (point 1 de TODO-008) N'EST PAS posé ici :
- * il est en attente d'arbitrage (voir TODO_TECHNIQUE.md, TODO-008, note LOT 6) — les seuls
- * types de référence que sait résoudre js/components/linkedItems.js pour une entité de ce
- * module ("Kept") sont filtrés sur `status === "kept"`, alors que ces six issues posent
- * `status: "processed"` : un tel lien s'afficherait "Élément supprimé" dès sa création.
+ * TODO-008 (LOT 6, 21/09/2026) : pose aussi, pour les six issues qui créent une entité, le lien
+ * InboxItem source ↔ entité créée (point 1, linkEntityToInboxSource ci-dessus) et, quand elle
+ * s'applique, le lien entité créée ↔ projet (point 2, linkEntityToProjectIfKnown ci-dessus). Voir
+ * le commentaire de OUTCOME_ENTITY ci-dessus pour le détail de qui est éligible à quoi.
  */
 export async function qualify(itemId, outcome, extra = {}) {
   // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : lecture et écriture de
@@ -276,8 +300,13 @@ export async function qualify(itemId, outcome, extra = {}) {
   // sans risque à l'intérieur du callback puisque seule l'écriture sur CET InboxItem est
   // sérialisée par cette clé.
   let task = null;
+  // Capturée pour construire le lien InboxSource (TODO-008 point 1) APRÈS le storage.update()
+  // ci-dessous, une fois `itemId` seul encore en portée — évite une seconde lecture de
+  // l'InboxItem pour récupérer un texte déjà lu une première fois ici.
+  let sourceRawContent = null;
   await storage.update(COLLECTION, itemId, async (item) => {
     if (!item) throw new Error("Élément Inbox introuvable : " + itemId);
+    sourceRawContent = item.rawContent;
 
     if (outcome === "task") {
       task = await createTask({
@@ -316,15 +345,21 @@ export async function qualify(itemId, outcome, extra = {}) {
   if (outcome === "task") {
     await storage.logHistory("InboxItem", itemId, "qualified_as_task", { taskId: task.id });
     await linkEntityToProjectIfKnown("Task", task, "title");
+    await linkEntityToInboxSource("Task", task.id, task.title, itemId, sourceRawContent);
     return { outcome: "task", task };
   }
 
   if (RESULT_KEY[outcome]) {
     await storage.logHistory("InboxItem", itemId, "qualified_as_" + outcome, { id: extra.id });
-    const projectLink = OUTCOME_PROJECT_LINK[outcome];
-    if (projectLink && extra.id) {
-      const entity = await projectLink.get(extra.id);
-      await linkEntityToProjectIfKnown(projectLink.type, entity, projectLink.titleField);
+    const entityInfo = OUTCOME_ENTITY[outcome];
+    if (entityInfo && extra.id) {
+      const entity = await entityInfo.get(extra.id);
+      if (entity) {
+        if (entityInfo.projectLinkEligible) {
+          await linkEntityToProjectIfKnown(entityInfo.type, entity, entityInfo.titleField);
+        }
+        await linkEntityToInboxSource(entityInfo.type, entity.id, entity[entityInfo.titleField], itemId, sourceRawContent);
+      }
     }
     return { outcome };
   }
