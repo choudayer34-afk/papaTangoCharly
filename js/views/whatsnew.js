@@ -33,6 +33,39 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "🔧 Filtres Type / Projet / Personne sur le Calendrier",
+        text: "Le Calendrier propose désormais un menu \"🔧 Filtrer\" (comme sur Pilotage/Projets) pour ne garder que certains types d'éléments (✅ Tâches, 🗓️ Réunions, 🗳️ Décisions, 👀 Suivis), un projet précis, ou une personne — dans ce dernier cas, seuls les Suivis peuvent lui être rattachés, les autres types n'ayant jamais de personne assignée. Tout reste affiché par défaut, exactement comme avant, tant que le filtre n'est pas touché.",
+        howTo: "Onglet Calendrier → bouton \"🔧 Filtrer\" (à côté de Mois/Semaine).",
+        gain: "Isoler d'un coup d'œil, par exemple, les échéances d'un seul projet ou les suivis d'une seule personne, sans avoir à les repérer visuellement au milieu de tout le reste.",
+      },
+      {
+        type: "add",
+        title: "➕ Créer une Tâche ou une Réunion directement depuis un jour du Calendrier",
+        text: "L'agenda d'un jour (ouvert en cliquant dessus) propose désormais deux boutons \"+ Tâche\"/\"+ Réunion\", qui ouvrent le formulaire de création habituel avec ce jour déjà rempli comme échéance/date — jusqu'ici, il fallait créer l'élément ailleurs puis lui donner cette date manuellement.",
+        howTo: "Onglet Calendrier → clic sur un jour → \"+ Tâche\" ou \"+ Réunion\".",
+        gain: "Poser une tâche ou une réunion pour un jour précis sans changer d'écran ni ressaisir la date à la main.",
+      },
+      {
+        type: "fix",
+        title: "📅 Semaine : les titres longs sont désormais tronqués comme en vue Mois",
+        text: "En vue Semaine, un titre de tâche/réunion/décision/suivi trop long passait à la ligne, alors que la vue Mois le tronque déjà avec \"...\" — les deux vues se comportent désormais de la même façon sur ce point.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Un même contenu s'affiche de façon cohérente, qu'on soit en vue Mois ou Semaine.",
+      },
+      {
+        type: "fix",
+        title: "📎 Ressource créée via \"+ Créer et lier\" : apparaît aussi dans \"📎 Ressources\"",
+        text: "Créer une Ressource depuis \"🔗 Lié\" → \"+ Créer et lier\" sur une fiche Tâche ou Projet ne la faisait apparaître que dans la section \"🔗 Lié\" de cette fiche, jamais dans son bloc dédié \"📎 Ressources\" (contrairement à une Ressource créée via \"+ Nouvelle ressource\" directement depuis ce bloc). Elle apparaît désormais dans les deux, de façon cohérente quel que soit le chemin de création utilisé.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Retrouver une Ressource créée à la volée là où on s'attend naturellement à la voir, quel que soit le bouton utilisé pour la créer.",
+      },
+    ],
+  },
+  {
+    date: "21 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "☑️ Traiter plusieurs éléments Inbox en une fois (Information / Idée / Archiver)",
         text: "L'Inbox et la Revue hebdomadaire proposent maintenant un mode « Traiter en lot », à activer explicitement — le traitement reste un par un par défaut, exactement comme avant. Une fois activé, une case à cocher apparaît sur chaque élément en attente : sélectionne-en plusieurs puis choisis Information, Idée ou Archiver pour les qualifier d'un coup. Volontairement limité à ces 3 issues, qui ne demandent aucun formulaire — Action, Suivi, Projet, Réunion, Décision et Ressource continuent de se traiter un par un, avec leur formulaire habituel.",
         howTo: "Onglet Inbox (ou Revue hebdomadaire → section \"📥 Inbox\") → bouton \"☑️ Traiter en lot\" → coche les éléments concernés → choisis Information / Idée / Archiver dans la barre qui apparaît.",
