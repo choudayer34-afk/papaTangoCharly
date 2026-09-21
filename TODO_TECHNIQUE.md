@@ -159,7 +159,7 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous)
 
 *Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
@@ -168,6 +168,8 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 *Ajout du 21/09/2026 (3)* : TODO-029 et TODO-030 sont, comme TODO-022 à TODO-027, des besoins produit hors audits (BESOIN-006, BESOIN-007, voir section 9) — mais exprimés en retour direct de Charles-Henri après la livraison de LOT 2 (TODO-003/TODO-004), plutôt qu'avant le démarrage des lots. Ajoutées au backlog (LOT 14) à sa demande explicite, **sans être traitées dans l'immédiat** ; ne comptent pas dans les 157 problèmes ni les 22 actions d'origine.
 
 *Ajout du 21/09/2026 (4)* : TODO-031 est d'une nature encore différente — ni un besoin produit (une envie de fonctionnalité), ni une scission technique d'un TODO existant, mais un **bug** remonté par Charles-Henri en testant TODO-006 (LOT 1) sur iPhone : la liste de suggestions native (`<datalist>`) ne s'affiche jamais sur Safari iOS, sur les 4 endroits de l'app qui l'utilisent. Diagnostiqué par échange direct le 21/09/2026 (élimination d'une hypothèse de désynchronisation entre appareils : le vrai problème est bien l'absence totale d'affichage sur iPhone, pas un contenu différent). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
+
+*Ajout du 21/09/2026 (5)* : TODO-032 est encore différente — ni besoin produit, ni bug utilisateur, mais une découverte de dette technique (fichier mort jamais importé) faite en travaillant sur TODO-005 (LOT 3), signalée sans être corrigée conformément à la règle du lot ("si tu identifies un problème hors périmètre, ne le corrige pas"). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 ## [ ] P0 — TODO-001 — Vérifier, verrouiller et versionner les règles de sécurité Firestore réelles
 
@@ -227,7 +229,7 @@ Ordre recommandé : en parallèle de TODO-001 (LOT 0A) pour l'émulateur et les 
 
 Statut (21/09/2026, LOT 0B) : **Terminé.** Implémenté : dossier `tests/` versionné complet (`package.json`, `firebase.json`, tests de règles TEST-027/TEST-002 avec `@firebase/rules-unit-testing`, 2 parcours E2E TEST-020/TEST-021 et tests unitaires navigateur TEST-001/TEST-006 avec Playwright, amorce de TEST-018 limitée au cas connexion/liste blanche — voir `tests/README.md` pour le détail exact du périmètre couvert et non couvert). Dérogation exceptionnelle validée par Charles-Henri le 20/09/2026 : quelques lignes ajoutées dans `js/services/firebase.js`, actives uniquement derrière un indicateur explicite posé par les tests (`globalThis.__PILOTAGE_USE_FIREBASE_EMULATOR__`, jamais vrai en production), pour permettre à TEST-001/006/018/020/021 de faire tourner l'app contre l'émulateur plutôt que contre la production — seule exception de ce lot à « aucun fichier applicatif modifié », aucun autre fichier de `js/` n'a été touché. **Bloquant découvert en cours de lot** : le registre npm (`registry.npmjs.org`) est inaccessible depuis l'environnement de réalisation (politique réseau, HTTP 403 confirmé, non contourné) — aucun test n'a pu y être exécuté. **Ajouté le 21/09/2026** : workflow GitHub Actions `.github/workflows/tests.yml` (déclenchement manuel, `workflow_dispatch`) qui installe Node/Java/les dépendances de `tests/`, les navigateurs Playwright, exécute `npm run test:rules` puis `npm run test:e2e`, et publie le rapport Playwright en artefact . **Premier déclenchement (21/09/2026)** : a échoué dès `test:rules` (`Error: ../firestore.rules is outside of project directory`) — le CLI Firebase interdit un `firestore.rules` référencé en dehors du dossier contenant `firebase.json`, qui vivait dans `tests/`. Corrigé en déplaçant `firebase.json` à la racine du dépôt, à côté de `firestore.rules` (voir ce fichier), et en ajustant les scripts de `tests/package.json` (`--config ../firebase.json`) ; `firestore.rules` n'a pas changé. **Troisième déclenchement (21/09/2026)** : `test:rules` passe intégralement (12/12, un bug de `firestore.rules` trouvé et corrigé à cette occasion — voir TODO-001 ci-dessus). `test:e2e` a échoué sur 6 des 9 tests, tous diagnostiqués et corrigés dans les fichiers de `tests/` uniquement (aucun fichier applicatif touché) — voir `tests/README.md` pour le détail : 3 échecs TEST-001 par authentification manquante avant lecture de `allowedUsers/{email}` (règle self-read LOT 0A), 3 échecs TEST-018/020/021 par absence du drapeau `__PILOTAGE_USE_FIREBASE_EMULATOR__` dans les fichiers de test naviguant directement vers `/index.html` (l'app se connectait donc à la vraie production Firebase). **Quatrième déclenchement (21/09/2026)** : 7 des 9 tests `test:e2e` passent ; les 2 derniers (parcours E2E complets TEST-020/TEST-021) échouaient sur `<div class="modal-overlay">` interceptant un clic — cause : `js/app.js#maybeShowUsageNotice` puis `js/components/onboarding.js#maybeShowFirstRunTour` ouvrent automatiquement deux modales à la toute première connexion d'un compte (le cas de tout compte de test, neuf à chaque exécution), jamais fermées par ces deux tests. Corrigé en ajoutant `tests/support/firstRun.js#dismissFirstRunModals()`, appelée après connexion dans les deux parcours E2E — ferme ces modales si elles apparaissent, sans toucher à l'application. **Cinquième déclenchement (21/09/2026)** : 7/9 toujours acquis, les 2 mêmes parcours échouent maintenant plus loin, sur une assertion précise chacun — `capture-qualification.spec.js` : `getByText(rawText)` ambigu (champ Description ET entrée d'historique contiennent le même texte), corrigé en ciblant `#detail-description` ; `projet-creation-cloture.spec.js` : `#add-task-inline` masqué car sous l'onglet "Contenu" de la fiche projet (3 onglets, "Détails" actif par défaut), jamais cliqué par le test — corrigé en cliquant cet onglet, et en scopant la vérification de la tâche ajoutée à `#detail-tasks` pour la même raison d'ambiguïté que ci-dessus. **Sixième déclenchement (21/09/2026)** : confirmé par Charles-Henri — le workflow GitHub Actions est passé 100 % au vert (`test:rules` 12/12, `test:e2e` 9/9). Ce TODO est **Terminé** : l'amorce d'outillage de test (émulateur Firebase, tests de règles, 2 parcours E2E cœur) est en place, exécutée avec succès en CI, et versionnée. Rappel de périmètre (inchangé) : cette amorce ne couvre que 7 des 27 manques d'`AUDIT_TESTS.md` ; les 20 autres restent en backlog non planifié (section 4.2), et la validation de `firestore.rules` dans la console Firebase réelle ainsi que son déploiement effectif relèvent de TODO-001/LOT 0A, non de ce TODO.
 
-## [ ] P1 — TODO-003 — Généraliser les actions rapides à 1 clic (report d'échéance, relance) sur la carte Tâche
+## [x] P1 — TODO-003 — Généraliser les actions rapides à 1 clic (report d'échéance, relance) sur la carte Tâche — **Terminé**
 
 Type : UX
 
@@ -253,7 +255,7 @@ Validation : TEST-023 (cohérence du résultat quel que soit le chemin de report
 
 Ordre recommandé : après TODO-001/002, en tête des chantiers UX (LOT 2)
 
-Statut (21/09/2026, LOT 2) : **Partiellement terminé — code et tests écrits, validation CI réelle restant à confirmer.** Implémenté et versionné : contrôle rapide "📅" sur la carte Kanban (`js/views/kanban.js#renderCard`), ouvrant un panneau déplié EN LIGNE (jamais une popover positionnée en absolu — `.kanban-column-cards` défile en `overflow-y:auto`, qui aurait pu couper une popover absolue près du bas d'une colonne, même famille de bug déjà rencontrée et documentée sur `#kanban-filters`) avec trois actions : "+1 j", "+7 j" (base de calcul : l'échéance actuelle si elle n'est pas déjà dépassée, sinon aujourd'hui — reporter une tâche déjà en retard "+1 jour" l'amène à demain, pas à un jour de plus de retard) et "Date libre" (`<input type="date">`, comme partout ailleurs dans l'app). Calcul de date via un nouvel helper local `addDaysToIsoDate()`, qui réutilise `dateUtils.parseLocalDate()` et reformate en composants locaux — jamais `toISOString()` — même précaution que documentée dans `js/services/dateUtils.js` pour ne pas réintroduire le bug de décalage minuit UTC/local déjà corrigé. Test TEST-023 écrit (`tests/e2e/lot2-quick-postpone.spec.js`, 2 scénarios : "+1 jour" et "date libre", tous deux vérifiant la cohérence avec `#detail-due`, le chemin déjà existant). **Premier passage réel du workflow GitHub Actions (21/09/2026)** : le scénario "date libre" est passé du premier coup ; le scénario "+1 jour" a échoué sur un bug du TEST lui-même, pas de l'application — `tasksApi.updateTask()` n'est pas attendu par le clic sur "+1 j"/"+7 j" (même geste "tire et oublie" que les boutons `‹ ›` de statut déjà existants), donc le toast de confirmation s'affichait avant la fin de l'écriture Firestore, et le test rouvrait la fiche détail trop tôt. Corrigé en attendant la disparition du toast avant de rouvrir la fiche (voir `tests/README.md`) — à reconfirmer au prochain passage réel avant de considérer ce TODO Terminé.
+Statut (21/09/2026, LOT 2) : **Partiellement terminé — code et tests écrits, validation CI réelle restant à confirmer.** Implémenté et versionné : contrôle rapide "📅" sur la carte Kanban (`js/views/kanban.js#renderCard`), ouvrant un panneau déplié EN LIGNE (jamais une popover positionnée en absolu — `.kanban-column-cards` défile en `overflow-y:auto`, qui aurait pu couper une popover absolue près du bas d'une colonne, même famille de bug déjà rencontrée et documentée sur `#kanban-filters`) avec trois actions : "+1 j", "+7 j" (base de calcul : l'échéance actuelle si elle n'est pas déjà dépassée, sinon aujourd'hui — reporter une tâche déjà en retard "+1 jour" l'amène à demain, pas à un jour de plus de retard) et "Date libre" (`<input type="date">`, comme partout ailleurs dans l'app). Calcul de date via un nouvel helper local `addDaysToIsoDate()`, qui réutilise `dateUtils.parseLocalDate()` et reformate en composants locaux — jamais `toISOString()` — même précaution que documentée dans `js/services/dateUtils.js` pour ne pas réintroduire le bug de décalage minuit UTC/local déjà corrigé. Test TEST-023 écrit (`tests/e2e/lot2-quick-postpone.spec.js`, 2 scénarios : "+1 jour" et "date libre", tous deux vérifiant la cohérence avec `#detail-due`, le chemin déjà existant). **Premier passage réel du workflow GitHub Actions (21/09/2026)** : le scénario "date libre" est passé du premier coup ; le scénario "+1 jour" a échoué sur un bug du TEST lui-même, pas de l'application — `tasksApi.updateTask()` n'est pas attendu par le clic sur "+1 j"/"+7 j" (même geste "tire et oublie" que les boutons `‹ ›` de statut déjà existants), donc le toast de confirmation s'affichait avant la fin de l'écriture Firestore, et le test rouvrait la fiche détail trop tôt. Corrigé en attendant la disparition du toast avant de rouvrir la fiche (voir `tests/README.md`). **Confirmation de Charles-Henri (21/09/2026)** : nouveau passage réel du workflow GitHub Actions, les deux scénarios de TEST-023 ("+1 jour" et "date libre") sont désormais verts. TODO-003 est en conséquence **Terminé**, sans blocage résiduel de son fait.
 
 ## [x] P1 — TODO-004 — Étendre les rappels de retard aux Suivis — **Terminé**
 
@@ -308,6 +310,8 @@ Complexité : S
 Validation : TEST-024 (comportement du filtre de recherche)
 
 Ordre recommandé : avec TODO-003/004 (LOT 3)
+
+Statut (21/09/2026, LOT 3) : **Partiellement terminé — volet affichage fait, volet recherche en attente d'arbitrage.** Implémenté et versionné : le score de santé (`projectHealthApi.computeHealth`, déjà utilisé par la vue "🩺 Santé", inchangé) est désormais aussi affiché dans l'en-tête de la fiche projet (`js/views/projects.js#openProjectDetail`, badge cliquable vers le signal le plus grave — seulement pour un projet actif, un projet fermé n'ayant plus besoin d'être surveillé, même filtre que `rankByHealth`) et sur chaque carte de la section "📦 Mes projets" du Dashboard (`js/views/dashboard.js#renderProjectsSection`, badge non cliquable séparément, la carte entière ouvrant déjà la fiche). **Volet recherche non implémenté, point bloquant identifié et à trancher par Charles-Henri** : `js/components/search.js#openSearchModal` documente une décision produit déjà actée et datée (13/09/2026, commentaire au-dessus de `#search-include-done`) selon laquelle la recherche ne porte PAS par défaut sur ce qui est terminé/archivé ("retrouver un vieux sujet clos ne doit pas noyer ce qu'on cherche activement aujourd'hui"), exactement l'inverse de la solution proposée par TODO-005 ("cocher par défaut... l'inclusion des archivés"). N'ayant pas d'instruction explicite annulant cette décision du 13/09, ce volet n'a pas été implémenté pour éviter de revenir dessus sans validation — voir échange du 21/09/2026 avec Charles-Henri. TEST-024 non écrit tant que ce point n'est pas tranché.
 
 ## [ ] P1 — TODO-006 — Retour visuel explicite et validation partagée sur les formulaires
 
@@ -795,6 +799,8 @@ Validation : Non déterminé — pas de test automatisé prévu pour cet écran
 
 Ordre recommandé : LOT 3 (rejoint TODO-005, même thème de visibilité de l'information déjà calculée)
 
+Statut (21/09/2026, LOT 3) : **Non commencé — cadrage demandé à Charles-Henri, exactement le point que ce TODO indique lui-même devoir préciser (voir "Solution" ci-dessus).** Le modèle de données Suivi (`js/domain/followups.js`) ne porte aucun champ nommé "collaborateur"/"personnel" : le rattachement le plus probant identifié est `direction` (`waiting_on` = "j'attends quelque chose de cette personne", `dueDate` appartenant alors à la personne suivie ; `to_tell` = "je dois lui transmettre quelque chose", sans `dueDate`, seule une `controlDate` qui revient à Charles-Henri lui-même) combiné à `Person.type` (`manager` vs le reste, déjà nommé "collaborateurs" ailleurs dans l'app — voir `js/views/people.js`). Plusieurs lectures restent possibles du texte de ce TODO ("ce qui relève d'un suivi/contrôle qui lui revient" vs. "en excluant les échéances de contrôle des collaborateurs") ; n'ayant pas la certitude du critère exact voulu, ce TODO n'a pas été implémenté à l'aveugle — voir échange du 21/09/2026 avec Charles-Henri.
+
 ## [ ] P1 — TODO-023 — Corriger les régressions d'affichage en mode sombre
 
 *Ajouté le 21/09/2026 — besoin produit (BESOIN-003), voir section 9.*
@@ -1049,6 +1055,34 @@ Ordre recommandé : non affectée à un lot pour l'instant, à planifier
 
 ---
 
+## [ ] P3 — TODO-032 — Supprimer le fichier mort `js/views/projectHealth.js` (doublon jamais importé de `js/domain/projectHealth.js`)
+
+*Ajoutée le 21/09/2026 — découverte hors périmètre en travaillant sur TODO-005 (LOT 3), signalée sans être corrigée conformément à la règle du lot ("si tu identifies un problème hors périmètre, ne le corrige pas").*
+
+Type : CODE (dette technique, aucun impact utilisateur)
+
+Problème : `js/views/projectHealth.js` est un doublon quasi identique de `js/domain/projectHealth.js` (même `computeHealth`/`rankByHealth`, même logique), mais n'est importé nulle part dans l'app (`grep` ne trouve aucun `from ".../views/projectHealth.js"`) — jamais exécuté. Il importe même `./tasks.js` en relatif à `js/views/`, fichier qui n'existe pas à cet emplacement (seul `js/domain/tasks.js` existe) : ce fichier planterait s'il était un jour importé par erreur.
+
+Cause racine : fichier mort, probablement un reliquat d'un déplacement de `js/views/` vers `js/domain/` non nettoyé après coup.
+
+Solution : supprimer `js/views/projectHealth.js` après avoir confirmé (nouvelle recherche au moment du traitement) qu'aucun import n'y a été ajouté entretemps.
+
+Fichiers concernés : `js/views/projectHealth.js` (suppression)
+
+Dépendances : aucune
+
+Problèmes résolus : (nouveau, hors audits — dette technique)
+
+Risque : faible — suppression d'un fichier non importé
+
+Complexité : XS
+
+Validation : `grep` de contrôle avant suppression (aucun import) + vérification que la vue "🩺 Santé" (`js/views/projects.js`, qui importe `js/domain/projectHealth.js`) continue de fonctionner après coup
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier (bas risque, sans urgence)
+
+---
+
 ## 6. Lots de correction (ordre de correction recommandé)
 
 ### LOT 0A — Sécurité Firestore
@@ -1086,14 +1120,14 @@ Les trois tests prévus (TEST-017, TEST-010, TEST-025) sont désormais **tous co
 
 Pour son propre périmètre — celui qui reste réellement à la charge de ce lot une fois SEC-011 formellement reporté à TODO-028 — LOT 1 a donc atteint l'état qui vaudrait normalement un statut Terminé : ses deux TODO sont, chacun pour ce qui relève effectivement de LOT 1, implémentés, versionnés et validés par un passage CI réel, sans blocage résiduel de leur fait. **Ce lot n'est cependant volontairement pas basculé à Terminé, sur instruction explicite de Charles-Henri (21/09/2026)** — un futur passage à Terminé de LOT 1, s'il est décidé, n'a donc plus pour condition que la validation CI (déjà acquise) et le report de SEC-011 (déjà fait) ; il reste soumis à la confirmation de Charles-Henri lui-même, et non à un travail restant sur TODO-006 ou TODO-007.
 
-### LOT 2 — Parité Tâche/Suivi et actions rapides
+### LOT 2 — Parité Tâche/Suivi et actions rapides — **Terminé**
 **Objectif** : généraliser les gestes rapides déjà éprouvés sur la Tâche aux situations où ils manquent (date, Suivi), avec un bénéfice mobile en prime.
 **Problèmes concernés** : TODO-003, TODO-004
 **Prérequis** : aucun
 **Modifications principales** : contrôle rapide de date sur carte, boutons de relance Suivi, extension de la notification de retard
 **Tests nécessaires** : TEST-023, TEST-005
 **Risques** : faible
-**Statut (21/09/2026)** : **Partiellement terminé.** TODO-003 et TODO-004 sont chacun implémentés et versionnés dans leur intégralité. Premier passage réel du workflow GitHub Actions (21/09/2026) : TODO-004 est **Terminé** (`lot2-followup-quick-actions.spec.js` 2/2, `lot2-followup-reminders.spec.js` 2/2, verts dès ce premier passage). TODO-003 reste **partiellement terminé** : sur les 2 scénarios de TEST-023, "date libre" est passé du premier coup mais "+1 jour" a échoué sur un bug du test lui-même (course entre le toast de confirmation et l'écriture Firestore, non de l'application — voir TODO-003 ci-dessus et `tests/README.md`), corrigé et en attente d'un nouveau passage pour être confirmé avant de considérer ce lot Terminé.
+**Statut (21/09/2026)** : **Terminé.** TODO-003 et TODO-004 sont chacun implémentés, versionnés et validés par un passage réel du workflow GitHub Actions. TODO-004 était vert dès le premier passage (`lot2-followup-quick-actions.spec.js` 2/2, `lot2-followup-reminders.spec.js` 2/2). TODO-003 avait un scénario de TEST-023 en échec sur un bug du test lui-même (course entre le toast de confirmation et l'écriture Firestore, non de l'application — voir TODO-003 ci-dessus et `tests/README.md`) ; corrigé, puis **confirmé vert par Charles-Henri (21/09/2026)** sur les 2 scénarios lors d'un nouveau passage réel. Les deux TODO du lot sont donc Terminé, sans blocage résiduel.
 
 ### LOT 3 — Visibilité de l'information déjà calculée
 **Objectif** : afficher ce que le système sait déjà là où l'utilisateur en a besoin.
@@ -1102,6 +1136,7 @@ Pour son propre périmètre — celui qui reste réellement à la charge de ce l
 **Modifications principales** : score de santé en fiche projet/Dashboard, inclusion par défaut des archivés en recherche, carte indicateur « Échéances du jour »
 **Tests nécessaires** : TEST-024
 **Risques** : faible
+**Statut (21/09/2026)** : **Partiellement terminé — en pause, 2 points d'arbitrage soumis à Charles-Henri.** Le volet non ambigu de TODO-005 (score de santé affiché en fiche projet et sur le Dashboard) est implémenté et versionné. Deux points ont été identifiés comme nécessitant une décision de Charles-Henri avant de continuer, plutôt que d'être tranchés à sa place : (1) le volet "inclusion des archivés en recherche" de TODO-005 contredit une décision produit déjà actée et documentée le 13/09/2026 dans `js/components/search.js` (recherche non élargie par défaut, décision explicite et datée) ; (2) TODO-022 indique lui-même explicitement avoir besoin d'un cadrage sur le critère "échéance personnelle" vs. "échéance collaborateur", qui n'a pas de traduction évidente et unique dans le modèle de données Suivi actuel. Voir le détail dans TODO-005 et TODO-022 ci-dessus, et l'échange du 21/09/2026 avec Charles-Henri.
 
 ### LOT 4A — Requêtes ciblées
 
