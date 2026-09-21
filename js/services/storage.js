@@ -16,6 +16,8 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
+  arrayUnion,
   deleteDoc,
   onSnapshot,
   query,
@@ -112,6 +114,23 @@ export async function remove(collectionName, id) {
 // différents restent traités en parallèle (une file par clé, pas une file globale).
 const updateQueues = new Map();
 
+// Extrait le 21/09/2026 (LOT 4B, TODO-010) : bookkeeping de la file par (collectionName, id),
+// jusqu'ici dupliqué UNE seule fois dans `update()` ci-dessous. `appendToArray()`/`setFields()`
+// (plus bas) en ont besoin à l'identique — mutualisé ici plutôt que recopié, pour qu'un futur
+// correctif de cette mécanique de sérialisation (celle qui protège CODE-021, voir le commentaire
+// original juste en dessous) n'ait qu'un seul endroit à corriger, jamais plusieurs copies
+// susceptibles de diverger silencieusement entre elles.
+function enqueue(collectionName, id, task) {
+  const key = `${collectionName}/${id}`;
+  const previous = updateQueues.get(key) || Promise.resolve();
+  const run = previous.catch(() => {}).then(task);
+  updateQueues.set(key, run);
+  run.catch(() => {}).finally(() => {
+    if (updateQueues.get(key) === run) updateQueues.delete(key);
+  });
+  return run;
+}
+
 /**
  * Lit puis modifie un document de façon sérialisée par (collectionName, id) — à utiliser à la
  * place de `get()` + `put()` séparés dès qu'une écriture dépend de l'état courant du document.
@@ -124,9 +143,7 @@ const updateQueues = new Map();
  * exprimer une suppression). Renvoie sinon le document écrit (comme `put`).
  */
 export async function update(collectionName, id, mutate) {
-  const key = `${collectionName}/${id}`;
-  const previous = updateQueues.get(key) || Promise.resolve();
-  const run = previous.catch(() => {}).then(async () => {
+  return enqueue(collectionName, id, async () => {
     const current = await get(collectionName, id);
     const patch = await mutate(current);
     if (patch === undefined) return current;
@@ -136,11 +153,47 @@ export async function update(collectionName, id, mutate) {
     }
     return put(collectionName, merged);
   });
-  updateQueues.set(key, run);
-  run.catch(() => {}).finally(() => {
-    if (updateQueues.get(key) === run) updateQueues.delete(key);
+}
+
+// Ajouté le 21/09/2026 (LOT 4B, TODO-010) : primitive d'écriture CIBLÉE pour le cas le plus
+// fréquent des mutations "additives" identifiées par l'audit (`addNote`, `addChecklistItem`,
+// `addOutlookMeeting`, `addPart`...) — ajouter un élément à un tableau du document SANS avoir
+// besoin de connaître son contenu actuel. Contrairement à `update()` ci-dessus (lecture complète
+// du document, patch calculé en mémoire, réécriture complète via `setDoc`), ceci utilise
+// `updateDoc()` + `arrayUnion()` de Firestore : une écriture ATOMIQUE côté serveur, ciblée sur le
+// seul champ `field`, sans jamais lire ni retransmettre le reste du document. `item` doit être un
+// objet dont l'égalité profonde ne risque jamais de coïncider avec un élément déjà présent (voir
+// les appelants : chacun pose son propre `id` généré via `generateId()`), car `arrayUnion` ne fait
+// rien si Firestore juge l'élément déjà présent — ce n'est PAS adapté à un tableau d'éléments
+// interchangeables sans identité propre. Volontairement réservé aux mutations SANS logique
+// conditionnelle (jamais pour "trouver et modifier un élément existant par id", comme
+// `toggleChecklistItem`/`toggleStep` — ces cas gardent `update()` ci-dessus, qui reste seul
+// capable d'inspecter l'état courant). Passe par la MÊME file `enqueue()` que `update()` : un
+// appel `update()` et un appel `appendToArray()` sur le MÊME document restent mutuellement
+// sérialisés (jamais concurrents entre eux), donc un `update()` mis en file APRÈS un
+// `appendToArray()` relira bien le tableau déjà complété par ce dernier — la garantie CODE-021
+// (aucune écriture perdue) reste intacte malgré ce nouveau chemin d'écriture qui ne passe plus par
+// `get()`+`put()`. Ne renvoie que l'élément ajouté (jamais le document complet, qui n'est jamais
+// relu ici) — à l'appelant de mettre à jour sa propre copie locale en conséquence, voir les
+// commentaires dans `js/domain/tasks.js#addNote` et ses équivalents.
+export async function appendToArray(collectionName, id, field, item) {
+  return enqueue(collectionName, id, async () => {
+    await updateDoc(docRef(collectionName, id), { [field]: arrayUnion(item), updatedAt: Date.now() });
+    return item;
   });
-  return run;
+}
+
+// Ajouté le 21/09/2026 (LOT 4B, TODO-010) : primitive d'écriture CIBLÉE pour un remplacement de
+// champ(s) inconditionnel (ex. `setWaitingNote` — la nouvelle valeur ne dépend jamais de
+// l'ancienne, contrairement aux mutations qui ont besoin de `update()`). Même principe et même
+// garantie de sérialisation que `appendToArray()` ci-dessus (passe par la même file `enqueue()`),
+// mais via `updateDoc()` seul (sans `arrayUnion`) puisqu'il s'agit ici de remplacer des champs
+// scalaires, pas d'ajouter un élément à un tableau.
+export async function setFields(collectionName, id, fields) {
+  return enqueue(collectionName, id, async () => {
+    await updateDoc(docRef(collectionName, id), { ...fields, updatedAt: Date.now() });
+    return fields;
+  });
 }
 
 // BUG corrigé (15/09/2026, audit "anomalies silencieuses" : échecs qui disparaissent) :
