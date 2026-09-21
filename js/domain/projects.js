@@ -187,8 +187,35 @@ export function listAll() {
   return storage.listAll(COLLECTION);
 }
 
+// BUG corrigé (21/09/2026, audit performance, TODO-009B) : même correctif que
+// js/domain/tasks.js#subscribe (voir son commentaire pour le détail) — `subscribe()` ouvrait un
+// `onSnapshot` Firestore indépendant à chaque appel, jusqu'à 6 vues (Accueil, Pilotage,
+// Calendrier, Priorisation, Projets, Ressources) écoutant simultanément la même collection
+// `projects`. Même mécanisme de mutualisation qu'`inboxItems` (js/domain/inbox.js), sans filtre
+// (tous les appelants veulent la liste complète).
+const rawListeners = new Set();
+let rawUnsubscribe = null;
+let lastRawItems = null;
+
 export function subscribe(callback) {
-  return storage.subscribe(COLLECTION, callback);
+  rawListeners.add(callback);
+  if (!rawUnsubscribe) {
+    rawUnsubscribe = storage.subscribe(COLLECTION, (items) => {
+      lastRawItems = items;
+      for (const cb of rawListeners) cb(items);
+    });
+  } else if (lastRawItems) {
+    // Voir js/domain/tasks.js#subscribe pour l'explication de ce cas.
+    callback(lastRawItems);
+  }
+  return () => {
+    rawListeners.delete(callback);
+    if (rawListeners.size === 0 && rawUnsubscribe) {
+      rawUnsubscribe();
+      rawUnsubscribe = null;
+      lastRawItems = null;
+    }
+  };
 }
 
 /**
