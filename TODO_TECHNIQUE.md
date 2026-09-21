@@ -159,7 +159,7 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous ; TODO-035 ajoutée le 21/09/2026, voir note ci-dessous)
 
 *Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
@@ -172,6 +172,8 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 *Ajout du 21/09/2026 (5)* : TODO-032 est encore différente — ni besoin produit, ni bug utilisateur, mais une découverte de dette technique (fichier mort jamais importé) faite en travaillant sur TODO-005 (LOT 3), signalée sans être corrigée conformément à la règle du lot ("si tu identifies un problème hors périmètre, ne le corrige pas"). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 *Ajout du 21/09/2026 (6)* : TODO-033 et TODO-034 sont, comme TODO-032, des découvertes hors périmètre faites en travaillant sur TODO-009A (LOT 4A), signalées sans être corrigées conformément à la même règle du lot. TODO-033 reprend le volet « dernière activité `usageEvents` » de TODO-009A lui-même, dont les deux solutions proposées par la roadmap se sont révélées, à l'examen, disproportionnées par rapport au risque « faible » annoncé (voir TODO-009A ci-dessous) — Charles-Henri a tranché en `AskUserQuestion` de le laisser tel quel et de le journaliser en backlog plutôt que de l'implémenter dans ce lot. TODO-034 documente 4 autres points d'appel du même motif que celui corrigé sur `renderLinkedSection` (`fetchBundle()`+`resolveRef()` rechargeant 9 collections pour résoudre une seule référence), repérés par recherche mais non listés dans le périmètre déclaré de TODO-009A, donc non touchés. Ni l'une ni l'autre ne provient des 9 audits sources ; elles ne s'ajoutent donc pas aux 157 problèmes ni aux 22 actions d'origine.
+
+*Ajout du 21/09/2026 (7)* : TODO-035 est encore différente — ni besoin produit, ni bug utilisateur au sens fonctionnel, ni scission technique, mais une découverte de dette technique (fichier mort) faite en diagnostiquant l'incident de cache de Service Worker (`sw.js`) remonté par Charles-Henri après la livraison de LOT 4A (voir le correctif dédié `sw.js`, hors roadmap car ne se rattachant à aucun TODO). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 ## [ ] P0 — TODO-001 — Vérifier, verrouiller et versionner les règles de sécurité Firestore réelles
 
@@ -1149,6 +1151,34 @@ Ordre recommandé : non affectée à un lot pour l'instant, à planifier
 
 ---
 
+## [ ] P3 — TODO-035 — Supprimer le fichier mort `js/services/storage-local.js` (mode stockage local abandonné, jamais réellement retiré du dépôt)
+
+*Ajoutée le 21/09/2026 — découverte hors périmètre en diagnostiquant l'incident de cache de Service Worker remonté par Charles-Henri après la livraison de LOT 4A (voir le correctif dédié dans `sw.js`), signalée sans être corrigée conformément à la règle "si tu identifies un problème hors périmètre, ne le corrige pas".*
+
+Type : CODE (dette technique, aucun impact utilisateur)
+
+Problème : `sw.js` affirme depuis le 15/09/2026, en commentaire, que « `storage-local.js` a été retiré : ce fichier n'existe plus dans l'application (le mode "stockage local" a été remplacé par Firestore) » et l'a en conséquence retiré de `APP_SHELL`. Or `js/services/storage-local.js` existe toujours réellement dans le dépôt (5,3 Ko, daté du 15/09/2026) — seul son retrait du précache a été fait, pas la suppression du fichier lui-même. Aucun fichier applicatif ne l'importe (seul `js/services/storage.js` le MENTIONNE en commentaire, sans `import`) : comme `js/views/projectHealth.js` (TODO-032), c'est un fichier mort jamais exécuté, mais qui laisse le dépôt et son historique de commentaires en contradiction avec l'état réel des fichiers.
+
+Cause racine : suppression partielle (retrait du précache) jamais suivie de la suppression réelle du fichier, ni d'une correction du commentaire de `sw.js` qui affirme à tort qu'il « n'existe plus ».
+
+Solution : supprimer `js/services/storage-local.js` après avoir confirmé (nouvelle recherche au moment du traitement) qu'aucun `import` n'y a été ajouté entretemps ; envisager de corriger le commentaire de `sw.js` (15/09/2026) qui affirme à tort que le fichier a déjà été supprimé.
+
+Fichiers concernés : `js/services/storage-local.js` (suppression)
+
+Dépendances : aucune
+
+Problèmes résolus : (nouveau, hors audits — dette technique)
+
+Risque : faible — suppression d'un fichier non importé, déjà exclu du précache
+
+Complexité : XS
+
+Validation : `grep` de contrôle avant suppression (aucun import)
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier (bas risque, sans urgence) — peut être regroupée avec TODO-032, même nature
+
+---
+
 ## 6. Lots de correction (ordre de correction recommandé)
 
 ### LOT 0A — Sécurité Firestore
@@ -1215,6 +1245,8 @@ Pour son propre périmètre — celui qui reste réellement à la charge de ce l
 **Tests nécessaires** : TEST-013, TEST-014
 **Risques** : faible (TODO-009A) à moyen (TODO-009B, désynchronisation possible si mal exécuté)
 **Statut (21/09/2026)** : **Partiellement terminé.** TODO-009B est Terminé : mutualisation des abonnements Firestore généralisée à `tasks`/`projects`/`followUps`, transparente pour les 8 vues appelantes (aucune n'a eu besoin d'être modifiée). TODO-009A est partiellement terminé : les volets `tags.js` (conversion à `listWhere`) et `linkedItems.js#renderLinkedSection` (lecture directe + chargement différé des données auxiliaires) sont faits ; le volet `usageEvents` a été soumis à Charles-Henri (ses deux solutions proposées se sont révélées plus risquées que ce que la roadmap annonçait) et reporté en backlog sous **TODO-033** à sa demande explicite. Une découverte hors périmètre (4 autres appelants du même motif `fetchBundle()`/`resolveRef()`) a été signalée sans être corrigée, journalisée sous **TODO-034**. Voir TODO-009A/TODO-009B en section 5 pour le détail complet. Tests écrits (`tests/unit/lot4a-subscribe-mutualization.spec.js`, `tests/unit/lot4a-tags-listwhere.spec.js`), non exécutés dans l'environnement de réalisation (registre npm bloqué) — à confirmer par un passage réel du workflow GitHub Actions, comme pour tous les lots précédents. **Ce lot ne passe donc pas à Terminé** et n'enchaîne pas automatiquement sur LOT 4B, en attente de la confirmation CI et de la validation de Charles-Henri.
+
+**Incident signalé après livraison (21/09/2026)** : Charles-Henri a remonté deux erreurs au chargement (`SyntaxError` sur un export de `tasks.js`, `Cache.put() encountered a network error`). Diagnostic : `CACHE_NAME` (`sw.js`) n'avait pas été incrémenté depuis le 15/09/2026 alors que LOT 1, LOT 2, LOT 3 et LOT 4A ont chacun modifié des fichiers précachés — la classe de bug que ce même fichier documente pourtant en détail comme devant être évitée systématiquement. Corrigé hors périmètre de ce lot (`sw.js` n'est concerné par aucun TODO de LOT 4A) : `CACHE_NAME` incrémenté, et `js/components/formValidation.js` (LOT 1) ajouté à `APP_SHELL` où il manquait depuis sa création (même classe d'oubli, détectée à cette occasion par comparaison exhaustive). Un fichier mort supplémentaire trouvé au passage (`js/services/storage-local.js`, jamais réellement supprimé malgré un commentaire de `sw.js` affirmant le contraire) a été journalisé sans être corrigé, voir **TODO-035**. Voir le commentaire détaillé directement dans `sw.js` pour l'analyse complète.
 
 ### LOT 4B — Écritures ciblées et rétention
 
