@@ -208,7 +208,7 @@
 // rechargement peut ne pas suffire si le Service Worker actuellement actif reste bloqué en
 // attente de contrôle — désinscrire le Service Worker existant (ou vider les données du site)
 // puis recharger complètement une fois ce fichier redéployé.
-const CACHE_NAME = "pilotage-cache-v62";
+const CACHE_NAME = "pilotage-cache-v63";
 const APP_SHELL = [
   "./",
   "./index.html",
