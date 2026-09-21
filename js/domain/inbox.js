@@ -6,6 +6,11 @@
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
 import { createTask } from "./tasks.js";
+import * as linksApi from "./links.js";
+import * as projectsApi from "./projects.js";
+import * as followUpsApi from "./followups.js";
+import * as meetingsApi from "./meetings.js";
+import * as decisionsApi from "./decisions.js";
 
 const COLLECTION = "inboxItems";
 
@@ -213,6 +218,36 @@ const RESULT_KEY = {
   resource: "resultResourceId",
 };
 
+// TODO-008 (LOT 6, 21/09/2026) — lien automatique entité créée ↔ projet, uniquement quand un
+// `projectId` de contexte est déjà connu AU MOMENT de la création de l'entité (voir
+// AUDIT_USAGE_EFFICACITE.md, UX-026, et TODO_TECHNIQUE.md, TODO-008 point 2). Limité aux
+// issues dont le formulaire de création permet déjà de choisir un projet : Task, FollowUp,
+// Meeting, Decision (point 2). Project ne se lie pas à lui-même et Resource n'a pas de
+// `projectId` à sa création (point 3) : ni l'un ni l'autre n'a donc d'entrée ici — ce ne sont
+// pas des cas particuliers à gérer, simplement les seules issues concernées. Réutilise
+// linksApi.createLink, exactement le mécanisme déjà écrit pour "+ Créer et lier"
+// (js/components/linkedItems.js#openCreateFormFor / titleField) — pas de nouvelle architecture
+// de gestion des liens (point 5).
+//
+// NE COUVRE PAS le lien InboxItem source ↔ entité créée (TODO-008 point 1) : voir la note en
+// tête de qualify() ci-dessous — ce point reste en attente d'arbitrage.
+const OUTCOME_PROJECT_LINK = {
+  followup: { type: "FollowUp", get: followUpsApi.getFollowUp, titleField: "title" },
+  meeting: { type: "Meeting", get: meetingsApi.getMeeting, titleField: "title" },
+  decision: { type: "Decision", get: decisionsApi.getDecision, titleField: "title" },
+};
+
+/** Pose le lien entité créée ↔ projet quand l'entité a effectivement un `projectId` connu. */
+async function linkEntityToProjectIfKnown(type, entity, titleField) {
+  if (!entity || !entity.projectId) return;
+  const project = await projectsApi.getProject(entity.projectId);
+  if (!project) return;
+  await linksApi.createLink(
+    { type, id: entity.id, label: entity[titleField] },
+    { type: "Project", id: project.id, label: project.name }
+  );
+}
+
 /**
  * Qualifie un élément d'Inbox.
  * - "task"     → crée une vraie Tâche à partir du contenu (le reste des champs se fait
@@ -225,6 +260,14 @@ const RESULT_KEY = {
  *                (§47 "information de contexte").
  * - "archived" → l'élément est classé sans suite.
  * Dans tous les cas, la capture brute originale n'est jamais perdue (Règle 3).
+ *
+ * TODO-008 (LOT 6, 21/09/2026) : pose aussi, quand elle s'applique, le lien entité créée ↔
+ * projet (voir OUTCOME_PROJECT_LINK / linkEntityToProjectIfKnown ci-dessus — point 2 de
+ * TODO-008). Le lien InboxItem source ↔ entité créée (point 1 de TODO-008) N'EST PAS posé ici :
+ * il est en attente d'arbitrage (voir TODO_TECHNIQUE.md, TODO-008, note LOT 6) — les seuls
+ * types de référence que sait résoudre js/components/linkedItems.js pour une entité de ce
+ * module ("Kept") sont filtrés sur `status === "kept"`, alors que ces six issues posent
+ * `status: "processed"` : un tel lien s'afficherait "Élément supprimé" dès sa création.
  */
 export async function qualify(itemId, outcome, extra = {}) {
   // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : lecture et écriture de
@@ -272,11 +315,17 @@ export async function qualify(itemId, outcome, extra = {}) {
 
   if (outcome === "task") {
     await storage.logHistory("InboxItem", itemId, "qualified_as_task", { taskId: task.id });
+    await linkEntityToProjectIfKnown("Task", task, "title");
     return { outcome: "task", task };
   }
 
   if (RESULT_KEY[outcome]) {
     await storage.logHistory("InboxItem", itemId, "qualified_as_" + outcome, { id: extra.id });
+    const projectLink = OUTCOME_PROJECT_LINK[outcome];
+    if (projectLink && extra.id) {
+      const entity = await projectLink.get(extra.id);
+      await linkEntityToProjectIfKnown(projectLink.type, entity, projectLink.titleField);
+    }
     return { outcome };
   }
 
