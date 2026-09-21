@@ -45,6 +45,13 @@ const WHATS_NEW = [
         howTo: "Qualifie une capture en Tâche/Suivi/Réunion/Décision en choisissant un projet dans le formulaire — le lien apparaît directement dans la fiche créée et dans celle du projet.",
         gain: "Retrouver depuis le projet tout ce qui en est directement issu, sans avoir à poser le lien soi-même après coup.",
       },
+      {
+        type: "add",
+        title: "🔗 Retrouver la capture Inbox d'origine depuis la fiche qu'elle a produite",
+        text: "Qualifier une capture en Tâche, Suivi, Projet, Réunion, Décision ou Ressource pose désormais aussi un lien vers la capture Inbox d'origine, visible dans la section \"🔗 Lié\" de la fiche créée — clique dessus pour retrouver le texte brut exact et sa date de capture, tel quel, sans qu'aucune action de gestion (archiver, changer de type...) ne soit proposée sur cette fiche de rappel.",
+        howTo: "Ouvre n'importe quelle Tâche/Suivi/Projet/Réunion/Décision/Ressource issue d'une qualification Inbox → section \"🔗 Lié\" → l'entrée \"📥 ...\" ouvre la capture d'origine.",
+        gain: "Retrouver le contexte exact d'origine d'un élément (le mot pour mot de la capture), même longtemps après sa qualification, sans avoir à s'en souvenir soi-même.",
+      },
     ],
   },
   {
