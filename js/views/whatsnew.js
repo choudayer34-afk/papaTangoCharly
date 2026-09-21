@@ -32,6 +32,39 @@ const WHATS_NEW = [
     date: "21 septembre 2026",
     items: [
       {
+        type: "fix",
+        title: "⌨️ Le clavier ne fait plus sortir d'une fiche ouverte",
+        text: "Dans une fiche ou un formulaire ouvert (Tâche, Projet, Suivi...), la touche Tab pouvait faire sortir le focus clavier vers l'écran en dessous, invisible sous la fiche mais toujours atteignable au clavier — il fallait alors deviner où on se trouvait. Tab/Maj+Tab restent désormais dans la fiche ouverte, et le focus revient automatiquement à l'endroit d'où on l'a ouverte une fois qu'on la referme.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Naviguer une fiche entièrement au clavier sans jamais perdre le fil de où se trouve le focus.",
+      },
+      {
+        type: "change",
+        title: "⌨️ Échap protège désormais une saisie en cours, comme le clic en dehors",
+        text: "Cliquer par erreur en dehors d'une fiche en cours de remplissage ne la ferme déjà plus (pour ne pas perdre la saisie) — la touche Échap suit maintenant exactement la même règle : elle ne ferme plus une fiche contenant un champ modifiable non enregistré. Pour les fiches sans aucun champ (confirmations, listes de choix), Échap continue de fermer normalement.",
+        howTo: "Rien à faire, c'est automatique — sur une fiche avec un champ à remplir, utilise le bouton \"Fermer\"/\"Annuler\" pour la refermer.",
+        gain: "Ne plus perdre une saisie en cours par un Échap réflexe, exactement comme c'était déjà le cas pour un clic accidentel en dehors.",
+      },
+      {
+        type: "fix",
+        title: "⌨️ Indicateur de focus visible sur les champs de formulaire au clavier",
+        text: "En naviguant au clavier (Tab), un champ de formulaire ne montrait plus aucun contour de focus net — seul un léger changement de couleur de bordure, peu visible. Un contour net apparaît désormais spécifiquement lors d'une navigation au clavier (comme déjà sur le bouton de thème clair/sombre), sans rien changer à l'apparence au clic à la souris.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Repérer immédiatement quel champ a le focus quand on navigue au clavier.",
+      },
+      {
+        type: "add",
+        title: "⌨️ Focus automatique sur le premier champ à l'ouverture d'une fiche",
+        text: "Ouvrir une fiche ou un formulaire (Tâche, Projet, Suivi...) place désormais automatiquement le focus sur son premier champ ou bouton, prêt à taper ou naviguer immédiatement au clavier — jusqu'ici, seuls certains écrans (Capturer, recherche, Prompts...) le faisaient déjà ; c'est maintenant le cas partout, y compris sur les formulaires de création Tâche et Projet qui ne l'avaient pas.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Commencer à saisir sans avoir à cliquer ou tabuler jusqu'au premier champ.",
+      },
+    ],
+  },
+  {
+    date: "21 septembre 2026",
+    items: [
+      {
         type: "add",
         title: "🔧 Filtres Type / Projet sur le Calendrier",
         text: "Le Calendrier propose désormais un menu \"🔧 Filtrer\" (comme sur Pilotage/Projets) pour ne garder que certains types d'éléments (✅ Tâches, 🗓️ Réunions, 🗳️ Décisions, 👀 Suivis) ou un projet précis. Tout reste affiché par défaut, exactement comme avant, tant que le filtre n'est pas touché.",
