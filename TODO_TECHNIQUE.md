@@ -159,11 +159,15 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous)
 
 *Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
 *Ajout du 21/09/2026 (2)* : TODO-028 est d'une nature différente de TODO-022 à TODO-027 — ce n'est ni un besoin produit nouveau, ni un problème d'audit inédit. C'est une scission technique décidée par Charles-Henri le 21/09/2026 (voir échange du même jour) : elle reprend le seul volet non réalisé de TODO-006 (la partie `firestore.rules` de SEC-011), pour ne pas bloquer le reste de TODO-006 derrière une restructuration d'architecture des règles. Elle ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine (SEC-011 y était déjà comptabilisé sous TODO-006) — elle ne fait que déplacer, vers un TODO dédié, un volet déjà compté. Voir TODO-006 et TODO-028 ci-dessous.
+
+*Ajout du 21/09/2026 (3)* : TODO-029 et TODO-030 sont, comme TODO-022 à TODO-027, des besoins produit hors audits (BESOIN-006, BESOIN-007, voir section 9) — mais exprimés en retour direct de Charles-Henri après la livraison de LOT 2 (TODO-003/TODO-004), plutôt qu'avant le démarrage des lots. Ajoutées au backlog (LOT 14) à sa demande explicite, **sans être traitées dans l'immédiat** ; ne comptent pas dans les 157 problèmes ni les 22 actions d'origine.
+
+*Ajout du 21/09/2026 (4)* : TODO-031 est d'une nature encore différente — ni un besoin produit (une envie de fonctionnalité), ni une scission technique d'un TODO existant, mais un **bug** remonté par Charles-Henri en testant TODO-006 (LOT 1) sur iPhone : la liste de suggestions native (`<datalist>`) ne s'affiche jamais sur Safari iOS, sur les 4 endroits de l'app qui l'utilisent. Diagnostiqué par échange direct le 21/09/2026 (élimination d'une hypothèse de désynchronisation entre appareils : le vrai problème est bien l'absence totale d'affichage sur iPhone, pas un contenu différent). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 ## [ ] P0 — TODO-001 — Vérifier, verrouiller et versionner les règles de sécurité Firestore réelles
 
@@ -959,6 +963,90 @@ Validation : nouveaux tests de règles sur l'émulateur (extension de `test:rule
 
 Ordre recommandé : après TODO-001 (même fichier) — non affectée à un lot pour l'instant, à planifier
 
+## [ ] P2 — TODO-029 — Note automatique de traçabilité sur relance/règlement rapide d'un Suivi
+
+*Ajoutée le 21/09/2026 — besoin produit (BESOIN-006, voir section 9), retour direct de Charles-Henri après livraison de TODO-004. Aucune priorité explicite indiquée — P2 proposé (amélioration de confort/traçabilité sur une fonctionnalité déjà livrée, non bloquante), à confirmer.*
+
+Type : UX / DATA
+
+Problème : les actions rapides "🔁 Relancer" / "✅ Réglé" (TODO-004) changent le statut d'un Suivi en 1 clic, directement depuis la liste, sans laisser de trace visible sur la fiche elle-même — contrairement à une modification faite depuis la fiche complète, rien n'indique ensuite, dans le journal de notes du Suivi, qu'une relance a été faite ou qu'il a été réglé, ni à quelle date.
+
+Cause racine : besoin produit (hors audits) — BESOIN-006
+
+Solution : à chaque clic sur "🔁 Relancer" ou "✅ Réglé" (`js/views/people.js#appendFollowUpRows` et `js/views/followupsOverview.js#renderGroup`), ajouter automatiquement une entrée horodatée au journal de notes du Suivi (même mécanisme que `followUpsApi.addNote`), du type "🔁 Relancé le JJ/MM/AAAA" ou "✅ Réglé le JJ/MM/AAAA" — visible ensuite dans l'onglet Notes de la fiche complète, sans avoir eu besoin de l'ouvrir pour l'action elle-même.
+
+Fichiers concernés : `js/domain/followups.js`, `js/views/people.js`, `js/views/followupsOverview.js`
+
+Fonctions concernées : `setStatus` (ou nouvelle fonction dédiée combinant changement de statut et note), `addNote`, `appendFollowUpRows`, `renderGroup`
+
+Dépendances : TODO-004 (mêmes boutons rapides, déjà en place — ce TODO les complète, ne les remplace pas)
+
+Problèmes résolus : BESOIN-006
+
+Risque : faible — ajout d'une note, ne modifie pas le comportement existant des boutons rapides
+
+Complexité : S
+
+Validation : Non déterminé — test vérifiant qu'un clic sur "🔁 Relancer"/"✅ Réglé" ajoute bien une entrée au journal de notes avec le texte et la date attendus
+
+Ordre recommandé : après TODO-004 (LOT 14)
+
+## [ ] P2 — TODO-030 — Contrôle rapide de date (+1j/+7j/date libre) sur les champs date des fiches Suivi
+
+*Ajoutée le 21/09/2026 — besoin produit (BESOIN-007, voir section 9), retour direct de Charles-Henri après livraison de TODO-003. Aucune priorité explicite indiquée — P2 proposé, à confirmer.*
+
+Type : UX
+
+Problème : le contrôle rapide "+1j / +7j / date libre" ajouté sur la carte Tâche (TODO-003) n'existe pas sur les champs de date des fiches Suivi (échéance, date de contrôle) — modifier une de ces dates demande toujours de passer directement par le champ date natif, sans le raccourci de report désormais disponible côté Tâche.
+
+Cause racine : besoin produit (hors audits) — BESOIN-007
+
+Solution : reprendre le contrôle "+1j / +7j / date libre" (même logique de calcul que `kanban.js#addDaysToIsoDate`) à côté des champs de date du formulaire Suivi (`#fu-due`/`#fu-control`, création et fiche détail, `js/views/people.js`) — à l'occasion, envisager de mutualiser le calcul de date dans un module partagé plutôt que de dupliquer `addDaysToIsoDate` (décision d'architecture mineure à trancher au cadrage, pas à l'aveugle).
+
+Fichiers concernés : `js/views/people.js`, possiblement un nouveau module partagé pour le calcul de date (à trancher au cadrage plutôt qu'en dupliquant `js/views/kanban.js#addDaysToIsoDate`)
+
+Fonctions concernées : `openCreateFollowUpModal`, fonction d'édition du Suivi dans la fiche Personne
+
+Dépendances : TODO-003 (même logique de calcul de date)
+
+Problèmes résolus : BESOIN-007
+
+Risque : faible
+
+Complexité : S/M
+
+Validation : Non déterminé
+
+Ordre recommandé : après TODO-003 (LOT 14)
+
+## [ ] P2 — TODO-031 — Remplacer le `<datalist>` natif par une liste de suggestions qui s'affiche aussi sur iOS Safari
+
+*Ajoutée le 21/09/2026 — bug remonté par Charles-Henri en testant la confirmation de catégorie (TODO-006, LOT 1) sur iPhone, hors des 9 audits sources. Diagnostic confirmé par échange direct (21/09/2026) : sur PC/navigateur de bureau, la liste de suggestions s'affiche normalement ; sur iPhone (Safari), rien ne s'affiche jamais.*
+
+Type : UX
+
+Problème : Safari sur iOS n'affiche jamais la liste de suggestions native (`<datalist>`) utilisée pour l'autocomplétion à 4 endroits de l'app — catégorie de projet (création et fiche détail), éditeur de tags réutilisé par 9 fiches (`js/components/tagsEditor.js`), filtre "#tag" de la recherche globale (`js/components/search.js`), et les 3 champs de "saisie en masse" ressource/prompt/tag du Kanban (`js/views/kanban.js`). Aucune suggestion n'apparaît jamais à la frappe sur cet appareil, contrairement à un navigateur de bureau où la liste s'affiche normalement — limitation de la plateforme, pas un défaut de configuration d'un champ en particulier (les 4 endroits sont concernés de la même façon).
+
+Cause racine : bug hors audit — remonté par Charles-Henri le 21/09/2026, non issu des 9 audits sources.
+
+Solution : remplacer le mécanisme natif `<input list="...">` + `<datalist>` par une petite liste de suggestions dessinée par l'app elle-même (composant JS partagé, ex. `js/components/autocomplete.js`) : affichée sous le champ, filtrée au fur et à mesure de la frappe, sélectionnable au clic comme au clavier (flèches/Entrée, à reproduire explicitement — voir Risque) — fonctionne alors identiquement sur tous les navigateurs, y compris iOS Safari. À construire comme un composant partagé unique plutôt que reproduit 4 fois, même principe que l'unification de l'éditeur de tags le 13/09/2026 (voir son en-tête de fichier).
+
+Fichiers concernés : nouveau composant partagé (proposition : `js/components/autocomplete.js`), `js/views/projects.js` (catégorie, ×2 : création et fiche détail), `js/components/tagsEditor.js`, `js/components/search.js`, `js/views/kanban.js` (saisie en masse, ×3 champs)
+
+Fonctions concernées : `openCreateProjectModal`, `openProjectDetail` (champs catégorie), `renderTagsEditor`, le filtre "#tag" de `mountGlobalSearch`, la modale de saisie en masse du Kanban
+
+Dépendances : aucune
+
+Problèmes résolus : (nouveau, hors audits)
+
+Risque : faible à moyen — un composant mal calé pourrait régresser la navigation clavier (flèches/Entrée) que `<datalist>` offre nativement ; à reproduire explicitement dans le nouveau composant, pas à perdre au passage
+
+Complexité : M (un composant partagé + 4 points d'intégration à migrer)
+
+Validation : Non déterminé — un test automatisé ne peut pas reproduire ce défaut (spécifique au moteur de rendu Safari iOS, pas simulable via l'émulateur Playwright/Chromium déjà en place) ; validation manuelle sur un navigateur de bureau ET un iPhone réel nécessaire
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier
+
 ---
 
 ## 6. Lots de correction (ordre de correction recommandé)
@@ -1114,6 +1202,17 @@ Pour son propre périmètre — celui qui reste réellement à la charge de ce l
 **Tests nécessaires** : Non déterminé — critères d'acceptation déjà fournis, à traduire en tests lors du cadrage
 **Risques** : moyen à élevé — nouveau modèle de données, interactions riches, fréquence d'écriture à calibrer
 
+### LOT 14 — Suivi : traçabilité des actions rapides et confort de saisie des dates
+
+*Ajouté le 21/09/2026 — besoins produit exprimés par Charles-Henri en retour direct sur les livraisons de TODO-003/TODO-004 (LOT 2), voir BESOIN-006/BESOIN-007 en section 9. Ne provient d'aucun des 9 audits sources.*
+
+**Objectif** : compléter les actions rapides livrées en LOT 2 — garder une trace de ce qui a été fait, et étendre le confort de saisie de date de la Tâche au Suivi.
+**Problèmes concernés** : TODO-029, TODO-030
+**Prérequis** : TODO-004 (pour TODO-029), TODO-003 (pour TODO-030) — tous deux du LOT 2
+**Modifications principales** : note automatique horodatée sur relance/règlement rapide d'un Suivi ; contrôle "+1j/+7j/date libre" sur les champs date des fiches Suivi
+**Tests nécessaires** : Non déterminé — à traduire en tests lors du cadrage
+**Risques** : faible
+
 ---
 
 ## 7. Questions ouvertes avant certains chantiers
@@ -1140,13 +1239,15 @@ Pour son propre périmètre — celui qui reste réellement à la charge de ce l
 
 ## 9. Besoins produit exprimés par Charles-Henri (21/09/2026, hors audits)
 
-*Section ajoutée le 21/09/2026. Contrairement aux 157 problèmes des sections précédentes (tous issus des 9 audits sources listés en section 0), les 5 besoins ci-dessous viennent directement de Charles-Henri, en dehors de tout audit — d'où la numérotation `BESOIN-XXX`, distincte de `DATA-XXX`/`SEC-XXX`/etc. Ajoutés au backlog et rattachés chacun à un ou plusieurs TODO (section 5) et à un lot (section 6) à sa demande explicite du 21/09/2026, **sans être traités dans l'immédiat** : la suite de la roadmap reprend au LOT 1, ces besoins restent en attente.*
+*Section ajoutée le 21/09/2026. Contrairement aux 157 problèmes des sections précédentes (tous issus des 9 audits sources listés en section 0), les besoins ci-dessous viennent directement de Charles-Henri, en dehors de tout audit — d'où la numérotation `BESOIN-XXX`, distincte de `DATA-XXX`/`SEC-XXX`/etc. Ajoutés au backlog et rattachés chacun à un ou plusieurs TODO (section 5) et à un lot (section 6) à sa demande explicite, **sans être traités dans l'immédiat** : la suite de la roadmap reprend au LOT 1, ces besoins restent en attente. BESOIN-001 à 005 datent du 21/09/2026, avant le démarrage des lots ; BESOIN-006 et BESOIN-007, ajoutés le même jour, sont un retour direct de Charles-Henri après la livraison de LOT 2 (TODO-003/TODO-004).*
 
 - **BESOIN-001 — Suivi structuré des objectifs et qualification des éléments Personne**. Deux volets, actuellement non départagés d'un seul chantier : (a) les objectifs (illustrés par deux exemples SMART complets fournis par Charles-Henri) manquent de structure pour décrire chaque indicateur de réussite (cible, mesure, source de preuve, suivi) et pour rattacher des éléments de suivi à un objectif ou à une information ; (b) à la création d'un élément sur une fiche Personne, aucun moyen d'indiquer immédiatement s'il doit remonter en préparation du point de suivi, ni sa nature (suivi perso / à transmettre / attendu). Charles-Henri a explicitement demandé une proposition de conception plutôt qu'une solution imposée (« que proposes-tu pour faire cela ? ») — non tranchée à ce stade. Voir **TODO-024** (volet a) et **TODO-025** (volet b), **LOT 11**.
 - **BESOIN-002 — Carte indicateur « Échéances du jour »**. Ajouter sur l'Accueil une carte comptant les éléments dont l'échéance est aujourd'hui, triés par priorité (à faire d'abord, puis suivi/contrôle), en excluant les échéances de contrôle des collaborateurs. Voir **TODO-022**, **LOT 3** (rejoint TODO-005, déjà existant).
 - **BESOIN-003 — Régressions d'affichage en mode sombre**. Texte noir illisible dans le traitement d'un item Inbox ; calendriers des champs de date illisibles (noirs) ; toasts à fond blanc et texte blanc. Constaté par Charles-Henri en parcourant les écrans le 21/09/2026. Voir **TODO-023**, **LOT 10**.
 - **BESOIN-004 — US-026 : Navigation personnalisable par utilisateur**. Spécification complète fournie par Charles-Henri (priorité **P1** indiquée explicitement par lui) : personnalisation individuelle de la barre de navigation (4 modules + « Plus » fixe), glisser-déposer, web et mobile, synchronisée entre les deux. Voir **TODO-026**, **LOT 12**.
 - **BESOIN-005 — Bureau : post-it libres sur l'écran d'accueil**. Spécification complète fournie par Charles-Henri : section « Mon bureau » sur l'Accueil, post-it multiples (texte ou checklist) déplaçables/redimensionnables avec sauvegarde automatique, convertibles en Tâche/Suivi/Ressource/Décision/Information (post-it entier ou ligne de checklist individuelle). Aucune priorité explicite indiquée — P2 proposé. Voir **TODO-027**, **LOT 13**.
+- **BESOIN-006 — Note automatique de traçabilité sur relance/règlement rapide d'un Suivi**. Retour de Charles-Henri sur la livraison de TODO-004 (boutons rapides "🔁 Relancer"/"✅ Réglé") : il faudrait qu'une note s'alimente automatiquement sur la fiche du Suivi pour indiquer qu'une relance ou un règlement a été fait, et à quelle date. Aucune priorité explicite indiquée — P2 proposé (amélioration de confort/traçabilité, non bloquante). Voir **TODO-029**, **LOT 14**.
+- **BESOIN-007 — Contrôle rapide de date sur les champs date des fiches Suivi**. Retour de Charles-Henri sur la livraison de TODO-003 (contrôle "+1j/+7j/date libre" sur la carte Tâche) : ce serait utile aussi devant les champs date des fiches de Suivi. Aucune priorité explicite indiquée — P2 proposé. Voir **TODO-030**, **LOT 14**.
 
 ---
 
