@@ -33,10 +33,10 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
-        title: "🩺 Score de santé visible directement sur la fiche projet et sur l'Accueil",
-        text: "Le score de santé d'un projet (calculé depuis les tâches en retard/bloquées/en pause et les suivis en retard) n'était visible que dans l'onglet Projets, vue \"🩺 Santé\" — il apparaît désormais aussi en en-tête de la fiche projet et sur chaque carte de la section \"📦 Mes projets\" de l'Accueil, là où la décision se prend.",
-        howTo: "Ouvre n'importe quel projet actif, ou regarde l'Accueil → \"📦 Mes projets\" : le badge \"🩺\" est visible sans action supplémentaire.",
-        gain: "Repérer une dérive sur un projet sans avoir à ouvrir une vue séparée à chaque fois.",
+        title: "🩺 Score de santé visible sur la fiche projet, l'Accueil et l'onglet Projets",
+        text: "Le score de santé d'un projet (calculé depuis les tâches en retard/bloquées/en pause et les suivis en retard) n'était visible que dans l'onglet Projets, vue \"🩺 Santé\" — il apparaît désormais aussi en en-tête de la fiche projet, sur chaque carte de la section \"📦 Mes projets\" de l'Accueil, et sur les cartes de l'onglet Projets lui-même (vues \"📋 Liste\" et \"🗂️ Par catégorie\"), là où la décision se prend.",
+        howTo: "Ouvre n'importe quel projet actif, regarde l'Accueil → \"📦 Mes projets\", ou l'onglet Projets (Liste ou Par catégorie) : le badge \"🩺\" est visible sans action supplémentaire.",
+        gain: "Repérer une dérive sur un projet sans avoir à ouvrir une vue séparée à chaque fois, quel que soit l'écran où on le croise.",
       },
       {
         type: "add",
