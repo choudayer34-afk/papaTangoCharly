@@ -20,8 +20,14 @@
     import * as firebaseApi from "/js/services/firebase.js";
     import * as storageApi from "/js/services/storage.js";
     import * as inboxApi from "/js/domain/inbox.js";
+    // Ajoutés en LOT 1 (TODO-007, TEST-025 — clôture Tâche/Projet/Suivi sans cascade) : mêmes
+    // modules applicatifs que ceux déjà exposés ci-dessus, aucun changement à ces trois fichiers
+    // eux-mêmes.
+    import * as tasksApi from "/js/domain/tasks.js";
+    import * as projectsApi from "/js/domain/projects.js";
+    import * as followUpsApi from "/js/domain/followups.js";
 
-    window.__pilotageTestApi = { firebaseApi, storageApi, inboxApi };
+    window.__pilotageTestApi = { firebaseApi, storageApi, inboxApi, tasksApi, projectsApi, followUpsApi };
     window.__pilotageTestApiReady = true;
   </script>
 </body>
