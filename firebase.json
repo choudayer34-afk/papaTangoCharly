@@ -1,0 +1,18 @@
+{
+  "//": "Config Firebase CLI utilisée UNIQUEMENT pour lancer l'émulateur Firestore/Auth pendant les tests (voir tests/package.json et TODO_TECHNIQUE.md → TODO-002/LOT 0B). Pas de Hosting/Functions ici : l'hébergement de l'app reste Cloudflare Pages, inchangé. Doit rester à la racine, à côté de firestore.rules — le CLI Firebase refuse toute règle référencée en dehors du dossier qui contient ce fichier (voir la correction du 21/09/2026 dans TODO_TECHNIQUE.md : ce fichier vivait auparavant dans tests/ et pointait vers ../firestore.rules, ce que le CLI rejette).",
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": false
+    },
+    "singleProjectMode": true
+  }
+}
