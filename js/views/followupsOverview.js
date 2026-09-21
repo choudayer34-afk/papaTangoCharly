@@ -14,6 +14,7 @@
 
 import * as followUpsApi from "../domain/followups.js";
 import { openEditFollowUpModal } from "./people.js";
+import { showToast } from "../components/toast.js";
 
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -65,7 +66,37 @@ function renderGroup(container, followUps, people, projects) {
           ${f.controlDate ? ` · à contrôler le ${formatDate(f.controlDate)}` : ""}
         </div>
       </div>
+      ${f.status !== "done" ? `
+        <div class="followup-quick-actions">
+          <button type="button" class="followup-quick-btn" data-quick-relance title="Relancer" aria-label="Relancer">🔁</button>
+          <button type="button" class="followup-quick-btn" data-quick-done title="Marquer réglé" aria-label="Marquer réglé">✅</button>
+        </div>
+      ` : ""}
     `;
+    // TODO-004 (LOT 2, 21/09/2026) : même action rapide "🔁 Relancer / ✅ Réglé" que sur les
+    // lignes de Suivi de js/views/people.js#appendFollowUpRows (stopPropagation pour ne pas
+    // aussi ouvrir la fiche complète). Un redessin complet suit de toute façon (renderPeople
+    // redessine cette vue à chaque followUpsApi.subscribe), mais la ligne se retire ICI tout de
+    // suite plutôt que d'attendre l'aller-retour Firestore — même principe de retour immédiat que
+    // le reste de l'app (ex. toast). "Relancer" n'a pas de pastille dédiée dans cette vue (seuls
+    // "✅ Réglé"/"🔴 En retard" existent ici) : rien à mettre à jour visuellement à part le toast.
+    const quickActions = row.querySelector(".followup-quick-actions");
+    if (quickActions) {
+      quickActions.addEventListener("click", (e) => e.stopPropagation());
+      quickActions.querySelector("[data-quick-relance]").addEventListener("click", async () => {
+        await followUpsApi.setStatus(f.id, "relaunched");
+        showToast("Suivi relancé");
+      });
+      quickActions.querySelector("[data-quick-done]").addEventListener("click", async () => {
+        await followUpsApi.setStatus(f.id, "done");
+        // Retrait immédiat de la ligne : par défaut ("Inclure ce qui est réglé" décoché), un
+        // Suivi réglé ne fait de toute façon plus partie de cette liste — inutile d'attendre le
+        // redessin déclenché par followUpsApi.subscribe pour le faire disparaître. Si "Inclure
+        // ce qui est réglé" est coché, ce redessin le refera réapparaître avec son badge à jour.
+        row.remove();
+        showToast("Suivi réglé");
+      });
+    }
     row.addEventListener("click", () => openEditFollowUpModal(f));
     container.appendChild(row);
   }
