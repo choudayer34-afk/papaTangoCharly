@@ -33,6 +33,18 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "🩺 Score de santé visible directement sur la fiche projet et sur l'Accueil",
+        text: "Le score de santé d'un projet (calculé depuis les tâches en retard/bloquées/en pause et les suivis en retard) n'était visible que dans l'onglet Projets, vue \"🩺 Santé\" — il apparaît désormais aussi en en-tête de la fiche projet et sur chaque carte de la section \"📦 Mes projets\" de l'Accueil, là où la décision se prend.",
+        howTo: "Ouvre n'importe quel projet actif, ou regarde l'Accueil → \"📦 Mes projets\" : le badge \"🩺\" est visible sans action supplémentaire.",
+        gain: "Repérer une dérive sur un projet sans avoir à ouvrir une vue séparée à chaque fois.",
+      },
+    ],
+  },
+  {
+    date: "21 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "📅 Reporter une échéance de tâche en 1 clic depuis le Kanban",
         text: "Chaque carte Tâche du Kanban a désormais un bouton \"📅\" à côté des boutons de statut ‹ › : il ouvre un petit menu \"+1 j / +7 j / Date libre\" pour reporter l'échéance sans ouvrir la fiche complète — jusqu'ici, changer une échéance demandait de rouvrir la fiche, même pour un simple report d'un jour.",
         howTo: "Onglet Pilotage → Trello → bouton \"📅\" sur la carte.",
