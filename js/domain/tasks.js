@@ -212,10 +212,60 @@ export function listAll() {
   return storage.listAll(COLLECTION);
 }
 
+// Ajouté le 21/09/2026 (TODO-009A, LOT 4A) : lire UNE tâche par son id, pour
+// js/components/linkedItems.js#resolveRef — évite de charger la collection entière (ou même
+// tout un bundle de 9 collections) juste pour résoudre une seule référence {type, id}.
+export function getTask(id) {
+  return storage.get(COLLECTION, id);
+}
+
+// BUG corrigé (21/09/2026, audit performance, TODO-009B) : `subscribe()` ouvrait un `onSnapshot`
+// Firestore INDÉPENDANT à chaque appel — 6 vues (Accueil, Pilotage, Calendrier, Priorisation,
+// Projets, Ressources) appellent chacune `tasksApi.subscribe()` de leur côté, donc jusqu'à 6
+// écoutes temps réel actives simultanément sur la même collection `tasks`, chacune retriant et
+// redécodant tout à chaque écriture. Même mécanisme de mutualisation que celui déjà en production
+// pour `inboxItems` (voir js/domain/inbox.js#subscribeFiltered) : un seul flux Firestore partagé,
+// démarré à la première inscription, arrêté à la dernière désinscription. Contrairement à
+// `inboxItems` (3 filtres différents selon l'appelant), aucun filtre n'est nécessaire ici : les 6
+// appelants actuels veulent tous la même liste complète, donc chaque abonné reçoit directement le
+// flux partagé, sans transformation supplémentaire.
+const rawListeners = new Set();
+let rawUnsubscribe = null;
+let lastRawItems = null;
+
+function subscribeShared(callback) {
+  rawListeners.add(callback);
+  if (!rawUnsubscribe) {
+    rawUnsubscribe = storage.subscribe(COLLECTION, (items) => {
+      lastRawItems = items;
+      for (const cb of rawListeners) cb(items);
+    });
+  } else if (lastRawItems) {
+    // Le flux existe déjà (un autre abonnement l'a démarré) : `onSnapshot` ne rappellera pas
+    // spontanément pour ce nouveau venu, on reproduit donc à la main la garantie "callback
+    // appelé immédiatement avec l'état courant" que `storage.subscribe` offre normalement.
+    callback(lastRawItems);
+  }
+  return () => {
+    rawListeners.delete(callback);
+    if (rawListeners.size === 0 && rawUnsubscribe) {
+      rawUnsubscribe();
+      rawUnsubscribe = null;
+      lastRawItems = null;
+    }
+  };
+}
+
 // `opts` transmis tel quel à storage.js#subscribe — voir son commentaire ({ sort: false } pour
-// un appelant qui retrie de toute façon, ex. js/views/kanban.js par échéance).
+// un appelant qui retrie de toute façon, ex. js/views/kanban.js par échéance). Aucun des 6
+// appelants actuels ne passe `opts` (voir js/views/kanban.js, commentaire à son propre appel) :
+// le flux mutualisé ci-dessus n'existe donc que dans sa forme triée par défaut. Un futur appelant
+// qui aurait explicitement besoin de `{ sort: false }` repasse par un abonnement Firestore dédié,
+// non mutualisé, plutôt que de risquer de réutiliser à tort le flux partagé (trié) pour un besoin
+// non trié — cas qui ne s'est encore jamais présenté.
 export function subscribe(callback, opts) {
-  return storage.subscribe(COLLECTION, callback, opts);
+  if (opts && opts.sort === false) return storage.subscribe(COLLECTION, callback, opts);
+  return subscribeShared(callback);
 }
 
 /**
