@@ -11,6 +11,23 @@ TEST-027. Les 20 autres restent en backlog non planifié (section 4.2 de `TODO_T
 
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
+**4ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
+une fois les 3 échecs TEST-001 et les 3 échecs TEST-018/020/021 corrigés (voir juste en dessous),
+les 2 parcours E2E complets (TEST-020, TEST-021) échouaient encore, tous deux avec la même
+signature : `<div class="modal-overlay">…</div> intercepts pointer events` sur un clic pourtant
+anodin (bouton "Traiter" d'une ligne Inbox, carte d'un projet fraîchement créé). Cause trouvée
+dans `js/app.js#maybeShowUsageNotice` puis `js/components/onboarding.js#maybeShowFirstRunTour` :
+deux modales automatiques, sans lien avec le parcours testé, s'ouvrent l'une après l'autre à la
+toute première connexion d'un compte — exactement le cas des comptes de test, neufs à chaque
+exécution (préférences vidées avec le reste de l'émulateur). Non fermées explicitement par les
+tests, elles restaient ouvertes par-dessus l'écran et bloquaient le clic suivant. Corrigé en
+ajoutant `tests/support/firstRun.js#dismissFirstRunModals(page)`, appelée juste après la
+connexion dans les deux parcours E2E — ferme ces deux modales si elles apparaissent (boutons
+"J'ai compris" / "Passer", déjà prévus par l'app elle-même), sans rien changer d'applicatif.
+Ajouté aussi dans `e2e/capture-qualification.spec.js` : une attente explicite du toast
+"Enregistré dans l'Inbox" avant de naviguer vers l'Inbox, pour ne pas naviguer pendant que la
+modale de capture finit de se fermer.
+
 **3ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 3/9 → corrections apportées)** :
 une fois les deux problèmes d'infrastructure précédents résolus, `npm run test:rules` est passé
 au vert (12/12). `npm run test:e2e` a lui révélé 6 échecs, tous diagnostiqués :
