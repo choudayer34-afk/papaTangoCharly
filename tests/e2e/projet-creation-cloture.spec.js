@@ -7,6 +7,11 @@
 // (js/views/projects.js#openCreateProjectModal/openProjectDetail/closeProject), mais jamais
 // exécuté dans l'environnement où il a été rédigé (registre npm bloqué — voir tests/README.md).
 // À reconfirmer au premier lancement réel.
+//
+// Correction du 21/09/2026 (premier passage réel du workflow GitHub Actions) : voir le
+// commentaire équivalent dans e2e/capture-qualification.spec.js — sans `page.addInitScript`,
+// l'app se connecte à la vraie production Firebase (compte de test inexistant là-bas) au lieu
+// de l'émulateur.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -16,6 +21,9 @@ test("Création de projet → Ajout de tâche → Clôture du projet", async ({ 
   const taskTitle = `Test LOT 0B — tâche ${Date.now()}`;
 
   // 1. Connexion (émulateur Auth).
+  await page.addInitScript(() => {
+    window.__PILOTAGE_USE_FIREBASE_EMULATOR__ = true;
+  });
   await page.goto("/index.html#/projects");
   await page.fill("#login-email", E2E_TEST_USER.email);
   await page.fill("#login-password", E2E_TEST_USER.password);
