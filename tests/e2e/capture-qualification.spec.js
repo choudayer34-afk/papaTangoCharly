@@ -20,9 +20,18 @@
 // réelle de l'app, chargée ici) n'a pas cet équivalent — `addInitScript` le fait au niveau de
 // Playwright, avant l'exécution de tout script de la page, exactement comme le tuteur `<script>`
 // de harness.html.
+//
+// Correction du 21/09/2026 (4e passage réel) : deux modales automatiques imprévues
+// (js/app.js#maybeShowUsageNotice puis js/components/onboarding.js#maybeShowFirstRunTour, la
+// visite guidée) s'ouvrent à la toute première connexion d'un compte neuf — voir
+// tests/support/firstRun.js pour le détail. Sans les fermer explicitement, elles bloquaient
+// (`.modal-overlay`) le clic suivant du parcours. Ajout aussi d'une attente du toast de
+// confirmation avant de naviguer vers l'Inbox : sans elle, la navigation pouvait intervenir
+// avant que la modale de capture (fermée de façon asynchrone) n'ait fini de se retirer.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
+import { dismissFirstRunModals } from "../support/firstRun.js";
 
 test("Capture → Qualification (Action) → Tâche créée", async ({ page }) => {
   const rawText = `Test LOT 0B — capture ${Date.now()}`;
@@ -36,11 +45,13 @@ test("Capture → Qualification (Action) → Tâche créée", async ({ page }) =
   await page.fill("#login-password", E2E_TEST_USER.password);
   await page.click("#login-email-submit");
   await expect(page.locator(".fab")).toBeVisible({ timeout: 10_000 });
+  await dismissFirstRunModals(page);
 
   // 2. Capture rapide (js/components/capture.js) — bouton flottant "+".
   await page.click(".fab");
   await page.fill("#capture-input", rawText);
   await page.getByRole("button", { name: "Enregistrer" }).click();
+  await expect(page.getByText("Enregistré dans l'Inbox")).toBeVisible({ timeout: 10_000 });
 
   // 3. Qualification (js/views/inbox.js#openQualifyModal) — l'item capturé apparaît en attente.
   await page.goto("/index.html#/inbox");
