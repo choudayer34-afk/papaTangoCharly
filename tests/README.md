@@ -12,9 +12,7 @@ TEST-027. Les 20 autres restent en backlog non planifié (section 4.2 de `TODO_T
 ## LOT 1 (TODO-006, TODO-007) — ajouté le 21/09/2026
 
 Trois nouveaux fichiers, sur le même principe que le reste de ce dossier (émulateur Firebase,
-jamais la production) et avec le même avertissement : écrits et relus manuellement, mais **non
-exécutés** dans cet environnement (registre npm bloqué, voir ci-dessous) — à confirmer au premier
-passage réel du workflow GitHub Actions, comme LOT 0B avant eux.
+jamais la production).
 
 - **`e2e/lot1-form-validation.spec.js`** (TEST-017) — retour visuel explicite (toast + surbrillance
   `.field-invalid`) sur un champ obligatoire vide (Tâche, Projet, Ressource) et sur une URL mal
@@ -28,10 +26,26 @@ passage réel du workflow GitHub Actions, comme LOT 0B avant eux.
   auquel `tasksApi`/`projectsApi`/`followUpsApi` ont été ajoutés (mêmes modules applicatifs déjà
   exposés pour LOT 0B, aucun changement à ces trois fichiers).
 
+**Correction du 21/09/2026 (premier passage réel du workflow GitHub Actions)** : `test:e2e` est
+passé à 16/17. TEST-017 (4/4) et TEST-025 (3/3) sont verts dès ce premier passage. TEST-010 a
+échoué sur un bug du test lui-même, pas de l'application : `await expect(page.getByText("tâche"))`
+sur le message de confirmation de suppression était ambigu — il matchait aussi l'onglet "📋
+Tâches" et un toast "Tâche créée" encore présent dans le DOM (3 éléments trouvés), exactement la
+même famille de strict-mode violation déjà rencontrée en LOT 0B sur `capture-qualification.spec.js`
+et `projet-creation-cloture.spec.js`. Corrigé en scopant l'assertion à `.modal-body` (une seule
+modale active à cet instant, voir `js/components/modal.js#openModal`) — à reconfirmer au prochain
+passage réel.
+
+**Confirmation du 21/09/2026** : Charles-Henri a confirmé que les tests du LOT 1 ont depuis été
+exécutés avec succès via GitHub Actions, correctif TEST-010 inclus. Les trois tests de ce lot
+(TEST-017, TEST-010, TEST-025) sont donc désormais tous verts en CI réelle.
+
 **Non traité par ce lot** : les contraintes de validation côté `firestore.rules` prévues par
-TODO-006 (SEC-011, tailles/types sur `tasks`/`inboxItems`) — voir TODO_TECHNIQUE.md → TODO-006
-pour le détail de ce point, volontairement laissé en suspens plutôt que risqué sans tests
-capables de le valider dans cet environnement.
+TODO-006 (SEC-011, tailles/types sur `tasks`/`inboxItems`). Ce volet s'est heurté à une contrainte
+d'architecture des règles (`match` récursif unique sur `users/{uid}/{document=**}`, évaluation OR
+de Firestore — voir TODO_TECHNIQUE.md → TODO-006), et a été, sur décision explicite de
+Charles-Henri (21/09/2026), formellement sorti de TODO-006 et repris par un TODO dédié,
+**TODO-028**, plutôt que traité sans tests capables de le valider dans cet environnement.
 
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
