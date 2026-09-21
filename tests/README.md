@@ -69,6 +69,16 @@ jamais la production).
   utilisée par `js/app.js#maybeNotifyStalledOrLate`, et `followUpsApi.setStatus`, le chemin exact
   emprunté par les boutons rapides ci-dessus.
 
+**Correction du 21/09/2026 (premier passage réel du workflow GitHub Actions)** : 22/23 tests verts
+(`lot2-followup-quick-actions.spec.js` 2/2, `lot2-followup-reminders.spec.js` 2/2, un des deux
+scénarios de `lot2-quick-postpone.spec.js`). Le scénario "+1 jour" a échoué sur un bug du TEST
+lui-même, pas de l'application : `tasksApi.updateTask()` n'est pas attendu par le clic sur
+"+1 j"/"+7 j" (même geste "tire et oublie" que les boutons ‹ › de statut déjà existants), donc le
+toast de confirmation s'affichait avant la fin de l'écriture Firestore — le test rouvrait la fiche
+détail trop tôt, parfois avant que le redessin réactif n'ait mis à jour l'échéance affichée par la
+carte. Corrigé en attendant la disparition du toast avant de rouvrir la fiche (voir le commentaire
+dans le fichier de test) — à reconfirmer au prochain passage réel.
+
 **Non testé par ce lot (limite assumée)** : la notification navigateur elle-même
 (`js/app.js#maybeNotifyStalledOrLate`, étendue aux Suivis en retard) n'est pas une fonction
 exportée et l'API `Notification` du navigateur ne se prête qu'à un test de bout en bout (permission
