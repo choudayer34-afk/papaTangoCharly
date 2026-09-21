@@ -1033,7 +1033,11 @@ export async function openProjectDetail(project, tasks) {
 
   renderNotesBlock(body.querySelector("#detail-notes"), project.notesLog || [], {
     onAdd: async (text) => {
-      const updated = await projectsApi.addNote(project.id, text);
+      // TODO-010 (LOT 4B) : projectsApi.addNote() renvoie désormais la note ajoutée seule
+      // (écriture ciblée, plus de relecture du tableau complet) — reconstruit ici à partir de la
+      // copie locale déjà tenue à jour par cette fiche.
+      const note = await projectsApi.addNote(project.id, text);
+      const updated = note ? [...(project.notesLog || []), note] : project.notesLog;
       project.notesLog = updated;
       return updated;
     },
@@ -1122,8 +1126,10 @@ export async function openProjectDetail(project, tasks) {
       const input = body.querySelector("#new-part-label");
       const label = input.value.trim();
       if (!label) return;
-      const updated = await projectsApi.addPart(project.id, label);
-      project.parts = updated.parts;
+      // TODO-010 (LOT 4B) : projectsApi.addPart() renvoie désormais la sous-partie ajoutée seule
+      // (écriture ciblée, plus le document complet).
+      const part = await projectsApi.addPart(project.id, label);
+      project.parts = [...(project.parts || []), part];
       input.value = "";
       renderParts();
     })
