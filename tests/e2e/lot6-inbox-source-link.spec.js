@@ -72,7 +72,10 @@ test("TODO-008 point 1 — qualifier en Action pose un lien InboxSource résolu 
   await expect(page.getByText(rawText)).toBeVisible();
   await expect(page.getByRole("button", { name: "🗄️ Archiver" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "🔁 Changer de type" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Fermer" })).toBeVisible();
+  // `exact: true` : même ambiguïté que dans le test suivant — "Fermer" matche aussi par
+  // sous-chaîne le bouton "Fermer ce conseil" d'un bandeau d'astuce par ailleurs présent sur
+  // la page.
+  await expect(page.getByRole("button", { name: "Fermer", exact: true })).toBeVisible();
 });
 
 test("Régression — le type de référence 'Kept' se résout toujours normalement après l'ajout d'InboxSource", async ({ page }) => {
