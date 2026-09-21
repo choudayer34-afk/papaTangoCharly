@@ -30,6 +30,24 @@
 //                     && request.auth.token.email == "ch-houdayer@hotmail.fr";
 //     allow update, delete: if false;
 //   }
+//
+// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation uniquement, aucune purge
+// implémentée à ce stade) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section 1) —
+// conservation cible de 24 à 36 mois pour `usageEvents`. Au-delà de cette fenêtre, toute purge ou
+// anonymisation ne pourra intervenir qu'après une confirmation explicite de l'utilisateur
+// (Charles-Henri, seul lecteur de cette collection) — jamais une suppression automatique ou
+// silencieuse, cohérent avec la promesse produit "ne rien perdre silencieusement". Cette
+// collection grandit aujourd'hui SANS AUCUNE purge (`logView`/`recordUsageEvent` ci-dessous
+// n'écrivent jamais rien d'autre qu'un nouvel événement).
+//
+// Point bloquant technique constaté en préparant cette documentation : la règle Firestore
+// ci-dessus interdit EXPLICITEMENT toute suppression (`allow update, delete: if false`), posée
+// volontairement le 20/09/2026 pour garantir l'intégrité de ce journal d'audit. Une purge réelle
+// nécessiterait donc de modifier `firestore.rules` (autoriser une suppression par
+// l'administrateur, potentiellement bornée dans le temps) — un changement de règle de sécurité
+// sensible, hors périmètre de cette simple documentation. Voir TODO-036 (section 5,
+// TODO_TECHNIQUE.md) pour l'implémentation différée de la purge assistée, pour cette collection
+// comme pour `history`/Inbox archivé (js/domain/history.js, js/domain/inbox.js).
 
 import { recordUsageEvent, listUsageEvents, getCurrentUser, ADMIN_EMAIL } from "./firebase.js";
 
