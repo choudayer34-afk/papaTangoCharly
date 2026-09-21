@@ -17,6 +17,13 @@
 // automatiques imprévues (« Suivi d'usage » puis la visite guidée) s'ouvrent à la toute première
 // connexion d'un compte neuf et, non fermées explicitement, bloquaient (`.modal-overlay`) le
 // clic sur la carte du projet fraîchement créé.
+//
+// Correction du 21/09/2026 (5e passage réel) : `#add-task-inline` restait invisible
+// ("Received: hidden") — la fiche projet (projects.js#openProjectDetail) a 3 onglets
+// ("Détails" actif par défaut, "Contenu", "Activité"), et `#add-task-inline` vit sous l'onglet
+// "Contenu" (`data-tabpanel="content"`, masqué tant que cet onglet n'est pas sélectionné). Le
+// test ouvrait la fiche mais ne cliquait jamais sur cet onglet. Corrigé en cliquant l'onglet
+// "Contenu" juste après l'ouverture de la fiche.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -45,6 +52,9 @@ test("Création de projet → Ajout de tâche → Clôture du projet", async ({ 
   // 3. Ouverture de la fiche projet depuis la liste (clic sur la carte, voir projects.js — le
   //    gestionnaire de clic est posé sur la carte entière, un clic sur le nom suffit).
   await page.getByText(projectName, { exact: false }).first().click();
+  // Onglet "Contenu" — #add-task-inline y vit, masqué par défaut (onglet "Détails" actif à
+  // l'ouverture de la fiche, voir projects.js#openProjectDetail).
+  await page.getByRole("tab", { name: "Contenu" }).click();
   await expect(page.locator("#add-task-inline")).toBeVisible({ timeout: 10_000 });
 
   // 4. Ajout d'une tâche depuis la fiche projet (js/views/projects.js, bouton #add-task-inline
@@ -54,8 +64,16 @@ test("Création de projet → Ajout de tâche → Clôture du projet", async ({ 
   await page.getByRole("button", { name: "Créer" }).click();
 
   // 5. La fiche projet se rouvre automatiquement après création (onCreated: reopenProject) —
-  //    la tâche ajoutée doit y apparaître.
-  await expect(page.getByText(taskTitle)).toBeVisible({ timeout: 10_000 });
+  //    la tâche ajoutée doit y apparaître. La fiche rouverte repart de zéro (projects.js —
+  //    aucune mémorisation de l'onglet précédemment actif), donc "Détails" est de nouveau actif
+  //    par défaut : il faut recliquer "Contenu" pour voir la liste des tâches. Recherche
+  //    volontairement scopée à `#detail-tasks` (pas un `getByText` global) : l'onglet
+  //    "Activité" de cette même fiche (masqué, pas affiché) tient son propre historique
+  //    (js/domain/history.js, "✅ Tâche créée · ...") qui contiendrait aussi ce titre et
+  //    provoquerait une ambiguïté de sélecteur (vu au 5e passage réel sur un cas similaire,
+  //    e2e/capture-qualification.spec.js).
+  await page.getByRole("tab", { name: "Contenu" }).click();
+  await expect(page.locator("#detail-tasks").getByText(taskTitle)).toBeVisible({ timeout: 10_000 });
 
   // 6. Clôture du projet (js/views/projects.js, bouton "Clôturer le projet" puis confirmation
   //    "🗄️ Fermer le projet" — volontairement réversible, PAS une suppression, voir le
