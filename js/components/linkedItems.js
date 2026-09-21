@@ -147,6 +147,123 @@ export function resolveRef(bundle, ref) {
   }
 }
 
+// BUG corrigé (21/09/2026, audit performance, TODO-009A) : `renderLinkedSection` ci-dessous
+// appelait `fetchBundle()` (9 `getDocs()`, une collection ENTIÈRE chacune) à CHAQUE ouverture
+// d'une fiche portant une section "🔗 Lié" — soit à chaque fois qu'une Tâche/Projet/Personne/
+// Suivi/Ressource/Réunion/Décision est ouverte, un des gestes les plus fréquents de l'app — pour
+// n'en tirer au final que les quelques éléments RÉELLEMENT liés à CETTE fiche (`mine`, souvent 0
+// à 5 liens). `resolveRefDirect()` lit directement le document demandé (`storage.get`, via les
+// nouveaux accesseurs `getTask`/`getFollowUp`/`getObjective`/`getInboxItem` — les autres
+// existaient déjà) plutôt que de filtrer un bundle déjà chargé en entier.
+//
+// Les données auxiliaires que `resolveRef()` allait chercher dans le bundle pour CONSTRUIRE le
+// bouton d'ouverture (ex. les tâches d'un Projet pour `openProjectDetail`, les Suivis d'une
+// Personne pour `openPersonDetail`) ne sont, elles, nécessaires qu'AU CLIC — jamais pour le
+// simple affichage du titre dans la liste "🔗 Lié". `onOpen` devient donc asynchrone : il ne va
+// chercher cette donnée complémentaire (au plus 1 à 2 collections, jamais les 9) qu'au moment où
+// l'utilisateur clique réellement sur ce lien précis, l'immense majorité des liens affichés
+// n'étant jamais cliqués dans une même session.
+//
+// `resolveRef(bundle, ref)` ci-dessus reste INCHANGÉE et continue de servir
+// `openLinkPickerModal`/`openCreateAndLinkModal` : ces deux-là ont un besoin structurellement
+// différent (chercher/lister TOUTES les fiches existantes pour en choisir une à lier), pour
+// lequel charger l'ensemble reste inévitable — seul `renderLinkedSection`, qui résout des
+// références déjà connues une par une, tire parti d'une lecture ciblée.
+async function resolveRefDirect(ref) {
+  switch (ref.type) {
+    case "Task": {
+      const t = await tasksApi.getTask(ref.id);
+      return t && { emoji: "✅", title: t.title, onOpen: async () => openTaskDetail(t, await projectsApi.listAll()) };
+    }
+    case "Project": {
+      const p = await projectsApi.getProject(ref.id);
+      if (!p) return null;
+      return {
+        emoji: "📦",
+        title: p.name,
+        onOpen: async () => {
+          const allTasks = await tasksApi.listAll();
+          openProjectDetail(p, allTasks.filter((t) => t.projectId === p.id));
+        },
+      };
+    }
+    case "Person": {
+      const person = await peopleApi.getPerson(ref.id);
+      return (
+        person && {
+          emoji: person.type === "manager" ? "👔" : "👤",
+          title: person.name,
+          onOpen: async () => openPersonDetail(person, await followUpsApi.listAll()),
+        }
+      );
+    }
+    case "FollowUp": {
+      const f = await followUpsApi.getFollowUp(ref.id);
+      if (!f) return null;
+      // Même format "Nom — Titre" que resolveRef() ci-dessus — voir son commentaire.
+      const person = f.personId ? await peopleApi.getPerson(f.personId) : null;
+      return { emoji: "👀", title: person ? `${person.name} — ${f.title}` : f.title, onOpen: () => openEditFollowUpModal(f) };
+    }
+    case "Resource": {
+      const r = await resourcesApi.getResource(ref.id);
+      if (!r) return null;
+      return {
+        emoji: "📎",
+        title: r.title,
+        onOpen: async () => {
+          const [projects, tasks] = await Promise.all([projectsApi.listAll(), tasksApi.listAll()]);
+          openResourceDetail(r, projects, tasks);
+        },
+      };
+    }
+    case "Meeting": {
+      const m = await meetingsApi.getMeeting(ref.id);
+      return (
+        m && {
+          emoji: "🗓️",
+          title: m.title,
+          onOpen: async () => openRecentDetail({ kind: "meeting", emoji: "🗓️", data: m }, await projectsApi.listAll()),
+        }
+      );
+    }
+    case "Decision": {
+      const d = await decisionsApi.getDecision(ref.id);
+      return (
+        d && {
+          emoji: "🗳️",
+          title: d.title,
+          onOpen: async () => openRecentDetail({ kind: "decision", emoji: "🗳️", data: d }, await projectsApi.listAll()),
+        }
+      );
+    }
+    case "Objective": {
+      const o = await objectivesApi.getObjective(ref.id);
+      if (!o) return null;
+      return {
+        emoji: o.status === "done" ? "✅" : "🎯",
+        title: o.title,
+        onOpen: async () => openObjectiveDetail(o, o.personId ? await peopleApi.getPerson(o.personId) : null, {}),
+      };
+    }
+    case "Kept": {
+      const k = await inboxApi.getInboxItem(ref.id);
+      // Même filtre que listKept() (voir fetchBundle() ci-dessus) : un lien vers une
+      // Information/Idée auto-archivée depuis (§ balayage 15 jours) reste résolu à null ici,
+      // comme avant ce correctif — comportement inchangé, pas une amélioration au passage.
+      return (
+        k &&
+        k.status === "kept" && {
+          emoji: k.keptAsType === "idea" ? "💡" : "🧠",
+          title: k.rawContent,
+          onOpen: () => openKeptItemDetail(k),
+        }
+      );
+    }
+    default:
+      return null;
+  }
+}
+
 function allRefs(bundle) {
   return [
     ...bundle.tasks.map((t) => ({ type: "Task", id: t.id })),
@@ -163,7 +280,11 @@ function allRefs(bundle) {
 
 /** Rend la section "🔗 Lié" dans `container` pour la fiche `ref` = {type, id}. */
 export async function renderLinkedSection(container, ref) {
-  const [bundle, allLinks] = await Promise.all([fetchBundle(), linksApi.listAll()]);
+  // TODO-009A (LOT 4A) : `resolveRefDirect` (lecture ciblée par référence) plutôt que
+  // `fetchBundle()` + `resolveRef()` (9 collections entières) — voir le commentaire de
+  // `resolveRefDirect` ci-dessus pour le détail. `linksApi.listAll()` reste inchangé : la
+  // collection `links` elle-même est hors périmètre de ce TODO.
+  const allLinks = await linksApi.listAll();
   const mine = linksApi.linksFor(allLinks, ref.type, ref.id);
 
   if (!mine.length) {
@@ -171,9 +292,12 @@ export async function renderLinkedSection(container, ref) {
     return;
   }
 
+  const resolvedEntries = await Promise.all(
+    mine.map(async ({ link, other }) => ({ link, other, resolved: await resolveRefDirect(other) }))
+  );
+
   container.innerHTML = "";
-  for (const { link, other } of mine) {
-    const resolved = resolveRef(bundle, other);
+  for (const { link, resolved } of resolvedEntries) {
     const row = document.createElement("div");
     row.className = "item-row";
     if (resolved) {
