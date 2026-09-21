@@ -53,6 +53,11 @@ test("TODO-008 point 1 — qualifier en Action pose un lien InboxSource résolu 
   // La fiche Tâche s'ouvre automatiquement — sa section "🔗 Lié" doit afficher le lien vers la
   // capture d'origine, résolu (le texte capturé, pas "Élément supprimé").
   await expect(page.locator("#detail-description")).toBeVisible({ timeout: 10_000 });
+  // La fiche Tâche est à onglets (vague 24) : "🔗 Lié" est regroupé sous l'onglet "Activité",
+  // non visible par défaut (onglet "Détails" actif à l'ouverture) — voir js/views/kanban.js,
+  // `.fiche-tabpanel[data-tabpanel="activity"]` porte `hidden` tant que cet onglet n'est pas
+  // sélectionné.
+  await page.getByRole("tab", { name: "Activité" }).click();
   const sourceRow = page.locator("#detail-links .item-row", { hasText: rawText });
   await expect(sourceRow).toBeVisible({ timeout: 10_000 });
   await expect(page.locator("#detail-links")).not.toContainText("Élément supprimé");
@@ -88,7 +93,9 @@ test("Régression — le type de référence 'Kept' se résout toujours normalem
   // affiche "🧠 Information" à la fois comme titre <h2> ET comme label de champ dans le corps
   // (comportement préexistant, hors périmètre de ce lot) — seul le titre doit être visé ici.
   await expect(page.getByRole("heading", { name: "🧠 Information" })).toBeVisible({ timeout: 10_000 });
-  await page.getByRole("button", { name: "Fermer" }).click();
+  // `exact: true` : sans lui, "Fermer" matche aussi le bouton "Fermer ce conseil" d'un bandeau
+  // d'astuce par ailleurs présent sur la page (getByRole matche par sous-chaîne par défaut).
+  await page.getByRole("button", { name: "Fermer", exact: true }).click();
 
   // 2. Une Tâche, liée manuellement à cette Information via "🔗 Lier une fiche" — chemin
   //    totalement indépendant de la qualification/InboxSource, qui exerce directement le cas
@@ -103,6 +110,8 @@ test("Régression — le type de référence 'Kept' se résout toujours normalem
   await page.getByRole("button", { name: "Créer" }).click();
   await expect(page.getByText("Action créée")).toBeVisible({ timeout: 10_000 });
 
+  // "🔗 Lier une fiche" est lui aussi regroupé sous l'onglet "Activité" (voir plus haut).
+  await page.getByRole("tab", { name: "Activité" }).click();
   await page.click("#link-existing-btn");
   await page.fill("#link-picker-input", rawInfo);
   const pickerRow = page.locator("#link-picker-results .item-row", { hasText: rawInfo });
@@ -110,6 +119,9 @@ test("Régression — le type de référence 'Kept' se résout toujours normalem
   await pickerRow.click();
   await expect(page.getByText("Lien créé")).toBeVisible({ timeout: 10_000 });
 
+  // La fiche Tâche se rouvre (onLinked) avec une HTML fraîche : l'onglet "Détails" redevient
+  // actif par défaut, il faut re-sélectionner "Activité" pour retrouver "🔗 Lié".
+  await page.getByRole("tab", { name: "Activité" }).click();
   // La fiche Tâche se rouvre (onLinked) : le lien vers l'Information doit être résolu — même
   // comportement qu'avant ce lot, le cas "Kept" de resolveRefDirect n'a pas été modifié.
   const keptLinkRow = page.locator("#detail-links .item-row", { hasText: rawInfo });
