@@ -22,7 +22,7 @@ import { openProjectDetail, openCreateProjectModal } from "../views/projects.js"
 import { openPersonDetail, openEditFollowUpModal, openCreateFollowUpModal, openObjectiveDetail } from "../views/people.js";
 import { openResourceDetail, openCreateResourceModal } from "../views/resources.js";
 import { openRecentDetail, openCreateMeetingModal, openCreateDecisionModal } from "../views/dashboard.js";
-import { openKeptItemDetail } from "../views/inbox.js";
+import { openKeptItemDetail, openInboxSourceDetail } from "../views/inbox.js";
 
 /** Les 7 types liables. Personne n'apparaît pas dans "+ Créer et lier" (rarement une fiche
  *  qu'on crée depuis un autre sujet) mais reste liable à une fiche existante — même chose pour
@@ -142,6 +142,14 @@ export function resolveRef(bundle, ref) {
         }
       );
     }
+    // Pas de cas "InboxSource" ici, volontairement (TODO-008 point 1, LOT 6) : ce type n'est
+    // résolu que par resolveRefDirect() plus bas, seule consommatrice des liens qu'il représente
+    // (renderLinkedSection, affichage de "🔗 Lié"). resolveRef()/allRefs() ci-dessus ne servent
+    // qu'à "🔗 Lier une fiche"/"+ Créer et lier" — un InboxSource n'est jamais choisi
+    // manuellement par ces deux chemins, uniquement posé automatiquement par
+    // js/domain/inbox.js#qualify(), donc jamais nécessaire à énumérer ici. L'ajouter obligerait
+    // en plus `fetchBundle()` à charger TOUS les InboxItems (pas seulement `keptItems`), à
+    // l'inverse de l'optimisation faite par TODO-009A.
     default:
       return null;
   }
@@ -250,12 +258,35 @@ async function resolveRefDirect(ref) {
       // Même filtre que listKept() (voir fetchBundle() ci-dessus) : un lien vers une
       // Information/Idée auto-archivée depuis (§ balayage 15 jours) reste résolu à null ici,
       // comme avant ce correctif — comportement inchangé, pas une amélioration au passage.
+      // INCHANGÉ par TODO-008/LOT 6 (arbitrage de Charles-Henri, 21/09/2026) : ce filtre sur
+      // `status === "kept"` reste tel quel, sémantique et cas d'usage propres à "Kept" — voir le
+      // nouveau cas "InboxSource" ci-dessous, ajouté SÉPARÉMENT pour un besoin différent.
       return (
         k &&
         k.status === "kept" && {
           emoji: k.keptAsType === "idea" ? "💡" : "🧠",
           title: k.rawContent,
           onOpen: () => openKeptItemDetail(k),
+        }
+      );
+    }
+    // TODO-008 point 1 (LOT 6, arbitrage de Charles-Henri, 21/09/2026) — type de référence dédié
+    // pour le lien "entité créée → InboxItem source" posé par js/domain/inbox.js#qualify()
+    // (linkEntityToInboxSource). Résout directement l'InboxItem par son id, SANS exiger
+    // `status === "kept"` (contrairement au cas "Kept" ci-dessus, volontairement inchangé) :
+    // les six issues concernées (Task/FollowUp/Project/Meeting/Decision/Resource) posent
+    // `status: "processed"`, jamais "kept" — ce nouveau cas est donc le seul chemin de
+    // résolution pour ces liens, sans toucher au comportement existant du type "Kept" ni au
+    // balayage d'auto-archivage à 15 jours (qui ne concerne que les Informations/Idées). Ouvre
+    // une fiche dédiée en lecture seule (openInboxSourceDetail, js/views/inbox.js) plutôt que
+    // openKeptItemDetail — voir son commentaire pour pourquoi les deux doivent rester distinctes.
+    case "InboxSource": {
+      const source = await inboxApi.getInboxItem(ref.id);
+      return (
+        source && {
+          emoji: "📥",
+          title: source.rawContent,
+          onOpen: () => openInboxSourceDetail(source),
         }
       );
     }
