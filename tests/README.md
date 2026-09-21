@@ -9,6 +9,30 @@ l'exception d'une dérogation ciblée et documentée dans `js/services/firebase.
 `AUDIT_TESTS.md` — TEST-001, TEST-002, TEST-006, TEST-018 (partiellement), TEST-020, TEST-021,
 TEST-027. Les 20 autres restent en backlog non planifié (section 4.2 de `TODO_TECHNIQUE.md`).
 
+## LOT 1 (TODO-006, TODO-007) — ajouté le 21/09/2026
+
+Trois nouveaux fichiers, sur le même principe que le reste de ce dossier (émulateur Firebase,
+jamais la production) et avec le même avertissement : écrits et relus manuellement, mais **non
+exécutés** dans cet environnement (registre npm bloqué, voir ci-dessous) — à confirmer au premier
+passage réel du workflow GitHub Actions, comme LOT 0B avant eux.
+
+- **`e2e/lot1-form-validation.spec.js`** (TEST-017) — retour visuel explicite (toast + surbrillance
+  `.field-invalid`) sur un champ obligatoire vide (Tâche, Projet, Ressource) et sur une URL mal
+  formée (Ressource), introduit par `js/components/formValidation.js`.
+- **`e2e/lot1-orphan-references.spec.js`** (TEST-010) — une tâche liée à un projet supprimé reste
+  affichée normalement (sans badge projet, sans erreur JS) — `js/views/kanban.js#renderCard`
+  gérait déjà ce cas par un simple `.find()` défensif, ce test fige ce comportement.
+- **`unit/lot1-closure.spec.js`** (TEST-025) — clôture Tâche/Projet/Suivi : statut et
+  `completedAt` corrects, et absence de cascade sur les entités rattachées (ex. clôturer un
+  projet ne modifie pas les tâches qui lui sont liées). Utilise `tests/support/harness.html`,
+  auquel `tasksApi`/`projectsApi`/`followUpsApi` ont été ajoutés (mêmes modules applicatifs déjà
+  exposés pour LOT 0B, aucun changement à ces trois fichiers).
+
+**Non traité par ce lot** : les contraintes de validation côté `firestore.rules` prévues par
+TODO-006 (SEC-011, tailles/types sur `tasks`/`inboxItems`) — voir TODO_TECHNIQUE.md → TODO-006
+pour le détail de ce point, volontairement laissé en suspens plutôt que risqué sans tests
+capables de le valider dans cet environnement.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
