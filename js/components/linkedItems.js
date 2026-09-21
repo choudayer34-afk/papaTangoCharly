@@ -504,7 +504,27 @@ function openCreateFormFor(type, ref, currentLabel, { onLinked, onCancel, defaul
       openCreateFollowUpModal({ ...prefill, onCreated: (f) => link(f, "title") });
       break;
     case "Resource":
-      openCreateResourceModal({ ...prefill, onCreated: (r) => link(r, "title") });
+      // TODO-014 (LOT 7, COMP-UX-014, 21/09/2026) : transmettre systématiquement l'id de la
+      // fiche d'origine — jusqu'ici, une Ressource créée via "+ Créer et lier" ne posait QUE le
+      // lien générique `links` (ci-dessus), sans jamais peupler `taskIds`/`projectIds` sur la
+      // Ressource elle-même ; celle créée via "+ Nouvelle ressource" dans le bloc "📎
+      // Ressources" d'une fiche Tâche/Projet (js/views/kanban.js, js/views/projects.js) ne posait
+      // QUE `taskIds`/`projectIds`, jamais de lien générique. Résultat, deux mécanismes aux
+      // résultats différents pour le même geste : la Ressource n'apparaissait alors que dans
+      // UNE seule des deux sections (soit "🔗 Lié", soit "📎 Ressources") selon le chemin utilisé.
+      // Ne change que ce chemin précis (`openCreateFormFor`), conformément à la solution actée —
+      // `openCreateResourceModal` (js/views/resources.js) sait déjà lire `prefill.taskId`/
+      // `prefill.projectId` pour peupler `taskIds`/`projectIds` à la création (mécanisme déjà
+      // utilisé par "+ Nouvelle ressource"), aucune modification nécessaire côté Ressources.
+      // Conséquence assumée : la Ressource apparaîtra désormais dans LES DEUX sections à la
+      // fois (résultat cohérent, mais visible à double) — la solution actée ne demande que de
+      // transmettre l'id d'origine, pas de fusionner les deux mécanismes d'affichage.
+      openCreateResourceModal({
+        ...prefill,
+        taskId: ref.type === "Task" ? ref.id : prefill.taskId,
+        projectId: ref.type === "Project" ? ref.id : prefill.projectId,
+        onCreated: (r) => link(r, "title"),
+      });
       break;
     case "Meeting":
       openCreateMeetingModal({ ...prefill, onCreated: (m) => link(m, "title") });
