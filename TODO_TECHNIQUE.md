@@ -197,9 +197,9 @@ Problème : 0% de couverture de test dans le dépôt ; aucune non-régression au
 
 Cause racine : SYS-008
 
-Solution : mettre en place l'émulateur Firebase (tests de règles), puis 2 scénarios End-to-End couvrant les parcours cœur de l'app. **Amorce d'outillage uniquement** — ne couvre que 7 des 27 manques recensés dans `AUDIT_TESTS.md` (TEST-001, 002, 006, 018, 020, 021, 027) ; les 20 autres restent en backlog non planifié (voir section 4.2). Deux options seront étudiées lors de l'implémentation : un dossier `tests/` isolé avec son propre `package.json`, ou un outillage jetable non versionné. Le choix sera fait au démarrage du LOT 0B — **décision produit du 15/09/2026 : ce choix n'est pas bloquant, il n'a pas besoin d'être tranché avant de commencer**.
+Solution : mettre en place l'émulateur Firebase (tests de règles), puis 2 scénarios End-to-End couvrant les parcours cœur de l'app. **Amorce d'outillage uniquement** — ne couvre que 7 des 27 manques recensés dans `AUDIT_TESTS.md` (TEST-001, 002, 006, 018, 020, 021, 027) ; les 20 autres restent en backlog non planifié (voir section 4.2). Deux options seront étudiées lors de l'implémentation : un dossier `tests/` isolé avec son propre `package.json`, ou un outillage jetable non versionné. Le choix sera fait au démarrage du LOT 0B — **décision produit du 15/09/2026 : ce choix n'est pas bloquant, il n'a pas besoin d'être tranché avant de commencer**. **Décision produit du 20/09/2026 (démarrage effectif du LOT 0B)** : dossier `tests/` isolé avec son propre `package.json`, versionné dans le dépôt (plutôt qu'un outillage jetable non versionné).
 
-Fichiers concernés : nouveau dossier de tests (ex. `tests/`), pas de fichier applicatif modifié
+Fichiers concernés : dossier de tests versionné `tests/` (créé) ; **dérogation exceptionnelle validée le 20/09/2026** : `js/services/firebase.js` (voir « Statut » ci-dessous) — seul fichier applicatif touché par ce lot, tout le reste de l'app reste inchangé
 
 Fonctions concernées : n/a (infrastructure)
 
@@ -214,6 +214,8 @@ Complexité : L (mise en place initiale) puis S par test ajouté
 Validation : les tests eux-mêmes sont le livrable
 
 Ordre recommandé : en parallèle de TODO-001 (LOT 0A) pour l'émulateur et les 2 parcours E2E cœur ; la sous-partie tests de règles attend le contenu final de TODO-001 — l'ensemble constitue le LOT 0B, avant tout le reste
+
+Statut (20/09/2026, LOT 0B) : **Partiellement terminé — code écrit, non exécuté.** Implémenté : dossier `tests/` versionné complet (`package.json`, `firebase.json`, tests de règles TEST-027/TEST-002 avec `@firebase/rules-unit-testing`, 2 parcours E2E TEST-020/TEST-021 et tests unitaires navigateur TEST-001/TEST-006 avec Playwright, amorce de TEST-018 limitée au cas connexion/liste blanche — voir `tests/README.md` pour le détail exact du périmètre couvert et non couvert). Dérogation exceptionnelle validée par Charles-Henri le 20/09/2026 : quelques lignes ajoutées dans `js/services/firebase.js`, actives uniquement derrière un indicateur explicite posé par les tests (`globalThis.__PILOTAGE_USE_FIREBASE_EMULATOR__`, jamais vrai en production), pour permettre à TEST-001/006/018/020/021 de faire tourner l'app contre l'émulateur plutôt que contre la production — seule exception de ce lot à « aucun fichier applicatif modifié », aucun autre fichier de `js/` n'a été touché. **Bloquant découvert en cours de lot** : le registre npm (`registry.npmjs.org`) est inaccessible depuis l'environnement où ce lot a été réalisé (politique réseau, HTTP 403 confirmé, non contourné) — `firebase-tools`, `@firebase/rules-unit-testing` et `@playwright/test` n'ont donc pas pu être installés, et **aucun test n'a pu être exécuté ni validé**. Voir « Éléments restant à valider » du bilan de ce lot.
 
 ## [ ] P1 — TODO-003 — Généraliser les actions rapides à 1 clic (report d'échéance, relance) sur la carte Tâche
 
@@ -771,6 +773,7 @@ Ordre recommandé : LOT 9, backlog
 **Modifications principales** : émulateur Firebase, tests de règles, 2 parcours E2E cœur — amorce d'outillage ne couvrant que 7 des 27 manques d'`AUDIT_TESTS.md` (les 20 autres restent en backlog non planifié, section 4.2)
 **Tests nécessaires** : TEST-020, TEST-021
 **Risques** : investissement initial sans bénéfice visible immédiat pour l'utilisateur final ; premier outillage Node introduit dans un dépôt qui n'en a jamais eu
+**Statut (20/09/2026)** : **Partiellement terminé.** Outillage choisi (dossier `tests/` isolé et versionné) et code des tests écrit dans son intégralité, mais aucun test n'a pu être exécuté (registre npm bloqué dans l'environnement de réalisation — voir TODO-002 en section 5 et `tests/README.md`). Une dérogation exceptionnelle, ciblée et validée par Charles-Henri a été introduite dans `js/services/firebase.js` pour que les tests puissent tourner contre l'émulateur plutôt que la production. Ce lot ne peut être considéré comme terminé tant que la suite n'a pas tourné avec succès dans un environnement disposant d'un accès npm.
 
 ### LOT 1 — Confiance du système : formulaires et suppression
 **Objectif** : éliminer les échecs silencieux et les créations/suppressions sans garde-fou.
