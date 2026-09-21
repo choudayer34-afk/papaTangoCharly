@@ -12,9 +12,15 @@
 // commentaire équivalent dans e2e/capture-qualification.spec.js — sans `page.addInitScript`,
 // l'app se connecte à la vraie production Firebase (compte de test inexistant là-bas) au lieu
 // de l'émulateur.
+//
+// Correction du 21/09/2026 (4e passage réel) : voir tests/support/firstRun.js — deux modales
+// automatiques imprévues (« Suivi d'usage » puis la visite guidée) s'ouvrent à la toute première
+// connexion d'un compte neuf et, non fermées explicitement, bloquaient (`.modal-overlay`) le
+// clic sur la carte du projet fraîchement créé.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
+import { dismissFirstRunModals } from "../support/firstRun.js";
 
 test("Création de projet → Ajout de tâche → Clôture du projet", async ({ page }) => {
   const projectName = `Test LOT 0B — projet ${Date.now()}`;
@@ -28,6 +34,7 @@ test("Création de projet → Ajout de tâche → Clôture du projet", async ({ 
   await page.fill("#login-email", E2E_TEST_USER.email);
   await page.fill("#login-password", E2E_TEST_USER.password);
   await page.click("#login-email-submit");
+  await dismissFirstRunModals(page);
 
   // 2. Création du projet (js/views/projects.js#openCreateProjectModal).
   await page.getByRole("button", { name: /Nouveau projet/ }).or(page.locator("#new-project-btn")).click();
