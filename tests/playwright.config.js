@@ -5,6 +5,11 @@
 //
 // Lancé via `firebase emulators:exec` (voir package.json#scripts.test:e2e) : les émulateurs
 // Auth/Firestore tournent déjà quand ce fichier s'exécute.
+//
+// Rapport HTML (en plus de la sortie console `list`) ajouté pour GitHub Actions
+// (.github/workflows/tests.yml, étape "Publier le rapport Playwright") — `open: "never"` pour
+// ne jamais tenter d'ouvrir un navigateur local pendant un lancement en CI ou en ligne de
+// commande ; le dossier `playwright-report/` est celui publié comme artefact.
 
 import { defineConfig, devices } from "@playwright/test";
 
@@ -13,7 +18,8 @@ export default defineConfig({
   testMatch: ["e2e/**/*.spec.js", "unit/**/*.spec.js"],
   timeout: 30_000,
   fullyParallel: false, // un seul jeu de comptes de test partagé — éviter les interférences (amorce, pas une suite à paralléliser)
-  reporter: [["list"]],
+  reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
+  outputDir: "test-results",
   globalSetup: "./e2e/global-setup.js",
   use: {
     baseURL: "http://127.0.0.1:5050",
