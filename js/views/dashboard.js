@@ -1340,6 +1340,23 @@ export function renderDashboard(container) {
     const followUpList = hatTasks.filter((t) => t.status === "follow_up");
     const waitingList = hatTasks.filter((t) => t.status === "waiting");
     const overdueFollowUpsList = hatFollowUps.filter(followUpsApi.isControlDue);
+    // TODO-022 (LOT 3, besoin produit BESOIN-002) : carte "Échéances du jour" — groupe 1, ce que
+    // Charles-Henri doit faire lui-même (Tâches/actions personnelles à échéance aujourd'hui,
+    // même détection que le Focus du jour ci-dessous, `isDueToday`) ; groupe 2, "ce qui relève
+    // d'un suivi/contrôle qui lui revient", en excluant "les échéances de contrôle des
+    // collaborateurs" — critère précisé par Charles-Henri le 21/09/2026 : uniquement les Suivis
+    // "to_tell" (`direction`, voir js/domain/followups.js — "je dois transmettre/dire quelque
+    // chose à cette personne", la `controlDate` appartient alors à Charles-Henri lui-même, pas au
+    // collaborateur), JAMAIS les "waiting_on" (il attend une échéance qui appartient à la
+    // personne suivie — ce sont ces `controlDate`-là que la carte doit exclure). Ne remplace pas
+    // la tuile "📅 Aujourd'hui" retirée le 01/09/2026 au profit du Focus (voir commentaire
+    // ci-dessous) : demande explicite et distincte de Charles-Henri, avec un périmètre différent
+    // (deux groupes précis, jamais toutes les échéances du jour indistinctement).
+    const todayTasksList = hatTasks.filter((t) => t.status !== "done" && isDueToday(t));
+    const todayToTellList = hatFollowUps.filter(
+      (f) => f.direction === "to_tell" && f.status !== "done" && f.controlDate && daysFromToday(f.controlDate) === 0
+    );
+    const todayCount = todayTasksList.length + todayToTellList.length;
 
     // La tuile "📅 Aujourd'hui" a été remplacée par la section "🎯 Focus du jour" ci-dessous
     // (piste TDAH du 01/09/2026, retour de Charles-Henri) : plafonner à 3 choses visibles vaut
@@ -1349,6 +1366,10 @@ export function renderDashboard(container) {
       <div class="stat-tile stat-danger" id="stat-late" style="cursor:pointer;">
         <div class="stat-value">${lateList.length}</div>
         <div class="stat-label">🔴 En retard</div>
+      </div>
+      <div class="stat-tile" id="stat-today" style="cursor:pointer;">
+        <div class="stat-value">${todayCount}</div>
+        <div class="stat-label">📅 Échéances du jour</div>
       </div>
       <div class="stat-tile" id="stat-inbox" style="cursor:pointer;">
         <div class="stat-value">${inboxPendingCount}</div>
@@ -1368,12 +1389,85 @@ export function renderDashboard(container) {
       </div>
     `;
     statGrid.querySelector("#stat-late").addEventListener("click", () => openTaskListModal("🔴 En retard", lateList));
+    statGrid.querySelector("#stat-today").addEventListener("click", () => openTodayDueModal(todayTasksList, todayToTellList));
     statGrid.querySelector("#stat-inbox").addEventListener("click", () => {
       location.hash = "#/inbox";
     });
     statGrid.querySelector("#stat-followup").addEventListener("click", () => openTaskListModal("👀 À suivre", followUpList));
     statGrid.querySelector("#stat-waiting").addEventListener("click", () => openTaskListModal("⏳ En attente", waitingList));
     statGrid.querySelector("#stat-relances").addEventListener("click", () => openFollowUpListModal("📣 Relances dues", overdueFollowUpsList));
+  }
+
+  /**
+   * TODO-022 (LOT 3) : détail de la carte "📅 Échéances du jour" — deux groupes toujours dans le
+   * même ordre (Tâches d'abord, "à faire" ; Suivis "à transmettre" ensuite), jamais mélangés dans
+   * une seule liste, pour rester lisible sur ce que chaque élément demande concrètement (faire vs
+   * dire). Même structure que `openTaskListModal`/`openFollowUpListModal` ci-dessus (une seule
+   * modale, ✕ pour fermer), simplement scindée en deux blocs successifs.
+   */
+  function openTodayDueModal(taskList, followUpList) {
+    const peopleById = new Map(people.map((p) => [p.id, p]));
+    const body = document.createElement("div");
+
+    const taskBlock = document.createElement("div");
+    taskBlock.innerHTML = `<div class="section-title" style="margin-top:0;">📋 Tâches (${taskList.length})</div>`;
+    const taskListEl = document.createElement("div");
+    taskListEl.className = "card";
+    taskListEl.style.marginBottom = "16px";
+    if (!taskList.length) {
+      taskListEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici. 🎉</div>`;
+    } else {
+      for (const t of taskList) {
+        const project = t.projectId ? projects.find((p) => p.id === t.projectId) : null;
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.style.cursor = "pointer";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${t.isBlocked ? "🔴 " : ""}${escapeHtml(t.title)}</div>
+            <div class="item-meta">${project ? "📦 " + escapeHtml(project.name) : "Sans projet"}</div>
+          </div>
+          <span class="badge badge-${t.status}">${tasksApi.STATUS_LABELS[t.status]}</span>
+        `;
+        row.addEventListener("click", () => {
+          closeModal();
+          openTaskDetail(t, projects);
+        });
+        taskListEl.appendChild(row);
+      }
+    }
+    taskBlock.appendChild(taskListEl);
+    body.appendChild(taskBlock);
+
+    const followUpBlock = document.createElement("div");
+    followUpBlock.innerHTML = `<div class="section-title">📣 À transmettre (${followUpList.length})</div>`;
+    const followUpListEl = document.createElement("div");
+    followUpListEl.className = "card";
+    if (!followUpList.length) {
+      followUpListEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici. 🎉</div>`;
+    } else {
+      for (const f of followUpList) {
+        const person = peopleById.get(f.personId);
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.style.cursor = "pointer";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">📣 ${person ? escapeHtml(person.name) : "Personne supprimée"} — ${escapeHtml(f.title)}</div>
+            <div class="item-meta">À dire aujourd'hui</div>
+          </div>
+        `;
+        row.addEventListener("click", () => {
+          closeModal();
+          openEditFollowUpModal(f);
+        });
+        followUpListEl.appendChild(row);
+      }
+    }
+    followUpBlock.appendChild(followUpListEl);
+    body.appendChild(followUpBlock);
+
+    openModal({ title: "📅 Échéances du jour", body, actions: [{ label: "Fermer", variant: "ghost" }] });
   }
 
   /**
