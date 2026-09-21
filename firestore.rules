@@ -62,9 +62,17 @@ service cloud.firestore {
       // "👥 Comptes" ne révoquait donc pas l'accès Firestore direct tant qu'une session/jeton
       // restait valide (jusqu'à ~1h, voir FIREBASE-001). Corrigé ici en vérifiant
       // explicitement `disabled`, comme recommandé dans AUDIT_FIREBASE.md.
+      // Bug trouvé le 21/09/2026 par le test de règles TEST-002 (LOT 0B) avant tout déploiement
+      // — cette correction FIREBASE-001 n'a donc jamais été live en production : `.data.disabled`
+      // lève une erreur d'évaluation (PERMISSION_DENIED) dès que le champ `disabled` est ABSENT
+      // du document `allowedUsers` — hors c'est le cas normal de tout compte jamais fermé (voir
+      // `disabled` (absent = compte autorisé) ci-dessus, seed.js#alice) : cela aurait bloqué
+      // l'accès de la quasi-totalité des comptes normaux. `.get('disabled', false)` renvoie une
+      // valeur par défaut au lieu de lever une erreur quand le champ est absent — comportement
+      // identique voulu, correctement implémenté.
       allow read, write: if request.auth != null
                            && request.auth.uid == uid
-                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.disabled != true;
+                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.get('disabled', false) != true;
 
       // SEC-002 : accès administrateur large à TOUTES les données de tous les utilisateurs,
       // nécessaire à l'export/suppression de compte depuis "👥 Comptes"
