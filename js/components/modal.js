@@ -30,6 +30,12 @@ let activeClose = null; // la fonction close() propre à la modale actuellement 
 export function openModal({ title, body, actions = [], dismissible = true, onClose }) {
   closeModal(); // une seule modale à la fois
 
+  // Piège de focus standard (LOT 8, TODO-016, COMP-UX-001/002) : mémorise l'élément qui avait le
+  // focus avant l'ouverture (typiquement le bouton qui a déclenché la modale) pour le lui rendre
+  // à la fermeture — sans ça, le focus clavier restait perdu quelque part dans la page une fois
+  // la modale refermée, obligeant à retrouver soi-même où on en était.
+  const previouslyFocusedEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
 
@@ -37,6 +43,7 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
   modal.className = "modal";
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
+  modal.setAttribute("tabindex", "-1"); // repli du piège de focus si la modale ne contient aucun élément focusable (cas normalement jamais rencontré, chaque modale ayant au moins un bouton d'action)
 
   const heading = document.createElement("h2");
   heading.textContent = title;
@@ -112,43 +119,90 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
     modal.appendChild(actionsRow);
   }
 
+  // BUG corrigé (retour de Charles-Henri, vague 41, 09/09/2026 : "je clique en dehors de la
+  // modale par erreur et ça me ferme la modale et je perds ma saisie") : un clic accidentel
+  // en dehors (changement de fenêtre, clic à côté sur un grand écran) ne doit jamais faire
+  // perdre une saisie en cours. Si la modale contient un champ modifiable (texte, date,
+  // liste déroulante...), le clic en dehors ne la ferme plus — seule une action explicite
+  // (bouton Fermer/Annuler) le fait. Les modales sans aucun champ (listes de choix,
+  // confirmations, fiches en lecture seule) gardent le clic en dehors comme raccourci de
+  // fermeture rapide, sans aucun risque de perte.
+  // Correctif (13/09/2026, retour de Charles-Henri : "je suis parfois bloqué comme sur
+  // administration") : le garde-fou ci-dessus visait les champs qu'on peut RENSEIGNER, pas
+  // n'importe quel <input>/<select> — un champ marqué readonly/disabled (ex. le lien de
+  // l'app affiché en lecture seule dans 🔧 Administration) ne peut par définition perdre
+  // aucune saisie, il n'y en a pas. Le compter comme "modale à protéger" revenait à
+  // supprimer le clic en dehors pour des modales purement informatives qui, en plus,
+  // n'avaient pas toutes un bouton d'action explicite — la seule sortie restait alors la
+  // touche Échap, jamais indiquée à l'écran. Voir aussi le bouton "Fermer" ajouté à
+  // js/components/adminPanel.js#openAdminPanel pour ce cas précis.
+  function hasUnsavedField() {
+    return !!bodyEl.querySelector("input:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled]), select:not([disabled])");
+  }
+
+  function nudge() {
+    modal.classList.remove("modal-nudge");
+    // Force le redémarrage de l'animation même si elle vient déjà de jouer (deux tentatives de
+    // fermeture rapprochées) — un retrait/ajout de classe en 2 temps plutôt qu'un simple
+    // toggle, sinon le navigateur ne rejoue pas une animation déjà terminée sur la même classe.
+    void modal.offsetWidth;
+    modal.classList.add("modal-nudge");
+  }
+
   overlay.appendChild(modal);
   if (dismissible) {
     overlay.addEventListener("click", (e) => {
       if (e.target !== overlay) return;
-      // BUG corrigé (retour de Charles-Henri, vague 41, 09/09/2026 : "je clique en dehors de la
-      // modale par erreur et ça me ferme la modale et je perds ma saisie") : un clic accidentel
-      // en dehors (changement de fenêtre, clic à côté sur un grand écran) ne doit jamais faire
-      // perdre une saisie en cours. Si la modale contient un champ modifiable (texte, date,
-      // liste déroulante...), le clic en dehors ne la ferme plus — seule une action explicite
-      // (bouton Fermer/Annuler, ou Échap) le fait. Les modales sans aucun champ (listes de
-      // choix, confirmations, fiches en lecture seule) gardent le clic en dehors comme
-      // raccourci de fermeture rapide, sans aucun risque de perte.
-      // Correctif (13/09/2026, retour de Charles-Henri : "je suis parfois bloqué comme sur
-      // administration") : le garde-fou ci-dessus visait les champs qu'on peut RENSEIGNER, pas
-      // n'importe quel <input>/<select> — un champ marqué readonly/disabled (ex. le lien de
-      // l'app affiché en lecture seule dans 🔧 Administration) ne peut par définition perdre
-      // aucune saisie, il n'y en a pas. Le compter comme "modale à protéger" revenait à
-      // supprimer le clic en dehors pour des modales purement informatives qui, en plus,
-      // n'avaient pas toutes un bouton d'action explicite — la seule sortie restait alors la
-      // touche Échap, jamais indiquée à l'écran. Voir aussi le bouton "Fermer" ajouté à
-      // js/components/adminPanel.js#openAdminPanel pour ce cas précis.
-      if (bodyEl.querySelector("input:not([readonly]):not([disabled]), textarea:not([readonly]):not([disabled]), select:not([disabled])")) {
-        modal.classList.remove("modal-nudge");
-        // Force le redémarrage de l'animation même si elle vient déjà de jouer (deux clics en
-        // dehors rapprochés) — un retrait/ajout de classe en 2 temps plutôt qu'un simple
-        // toggle, sinon le navigateur ne rejoue pas une animation déjà terminée sur la même
-        // classe.
-        void modal.offsetWidth;
-        modal.classList.add("modal-nudge");
+      if (hasUnsavedField()) {
+        nudge();
         return;
       }
       close();
     });
   }
 
+  // Piège de focus standard (LOT 8, TODO-016, COMP-UX-001/002) : liste des éléments focusables
+  // de la modale, dans l'ordre du DOM — recalculée à chaque Tab plutôt que mémorisée une fois,
+  // car le contenu d'une modale peut changer en cours de vie (ex. un champ qui apparaît après un
+  // choix, voir attachProjectQuickCreate).
+  function getFocusableEls() {
+    return Array.from(modal.querySelectorAll('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(
+      (el) => el.offsetParent !== null || el === document.activeElement,
+    );
+  }
+
   function onKeydown(e) {
-    if (e.key === "Escape" && dismissible) close();
+    // Échap sans avertissement d'une saisie non sauvegardée corrigé (LOT 8, TODO-016) : jusqu'ici
+    // Échap fermait TOUJOURS une modale dismissible, y compris avec une saisie en cours non
+    // enregistrée — contrairement au clic en dehors, protégé depuis la vague 41 (voir
+    // hasUnsavedField() ci-dessus). Échap suit désormais exactement la même règle : si la modale
+    // contient un champ modifiable, Échap ne la ferme plus (seule une action explicite du type
+    // Fermer/Annuler le fait) — sinon, comportement inchangé, Échap ferme normalement.
+    if (e.key === "Escape" && dismissible) {
+      if (hasUnsavedField()) {
+        nudge();
+        return;
+      }
+      close();
+      return;
+    }
+    // Piège de focus (LOT 8, TODO-016, COMP-UX-001/002) : jusqu'ici Tab/Shift+Tab pouvait faire
+    // sortir le focus clavier de la modale ouverte vers des éléments de la page en dessous
+    // (invisibles sous l'overlay mais toujours dans l'ordre de tabulation) — on boucle désormais
+    // le focus sur le premier/dernier élément focusable de la modale.
+    if (e.key === "Tab") {
+      const focusable = getFocusableEls();
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
   }
   document.addEventListener("keydown", onKeydown);
 
@@ -160,12 +214,26 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
     overlay.remove();
     if (activeOverlay === overlay) activeOverlay = null;
     if (activeClose === close) activeClose = null;
+    // Restitution du focus (LOT 8, TODO-016) : uniquement si l'élément d'origine est encore
+    // rattaché au document — il peut avoir disparu entre-temps (ex. la ligne qui l'a ouvert a été
+    // supprimée), auquel cas il n'y a rien de sensé où revenir, on laisse le focus où il est.
+    if (previouslyFocusedEl && previouslyFocusedEl.isConnected) previouslyFocusedEl.focus();
     onClose?.();
   }
 
   document.body.appendChild(overlay);
   activeOverlay = overlay;
   activeClose = close;
+
+  // Déplace le focus dans la modale à l'ouverture — sans ça, le piège de focus ci-dessus ne sert
+  // à rien tant qu'on n'a pas déjà tabulé une première fois DANS la modale : le focus resterait
+  // sur l'élément déclencheur (masqué sous l'overlay mais toujours actif), et un premier Tab
+  // continuerait alors dans la page du dessous au lieu de rester dans la modale. Un appelant qui
+  // a besoin de focus un champ précis (ex. le titre d'un formulaire de création) le fait comme
+  // avant avec son propre `setTimeout(() => ..., 30)` après l'ouverture, qui prend simplement le
+  // relais de ce focus initial générique.
+  const initialFocusable = getFocusableEls();
+  (initialFocusable[0] || modal).focus();
 
   return { close, bodyEl };
 }
