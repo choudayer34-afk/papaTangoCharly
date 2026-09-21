@@ -33,10 +33,10 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
-        title: "🔧 Filtres Type / Projet / Personne sur le Calendrier",
-        text: "Le Calendrier propose désormais un menu \"🔧 Filtrer\" (comme sur Pilotage/Projets) pour ne garder que certains types d'éléments (✅ Tâches, 🗓️ Réunions, 🗳️ Décisions, 👀 Suivis), un projet précis, ou une personne — dans ce dernier cas, seuls les Suivis peuvent lui être rattachés, les autres types n'ayant jamais de personne assignée. Tout reste affiché par défaut, exactement comme avant, tant que le filtre n'est pas touché.",
+        title: "🔧 Filtres Type / Projet sur le Calendrier",
+        text: "Le Calendrier propose désormais un menu \"🔧 Filtrer\" (comme sur Pilotage/Projets) pour ne garder que certains types d'éléments (✅ Tâches, 🗓️ Réunions, 🗳️ Décisions, 👀 Suivis) ou un projet précis. Tout reste affiché par défaut, exactement comme avant, tant que le filtre n'est pas touché.",
         howTo: "Onglet Calendrier → bouton \"🔧 Filtrer\" (à côté de Mois/Semaine).",
-        gain: "Isoler d'un coup d'œil, par exemple, les échéances d'un seul projet ou les suivis d'une seule personne, sans avoir à les repérer visuellement au milieu de tout le reste.",
+        gain: "Isoler d'un coup d'œil, par exemple, les échéances d'un seul projet, sans avoir à les repérer visuellement au milieu de tout le reste.",
       },
       {
         type: "add",
@@ -51,13 +51,6 @@ const WHATS_NEW = [
         text: "En vue Semaine, un titre de tâche/réunion/décision/suivi trop long passait à la ligne, alors que la vue Mois le tronque déjà avec \"...\" — les deux vues se comportent désormais de la même façon sur ce point.",
         howTo: "Rien à faire, c'est automatique.",
         gain: "Un même contenu s'affiche de façon cohérente, qu'on soit en vue Mois ou Semaine.",
-      },
-      {
-        type: "fix",
-        title: "📎 Ressource créée via \"+ Créer et lier\" : apparaît aussi dans \"📎 Ressources\"",
-        text: "Créer une Ressource depuis \"🔗 Lié\" → \"+ Créer et lier\" sur une fiche Tâche ou Projet ne la faisait apparaître que dans la section \"🔗 Lié\" de cette fiche, jamais dans son bloc dédié \"📎 Ressources\" (contrairement à une Ressource créée via \"+ Nouvelle ressource\" directement depuis ce bloc). Elle apparaît désormais dans les deux, de façon cohérente quel que soit le chemin de création utilisé.",
-        howTo: "Rien à faire, c'est automatique.",
-        gain: "Retrouver une Ressource créée à la volée là où on s'attend naturellement à la voir, quel que soit le bouton utilisé pour la créer.",
       },
     ],
   },
