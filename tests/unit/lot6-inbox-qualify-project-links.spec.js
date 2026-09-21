@@ -172,7 +172,9 @@ test.describe("TEST-022 (étendu) — inboxApi.qualify() : régression des 9 iss
     expect(result.hasDecisionLink).toBe(true);
   });
 
-  test("Aucun projectId connu à la création → aucun lien entité↔projet créé", async ({ page }) => {
+  test("Aucun projectId connu à la création → aucun lien entité↔projet créé (mais le lien InboxSource, lui, est toujours posé)", async ({
+    page,
+  }) => {
     const result = await page.evaluate(async () => {
       const { inboxApi, followUpsApi, linksApi } = window.__pilotageTestApi;
 
@@ -184,16 +186,33 @@ test.describe("TEST-022 (étendu) — inboxApi.qualify() : régression des 9 iss
       await inboxApi.qualify(followupItem.id, "followup", { id: followUp.id });
 
       const allLinks = await linksApi.listAll();
-      const hasAnyProjectLink = (type, id) => allLinks.some((l) => (l.a.type === type && l.a.id === id) || (l.b.type === type && l.b.id === id));
+      // Ciblé sur un lien vers "Project" spécifiquement — un `some()` sans filtre de type sur
+      // l'AUTRE bout du lien matcherait aussi le lien InboxSource (toujours posé, lui, qu'un
+      // projet soit connu ou non), ce qui rendrait ce test faux-négatif depuis l'ajout du point 1.
+      const hasProjectLink = (type, id) =>
+        allLinks.some(
+          (l) =>
+            (l.a.type === type && l.a.id === id && l.b.type === "Project") || (l.b.type === type && l.b.id === id && l.a.type === "Project")
+        );
+      const hasInboxSourceLink = (type, id, inboxItemId) =>
+        allLinks.some(
+          (l) =>
+            (l.a.type === type && l.a.id === id && l.b.type === "InboxSource" && l.b.id === inboxItemId) ||
+            (l.b.type === type && l.b.id === id && l.a.type === "InboxSource" && l.a.id === inboxItemId)
+        );
 
       return {
-        hasTaskLink: hasAnyProjectLink("Task", taskResult.task.id),
-        hasFollowUpLink: hasAnyProjectLink("FollowUp", followUp.id),
+        hasTaskProjectLink: hasProjectLink("Task", taskResult.task.id),
+        hasFollowUpProjectLink: hasProjectLink("FollowUp", followUp.id),
+        hasTaskSourceLink: hasInboxSourceLink("Task", taskResult.task.id, taskItem.id),
+        hasFollowUpSourceLink: hasInboxSourceLink("FollowUp", followUp.id, followupItem.id),
       };
     });
 
-    expect(result.hasTaskLink).toBe(false);
-    expect(result.hasFollowUpLink).toBe(false);
+    expect(result.hasTaskProjectLink).toBe(false);
+    expect(result.hasFollowUpProjectLink).toBe(false);
+    expect(result.hasTaskSourceLink).toBe(true);
+    expect(result.hasFollowUpSourceLink).toBe(true);
   });
 
   test("Resource ne génère jamais de lien projet, même avec un projet existant en base (mais reçoit bien son lien InboxSource)", async ({ page }) => {
