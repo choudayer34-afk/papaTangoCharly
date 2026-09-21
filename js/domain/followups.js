@@ -150,14 +150,16 @@ export async function createFollowUp(data) {
  * js/components/checklist.js reste le seul composant à connaître, sans variante par type de
  * fiche.
  */
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée (`storage.appendToArray`, voir
+// son commentaire détaillé dans storage.js) — même raisonnement que
+// js/domain/tasks.js#addChecklistItem. `toggleChecklistItem`/`removeChecklistItem` juste en
+// dessous restent sur `storage.update()` : ils doivent localiser un élément EXISTANT par son id.
 export async function addChecklistItem(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Suivi introuvable : " + id);
-    return { checklist: [...(current.checklist || []), { id: generateId(), text: trimmed, done: false, doneAt: null }] };
-  });
-  return updated.checklist;
+  const item = { id: generateId(), text: trimmed, done: false, doneAt: null };
+  await storage.appendToArray(COLLECTION, id, "checklist", item);
+  return item;
 }
 
 export async function toggleChecklistItem(id, itemId, done) {
@@ -178,15 +180,15 @@ export async function removeChecklistItem(id, itemId) {
 
 /** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
  *  domain/tasks.js pour le principe complet (additif uniquement). */
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée — même raisonnement que
+// addChecklistItem() ci-dessus. Ne renvoie plus le tableau complet mais la note ajoutée seule.
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Suivi introuvable : " + id);
-    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
-  });
+  const note = { id: generateId(), text: trimmed, createdAt: Date.now() };
+  await storage.appendToArray(COLLECTION, id, "notesLog", note);
   await storage.logHistory("FollowUp", id, "note_added", { text: trimmed });
-  return updated.notesLog;
+  return note;
 }
 
 export async function updateFollowUp(id, patch) {
