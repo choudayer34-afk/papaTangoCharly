@@ -159,7 +159,9 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9)
+
+*Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
 ## [ ] P0 — TODO-001 — Vérifier, verrouiller et versionner les règles de sécurité Firestore réelles
 
@@ -751,6 +753,174 @@ Validation : relecture manuelle de tous les libellés affichés après fusion
 
 Ordre recommandé : LOT 9, backlog
 
+## [ ] P1 — TODO-022 — Carte indicateur « Échéances du jour » (tri : à faire d'abord, puis suivi/contrôle)
+
+*Ajouté le 21/09/2026 — besoin produit (BESOIN-002), voir section 9.*
+
+Type : UX (nouveau besoin produit)
+
+Problème : sur l'Accueil, rien ne montre en un coup d'œil le nombre d'éléments dont l'échéance tombe aujourd'hui, triés par ce qui doit être fait en premier (Tâches/actions personnelles) puis ce qui relève d'un suivi ou d'un contrôle — sans mélanger les dates de contrôle des collaborateurs (Suivis), que Charles-Henri ne veut pas voir dans cette carte précise.
+
+Cause racine : besoin produit (hors audits) — BESOIN-002
+
+Solution : ajouter une nouvelle carte indicateur sur le Dashboard affichant le nombre d'éléments dont l'échéance est le jour même, triés en deux groupes : 1) ce que Charles-Henri doit faire lui-même (Tâches/actions personnelles), 2) ce qui relève d'un suivi/contrôle qui lui revient — en excluant les échéances de contrôle des collaborateurs. À préciser lors du cadrage : critère exact de distinction entre « échéance personnelle » et « échéance collaborateur » dans le modèle Suivi actuel.
+
+Fichiers concernés : `js/views/dashboard.js`
+
+Fonctions concernées : rendu des cartes indicateurs (KPI), calcul des échéances du jour
+
+Dépendances : aucune connue à ce stade
+
+Problèmes résolus : BESOIN-002
+
+Risque : faible — ajout d'affichage, aucune donnée modifiée
+
+Complexité : S
+
+Validation : Non déterminé — pas de test automatisé prévu pour cet écran
+
+Ordre recommandé : LOT 3 (rejoint TODO-005, même thème de visibilité de l'information déjà calculée)
+
+## [ ] P1 — TODO-023 — Corriger les régressions d'affichage en mode sombre
+
+*Ajouté le 21/09/2026 — besoin produit (BESOIN-003), voir section 9.*
+
+Type : BUG / UX (nouveau besoin produit)
+
+Problème : constaté par Charles-Henri en parcourant les écrans le 21/09/2026 — en mode sombre : (1) le traitement d'un item de l'Inbox affiche le texte de chaque élément en noir (illisible sur fond sombre) ; (2) tous les calendriers affichés dans les champs de type date s'affichent en noir (illisibles) ; (3) les toasts temporaires ont un fond blanc avec une écriture blanche (illisibles).
+
+Cause racine : besoin produit (hors audits) — BESOIN-003 ; probablement des couleurs codées en dur (non liées aux tokens de thème) sur ces éléments précis, à confirmer lors du cadrage
+
+Solution : identifier et corriger les couleurs codées en dur (ou l'absence de redéfinition en mode sombre) sur : l'écran de traitement/qualification d'un item Inbox, le composant natif de sélection de date (`<input type="date">`, propriété CSS `color-scheme`), et le composant toast.
+
+Fichiers concernés : `js/views/inbox.js`, `js/components/toast.js`, feuilles de styles concernées (fichier exact à confirmer lors du cadrage)
+
+Fonctions concernées : rendu de la modale de qualification Inbox, `showToast`, styles des champs `<input type="date">`
+
+Dépendances : aucune connue à ce stade
+
+Problèmes résolus : BESOIN-003
+
+Risque : faible — correctifs CSS ciblés, aucun changement de comportement fonctionnel
+
+Complexité : S
+
+Validation : Non déterminé — vérification visuelle manuelle en mode sombre sur chaque écran concerné
+
+Ordre recommandé : nouveau LOT 10 — priorité élevée proposée vu la gêne d'usage immédiate et le faible coût de correction, malgré son ajout tardif à la roadmap
+
+## [ ] P1 — TODO-024 — Suivi structuré des objectifs : indicateurs de réussite et éléments de suivi associés
+
+*Ajouté le 21/09/2026 — besoin produit (BESOIN-001, volet objectifs), voir section 9.*
+
+Type : DATA / UX (nouveau besoin produit)
+
+Problème : les objectifs (`js/domain/objectives.js`) ne permettent pas aujourd'hui de décrire chaque indicateur de réussite individuellement (cible, mode de mesure, source de preuve, fréquence de suivi), ni d'associer à un objectif — ou à une information — des éléments de suivi dédiés ; la structure illustrée par les deux exemples SMART fournis par Charles-Henri le 21/09/2026 resterait donc en texte libre non exploitable.
+
+Cause racine : besoin produit (hors audits) — BESOIN-001 (volet objectifs)
+
+Solution : **à concevoir lors du cadrage de ce lot** — Charles-Henri a explicitement demandé une proposition (« que proposes-tu pour faire cela ? »), non tranchée à ce stade et volontairement non traitée maintenant. Piste de départ à instruire : structurer chaque objectif avec une liste d'indicateurs de réussite (cible, mesure, source de preuve, fréquence de suivi chacun) et permettre de rattacher des éléments de suivi (ou une information) à un objectif ou à un indicateur précis.
+
+Fichiers concernés : `js/domain/objectives.js`, vue(s) Objectifs concernée(s) (à identifier lors du cadrage)
+
+Fonctions concernées : à déterminer lors du cadrage
+
+Dépendances : proposition de conception à valider par Charles-Henri avant tout développement (voir Solution) ; thème partagé avec TODO-025 (préparation des points de suivi)
+
+Problèmes résolus : BESOIN-001 (volet objectifs)
+
+Risque : moyen — nouveau modèle de données, à concevoir avec soin pour rester cohérent avec l'existant (`objectives.js`, `followups.js`)
+
+Complexité : L (modèle de données + UI) — à affiner lors du cadrage
+
+Validation : Non déterminé — à définir lors du cadrage
+
+Ordre recommandé : nouveau LOT 11, avec TODO-025
+
+## [ ] P1 — TODO-025 — Qualification immédiate des éléments créés sur une fiche Personne (suivi perso / à transmettre / attendu, préparation du point de suivi)
+
+*Ajouté le 21/09/2026 — besoin produit (BESOIN-001, volet personnes), voir section 9.*
+
+Type : DATA / UX (nouveau besoin produit)
+
+Problème : à la création d'un élément sur la fiche d'une personne, rien ne permet aujourd'hui d'indiquer immédiatement (1) si cet élément doit remonter dans la préparation du prochain point de suivi avec cette personne, ni (2) sa nature — un suivi purement personnel, quelque chose à transmettre à cette personne, ou quelque chose d'attendu de sa part.
+
+Cause racine : besoin produit (hors audits) — BESOIN-001 (volet personnes)
+
+Solution : **à concevoir lors du cadrage de ce lot**, non tranchée à ce stade et volontairement non traitée maintenant. Piste de départ à instruire : ajouter à la création d'un élément rattaché à une personne un indicateur « à remonter en préparation du point de suivi » et un type parmi {suivi perso, à transmettre, attendu}, puis exploiter ces champs dans l'écran de préparation du point de suivi existant.
+
+Fichiers concernés : `js/views/people.js`, `js/domain/followups.js` (à confirmer lors du cadrage selon l'entité réellement concernée)
+
+Fonctions concernées : à déterminer lors du cadrage
+
+Dépendances : thème partagé avec TODO-024 ; écran de préparation du point de suivi existant à identifier précisément lors du cadrage
+
+Problèmes résolus : BESOIN-001 (volet personnes)
+
+Risque : faible à moyen — ajout de champs, à vérifier vis-à-vis des filtres déjà existants sur les Suivis
+
+Complexité : M — à affiner lors du cadrage
+
+Validation : Non déterminé — à définir lors du cadrage
+
+Ordre recommandé : nouveau LOT 11, avec TODO-024
+
+## [ ] P1 — TODO-026 — US-026 : Navigation personnalisable par utilisateur
+
+*Ajouté le 21/09/2026 — besoin produit (BESOIN-004), voir section 9. Priorité P1 indiquée explicitement par Charles-Henri dans sa spécification.*
+
+Type : UX / DATA (nouveau besoin produit — spécification déjà détaillée fournie par Charles-Henri)
+
+Problème : la barre de navigation est aujourd'hui identique pour tous les usages (Accueil, Inbox, Pilotage, Équipe, Plus) ; certains utilisateurs souhaiteraient réorganiser ou remplacer certains onglets principaux selon leurs usages réels, sans impact sur les autres utilisateurs.
+
+Cause racine : besoin produit (hors audits) — BESOIN-004
+
+Solution : reprendre intégralement la spécification fournie (US-026) — feuille de personnalisation mobile (appui long sur la barre), fenêtre de personnalisation web (bouton ⚙ Personnaliser), glisser-déposer entre « barre principale » (4 modules personnalisables + Plus fixe) et « Plus », restauration de la navigation par défaut, nouvelle préférence utilisateur `navigation.main`, synchronisation web/mobile, nouveaux modules ajoutés automatiquement dans Plus. Voir le document fourni par Charles-Henri le 21/09/2026 pour le détail complet (règles métier, critères d'acceptation, modèle de données).
+
+Fichiers concernés : `js/app.js` (table de navigation), `js/domain/preferences.js` (nouvelle préférence `navigation.main`), vue(s) de personnalisation à créer (web et mobile)
+
+Fonctions concernées : à déterminer lors du cadrage
+
+Dépendances : aucune connue à ce stade ; à croiser avec TODO-020 (LOT 9, clarté de nommage de la navigation existante) lors du cadrage pour éviter tout chevauchement
+
+Problèmes résolus : BESOIN-004
+
+Risque : moyen — touche la navigation centrale de l'app sur web et mobile, à tester soigneusement sur les deux
+
+Complexité : L
+
+Validation : Non déterminé — critères d'acceptation déjà fournis par Charles-Henri (voir spécification), à traduire en scénarios de test lors du cadrage
+
+Ordre recommandé : nouveau LOT 12
+
+## [ ] P2 — TODO-027 — Bureau : post-it libres sur l'écran d'accueil
+
+*Ajouté le 21/09/2026 — besoin produit (BESOIN-005), voir section 9. Aucune priorité explicite indiquée par Charles-Henri — P2 proposé (fonctionnalité significative mais non bloquante), à confirmer.*
+
+Type : UX / DATA (nouveau besoin produit — spécification déjà détaillée fournie par Charles-Henri)
+
+Problème : il n'existe aujourd'hui aucun espace de notes libres et visuelles, distinct de l'Inbox, pour capturer rapidement des informations pendant une réunion ou organiser des idées avant de les transformer en objets Pilotage (Tâche, Suivi, Ressource, Décision, Information).
+
+Cause racine : besoin produit (hors audits) — BESOIN-005
+
+Solution : reprendre intégralement la spécification fournie — section « Mon bureau » sur l'écran Accueil, post-it multiples et indépendants (texte ou checklist), déplacement libre et redimensionnement (sauvegarde automatique de position/taille/z-index), couleurs, épingler/archiver/supprimer, conversion du post-it entier ou d'une seule ligne de checklist vers Tâche/Suivi/Ressource/Décision/Information. Voir le document fourni par Charles-Henri le 21/09/2026 pour le détail complet (modèle de données `StickyNote`/`ChecklistItem`, critères d'acceptation).
+
+Fichiers concernés : `js/views/dashboard.js`, nouveau domaine à créer (ex. `js/domain/stickyNotes.js`), nouveau composant de bureau à créer
+
+Fonctions concernées : à déterminer lors du cadrage
+
+Dépendances : réutilise les formulaires de création existants (Tâche/Suivi/Ressource/Décision/Information) pour la conversion, avec préremplissage — à vérifier lors du cadrage que chacun accepte bien un préremplissage type `prefill`
+
+Problèmes résolus : BESOIN-005
+
+Risque : moyen à élevé — nouveau modèle de données, interactions de glisser-déposer/redimensionnement les plus riches de l'app à ce jour, sauvegarde automatique fréquente (position pendant déplacement) à calibrer pour ne pas multiplier les écritures Firestore (cohérence à vérifier avec SYS-001/TODO-010)
+
+Complexité : L
+
+Validation : Non déterminé — critères d'acceptation déjà fournis par Charles-Henri (voir spécification), à traduire en scénarios de test lors du cadrage
+
+Ordre recommandé : nouveau LOT 13
+
 ---
 
 ## 6. Lots de correction (ordre de correction recommandé)
@@ -795,9 +965,9 @@ Ordre recommandé : LOT 9, backlog
 
 ### LOT 3 — Visibilité de l'information déjà calculée
 **Objectif** : afficher ce que le système sait déjà là où l'utilisateur en a besoin.
-**Problèmes concernés** : TODO-005
+**Problèmes concernés** : TODO-005, TODO-022 *(ajouté le 21/09/2026 — besoin produit BESOIN-002, voir section 9)*
 **Prérequis** : aucun
-**Modifications principales** : score de santé en fiche projet/Dashboard, inclusion par défaut des archivés en recherche
+**Modifications principales** : score de santé en fiche projet/Dashboard, inclusion par défaut des archivés en recherche, carte indicateur « Échéances du jour »
 **Tests nécessaires** : TEST-024
 **Risques** : faible
 
@@ -866,6 +1036,42 @@ Ordre recommandé : LOT 9, backlog
 
 ---
 
+*Lots 10 à 13 ajoutés le 21/09/2026 — besoins produit exprimés directement par Charles-Henri (BESOIN-001 à BESOIN-005, voir section 9), ne provenant d'aucun des 9 audits sources. Ajoutés au backlog et priorisés à sa demande explicite, mais **non traités dans l'immédiat** : la suite de la roadmap reprend au LOT 1, ces lots restent en attente d'être atteints dans l'ordre ou avancés selon une décision explicite ultérieure.*
+
+### LOT 10 — Corrections d'affichage mode sombre
+**Objectif** : rendre à nouveau lisibles les écrans signalés en mode sombre.
+**Problèmes concernés** : TODO-023
+**Prérequis** : aucun
+**Modifications principales** : couleur du texte au traitement Inbox, couleur des champs de date natifs, contraste des toasts
+**Tests nécessaires** : Non déterminé — vérification visuelle manuelle en mode sombre
+**Risques** : faible
+
+### LOT 11 — Suivi structuré des objectifs et des points de suivi personnes
+**Objectif** : donner aux objectifs une structure exploitable (indicateurs de réussite, éléments de suivi) et qualifier dès la création les éléments créés sur une fiche Personne pour alimenter la préparation des points de suivi.
+**Problèmes concernés** : TODO-024, TODO-025
+**Prérequis** : proposition de conception à soumettre à Charles-Henri et à faire valider avant tout développement (voir TODO-024/TODO-025 — non tranché à ce stade)
+**Modifications principales** : modèle de données objectifs enrichi (indicateurs de réussite, éléments de suivi), nouveaux champs de qualification à la création d'un élément Personne
+**Tests nécessaires** : Non déterminé, à définir lors du cadrage
+**Risques** : moyen — nouveau modèle de données, conception encore à trancher
+
+### LOT 12 — Navigation personnalisable par utilisateur
+**Objectif** : permettre à chaque utilisateur de personnaliser sa barre de navigation, de façon cohérente entre web et mobile.
+**Problèmes concernés** : TODO-026
+**Prérequis** : aucun
+**Modifications principales** : préférence utilisateur `navigation.main`, écrans de personnalisation web et mobile, glisser-déposer, restauration de la navigation par défaut
+**Tests nécessaires** : Non déterminé — critères d'acceptation déjà fournis (US-026), à traduire en tests lors du cadrage
+**Risques** : moyen — touche la navigation centrale de l'app
+
+### LOT 13 — Bureau : post-it libres
+**Objectif** : offrir un espace de notes libres sur l'écran d'accueil, convertibles en objets Pilotage.
+**Problèmes concernés** : TODO-027
+**Prérequis** : aucun
+**Modifications principales** : nouveau domaine de données post-it, composant de bureau avec glisser-déposer/redimensionnement, conversions vers les formulaires existants
+**Tests nécessaires** : Non déterminé — critères d'acceptation déjà fournis, à traduire en tests lors du cadrage
+**Risques** : moyen à élevé — nouveau modèle de données, interactions riches, fréquence d'écriture à calibrer
+
+---
+
 ## 7. Questions ouvertes avant certains chantiers
 
 *Section mise à jour le 15/09/2026 : les trois questions listées ci-dessous ont toutes été tranchées par des décisions produit de Charles-Henri. Section conservée pour traçabilité historique — elle ne porte plus de question réellement ouverte à ce jour.*
@@ -888,4 +1094,16 @@ Ordre recommandé : LOT 9, backlog
 
 ---
 
-*Fin du document. Aucun fichier applicatif n'a été modifié — consolidation strictement en lecture seule.*
+## 9. Besoins produit exprimés par Charles-Henri (21/09/2026, hors audits)
+
+*Section ajoutée le 21/09/2026. Contrairement aux 157 problèmes des sections précédentes (tous issus des 9 audits sources listés en section 0), les 5 besoins ci-dessous viennent directement de Charles-Henri, en dehors de tout audit — d'où la numérotation `BESOIN-XXX`, distincte de `DATA-XXX`/`SEC-XXX`/etc. Ajoutés au backlog et rattachés chacun à un ou plusieurs TODO (section 5) et à un lot (section 6) à sa demande explicite du 21/09/2026, **sans être traités dans l'immédiat** : la suite de la roadmap reprend au LOT 1, ces besoins restent en attente.*
+
+- **BESOIN-001 — Suivi structuré des objectifs et qualification des éléments Personne**. Deux volets, actuellement non départagés d'un seul chantier : (a) les objectifs (illustrés par deux exemples SMART complets fournis par Charles-Henri) manquent de structure pour décrire chaque indicateur de réussite (cible, mesure, source de preuve, suivi) et pour rattacher des éléments de suivi à un objectif ou à une information ; (b) à la création d'un élément sur une fiche Personne, aucun moyen d'indiquer immédiatement s'il doit remonter en préparation du point de suivi, ni sa nature (suivi perso / à transmettre / attendu). Charles-Henri a explicitement demandé une proposition de conception plutôt qu'une solution imposée (« que proposes-tu pour faire cela ? ») — non tranchée à ce stade. Voir **TODO-024** (volet a) et **TODO-025** (volet b), **LOT 11**.
+- **BESOIN-002 — Carte indicateur « Échéances du jour »**. Ajouter sur l'Accueil une carte comptant les éléments dont l'échéance est aujourd'hui, triés par priorité (à faire d'abord, puis suivi/contrôle), en excluant les échéances de contrôle des collaborateurs. Voir **TODO-022**, **LOT 3** (rejoint TODO-005, déjà existant).
+- **BESOIN-003 — Régressions d'affichage en mode sombre**. Texte noir illisible dans le traitement d'un item Inbox ; calendriers des champs de date illisibles (noirs) ; toasts à fond blanc et texte blanc. Constaté par Charles-Henri en parcourant les écrans le 21/09/2026. Voir **TODO-023**, **LOT 10**.
+- **BESOIN-004 — US-026 : Navigation personnalisable par utilisateur**. Spécification complète fournie par Charles-Henri (priorité **P1** indiquée explicitement par lui) : personnalisation individuelle de la barre de navigation (4 modules + « Plus » fixe), glisser-déposer, web et mobile, synchronisée entre les deux. Voir **TODO-026**, **LOT 12**.
+- **BESOIN-005 — Bureau : post-it libres sur l'écran d'accueil**. Spécification complète fournie par Charles-Henri : section « Mon bureau » sur l'Accueil, post-it multiples (texte ou checklist) déplaçables/redimensionnables avec sauvegarde automatique, convertibles en Tâche/Suivi/Ressource/Décision/Information (post-it entier ou ligne de checklist individuelle). Aucune priorité explicite indiquée — P2 proposé. Voir **TODO-027**, **LOT 13**.
+
+---
+
+*Fin du document. Aucun fichier applicatif n'a été modifié pour la consolidation initiale du 15/09/2026 ; les besoins ajoutés le 21/09/2026 (section 9) sont au stade « backlog priorisé », eux non plus non traités à ce jour.*
