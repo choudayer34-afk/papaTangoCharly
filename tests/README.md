@@ -9,7 +9,19 @@ l'exception d'une dérogation ciblée et documentée dans `js/services/firebase.
 `AUDIT_TESTS.md` — TEST-001, TEST-002, TEST-006, TEST-018 (partiellement), TEST-020, TEST-021,
 TEST-027. Les 20 autres restent en backlog non planifié (section 4.2 de `TODO_TECHNIQUE.md`).
 
-## ⚠️ État au 20/09/2026 : écrit, non exécuté
+## ⚠️ État au 21/09/2026 : premier passage GitHub Actions en cours de correction
+
+**Correction du 21/09/2026** : le premier lancement réel du workflow GitHub Actions
+(`.github/workflows/tests.yml`) a échoué dès `npm run test:rules` avec
+`Error: ../firestore.rules is outside of project directory`. Le CLI Firebase interdit qu'un
+fichier référencé dans `firebase.json` (ici, `firestore.rules`) se trouve en dehors du dossier
+qui contient ce `firebase.json` — or ce fichier vivait jusqu'ici dans `tests/` et pointait vers
+`../firestore.rules` (à la racine). Corrigé en déplaçant `firebase.json` à la racine du dépôt,
+à côté de `firestore.rules` (voir ce fichier pour le détail) ; les scripts de ce `package.json`
+référencent maintenant ce fichier via `--config ../firebase.json`. `firestore.rules` lui-même
+n'a pas bougé et n'a pas changé.
+
+## État précédent (20/09/2026) : écrit, non exécuté
 
 Tout le code de ce dossier a été écrit et relu manuellement, mais **n'a pas pu être exécuté** dans
 l'environnement où il a été rédigé : le registre npm (`registry.npmjs.org`) y est bloqué par la
@@ -56,7 +68,8 @@ complet de cette dérogation et sa justification.
 
 ## Structure
 
-- `package.json`, `firebase.json`, `.gitignore` — outillage du dossier de tests.
+- `package.json`, `.gitignore` — outillage du dossier de tests. `firebase.json` vit désormais à
+  la racine du dépôt, à côté de `firestore.rules` (voir la correction du 21/09/2026 ci-dessus).
 - `rules/firestore.rules.test.js` — TEST-027 + TEST-002, tests de règles purs (n'importent aucun
   fichier applicatif, ne parlent qu'à l'émulateur Firestore directement via
   `@firebase/rules-unit-testing`).
