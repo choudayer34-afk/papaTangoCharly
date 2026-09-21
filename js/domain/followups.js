@@ -224,8 +224,45 @@ export async function listAll() {
   return items.map(normalize);
 }
 
+// Ajouté le 21/09/2026 (TODO-009A, LOT 4A) : lire UN Suivi par son id, pour
+// js/components/linkedItems.js#resolveRef — même besoin que tasksApi.getTask(), voir son
+// commentaire. `normalize()` reste appliqué, comme pour listAll()/subscribe() ci-dessus, pour ne
+// jamais renvoyer un ancien statut non migré.
+export async function getFollowUp(id) {
+  const doc = await storage.get(COLLECTION, id);
+  return doc ? normalize(doc) : null;
+}
+
+// BUG corrigé (21/09/2026, audit performance, TODO-009B) : même correctif que
+// js/domain/tasks.js#subscribe (voir son commentaire pour le détail) — `subscribe()` ouvrait un
+// `onSnapshot` Firestore indépendant à chaque appel, jusqu'à 4 vues (Accueil, Calendrier,
+// Personnes, Projets) écoutant simultanément la même collection `followUps`. Même mécanisme de
+// mutualisation qu'`inboxItems` (js/domain/inbox.js), sans filtre (tous les appelants veulent la
+// liste complète) — la normalisation (`normalize`, migration des anciens statuts) est faite UNE
+// SEULE fois par notification, sur le flux partagé, plutôt que recalculée séparément par abonné.
+const rawListeners = new Set();
+let rawUnsubscribe = null;
+let lastRawItems = null;
+
 export function subscribe(callback) {
-  return storage.subscribe(COLLECTION, (items) => callback(items.map(normalize)));
+  rawListeners.add(callback);
+  if (!rawUnsubscribe) {
+    rawUnsubscribe = storage.subscribe(COLLECTION, (items) => {
+      lastRawItems = items.map(normalize);
+      for (const cb of rawListeners) cb(lastRawItems);
+    });
+  } else if (lastRawItems) {
+    // Voir js/domain/tasks.js#subscribe pour l'explication de ce cas.
+    callback(lastRawItems);
+  }
+  return () => {
+    rawListeners.delete(callback);
+    if (rawListeners.size === 0 && rawUnsubscribe) {
+      rawUnsubscribe();
+      rawUnsubscribe = null;
+      lastRawItems = null;
+    }
+  };
 }
 
 export async function removeFollowUp(id) {
