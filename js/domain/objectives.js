@@ -66,6 +66,13 @@ export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
 }
 
+// Ajouté le 21/09/2026 (TODO-009A, LOT 4A) : lire UN Objectif par son id, pour
+// js/components/linkedItems.js#resolveRef — même besoin que tasksApi.getTask(), voir son
+// commentaire.
+export function getObjective(id) {
+  return storage.get(COLLECTION, id);
+}
+
 export async function removeObjective(id) {
   await storage.logHistory("Objective", id, "deleted", {});
   return storage.remove(COLLECTION, id);
