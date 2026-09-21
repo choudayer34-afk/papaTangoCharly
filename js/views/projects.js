@@ -728,6 +728,18 @@ export async function openProjectDetail(project, tasks) {
 
   const isArchived = projectsApi.isArchived(project);
 
+  // TODO-005 (LOT 3) : score de santé (§49, déjà calculé pour la vue "🩺 Santé" — voir
+  // js/domain/projectHealth.js) désormais AUSSI affiché ici, dans l'en-tête de la fiche —
+  // jusqu'ici visible uniquement dans cette vue séparée. Seulement pour un projet actif : un
+  // projet fermé n'a plus besoin d'être surveillé (même filtre que `rankByHealth`, qui ne
+  // classe que les projets `status === "active"`), et ses tâches/suivis sont d'ailleurs déjà
+  // exclus des listes actives ailleurs dans l'app. `tasks` reçu ici est déjà filtré sur ce seul
+  // projet par tous les appelants (voir les différents `tasks.filter(t => t.projectId === ...)`
+  // avant chaque appel à `openProjectDetail`) — passer directement `tasks`/`allFollowUps` à
+  // `computeHealth` reste donc correct, son propre filtre par `projectId` étant alors sans effet.
+  const health = isArchived ? null : projectHealthApi.computeHealth(project, tasks, allFollowUps);
+  const healthTopSignal = health?.signals.find((s) => s.target);
+
   // Fiche à onglets (vague 25, retour de Charles-Henri : "je veux aussi une organisation piste A
   // comme sur les tâches" — voir claude/vague-25-onglets-fiches-controle-suivi.md, section 3,
   // pour l'inventaire complet et le découpage validé). En-tête toujours visible (Nom, Catégorie,
@@ -759,6 +771,13 @@ export async function openProjectDetail(project, tasks) {
       </datalist>
     </div>
     <div class="item-meta" style="margin-bottom:12px;">${isArchived ? "🗄️ Fermé" : "🟢 Actif"}</div>
+    ${health ? `
+    <div style="margin-bottom:12px;">
+      <span class="badge badge-health-${health.level}" id="detail-health-badge" style="${healthTopSignal ? "cursor:pointer;" : ""}" title="Score de santé du projet (tâches en retard/bloquées/en pause, suivis en retard)">
+        🩺 ${health.score}/100${health.signals[0] ? " · " + escapeHtml(health.signals[0].text) : ""}
+      </span>
+    </div>
+    ` : ""}
     <!-- "⭐ Projet prioritaire" (vague 33, retour de Charles-Henri : "impact — le projet est-il
          critique ?") — seul signal manuel requis par la matrice de priorisation, volontairement
          posé ici (en-tête de la fiche, toujours visible) plutôt que dans l'onglet Détails, au
@@ -881,6 +900,22 @@ export async function openProjectDetail(project, tasks) {
     const freshTasks = (await tasksApi.listAll()).filter((t) => t.projectId === project.id);
     openProjectDetail(project, freshTasks);
   };
+
+  // Clic sur le badge de santé (TODO-005) : ouvre l'élément ciblé par le signal le plus grave
+  // (`target` posé par `computeHealth()`), jamais le projet lui-même — même geste que le clic
+  // sur un signal dans la vue "🩺 Santé" (voir renderHealth() ci-dessus, onOpenSignal).
+  if (healthTopSignal) {
+    body.querySelector("#detail-health-badge").addEventListener("click", () => {
+      closeModal();
+      if (healthTopSignal.target.type === "Task") {
+        const task = tasks.find((t) => t.id === healthTopSignal.target.id);
+        if (task) openTaskDetail(task, allProjects, { onClose: reopenProject });
+      } else if (healthTopSignal.target.type === "FollowUp") {
+        const followUp = allFollowUps.find((f) => f.id === healthTopSignal.target.id);
+        if (followUp) openEditFollowUpModal(followUp, { onDone: reopenProject });
+      }
+    });
+  }
 
   const tasksEl = body.querySelector("#detail-tasks");
   if (!tasks.length) {
