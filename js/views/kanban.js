@@ -1722,7 +1722,11 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
   }
   renderChecklist(body.querySelector("#detail-checklist"), task.checklist || [], {
     onAdd: async (text) => {
-      const updated = await tasksApi.addChecklistItem(task.id, text);
+      // TODO-010 (LOT 4B) : tasksApi.addChecklistItem() renvoie désormais l'élément ajouté seul
+      // (écriture ciblée, plus de relecture du tableau complet) — reconstruit ici à partir de la
+      // copie locale déjà tenue à jour par cette fiche.
+      const item = await tasksApi.addChecklistItem(task.id, text);
+      const updated = item ? [...(task.checklist || []), item] : task.checklist;
       task.checklist = updated;
       updateChecklistTitle();
       return updated;
@@ -1742,7 +1746,10 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
   });
   renderNotesBlock(body.querySelector("#detail-notes"), task.notesLog || [], {
     onAdd: async (text) => {
-      const updated = await tasksApi.addNote(task.id, text);
+      // TODO-010 (LOT 4B) : tasksApi.addNote() renvoie désormais la note ajoutée seule (écriture
+      // ciblée) — voir le commentaire équivalent sur la checklist juste au-dessus.
+      const note = await tasksApi.addNote(task.id, text);
+      const updated = note ? [...(task.notesLog || []), note] : task.notesLog;
       task.notesLog = updated;
       return updated;
     },
@@ -1850,8 +1857,11 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       const title = body.querySelector("#outlook-title").value.trim();
       if (!title) return;
       const date = body.querySelector("#outlook-date").value || null;
-      const updated = await tasksApi.addOutlookMeeting(task.id, { title, date });
-      task.outlookMeetings = updated.outlookMeetings;
+      // TODO-010 (LOT 4B) : tasksApi.addOutlookMeeting() renvoie désormais la réunion ajoutée
+      // seule (écriture ciblée, plus le document complet) — voir le commentaire équivalent sur
+      // la checklist/les notes plus haut dans cette fiche.
+      const meeting = await tasksApi.addOutlookMeeting(task.id, { title, date });
+      task.outlookMeetings = [...(task.outlookMeetings || []), meeting];
       renderOutlookList(outlookEl, task);
       body.querySelector("#outlook-title").value = "";
       body.querySelector("#outlook-date").value = "";
