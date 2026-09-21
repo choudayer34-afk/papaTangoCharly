@@ -528,9 +528,21 @@ export async function openPersonDetail(person, allFollowUps) {
         closesModal: false,
         onClick: () => {
           closeModal();
+          // Impact réel avant confirmation (LOT 1, TODO-007 — UX-001/DATA-003) : `own` (Suivis)
+          // et `objectives` (Objectifs liés à cette personne) sont déjà calculés plus haut dans
+          // cette même fonction, pas de requête supplémentaire. `removePerson` ne cascade
+          // toujours pas (politique assumée, voir js/domain/people.js) : ces entités perdent
+          // seulement leur lien, elles ne sont pas supprimées avec la personne.
+          const impactParts = [
+            own.length ? `${own.length} suivi${own.length > 1 ? "s" : ""}` : null,
+            objectives.length ? `${objectives.length} objectif${objectives.length > 1 ? "s" : ""}` : null,
+          ].filter(Boolean);
+          const impactSentence = impactParts.length
+            ? ` ${new Intl.ListFormat("fr", { type: "conjunction" }).format(impactParts)} qui lui étaient rattaché(e)s ne seront pas supprimé(e)s — ils perdent simplement leur lien vers cette personne.`
+            : " Rien n'y est rattaché aujourd'hui.";
           confirmDelete({
             title: "Supprimer cette personne ?",
-            message: `« ${person.name} » sera définitivement supprimée. Ses suivis ne sont pas supprimés — ils perdent simplement leur lien vers cette personne.`,
+            message: `« ${person.name} » sera définitivement supprimée.${impactSentence}`,
             onConfirm: async () => {
               await peopleApi.removePerson(person.id);
               showToast("Personne supprimée");
