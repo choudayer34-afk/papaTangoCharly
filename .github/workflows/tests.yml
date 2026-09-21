@@ -1,0 +1,66 @@
+name: Tests LOT 0B (TODO-002)
+
+# Socle de tests P0 : tests de règles Firestore (TEST-027, TEST-002) puis 2 parcours E2E cœur
+# (TEST-020, TEST-021) et une amorce de tests unitaires navigateur (TEST-001, TEST-006, TEST-018)
+# — voir TODO_TECHNIQUE.md → TODO-002 / LOT 0B et tests/README.md pour le détail du périmètre.
+#
+# Ce workflow n'a encore jamais tourné : il a été écrit dans un environnement où le registre npm
+# était bloqué (voir tests/README.md), donc aucun des tests qu'il exécute n'a pu être validé
+# avant ce commit. Son premier déclenchement, manuel, sert justement à valider LOT 0B — voir la
+# procédure exacte donnée à Charles-Henri en dehors de ce fichier.
+#
+# Déclenchement manuel uniquement pour l'instant (`workflow_dispatch`, bouton "Run workflow"
+# dans l'onglet Actions de GitHub) : volontairement pas encore de déclenchement automatique sur
+# push/pull_request tant que ce premier passage n'a pas confirmé que la chaîne complète
+# (émulateurs + Playwright) fonctionne bien en CI.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: Règles Firestore + E2E (émulateur)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          # Pas de `cache: npm` pour l'instant : aucun tests/package-lock.json n'est encore
+          # versionné (npm install n'a jamais pu tourner dans l'environnement de préparation de
+          # ce lot). À activer une fois ce premier `npm install` fait et le lockfile commité.
+
+      - name: Installer Java (requis par l'émulateur Firestore)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Installer les dépendances (tests/package.json)
+        run: npm install
+
+      - name: Installer les navigateurs Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests de règles Firestore (TEST-027, TEST-002)
+        run: npm run test:rules
+
+      - name: Tests E2E + unitaires navigateur (TEST-001, TEST-006, TEST-018, TEST-020, TEST-021)
+        run: npm run test:e2e
+
+      - name: Publier le rapport Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            tests/playwright-report/
+            tests/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
