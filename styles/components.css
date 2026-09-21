@@ -905,6 +905,14 @@ tbody.drag-over-group {
   outline: none;
   border-color: var(--color-primary);
 }
+/* Retour visuel de champ obligatoire/mal formé manquant (LOT 1, TODO-006, UX-002/UX-012) — posée
+   par js/components/formValidation.js au clic sur "Créer"/"Enregistrer" si un champ obligatoire
+   est vide, ou si une URL saisie est mal formée. Ne bloque jamais la ressaisie : retirée dès le
+   prochain caractère tapé, voir clearFieldErrorOnInput() dans ce même fichier. */
+.field-invalid {
+  border-color: var(--color-danger) !important;
+  box-shadow: 0 0 0 1px var(--color-danger);
+}
 
 .choice-grid {
   display: grid;
