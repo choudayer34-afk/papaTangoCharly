@@ -15,6 +15,12 @@
 // bloqué, voir tests/README.md). L'interception réseau ci-dessous (`page.route`) cible le
 // WebChannel Firestore par motif d'URL le plus courant connu au moment de la rédaction — à
 // vérifier/ajuster au premier lancement réel si le SDK Firestore emprunte une autre route.
+//
+// Correction du 21/09/2026 (premier passage réel du workflow GitHub Actions) : voir le
+// commentaire équivalent dans e2e/capture-qualification.spec.js — sans `page.addInitScript`,
+// l'app se connecte à la vraie production Firebase (compte de test inexistant là-bas), la
+// connexion échoue avant même d'atteindre isEmailAllowed(), et #auth-error-retry n'apparaît
+// jamais pour la mauvaise raison (pas de connexion du tout, pas l'erreur simulée ci-dessous).
 
 import { test, expect } from "@playwright/test";
 
@@ -27,6 +33,9 @@ test.describe("TEST-018 (amorce) — régression : vérification de liste blanch
     await page.route("**/google.firestore.v1.Firestore/**", (route) => route.abort());
     await page.route("**firestore.googleapis.com/**", (route) => route.abort());
 
+    await page.addInitScript(() => {
+      window.__PILOTAGE_USE_FIREBASE_EMULATOR__ = true;
+    });
     await page.goto("/index.html");
     await page.fill("#login-email", "alice@example.com");
     await page.fill("#login-password", "Test-Pilotage-0B!");
