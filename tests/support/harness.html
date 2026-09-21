@@ -29,8 +29,28 @@
     // Ajouté en LOT 4A (TODO-009A/TODO-009B) : mêmes modules applicatifs que ceux déjà exposés
     // ci-dessus, aucun changement à ce fichier lui-même au-delà de l'ajout de tagsApi.
     import * as tagsApi from "/js/domain/tags.js";
+    // Ajoutés en LOT 6 (TODO-008, TEST-022 étendu) : nécessaires pour vérifier depuis les tests
+    // les liens entité créée ↔ projet posés par inboxApi.qualify() (linksApi.listAll()) et pour
+    // créer les entités Meeting/Decision/Resource nécessaires aux scénarios de qualification —
+    // aucun changement à ces fichiers eux-mêmes au-delà de leur ajout ici.
+    import * as linksApi from "/js/domain/links.js";
+    import * as meetingsApi from "/js/domain/meetings.js";
+    import * as decisionsApi from "/js/domain/decisions.js";
+    import * as resourcesApi from "/js/domain/resources.js";
 
-    window.__pilotageTestApi = { firebaseApi, storageApi, inboxApi, tasksApi, projectsApi, followUpsApi, tagsApi };
+    window.__pilotageTestApi = {
+      firebaseApi,
+      storageApi,
+      inboxApi,
+      tasksApi,
+      projectsApi,
+      followUpsApi,
+      tagsApi,
+      linksApi,
+      meetingsApi,
+      decisionsApi,
+      resourcesApi,
+    };
     window.__pilotageTestApiReady = true;
   </script>
 </body>
