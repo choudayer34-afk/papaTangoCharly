@@ -45,9 +45,12 @@ test("Tâche liée à un projet supprimé : reste affichée sans son badge proje
   await expect(page.locator("#detail-tasks").getByText(taskTitle)).toBeVisible({ timeout: 10_000 });
 
   // 2. Suppression DÉFINITIVE du projet (pas une clôture) — message d'impact ajouté par LOT 1
-  // (TODO-007) avant confirmation.
+  // (TODO-007) avant confirmation. Assertion scopée à `.modal-body` (voir js/components/
+  // modal.js#openModal) : un `getByText("tâche")` global est ambigu — il matche aussi l'onglet
+  // "📋 Tâches" et un toast "Tâche créée" pas encore retiré du DOM (même famille de
+  // strict-mode violation déjà rencontrée en LOT 0B, voir tests/README.md).
   await page.getByRole("button", { name: "Supprimer" }).click();
-  await expect(page.getByText("tâche")).toBeVisible({ timeout: 5_000 });
+  await expect(page.locator(".modal-body").getByText("tâche")).toBeVisible({ timeout: 5_000 });
   await page.getByRole("button", { name: "Supprimer" }).click();
   await expect(page.getByText("Projet supprimé")).toBeVisible({ timeout: 10_000 });
 
