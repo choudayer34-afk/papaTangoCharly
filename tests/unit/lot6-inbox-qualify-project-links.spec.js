@@ -1,16 +1,17 @@
-// TEST-022 (AUDIT_TESTS.md), étendu pour LOT 6 / TODO-008 — lien automatique entité créée ↔
-// projet, posé par inboxApi.qualify() quand un `projectId` de contexte est déjà connu à la
-// création de l'entité (voir OUTCOME_PROJECT_LINK / linkEntityToProjectIfKnown dans
-// js/domain/inbox.js).
+// TEST-022 (AUDIT_TESTS.md), étendu pour LOT 6 / TODO-008 — les deux liens automatiques posés par
+// inboxApi.qualify() :
+//   1. Entité créée ↔ InboxItem source (point 1, arbitrage de Charles-Henri du 21/09/2026,
+//      type de référence dédié "InboxSource" résolu dans js/components/linkedItems.js) — posé
+//      pour les 6 entités concernées (Task/FollowUp/Project/Meeting/Decision/Resource), quel que
+//      soit `projectId`.
+//   2. Entité créée ↔ projet, quand un `projectId` de contexte est déjà connu à la création
+//      (point 2) — seulement pour Task/FollowUp/Meeting/Decision, jamais Project (se lierait à
+//      lui-même) ni Resource (pas de `projectId` à sa création).
 //
-// IMPORTANT — périmètre de ce fichier : TODO-008 comporte deux liens distincts.
-//   1. InboxItem source ↔ entité créée — PAS COUVERT ICI, ce point reste en attente d'arbitrage
-//      (voir TODO_TECHNIQUE.md, TODO-008, note LOT 6 : le seul type de référence permettant de
-//      représenter un InboxItem dans js/components/linkedItems.js, "Kept", est filtré sur
-//      `status === "kept"`, alors que ces 6 issues posent `status: "processed"` — un tel lien
-//      serait résolu à null dès sa création).
-//   2. Entité créée ↔ projet, quand connu à la création — c'est le seul des deux liens
-//      effectivement implémenté par ce lot, et c'est ce que ce fichier vérifie.
+// La RÉSOLUTION du lien InboxSource (js/components/linkedItems.js#resolveRefDirect, fonction non
+// exportée) n'est pas testable depuis ce fichier — voir tests/e2e/lot6-inbox-source-link.spec.js
+// pour la vérification en conditions réelles de navigateur (résolution correcte d'un InboxItem
+// "processed", non-régression du type "Kept" existant).
 //
 // Vérifie aussi que les 9 issues de qualification existantes ne régressent pas (mêmes champs
 // posés qu'avant ce lot sur l'InboxItem lui-même).
@@ -22,7 +23,7 @@
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "../e2e/global-setup.js";
 
-test.describe("TEST-022 (étendu) — inboxApi.qualify() : régression des 9 issues + lien entité↔projet (LOT 6, TODO-008)", () => {
+test.describe("TEST-022 (étendu) — inboxApi.qualify() : régression des 9 issues + liens InboxSource/entité↔projet (LOT 6, TODO-008)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/tests/support/harness.html");
     await page.waitForFunction(() => window.__pilotageTestApiReady === true);
@@ -195,7 +196,7 @@ test.describe("TEST-022 (étendu) — inboxApi.qualify() : régression des 9 iss
     expect(result.hasFollowUpLink).toBe(false);
   });
 
-  test("Resource ne génère jamais de lien projet, même avec un projet existant en base", async ({ page }) => {
+  test("Resource ne génère jamais de lien projet, même avec un projet existant en base (mais reçoit bien son lien InboxSource)", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { inboxApi, projectsApi, resourcesApi, linksApi } = window.__pilotageTestApi;
       const project = await projectsApi.createProject({ name: `Test LOT 6 — projet resource ${Date.now()}` });
@@ -205,12 +206,79 @@ test.describe("TEST-022 (étendu) — inboxApi.qualify() : régression des 9 iss
       await inboxApi.qualify(resourceItem.id, "resource", { id: resource.id });
 
       const allLinks = await linksApi.listAll();
-      const hasResourceLink = allLinks.some(
-        (l) => (l.a.type === "Resource" && l.a.id === resource.id) || (l.b.type === "Resource" && l.b.id === resource.id)
+      const hasResourceProjectLink = allLinks.some(
+        (l) =>
+          (l.a.type === "Resource" && l.a.id === resource.id && l.b.type === "Project") ||
+          (l.b.type === "Resource" && l.b.id === resource.id && l.a.type === "Project")
       );
-      return { hasResourceLink, projectId: project.id };
+      const hasResourceInboxSourceLink = allLinks.some(
+        (l) =>
+          (l.a.type === "Resource" && l.a.id === resource.id && l.b.type === "InboxSource" && l.b.id === resourceItem.id) ||
+          (l.b.type === "Resource" && l.b.id === resource.id && l.a.type === "InboxSource" && l.a.id === resourceItem.id)
+      );
+      return { hasResourceProjectLink, hasResourceInboxSourceLink, projectId: project.id };
     });
 
-    expect(result.hasResourceLink).toBe(false);
+    // Point 2 (lien projet) : jamais pour Resource, même avec un projet disponible en base.
+    expect(result.hasResourceProjectLink).toBe(false);
+    // Point 1 (lien InboxSource) : Resource reste éligible, comme les 5 autres entités.
+    expect(result.hasResourceInboxSourceLink).toBe(true);
+  });
+
+  test("InboxSource : lien créé pour chacune des 6 entités concernées, et pointe vers l'InboxItem source (pas l'entité résultante)", async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async () => {
+      const { inboxApi, projectsApi, followUpsApi, meetingsApi, decisionsApi, resourcesApi, linksApi } = window.__pilotageTestApi;
+
+      const taskItem = await inboxApi.capture(`Test LOT 6 — InboxSource task ${Date.now()}`);
+      const taskResult = await inboxApi.qualify(taskItem.id, "task", { title: "Tâche source" });
+
+      const project = await projectsApi.createProject({ name: `Test LOT 6 — projet source ${Date.now()}` });
+      const projectItem = await inboxApi.capture(`Test LOT 6 — InboxSource project ${Date.now()}`);
+      await inboxApi.qualify(projectItem.id, "project", { id: project.id });
+
+      const followUp = await followUpsApi.createFollowUp({ title: "Suivi source", personId: "test-lot6-person-3" });
+      const followupItem = await inboxApi.capture(`Test LOT 6 — InboxSource followup ${Date.now()}`);
+      await inboxApi.qualify(followupItem.id, "followup", { id: followUp.id });
+
+      const meeting = await meetingsApi.createMeeting({ title: "Réunion source" });
+      const meetingItem = await inboxApi.capture(`Test LOT 6 — InboxSource meeting ${Date.now()}`);
+      await inboxApi.qualify(meetingItem.id, "meeting", { id: meeting.id });
+
+      const decision = await decisionsApi.createDecision({ title: "Décision source", decision: "On fait Y" });
+      const decisionItem = await inboxApi.capture(`Test LOT 6 — InboxSource decision ${Date.now()}`);
+      await inboxApi.qualify(decisionItem.id, "decision", { id: decision.id });
+
+      const resource = await resourcesApi.createResource({ title: "Ressource source" });
+      const resourceItem = await inboxApi.capture(`Test LOT 6 — InboxSource resource ${Date.now()}`);
+      await inboxApi.qualify(resourceItem.id, "resource", { id: resource.id });
+
+      const allLinks = await linksApi.listAll();
+      // Vérifie que le lien pointe bien {entité} ↔ {InboxSource, id: <InboxItem SOURCE>} — jamais
+      // l'inverse (ex. un lien qui pointerait par erreur vers l'entité résultante des deux côtés).
+      const findLink = (entityType, entityId, inboxItemId) =>
+        allLinks.find(
+          (l) =>
+            (l.a.type === entityType && l.a.id === entityId && l.b.type === "InboxSource" && l.b.id === inboxItemId) ||
+            (l.b.type === entityType && l.b.id === entityId && l.a.type === "InboxSource" && l.a.id === inboxItemId)
+        );
+
+      return {
+        task: !!findLink("Task", taskResult.task.id, taskItem.id),
+        project: !!findLink("Project", project.id, projectItem.id),
+        followup: !!findLink("FollowUp", followUp.id, followupItem.id),
+        meeting: !!findLink("Meeting", meeting.id, meetingItem.id),
+        decision: !!findLink("Decision", decision.id, decisionItem.id),
+        resource: !!findLink("Resource", resource.id, resourceItem.id),
+      };
+    });
+
+    expect(result.task).toBe(true);
+    expect(result.project).toBe(true);
+    expect(result.followup).toBe(true);
+    expect(result.meeting).toBe(true);
+    expect(result.decision).toBe(true);
+    expect(result.resource).toBe(true);
   });
 });
