@@ -47,6 +47,34 @@ de Firestore — voir TODO_TECHNIQUE.md → TODO-006), et a été, sur décision
 Charles-Henri (21/09/2026), formellement sorti de TODO-006 et repris par un TODO dédié,
 **TODO-028**, plutôt que traité sans tests capables de le valider dans cet environnement.
 
+## LOT 2 (TODO-003, TODO-004) — ajouté le 21/09/2026
+
+Quatre nouveaux fichiers, sur le même principe que le reste de ce dossier (émulateur Firebase,
+jamais la production).
+
+- **`e2e/lot2-quick-postpone.spec.js`** (TEST-023, décliné pour le nouveau chemin de report) —
+  le contrôle rapide "📅" de la carte Kanban (`js/views/kanban.js#renderCard`, "+1j / +7j / date
+  libre") aboutit au même `task.dueDate` que le chemin déjà existant (fiche détail, `#detail-due`).
+  Ne couvre pas le report par tableau/calendrier (TEST-023 tel quel, AUDIT_TESTS.md) : hors du
+  périmètre de TODO-003, qui ne touche que `js/views/kanban.js`.
+- **`e2e/lot2-followup-quick-actions.spec.js`** — le bouton "🔁 Relancer / ✅ Réglé" (TODO-004) sur
+  une ligne de Suivi, dans les deux endroits où il a été ajouté : la fiche Personne
+  (`js/views/people.js#appendFollowUpRows`, instantané non réactif — la ligne doit se mettre à
+  jour elle-même) et la liste transverse "👀 Suivis" (`js/views/followupsOverview.js`, déjà
+  redessinée par `followUpsApi.subscribe`). Vérifie que l'action ne rouvre jamais la fiche
+  complète d'édition.
+- **`unit/lot2-followup-reminders.spec.js`** (TEST-005, décliné pour ce cas précis — TEST-005
+  porte à l'origine sur l'écran d'erreur d'authentification, sans rapport avec ce lot) — logique
+  de détection `followUpsApi.isControlDue` (retard de contrôle, jamais si `status === "done"`)
+  utilisée par `js/app.js#maybeNotifyStalledOrLate`, et `followUpsApi.setStatus`, le chemin exact
+  emprunté par les boutons rapides ci-dessus.
+
+**Non testé par ce lot (limite assumée)** : la notification navigateur elle-même
+(`js/app.js#maybeNotifyStalledOrLate`, étendue aux Suivis en retard) n'est pas une fonction
+exportée et l'API `Notification` du navigateur ne se prête qu'à un test de bout en bout (permission
+accordée, contenu du message) — hors de portée d'un test unitaire via `harness.html`. Seule la
+logique de détection sous-jacente (`isControlDue`) est testée directement.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
