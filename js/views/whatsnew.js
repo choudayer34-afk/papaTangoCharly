@@ -29,6 +29,53 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "21 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "➕ Nouvelle tâche directement depuis Pilotage",
+        text: "Un bouton \"+ Tâche\" apparaît désormais en haut de Pilotage (Trello comme Tableau), à côté de \"🗂️ Trello\"/\"📊 Tableau\" — jusqu'ici, créer une tâche libre sans passer par l'Inbox ou par un projet existant n'avait aucun point d'entrée direct.",
+        howTo: "Onglet Pilotage → Tâches → bouton \"+ Tâche\".",
+        gain: "Poser une tâche qui vient d'y penser sans détour, exactement comme \"+ Projet\" le permet déjà côté Projets.",
+      },
+      {
+        type: "fix",
+        title: "🐛 Cliquer Créer/Enregistrer sans champ obligatoire ne dit plus rien",
+        text: "Sur les formulaires de création (Tâche, Projet, Ressource) et sur la fiche Tâche/Projet/Ressource en modification, cliquer Créer/Enregistrer avec le champ obligatoire vide (Titre, Nom) ne faisait rien de visible — pas de message, pas de fermeture, juste un clic apparemment sans effet. Un message (\"Le titre obligatoire\"/\"Le nom obligatoire\") apparaît désormais, avec le champ en cause entouré en rouge le temps de le compléter.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Un clic sur Créer/Enregistrer donne toujours un résultat visible, jamais un silence qui laisse deviner si ça a marché.",
+      },
+      {
+        type: "add",
+        title: "🔗 Ressource : le lien mal collé est signalé avant l'enregistrement",
+        text: "Le champ Lien d'une Ressource (création ou fiche détail) vérifie désormais qu'il s'agit bien d'une URL correcte avant d'enregistrer — un lien mal tapé ou mal collé était accepté tel quel jusqu'ici, l'erreur n'apparaissant qu'au moment de cliquer \"Ouvrir le lien\" bien plus tard.",
+        howTo: "Rien à faire, c'est automatique — un message apparaît si le lien saisi n'est pas valide.",
+        gain: "Repérer un lien mal collé tout de suite, pas plusieurs jours après en essayant de l'ouvrir.",
+      },
+      {
+        type: "add",
+        title: "🗂️ Confirmation avant de créer une nouvelle catégorie de projet",
+        text: "Taper une catégorie qui n'existe pas encore dans le champ Catégorie d'un projet (création ou fiche détail) demande désormais confirmation avant de la créer — une simple faute de frappe (\"Cse\" au lieu de \"CSE\") ne crée plus silencieusement une catégorie en double. Une catégorie déjà connue, même dans une casse différente, est reconnue et réutilisée telle quelle, sans confirmation superflue.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Fini les catégories quasi-identiques qui s'accumulent par erreur de frappe.",
+      },
+      {
+        type: "change",
+        title: "📣 \"C'est une communication\" se choisit désormais après création",
+        text: "La case \"📣 C'est une communication\" du formulaire de création de tâche exposait un réglage avancé (son canevas de production) sans expliquer sa conséquence, au moment même où on ne pense encore qu'au titre. Elle est retirée de la création — le choix se fait désormais après coup, depuis la fiche détail de la tâche, comme les autres réglages avancés (ex. \"🔴 Bloqué\").",
+        howTo: "Fiche Tâche → onglet Détails → bouton \"📣 Activer le canevas de communication\" (n'apparaît que si ce n'est pas déjà fait).",
+        gain: "Un formulaire de création plus simple, et un réglage avancé qui n'agit plus qu'une fois qu'on en a vraiment besoin.",
+      },
+      {
+        type: "add",
+        title: "🗑️ Supprimer un Projet ou une Personne dit ce qui est concerné",
+        text: "La confirmation avant de supprimer définitivement un Projet ou une Personne indique désormais précisément ce qui lui est rattaché (nombre de tâches, suivis, réunions, décisions, ressources ou objectifs) — rien de tout cela n'est supprimé avec (politique déjà en place, ces éléments perdent simplement leur lien), mais jusqu'ici la confirmation ne le disait qu'en termes vagues, sans dire combien ni quoi précisément.",
+        howTo: "Rien à faire, c'est automatique — le message de confirmation liste maintenant ce qui est réellement concerné.",
+        gain: "Savoir précisément l'ampleur d'une suppression avant de la confirmer, pas seulement qu'\"il y a des liens\".",
+      },
+    ],
+  },
+  {
     date: "15 septembre 2026",
     items: [
       {
