@@ -11,6 +11,24 @@ TEST-027. Les 20 autres restent en backlog non planifié (section 4.2 de `TODO_T
 
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
+**5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
+les deux modales de première connexion ne bloquaient plus rien, mais les 2 parcours E2E complets
+échouaient chacun sur une assertion précise, une fois arrivés plus loin dans le parcours qu'au
+passage précédent :
+
+- **`e2e/capture-qualification.spec.js`** — "strict mode violation" sur `getByText(rawText)` à
+  l'étape 7 : le texte capturé apparaît dans DEUX éléments une fois la fiche Tâche ouverte, le
+  champ Description (`#detail-description`, préremplit avec ce texte) ET une entrée d'historique
+  ("✅ Tâche créée · ..."). Corrigé en ciblant directement `#detail-description`.
+- **`e2e/projet-creation-cloture.spec.js`** — `#add-task-inline` restait invisible. La fiche
+  projet (`projects.js#openProjectDetail`) a 3 onglets ("Détails" actif par défaut, "Contenu",
+  "Activité") ; `#add-task-inline` (et la liste des tâches) vivent sous l'onglet "Contenu",
+  masqué tant qu'on ne clique pas dessus — le test ne le faisait jamais. Corrigé en cliquant cet
+  onglet à chaque fois que la fiche (re)s'ouvre (elle repart toujours sur "Détails"), et en
+  scopant la vérification de la tâche ajoutée à `#detail-tasks` pour éviter la même ambiguïté que
+  ci-dessus avec l'historique du projet (onglet "Activité", lui aussi masqué mais présent dans
+  le DOM).
+
 **4ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
 une fois les 3 échecs TEST-001 et les 3 échecs TEST-018/020/021 corrigés (voir juste en dessous),
 les 2 parcours E2E complets (TEST-020, TEST-021) échouaient encore, tous deux avec la même
