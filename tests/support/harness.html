@@ -26,8 +26,11 @@
     import * as tasksApi from "/js/domain/tasks.js";
     import * as projectsApi from "/js/domain/projects.js";
     import * as followUpsApi from "/js/domain/followups.js";
+    // Ajouté en LOT 4A (TODO-009A/TODO-009B) : mêmes modules applicatifs que ceux déjà exposés
+    // ci-dessus, aucun changement à ce fichier lui-même au-delà de l'ajout de tagsApi.
+    import * as tagsApi from "/js/domain/tags.js";
 
-    window.__pilotageTestApi = { firebaseApi, storageApi, inboxApi, tasksApi, projectsApi, followUpsApi };
+    window.__pilotageTestApi = { firebaseApi, storageApi, inboxApi, tasksApi, projectsApi, followUpsApi, tagsApi };
     window.__pilotageTestApiReady = true;
   </script>
 </body>
