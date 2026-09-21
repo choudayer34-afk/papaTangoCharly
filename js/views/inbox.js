@@ -45,6 +45,15 @@ const QUALIFY_CHOICES = [
   { key: "archived", emoji: "🗑️", label: "Archiver" },
 ];
 
+// TODO-013 (LOT 6, 21/09/2026) — "Traiter en lot" : strictement limité aux 3 qualifications de
+// QUALIFY_CHOICES qui ne nécessitent aucun formulaire de création (kept/idea/archived — voir
+// leur commentaire plus haut, "primary" et "Autre" n'y changent rien). Ne concerne jamais
+// Action/Suivi/Projet/Réunion/Décision/Ressource, qui gardent leur formulaire dédié. Dérivé de
+// QUALIFY_CHOICES par filtre plutôt que redéfini séparément, pour ne jamais pouvoir diverger
+// silencieusement de la liste "sans formulaire" si elle change un jour.
+const BULK_ELIGIBLE_KEYS = ["kept", "idea", "archived"];
+const BULK_CHOICES = QUALIFY_CHOICES.filter((c) => BULK_ELIGIBLE_KEYS.includes(c.key));
+
 export function renderInbox(container) {
   container.innerHTML = `
     <div class="topbar">
@@ -52,19 +61,89 @@ export function renderInbox(container) {
         <h1>Inbox</h1>
         <div class="subtitle" id="inbox-subtitle">—</div>
       </div>
+      <button type="button" id="inbox-bulk-toggle" class="btn btn-ghost btn-sm">☑️ Traiter en lot</button>
     </div>
-    <div class="view"><div id="inbox-hint"></div><div id="inbox-list"></div></div>
+    <div class="view"><div id="inbox-hint"></div><div id="inbox-bulk-toolbar-slot"></div><div id="inbox-list"></div></div>
   `;
 
   const listEl = container.querySelector("#inbox-list");
   const subtitleEl = container.querySelector("#inbox-subtitle");
+  const bulkToggleBtn = container.querySelector("#inbox-bulk-toggle");
+  const bulkToolbarSlot = container.querySelector("#inbox-bulk-toolbar-slot");
   showHintOnce(
     container.querySelector("#inbox-hint"),
     "inbox-intro-v1",
     "Une capture en attente ici n'est <strong>jamais</strong> un retard — c'est juste qualifié plus tard. Qualifie-la en Tâche (c'est toi qui agis) ou en Suivi (quelqu'un d'autre s'engage) pour qu'elle rejoigne le bon endroit."
   );
 
+  // Désactivé par défaut (retour explicite de Charles-Henri : l'utilisateur doit activer le
+  // mode lot lui-même) — état purement local à cette vue, volontairement pas un mécanisme
+  // générique de sélection/traitement multiple (voir la garde d'implémentation du TODO-013) :
+  // un booléen + un Set d'ids, indépendants de tout ce qui existe par ailleurs (ex. la
+  // sélection en masse de js/views/kanban.js, qui reste un mécanisme séparé, propre aux tâches).
+  let bulkMode = false;
+  const bulkSelection = new Set();
+  let currentItems = [];
+
+  function renderBulkToolbar() {
+    bulkToolbarSlot.innerHTML = "";
+    if (!bulkMode || bulkSelection.size === 0) return;
+    const bar = document.createElement("div");
+    // Classe déjà utilisée par la barre d'actions en masse de js/views/kanban.js, reprise ici
+    // uniquement pour la cohérence visuelle — aucune logique JS partagée avec elle.
+    bar.className = "pilotage-bulk-toolbar";
+    bar.innerHTML = `
+      <span class="pilotage-bulk-toolbar-count">${bulkSelection.size} élément${bulkSelection.size > 1 ? "s" : ""} sélectionné${bulkSelection.size > 1 ? "s" : ""}</span>
+      ${BULK_CHOICES.map((c) => `<button type="button" class="btn btn-secondary btn-sm" data-bulk-choice="${c.key}">${c.emoji} ${escapeHtml(c.label)}</button>`).join("")}
+      <button type="button" id="inbox-bulk-clear" class="btn btn-ghost btn-sm">Tout désélectionner</button>
+    `;
+    bar.querySelectorAll("[data-bulk-choice]").forEach((btn) => {
+      btn.addEventListener("click", () => processBulk(btn.dataset.bulkChoice));
+    });
+    bar.querySelector("#inbox-bulk-clear").addEventListener("click", () => {
+      bulkSelection.clear();
+      renderBulkToolbar();
+      render(currentItems);
+    });
+    bulkToolbarSlot.appendChild(bar);
+  }
+
+  /** Traite en une fois tous les éléments actuellement sélectionnés avec l'issue choisie. */
+  async function processBulk(key) {
+    const choice = BULK_CHOICES.find((c) => c.key === key);
+    if (!choice) return;
+    const ids = [...bulkSelection];
+    if (!ids.length) return;
+    const outcome = choice.mapsTo || choice.key;
+    // Garde anti-double-traitement (exigée par TODO-013) : la sélection est vidée et la barre
+    // d'actions/les cases à cocher redessinées de façon SYNCHRONE, avant le `await` de la
+    // qualification elle-même — un second clic (ou un clic pendant le await) ne retrouve donc
+    // plus ni les ids déjà envoyés ni les boutons qui les ont envoyés.
+    bulkSelection.clear();
+    renderBulkToolbar();
+    render(currentItems);
+    await Promise.all(ids.map((id) => inboxApi.qualify(id, outcome)));
+    showToast(`${ids.length} élément${ids.length > 1 ? "s" : ""} traité${ids.length > 1 ? "s" : ""} en lot`);
+  }
+
+  bulkToggleBtn.addEventListener("click", () => {
+    bulkMode = !bulkMode;
+    bulkToggleBtn.textContent = bulkMode ? "✅ Mode lot actif" : "☑️ Traiter en lot";
+    bulkToggleBtn.classList.toggle("btn-secondary", bulkMode);
+    bulkToggleBtn.classList.toggle("btn-ghost", !bulkMode);
+    if (!bulkMode) bulkSelection.clear();
+    renderBulkToolbar();
+    render(currentItems);
+  });
+
   function render(items) {
+    currentItems = items;
+    // Purge la sélection de tout id qui ne serait plus en attente (qualifié entretemps par un
+    // autre onglet, par ex.) — jamais de sélection fantôme.
+    for (const id of [...bulkSelection]) {
+      if (!items.some((i) => i.id === id)) bulkSelection.delete(id);
+    }
+
     subtitleEl.textContent = items.length
       ? `${items.length} élément${items.length > 1 ? "s" : ""} à traiter`
       : "Tout est traité";
@@ -75,6 +154,7 @@ export function renderInbox(container) {
           <span class="emoji">📥</span>
           Rien à traiter pour l'instant.
         </div>`;
+      renderBulkToolbar();
       return;
     }
 
@@ -89,6 +169,22 @@ export function renderInbox(container) {
           <div class="item-meta">${formatDate(item.createdAt)} · ${escapeHtml(item.source)}</div>
         </div>
       `;
+      // Case de sélection pour le mode lot (TODO-013) — visible uniquement quand le mode est
+      // actif ; le comportement individuel ci-dessous ("✏️" et "Traiter") reste par ailleurs
+      // totalement inchangé et disponible, mode lot actif ou non.
+      if (bulkMode) {
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.setAttribute("aria-label", "Sélectionner pour un traitement en lot");
+        checkbox.style.marginRight = "12px";
+        checkbox.checked = bulkSelection.has(item.id);
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) bulkSelection.add(item.id);
+          else bulkSelection.delete(item.id);
+          renderBulkToolbar();
+        });
+        row.prepend(checkbox);
+      }
       const actions = document.createElement("div");
       actions.style.display = "flex";
       actions.style.gap = "8px";
@@ -113,6 +209,7 @@ export function renderInbox(container) {
     }
     listEl.innerHTML = "";
     listEl.appendChild(list);
+    renderBulkToolbar();
   }
 
   const unsubscribe = inboxApi.subscribePending(render);
