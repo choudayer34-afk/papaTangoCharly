@@ -965,6 +965,20 @@ tbody.drag-over-group {
   outline: none;
   border-color: var(--color-primary);
 }
+/* Indicateur de focus clavier manquant (LOT 8, TODO-016, COMP-UX-016/017/018) : la règle
+   ci-dessus supprime l'outline par défaut du navigateur sur TOUT focus (clic souris compris) sans
+   aucun repli — seul le changement de couleur de bordure restait, insuffisant comme indicateur
+   pour la navigation au clavier. Généralise ici le pattern déjà écrit pour le sélecteur de thème
+   (`.theme-toggle-switch input:focus-visible`, plus haut dans ce fichier) : un contour visible
+   ajouté uniquement quand le focus vient du clavier (`:focus-visible`, ignoré par la plupart des
+   navigateurs sur un simple clic souris) — la bordure de couleur ci-dessus reste inchangée pour
+   tous les cas. */
+.field input:focus-visible,
+.field textarea:focus-visible,
+.field select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
 /* Retour visuel de champ obligatoire/mal formé manquant (LOT 1, TODO-006, UX-002/UX-012) — posée
    par js/components/formValidation.js au clic sur "Créer"/"Enregistrer" si un champ obligatoire
    est vide, ou si une URL saisie est mal formée. Ne bloque jamais la ressaisie : retirée dès le
