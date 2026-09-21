@@ -11,8 +11,20 @@
 // AVERTISSEMENT (21/09/2026) : écrit et relu manuellement à partir du code réel
 // (js/views/kanban.js#renderCard, #addDaysToIsoDate — parsing/reformatage en date LOCALE, jamais
 // UTC, même précaution documentée dans js/services/dateUtils.js), mais jamais exécuté dans
-// l'environnement où il a été rédigé (registre npm bloqué, voir tests/README.md). À reconfirmer
-// au premier lancement réel.
+// l'environnement où il a été rédigé (registre npm bloqué, voir tests/README.md).
+//
+// CORRECTION (21/09/2026, premier passage réel du workflow GitHub Actions) : le scénario
+// "+1 jour" a échoué — `#detail-due` affichait encore l'échéance d'origine au lieu de +1 jour.
+// Bug du TEST, pas de l'application : `tasksApi.updateTask()` n'est pas attendu par le clic sur
+// "+1 j"/"+7 j" (même geste "tire et oublie" que les boutons ‹ › de statut déjà existants — voir
+// kanban.js#renderCard), donc le toast de confirmation s'affiche AVANT la fin de l'écriture
+// Firestore. Le test rouvrait la fiche détail immédiatement après le toast, parfois avant que le
+// redessin réactif (storage.subscribe) n'ait mis à jour l'objet `task` de la carte, rouvrant donc
+// sur son échéance encore ancienne. Corrigé en attendant la disparition du toast (durée fixe,
+// voir js/components/toast.js) avant de rouvrir la fiche — le scénario "date libre" n'a pas
+// montré cette même course lors de ce premier passage (probablement plus lent à cause du `fill()`
+// sur le champ date, laissant naturellement le temps à l'écriture de se terminer), mais reçoit la
+// même précaution par prudence.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -55,6 +67,13 @@ test("Report rapide '+1 jour' sur la carte Kanban : cohérent avec la fiche dét
   await card.locator("[data-postpone-toggle]").click();
   await card.locator('[data-postpone-offset="1"]').click();
   await expect(page.locator(".toast")).toContainText("Échéance reportée au", { timeout: 5_000 });
+  // `tasksApi.updateTask` n'est pas attendu par le clic (même geste "tire et oublie" que les
+  // boutons ‹ › de statut, voir kanban.js#renderCard) : le toast s'affiche AVANT la fin de
+  // l'écriture Firestore. Attendre sa disparition (durée fixe de js/components/toast.js)
+  // laisse le temps à l'écriture + au redessin réactif (storage.subscribe) de se terminer avant
+  // de rouvrir la fiche détail — sinon la fiche peut rouvrir sur l'objet `task` encore ancien de
+  // la carte (échéance pas encore mise à jour dans ce closure).
+  await expect(page.locator(".toast")).toHaveCount(0, { timeout: 5_000 });
 
   // 3. Cohérence inter-chemins (TEST-023) : la fiche détail, chemin déjà existant (`#detail-due`,
   // utilisé par le tableau et par tout appel direct à tasksApi.updateTask), affiche la MÊME date
@@ -89,6 +108,9 @@ test("Report rapide 'date libre' sur la carte Kanban : la date choisie est bien 
   await card.locator("[data-postpone-toggle]").click();
   await card.locator("[data-postpone-custom]").fill(chosenIso);
   await expect(page.locator(".toast")).toContainText("Échéance reportée au", { timeout: 5_000 });
+  // Même précaution que le test précédent : laisser l'écriture Firestore (non attendue par le
+  // clic) et le redessin réactif se terminer avant de rouvrir la fiche détail.
+  await expect(page.locator(".toast")).toHaveCount(0, { timeout: 5_000 });
 
   await page.locator(".kanban-card", { hasText: taskTitle }).click();
   await expect(page.locator("#detail-due")).toHaveValue(chosenIso, { timeout: 10_000 });
