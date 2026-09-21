@@ -183,7 +183,32 @@
 // Notes de mise à jour (15/09/2026) : nouvelle vague dans js/views/whatsnew.js décrivant les
 // cinq correctifs ci-dessus (changeType, confirmDelete, bandeau hors-ligne, message de connexion,
 // performances). `CACHE_NAME` incrémenté puisque ce fichier est précaché.
-const CACHE_NAME = "pilotage-cache-v61";
+//
+// BUG corrigé (21/09/2026, remonté par Charles-Henri : "SyntaxError: The requested module
+// './tasks.js' does not provide an export named 'createTask'" + "Cache.put() encountered a
+// network error" au chargement) — exactement la classe de bug documentée en détail plus haut
+// (vague 22 septies/novies) : `CACHE_NAME` n'a PAS été incrémenté depuis ce commentaire du
+// 15/09/2026, alors que LOT 1 (kanban.js, people.js, followupsOverview.js, app.js...), LOT 2
+// (kanban.js, app.js...), LOT 3 (dashboard.js, projects.js, whatsnew.js) et LOT 4A (tasks.js,
+// projects.js, followups.js, objectives.js, inbox.js, tags.js, linkedItems.js) ont chacun modifié
+// des fichiers précachés sans jamais toucher ce fichier ni sa constante. Le navigateur ne
+// détectait donc jamais de nouvelle version (`sw.js` inchangé), et la stratégie cache-first à
+// rafraîchissement de fond (voir "fetch" plus bas) mettait à jour CHAQUE fichier précaché
+// indépendamment et de façon non coordonnée au fil des rechargements — un onglet ouvert pendant
+// cette période pouvait ainsi se retrouver avec un mélange d'anciennes et de nouvelles versions
+// de fichiers censés être cohérents entre eux (ex. `inbox.js` déjà rafraîchi important une
+// fonction de `tasks.js` encore sur son ancienne version, ou l'inverse), d'où l'erreur d'export
+// manquant — un fichier réellement corrompu par une écriture réseau interrompue en cours de
+// rafraîchissement de fond peut aussi expliquer le "Cache.put() encountered a network error" vu
+// au même moment. `CACHE_NAME` incrémenté ici pour forcer une reconstruction propre et atomique
+// du cache chez tout le monde, comme le veut la règle rappelée plus haut. Cette régression n'est
+// rattachée à aucun TODO de la roadmap : c'est un oubli de procédure de livraison (bump de
+// `CACHE_NAME`), pas un problème fonctionnel d'un des lots eux-mêmes — voir le rapport de LOT 4A
+// pour le détail. **Vérification à faire côté navigateur après ce correctif** : un simple
+// rechargement peut ne pas suffire si le Service Worker actuellement actif reste bloqué en
+// attente de contrôle — désinscrire le Service Worker existant (ou vider les données du site)
+// puis recharger complètement une fois ce fichier redéployé.
+const CACHE_NAME = "pilotage-cache-v62";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -233,6 +258,12 @@ const APP_SHELL = [
   "./js/domain/workload.js",
   "./js/domain/projectHealth.js",
   "./js/components/modal.js",
+  // BUG corrigé (21/09/2026, même correctif que le bump de CACHE_NAME ci-dessus) : ce fichier
+  // (LOT 1, TODO-006, "validation partagée") n'avait jamais été ajouté ici depuis sa création —
+  // importé par kanban.js/projects.js/resources.js mais absent du précache, donc vulnérable à un
+  // aller-réseau raté avant son premier chargement réussi, exactement la classe de bug déjà
+  // documentée plus haut pour d'autres fichiers oubliés.
+  "./js/components/formValidation.js",
   "./js/components/changeType.js",
   "./js/components/toast.js",
   "./js/components/hint.js",
