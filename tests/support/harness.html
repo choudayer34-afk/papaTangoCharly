@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Harnais de test — Pilotage (LOT 0B)</title>
+</head>
+<body>
+  <p>Harnais de test technique (TODO-002) — n'affiche rien d'utile, sert uniquement à exposer
+    quelques fonctions internes de l'app aux tests unitaires (tests/unit/) via
+    <code>window.__pilotageTestApi</code>. Ne fait pas partie de l'application livrée aux
+    utilisateurs (n'est jamais servi hors de ce dossier de tests).</p>
+
+  <script>
+    // DOIT s'exécuter avant l'import ci-dessous (ordre de script garanti : ce <script> classique
+    // est exécuté avant le <script type="module"> qui suit, voir js/services/firebase.js pour la
+    // dérogation LOT 0B qui lit ce indicateur). Jamais posé par l'application elle-même.
+    window.__PILOTAGE_USE_FIREBASE_EMULATOR__ = true;
+  </script>
+  <script type="module">
+    import * as firebaseApi from "/js/services/firebase.js";
+    import * as storageApi from "/js/services/storage.js";
+    import * as inboxApi from "/js/domain/inbox.js";
+
+    window.__pilotageTestApi = { firebaseApi, storageApi, inboxApi };
+    window.__pilotageTestApiReady = true;
+  </script>
+</body>
+</html>
