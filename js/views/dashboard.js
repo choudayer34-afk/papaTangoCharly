@@ -13,6 +13,7 @@ import * as preferencesApi from "../domain/preferences.js";
 import * as casquettesApi from "../domain/casquettes.js";
 import * as priorisationApi from "../domain/priorisation.js";
 import * as objectivesApi from "../domain/objectives.js";
+import * as projectHealthApi from "../domain/projectHealth.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
@@ -1658,6 +1659,11 @@ export function renderDashboard(container) {
       const projectTasks = tasksByProject.get(project.id) || [];
       const progress = projectsApi.computeProgress(projectTasks);
       const icon = preferencesApi.categoryIcon(categories, project.category);
+      // TODO-005 (LOT 3) : score de santé (§49) désormais AUSSI visible ici — jusqu'ici visible
+      // seulement dans la vue séparée "🩺 Santé" (js/views/projects.js). `active` ne contient
+      // que des projets `status === "active"` (filtre en tête de cette fonction), donc jamais
+      // besoin d'exclure un projet fermé ici comme le fait la fiche détail (js/views/projects.js).
+      const health = projectHealthApi.computeHealth(project, projectTasks, followUps);
       const row = document.createElement("div");
       row.className = "item-row";
       row.style.cursor = "pointer";
@@ -1669,7 +1675,10 @@ export function renderDashboard(container) {
           </div>
           ${tagsLineHtml("Project", project.id)}
         </div>
-        <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+          <span class="badge badge-health-${health.level}" title="Score de santé : ${health.score}/100${health.signals[0] ? " · " + escapeAttr(health.signals[0].text) : ""}">🩺 ${health.score}</span>
+          <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
+        </div>
       `;
       row.addEventListener("click", () => openProjectDetail(project, projectTasks));
       list.appendChild(row);
@@ -1803,6 +1812,12 @@ export function renderDashboard(container) {
     renderStats();
     renderNeedsAttentionSection();
     renderFocusQueueSection();
+    // TODO-005 (LOT 3) : la carte "📦 Mes projets" affiche désormais un score de santé qui
+    // dépend aussi des Suivis (`computeHealth` compte les suivis en retard) — sans ce
+    // rafraîchissement, un Suivi qui passe en retard (ou qui est réglé) ne mettrait pas à jour
+    // le badge de santé tant qu'aucun autre événement (changement de Tâche/Projet) ne
+    // redessinait cette section par ailleurs.
+    renderProjectsSection();
   });
   // Tags (retour de Charles-Henri, 13/09/2026 : "je veux que remonte les tags sur les fiches
   // présentes quelque soit leur nature dans l'écran d'accueil") — toutes les sections qui
