@@ -8,6 +8,18 @@ import * as storage from "../services/storage.js";
 
 const COLLECTION = "history";
 
+// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation uniquement, aucune purge
+// implémentée à ce stade) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section 1) —
+// conservation cible de 24 à 36 mois pour cette collection. Au-delà de cette fenêtre, toute purge
+// ou anonymisation ne pourra intervenir qu'après une confirmation explicite de l'utilisateur —
+// jamais une suppression automatique ou silencieuse, cohérent avec la promesse produit "ne rien
+// perdre silencieusement". Contrairement à `usageEvents` (js/services/usageTracking.js), rien
+// dans les règles Firestore n'empêche techniquement une suppression ici (`history` vit sous
+// `users/{uid}/{document=**}`, en écriture complète pour son propriétaire) — seule
+// l'IMPLÉMENTATION de l'écran de purge assistée avec confirmation reste à faire, voir TODO-036
+// (section 5, TODO_TECHNIQUE.md). Cette collection grandit aujourd'hui sans aucune purge
+// (`storage.logHistory()` n'écrit jamais que de nouvelles entrées, jamais de suppression).
+
 const ACTION_META = {
   "InboxItem:captured": { emoji: "📥", label: "Capture reçue" },
   "InboxItem:qualified_as_task": { emoji: "✅", label: "Qualifié en action" },
