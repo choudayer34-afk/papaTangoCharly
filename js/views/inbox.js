@@ -707,6 +707,34 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
   });
 }
 
+/**
+ * Fiche minimale, en LECTURE SEULE, pour le lien "InboxSource" (TODO-008 point 1, LOT 6,
+ * arbitrage de Charles-Henri du 21/09/2026) : ce que la section "🔗 Lié" d'une Tâche/Suivi/
+ * Projet/Réunion/Décision/Ressource affiche pour retrouver la capture Inbox dont elle est issue
+ * (voir js/components/linkedItems.js#resolveRefDirect, cas "InboxSource").
+ *
+ * Volontairement DISTINCTE de openKeptItemDetail ci-dessus : celle-ci reste réservée aux
+ * Informations/Idées (`status === "kept"`), avec ses propres actions de gestion ("🔁 Changer de
+ * type", "🗄️ Archiver"...). Un InboxItem qualifié en Tâche/Suivi/Projet/Réunion/Décision/
+ * Ressource a `status: "processed"` — lui appliquer openKeptItemDetail l'exposerait à tort à ces
+ * actions (ex. "🗄️ Archiver" écraserait silencieusement son statut "processed", perdant le sens
+ * de la qualification déjà faite) et à un intitulé "🧠 Information"/"💡 Idée" incorrect
+ * (`item.keptAsType` n'est jamais posé pour ces six issues). Cette fiche-ci n'a donc qu'une seule
+ * action ("Fermer") : elle sert uniquement à retrouver le texte d'origine et la date de capture,
+ * jamais à re-qualifier ou modifier quoi que ce soit sur l'InboxItem source.
+ */
+export function openInboxSourceDetail(item) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label>📥 Capture d'origine</label>
+      <p style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(item.rawContent)}</p>
+    </div>
+    <div class="item-meta">Capturé le ${formatDate(item.createdAt)} · ${escapeHtml(item.source)}</div>
+  `;
+  openModal({ title: "📥 Capture d'origine", body, actions: [{ label: "Fermer", variant: "ghost" }] });
+}
+
 function formatDate(ts) {
   return new Date(ts).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
