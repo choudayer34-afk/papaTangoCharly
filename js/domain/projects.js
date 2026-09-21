@@ -68,13 +68,18 @@ export async function toggleStep(id, stepKey, done) {
 // trois fonctions-ci — pourtant tout aussi structurantes pour un projet (ajout/statut/retrait
 // d'une sous-partie) — ne journalisaient rien du tout, laissant un trou muet dans le fil de
 // l'Historique d'un projet à sous-parties actif.
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée (`storage.appendToArray`, voir
+// son commentaire détaillé dans storage.js) — un ajout de sous-partie n'a besoin de connaître ni
+// les autres champs du projet, ni le contenu actuel de `parts`. Renvoie désormais la sous-partie
+// ajoutée seule (plus le document complet) — voir js/views/projects.js pour la reconstruction de
+// `project.parts` côté appelant. `updatePartStatus`/`removePart` juste en dessous restent sur
+// `storage.update()` : ils doivent localiser un élément EXISTANT par son id, ce que `arrayUnion`
+// ne peut pas exprimer.
 export async function addPart(id, label) {
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Projet introuvable : " + id);
-    return { parts: [...(current.parts || []), { id: generateId(), label, status: "not_started", notesLog: [] }] };
-  });
+  const part = { id: generateId(), label, status: "not_started", notesLog: [] };
+  await storage.appendToArray(COLLECTION, id, "parts", part);
   await storage.logHistory("Project", id, "part_added", { label });
-  return updated;
+  return part;
 }
 
 export async function updatePartStatus(id, partId, status) {
@@ -102,15 +107,15 @@ export async function removePart(id, partId) {
  * Journal de notes horodaté du PROJET lui-même (voir addNote() dans domain/tasks.js pour le
  * principe complet). Distinct de addPartNote() ci-dessous, qui note une sous-partie précise.
  */
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée — même raisonnement que
+// addPart() ci-dessus. Ne renvoie plus le tableau complet mais la note ajoutée seule.
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Projet introuvable : " + id);
-    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
-  });
+  const note = { id: generateId(), text: trimmed, createdAt: Date.now() };
+  await storage.appendToArray(COLLECTION, id, "notesLog", note);
   await storage.logHistory("Project", id, "note_added", { text: trimmed });
-  return updated.notesLog;
+  return note;
 }
 
 /**
