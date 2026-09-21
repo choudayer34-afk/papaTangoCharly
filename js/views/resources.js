@@ -7,6 +7,7 @@ import * as tasksApi from "../domain/tasks.js";
 import * as historyApi from "../domain/history.js";
 import * as preferencesApi from "../domain/preferences.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
+import { validateRequiredFields, validateUrlField, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -187,6 +188,7 @@ function openCreateResourceModal(prefill = {}) {
   urlInput.addEventListener("input", () => {
     typeSelect.value = resourcesApi.detectType(urlInput.value);
   });
+  clearFieldErrorOnInput(body, ["#res-title", "#res-url"]);
 
   const { bodyEl, close } = openModal({
     title: "Nouvelle ressource",
@@ -198,8 +200,11 @@ function openCreateResourceModal(prefill = {}) {
         variant: "primary",
         closesModal: false,
         onClick: async () => {
+          // Retour visuel explicite sur champ obligatoire vide (LOT 1, TODO-006 — UX-002) et sur
+          // URL mal formée (UX-012 : `type="url"` natif jamais déclenché hors d'un vrai <form>).
+          if (!validateRequiredFields(bodyEl, [{ selector: "#res-title", label: "Le titre" }])) return;
+          if (!validateUrlField(bodyEl, "#res-url")) return;
           const title = bodyEl.querySelector("#res-title").value.trim();
-          if (!title) return;
           const resource = await resourcesApi.createResource({
             title,
             url: bodyEl.querySelector("#res-url").value.trim(),
@@ -268,6 +273,7 @@ export async function openResourceDetail(resource, projects, tasks) {
     </div>
   `;
 
+  clearFieldErrorOnInput(body, ["#res-detail-title", "#res-detail-url"]);
   body.querySelector("#res-open-link")?.addEventListener("click", () => resourcesApi.touchLastUsed(resource.id));
   renderHistoryTimeline(body.querySelector("#res-history"), resourceHistory);
   renderNotesBlock(body.querySelector("#detail-notes"), resource.notesLog || [], {
@@ -351,8 +357,11 @@ export async function openResourceDetail(resource, projects, tasks) {
         compact: true,
         closesModal: false,
         onClick: async () => {
+          // Même échec silencieux que la création (UX-002) — corrigé ici aussi, en modification,
+          // et validation de l'URL (UX-012).
+          if (!validateRequiredFields(bodyEl, [{ selector: "#res-detail-title", label: "Le titre" }])) return;
+          if (!validateUrlField(bodyEl, "#res-detail-url")) return;
           const title = bodyEl.querySelector("#res-detail-title").value.trim();
-          if (!title) return;
           await resourcesApi.updateResource(resource.id, {
             title,
             type: bodyEl.querySelector("#res-detail-type").value,
