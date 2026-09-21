@@ -727,7 +727,7 @@ export function openInboxSourceDetail(item) {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <label>📥 Capture d'origine</label>
+      <label>Texte capturé</label>
       <p style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(item.rawContent)}</p>
     </div>
     <div class="item-meta">Capturé le ${formatDate(item.createdAt)} · ${escapeHtml(item.source)}</div>
