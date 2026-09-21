@@ -61,7 +61,9 @@ test("TODO-008 point 1 — qualifier en Action pose un lien InboxSource résolu 
   // la fiche "🧠 Information"/"💡 Idée" : pas de bouton "Archiver" ni "Changer de type" ici — ce
   // lien ne doit jamais permettre de re-qualifier ou modifier l'InboxItem source.
   await sourceRow.click();
-  await expect(page.getByText("📥 Capture d'origine")).toBeVisible({ timeout: 10_000 });
+  // `getByRole("heading", ...)` plutôt que `getByText` : ne matche que le titre <h2> de la
+  // modale, jamais un texte identique affiché ailleurs dans son corps.
+  await expect(page.getByRole("heading", { name: "📥 Capture d'origine" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText(rawText)).toBeVisible();
   await expect(page.getByRole("button", { name: "🗄️ Archiver" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "🔁 Changer de type" })).toHaveCount(0);
@@ -82,7 +84,10 @@ test("Régression — le type de référence 'Kept' se résout toujours normalem
   await expect(infoRow).toBeVisible({ timeout: 10_000 });
   await infoRow.getByRole("button", { name: "Traiter" }).click();
   await page.getByRole("button", { name: /Information/ }).click();
-  await expect(page.getByText("🧠 Information")).toBeVisible({ timeout: 10_000 });
+  // `getByRole("heading", ...)` plutôt que `getByText` : js/views/inbox.js#openKeptItemDetail
+  // affiche "🧠 Information" à la fois comme titre <h2> ET comme label de champ dans le corps
+  // (comportement préexistant, hors périmètre de ce lot) — seul le titre doit être visé ici.
+  await expect(page.getByRole("heading", { name: "🧠 Information" })).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: "Fermer" }).click();
 
   // 2. Une Tâche, liée manuellement à cette Information via "🔗 Lier une fiche" — chemin
