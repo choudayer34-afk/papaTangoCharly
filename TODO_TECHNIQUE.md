@@ -159,7 +159,7 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous)
 
 *Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
@@ -170,6 +170,8 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 *Ajout du 21/09/2026 (4)* : TODO-031 est d'une nature encore différente — ni un besoin produit (une envie de fonctionnalité), ni une scission technique d'un TODO existant, mais un **bug** remonté par Charles-Henri en testant TODO-006 (LOT 1) sur iPhone : la liste de suggestions native (`<datalist>`) ne s'affiche jamais sur Safari iOS, sur les 4 endroits de l'app qui l'utilisent. Diagnostiqué par échange direct le 21/09/2026 (élimination d'une hypothèse de désynchronisation entre appareils : le vrai problème est bien l'absence totale d'affichage sur iPhone, pas un contenu différent). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 *Ajout du 21/09/2026 (5)* : TODO-032 est encore différente — ni besoin produit, ni bug utilisateur, mais une découverte de dette technique (fichier mort jamais importé) faite en travaillant sur TODO-005 (LOT 3), signalée sans être corrigée conformément à la règle du lot ("si tu identifies un problème hors périmètre, ne le corrige pas"). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
+
+*Ajout du 21/09/2026 (6)* : TODO-033 et TODO-034 sont, comme TODO-032, des découvertes hors périmètre faites en travaillant sur TODO-009A (LOT 4A), signalées sans être corrigées conformément à la même règle du lot. TODO-033 reprend le volet « dernière activité `usageEvents` » de TODO-009A lui-même, dont les deux solutions proposées par la roadmap se sont révélées, à l'examen, disproportionnées par rapport au risque « faible » annoncé (voir TODO-009A ci-dessous) — Charles-Henri a tranché en `AskUserQuestion` de le laisser tel quel et de le journaliser en backlog plutôt que de l'implémenter dans ce lot. TODO-034 documente 4 autres points d'appel du même motif que celui corrigé sur `renderLinkedSection` (`fetchBundle()`+`resolveRef()` rechargeant 9 collections pour résoudre une seule référence), repérés par recherche mais non listés dans le périmètre déclaré de TODO-009A, donc non touchés. Ni l'une ni l'autre ne provient des 9 audits sources ; elles ne s'ajoutent donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 ## [ ] P0 — TODO-001 — Vérifier, verrouiller et versionner les règles de sécurité Firestore réelles
 
@@ -423,7 +425,9 @@ Validation : TEST-013, TEST-014
 
 Ordre recommandé : LOT 4A, peut démarrer immédiatement
 
-## [ ] P1 — TODO-009B — Mutualiser les abonnements Firestore temps réel (`tasks`/`projects`/`followUps`)
+Statut (21/09/2026, LOT 4A) : **Partiellement terminé.** Implémenté et versionné : `tags.js#addTag`/`removeTagByName` utilisent désormais `storage.listWhere(COLLECTION, [["entityType", type], ["entityId", id]])` au lieu de `listAll()` + filtre en mémoire (voir le commentaire détaillé dans `tags.js`) ; `deleteTagEverywhere` a été délibérément **laissé sur `listAll()`** — cette fonction cherche un tag par NOM insensible à la casse sur TOUTES les fiches, ce qu'un filtre d'égalité Firestore ne peut pas exprimer sans un champ `tag` normalisé dédié (changement de modèle de données hors périmètre de ce TODO), documenté en commentaire dans `tags.js`. `js/components/linkedItems.js#renderLinkedSection` (le point d'usage réel du problème de `fetchBundle()`/`resolveRef()` décrit par ce TODO) ne charge plus les 9 collections complètes à chaque ouverture d'une fiche liée : une nouvelle fonction `resolveRefDirect(ref)` lit directement le document demandé via de nouveaux accesseurs `getX(id)` ajoutés à `tasks.js`, `followups.js`, `objectives.js` et `inbox.js` (les autres types en avaient déjà un), et diffère même le chargement des données auxiliaires (ex. les tâches d'un projet) au moment où l'utilisateur clique réellement sur le lien (`onOpen` rendu `async`), puisque la grande majorité des liens affichés ne sont jamais cliqués. `fetchBundle()`/`resolveRef()` restent inchangées et continuent de servir `openLinkPickerModal`/`openCreateAndLinkModal`, qui ont un besoin structurellement différent (rechercher/lister l'ensemble des fiches). **Non fait, volontairement** : le volet « dernière activité `usageEvents` » (`js/services/usageTracking.js`/`accountAdmin.js`) — les deux solutions proposées par ce TODO (champ dédié nécessitant une modification de `firestore.rules` sensible ; requête bornée par compte nécessitant un index composite Firestore jamais mis en place) se sont révélées, à l'examen, disproportionnées par rapport au risque « faible » annoncé pour ce sous-point. Signalé à Charles-Henri plutôt que traité unilatéralement ; **décision de Charles-Henri (21/09/2026)** : laisser tel quel pour l'instant, journalisé en backlog sous **TODO-033** (voir section 5, non affectée à un lot). Constaté au passage, hors périmètre déclaré de ce TODO : 4 autres points d'appel du même `fetchBundle()`+`resolveRef()` (`js/components/changeType.js`, `js/services/shortcuts.js`, `js/views/dashboard.js` — "🔄 Reprendre où j'en étais", `js/app.js` — résolution de lien profond) présentent le même motif inefficace ; non touchés (hors du périmètre déclaré de ce TODO), journalisés sous **TODO-034**. TODO-009A est donc **partiellement terminé** : les volets `tags.js` et `linkedItems.js`/`renderLinkedSection` sont faits, versionnés, syntaxiquement vérifiés (`node --check`) et couverts par un test (`tests/unit/lot4a-tags-listwhere.spec.js`, TEST-013 décliné) ; le volet `usageEvents` est différé en backlog (TODO-033), sans blocage pour le reste du TODO. Comme pour tous les tests écrits durant cette phase du projet, aucun n'a pu être exécuté dans l'environnement de réalisation (registre npm bloqué) — à confirmer par un passage réel du workflow GitHub Actions.
+
+## [x] P1 — TODO-009B — Mutualiser les abonnements Firestore temps réel (`tasks`/`projects`/`followUps`) — **Terminé**
 
 *Scindé de TODO-009 le 15/09/2026 — chantier plus structurant que TODO-009A, réévalué en risque moyen (et non plus « faible ») suite à la revue critique.*
 
@@ -450,6 +454,8 @@ Complexité : L
 Validation : TEST-013, TEST-014 (à étendre à une vérification multi-vues)
 
 Ordre recommandé : LOT 4A, après TODO-009A, idéalement après le socle de tests (LOT 0B)
+
+Statut (21/09/2026, LOT 4A) : **Terminé.** Le mécanisme de mutualisation d'abonnement déjà en production pour `inboxItems` (`js/domain/inbox.js#subscribeFiltered`) a été généralisé à `js/domain/tasks.js`, `js/domain/projects.js` et `js/domain/followups.js` : un `Set` d'abonnés, un seul `onSnapshot` Firestore ouvert à la première inscription et fermé à la dernière désinscription, un abonné qui arrive après coup rejoué immédiatement avec l'état courant (`lastRawItems`) plutôt que d'attendre une nouvelle écriture. Contrairement à `inboxItems` (3 filtres différents selon l'appelant), aucun filtre n'est nécessaire pour ces trois collections : tous les appelants actuels (6 vues pour `tasks`/`projects`, 4 pour `followUps`) veulent la même liste complète, donc chaque abonné reçoit directement le flux partagé. Cas particulier préservé : `tasksApi.subscribe(callback, { sort: false })` (utilisé par un appelant qui retrie lui-même) continue de passer par un abonnement Firestore dédié non mutualisé plutôt que de risquer de réutiliser à tort le flux partagé (trié) — voir le commentaire dans `tasks.js`. `followups.js` applique en plus `normalize()` (migration de statut legacy) une seule fois par instantané reçu, dans le flux partagé, comme avant la mutualisation. Aucun appelant (vues Dashboard/Kanban/Calendrier/Priorisation/Projets/Équipe/Ressources) n'a eu besoin d'être modifié : la mutualisation est entièrement transparente au niveau du domaine — les fichiers listés dans "Fichiers concernés" ci-dessus qui n'ont finalement pas été touchés (les 8 vues) le sont donc restés intentionnellement, la généralisation n'exigeant de changement que dans les 3 modules de domaine. Vérifié syntaxiquement (`node --check`) sur les 3 fichiers modifiés, et couvert par un test comportemental (`tests/unit/lot4a-subscribe-mutualization.spec.js`, TEST-013 décliné — abonnés synchronisés, abonné tardif rejoué, désabonnement partiel sans casse pour les autres abonnés, la classe de régression citée comme risque de ce TODO). Comme pour tous les tests de cette phase, non exécuté dans l'environnement de réalisation (registre npm bloqué) — à confirmer par un passage réel du workflow GitHub Actions.
 
 ## [ ] P2 — TODO-010 — Écritures Firestore ciblées pour les mutations fréquentes
 
@@ -1083,6 +1089,66 @@ Ordre recommandé : non affectée à un lot pour l'instant, à planifier (bas ri
 
 ---
 
+## [ ] P3 — TODO-033 — Optimiser le calcul de dernière activité (`usageEvents`) pour « 👥 Comptes »
+
+*Ajoutée le 21/09/2026 — volet de TODO-009A (LOT 4A) délibérément non traité dans ce lot, sur décision explicite de Charles-Henri (voir TODO-009A en section 5).*
+
+Type : DATA
+
+Problème : le calcul de dernière activité affiché dans l'écran d'administration « 👥 Comptes » (`js/services/usageTracking.js#fetchUsageEvents`, `js/services/accountAdmin.js#listAccounts`) relit l'intégralité de la collection `usageEvents` (tous comptes confondus) à chaque affichage, au lieu d'une lecture bornée par compte.
+
+Cause racine : SYS-002 (même famille que TODO-009A, volet non traité)
+
+Solution : deux pistes identifiées par la roadmap d'origine, toutes deux jugées disproportionnées par rapport au risque « faible » annoncé pour ce sous-point et donc non tranchées dans l'immédiat : (1) un champ dédié de dernière activité par compte, qui nécessiterait une modification de `firestore.rules` (sujet sensible, voir le précédent SEC-011/TODO-028) ; (2) une requête bornée par compte (`listWhere`), qui nécessiterait un index composite Firestore jamais mis en place dans ce projet (dépendance de déploiement réelle, comme les règles de sécurité) et remplacerait un appel réseau par N. Une piste plus légère (pagination, mise en cache côté client) reste à évaluer le moment venu.
+
+Fichiers concernés : `js/services/usageTracking.js`, `js/services/accountAdmin.js`
+
+Fonctions concernées : `fetchUsageEvents`, `listAccounts`
+
+Dépendances : accès à la console Firebase pour un éventuel index composite ou une évolution de `firestore.rules`
+
+Problèmes résolus : (reprend le volet `usageEvents` de DATA-004/DATA-005/FIREBASE-003, initialement sous TODO-009A)
+
+Risque : à réévaluer — plus élevé que le « faible » annoncé initialement par TODO-009A pour ce sous-point (voir Solution ci-dessus)
+
+Complexité : à réévaluer selon la piste retenue
+
+Validation : non déterminée tant que la piste n'est pas choisie
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier
+
+---
+
+## [ ] P3 — TODO-034 — Étendre l'optimisation de résolution de lien aux autres appelants de `fetchBundle()`/`resolveRef()`
+
+*Ajoutée le 21/09/2026 — découverte hors périmètre en travaillant sur TODO-009A (LOT 4A), signalée sans être corrigée conformément à la règle du lot ("si tu identifies un problème hors périmètre, ne le corrige pas").*
+
+Type : CODE / PERFORMANCE
+
+Problème : `js/components/linkedItems.js#renderLinkedSection` a été corrigé en LOT 4A (TODO-009A) pour ne plus recharger 9 collections complètes (`fetchBundle()`) à chaque résolution d'un lien déjà connu. Le même motif inefficace subsiste, non touché, à 4 autres points d'appel de `fetchBundle()`+`resolveRef()` : `js/components/changeType.js`, `js/services/shortcuts.js`, `js/views/dashboard.js` (fonctionnalité "🔄 Reprendre où j'en étais"), `js/app.js` (résolution de lien profond/deep-link).
+
+Cause racine : SYS-002 (même famille que TODO-009A)
+
+Solution : évaluer, pour chacun des 4 appelants, si le même remplacement par `resolveRefDirect()` (ou équivalent) s'applique tel quel, ou si leur besoin réel (ex. deep-link pouvant cibler n'importe quel type sans contexte préalable) justifie de conserver `fetchBundle()` — à trancher au cas par cas plutôt que par un remplacement uniforme.
+
+Fichiers concernés : `js/components/changeType.js`, `js/services/shortcuts.js`, `js/views/dashboard.js`, `js/app.js`, `js/components/linkedItems.js` (`resolveRefDirect`, déjà en place)
+
+Fonctions concernées : usages de `fetchBundle`/`resolveRef` dans ces 4 fichiers
+
+Dépendances : TODO-009A (déjà partiellement terminé — `resolveRefDirect()` existe et peut être réutilisée)
+
+Problèmes résolus : (extension du périmètre de DATA-004/FIREBASE-003, non couverte par TODO-009A)
+
+Risque : faible à moyen selon l'appelant — à évaluer individuellement (le cas du deep-link notamment peut avoir un besoin structurellement différent)
+
+Complexité : S à M selon le nombre d'appelants effectivement convertis
+
+Validation : à définir au moment du traitement
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier
+
+---
+
 ## 6. Lots de correction (ordre de correction recommandé)
 
 ### LOT 0A — Sécurité Firestore
@@ -1136,7 +1202,7 @@ Pour son propre périmètre — celui qui reste réellement à la charge de ce l
 **Modifications principales** : score de santé en fiche projet/Dashboard, inclusion par défaut des archivés en recherche, carte indicateur « Échéances du jour »
 **Tests nécessaires** : TEST-024
 **Risques** : faible
-**Statut (21/09/2026)** : **Terminé.** Deux points ont été soumis à Charles-Henri avant d'être tranchés, plutôt que décidés à sa place : (1) le volet "inclusion des archivés en recherche" de TODO-005 contredisait une décision produit déjà actée et documentée le 13/09/2026 dans `js/components/search.js` — Charles-Henri a confirmé garder cette décision du 13/09 (recherche non élargie par défaut), donc aucune modification de `search.js` ; (2) TODO-022 indiquait lui-même explicitement avoir besoin d'un cadrage sur le critère "échéance personnelle" vs. "échéance collaborateur" — Charles-Henri a précisé le critère (Suivis `direction: "to_tell"` uniquement), implémenté en conséquence. Les deux TODO du lot sont Terminé : score de santé visible en fiche projet et sur le Dashboard (TODO-005), carte "📅 Échéances du jour" sur le Dashboard (TODO-022). Aucun test automatisé n'était prévu pour ces deux TODO au-delà de TEST-024 (recherche), devenu sans objet puisque la recherche n'a pas changé de comportement.
+**Statut (21/09/2026)** : **Terminé.** Deux points ont été soumis à Charles-Henri avant d'être tranchés, plutôt que décidés à sa place : (1) le volet "inclusion des archivés en recherche" de TODO-005 contredisait une décision produit déjà actée et documentée le 13/09/2026 dans `js/components/search.js` — Charles-Henri a confirmé garder cette décision du 13/09 (recherche non élargie par défaut), donc aucune modification de `search.js` ; (2) TODO-022 indiquait lui-même explicitement avoir besoin d'un cadrage sur le critère "échéance personnelle" vs. "échéance collaborateur" — Charles-Henri a précisé le critère (Suivis `direction: "to_tell"` uniquement), implémenté en conséquence. Les deux TODO du lot sont Terminé : score de santé visible en fiche projet et sur le Dashboard (TODO-005), carte "📅 Échéances du jour" sur le Dashboard (TODO-022). Aucun test automatisé n'était prévu pour ces deux TODO au-delà de TEST-024 (recherche), devenu sans objet puisque la recherche n'a pas changé de comportement. Étendu le 21/09/2026 (retour de Charles-Henri) au badge de santé sur les cartes de l'onglet Projets (Liste/Par catégorie), voir TODO-005 ci-dessus. **Clôture confirmée par Charles-Henri le 21/09/2026** : lot validé, suite de tests toujours au vert.
 
 ### LOT 4A — Requêtes ciblées
 
@@ -1148,6 +1214,7 @@ Pour son propre périmètre — celui qui reste réellement à la charge de ce l
 **Modifications principales** : requêtes ciblées ponctuelles (TODO-009A), mutualisation des abonnements temps réel (TODO-009B)
 **Tests nécessaires** : TEST-013, TEST-014
 **Risques** : faible (TODO-009A) à moyen (TODO-009B, désynchronisation possible si mal exécuté)
+**Statut (21/09/2026)** : **Partiellement terminé.** TODO-009B est Terminé : mutualisation des abonnements Firestore généralisée à `tasks`/`projects`/`followUps`, transparente pour les 8 vues appelantes (aucune n'a eu besoin d'être modifiée). TODO-009A est partiellement terminé : les volets `tags.js` (conversion à `listWhere`) et `linkedItems.js#renderLinkedSection` (lecture directe + chargement différé des données auxiliaires) sont faits ; le volet `usageEvents` a été soumis à Charles-Henri (ses deux solutions proposées se sont révélées plus risquées que ce que la roadmap annonçait) et reporté en backlog sous **TODO-033** à sa demande explicite. Une découverte hors périmètre (4 autres appelants du même motif `fetchBundle()`/`resolveRef()`) a été signalée sans être corrigée, journalisée sous **TODO-034**. Voir TODO-009A/TODO-009B en section 5 pour le détail complet. Tests écrits (`tests/unit/lot4a-subscribe-mutualization.spec.js`, `tests/unit/lot4a-tags-listwhere.spec.js`), non exécutés dans l'environnement de réalisation (registre npm bloqué) — à confirmer par un passage réel du workflow GitHub Actions, comme pour tous les lots précédents. **Ce lot ne passe donc pas à Terminé** et n'enchaîne pas automatiquement sur LOT 4B, en attente de la confirmation CI et de la validation de Charles-Henri.
 
 ### LOT 4B — Écritures ciblées et rétention
 
