@@ -45,8 +45,19 @@ export async function addTag(type, id, rawTag) {
   const clean = stripHash(rawTag);
   if (!clean) return null;
   const key = normalize(clean);
-  const all = await storage.listAll(COLLECTION);
-  const existing = all.find((t) => t.entityType === type && t.entityId === id && normalize(t.tag) === key);
+  // BUG corrigé (21/09/2026, audit performance, TODO-009A) : `listAll()` téléchargeait la
+  // collection `tags` ENTIÈRE (tous types de fiches confondus, qui grandit avec tout l'usage de
+  // l'app) pour n'en garder que les quelques tags DE CETTE FICHE. `listWhere` (voir son
+  // commentaire dans storage.js, même principe que js/domain/history.js#listForEntity) filtre
+  // déjà côté Firestore sur `entityType`/`entityId` (égalité uniquement, jamais d'index composite
+  // requis) — seule la comparaison sur le NOM du tag reste en mémoire après coup, une comparaison
+  // insensible à la casse (`normalize`) ne pouvant pas se traduire en filtre d'égalité Firestore
+  // (`tag` est stocké avec sa casse d'origine, voir groupByName() plus bas).
+  const entityTags = await storage.listWhere(COLLECTION, [
+    ["entityType", type],
+    ["entityId", id],
+  ]);
+  const existing = entityTags.find((t) => normalize(t.tag) === key);
   if (existing) return existing;
   const created = await storage.put(COLLECTION, { entityType: type, entityId: id, tag: clean });
   await storage.logHistory(type, id, "tag_added", { tag: clean });
@@ -127,8 +138,12 @@ export function groupByName(allTags) {
 export async function removeTagByName(type, id, rawTag) {
   const key = normalize(rawTag);
   if (!key) return;
-  const all = await storage.listAll(COLLECTION);
-  const doc = all.find((t) => t.entityType === type && t.entityId === id && normalize(t.tag) === key);
+  // Même correctif que addTag() ci-dessus (TODO-009A) — voir son commentaire.
+  const entityTags = await storage.listWhere(COLLECTION, [
+    ["entityType", type],
+    ["entityId", id],
+  ]);
+  const doc = entityTags.find((t) => normalize(t.tag) === key);
   if (doc) await removeTag(doc);
 }
 
@@ -139,6 +154,16 @@ export async function removeTagByName(type, id, rawTag) {
  * correspondant, quelle que soit la casse d'origine. Irréversible — l'appelant (voir
  * js/components/adminPanel.js) doit faire confirmer avant d'appeler ceci. Retourne le nombre de
  * fiches concernées, pour le message de confirmation affiché ensuite.
+ *
+ * TODO-009A (LOT 4A, audit performance) : `listAll()` VOLONTAIREMENT non converti en `listWhere`
+ * ici, contrairement à `addTag`/`removeTagByName` ci-dessus. Cette fonction cherche un tag par
+ * NOM, quelle que soit la casse et quelle que soit la fiche qui le porte (voir `groupByName()`
+ * plus haut : "Urgent" et "urgent" sont deux casses distinctes, jamais fusionnées) — un filtre
+ * d'égalité Firestore sur `tag` ne peut matcher qu'une seule casse exacte à la fois, il faudrait
+ * donc soit un champ `tag` normalisé dédié (changement de modèle de données hors périmètre de ce
+ * TODO), soit une requête par casse déjà connue (risque d'en oublier une, silencieusement). Reste
+ * sur `listAll` pour ne pas introduire un tag "oublié" lors d'une suppression censée être
+ * définitive et irréversible.
  */
 export async function deleteTagEverywhere(rawTag) {
   const key = normalize(rawTag);
