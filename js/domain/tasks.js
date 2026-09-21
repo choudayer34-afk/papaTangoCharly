@@ -71,6 +71,30 @@ export async function createTask(data) {
 }
 
 /**
+ * Active le canevas de communication après création (LOT 1, TODO-007 — UX-010/AUDIT_USAGE_
+ * EFFICACITE.md, décision validée par Charles-Henri le 15/09/2026 : la case "Communication" du
+ * formulaire de création exposait un réglage avancé sans expliquer sa conséquence ; retirée de
+ * `openCreateTaskModal`, ce choix se fait désormais après coup, depuis la fiche détail, comme les
+ * autres réglages avancés — voir js/views/kanban.js#openTaskDetail). Volontairement à sens unique
+ * (comme l'était la case à cocher qu'elle remplace : aucun chemin ne désactivait un canevas déjà
+ * actif) et idempotente : si le canevas est déjà actif, ne réinitialise pas ses `steps` — cela
+ * effacerait une progression déjà cochée.
+ */
+export async function enableCommunicationCanevas(id) {
+  let didActivate = false;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    if (current.type === "communication" && (current.steps || []).length) return undefined; // déjà actif, rien à écrire
+    didActivate = true;
+    return { type: "communication", steps: buildSteps("communication") };
+  });
+  if (didActivate) {
+    await storage.logHistory("Task", id, "updated", { patch: { type: "communication" } });
+  }
+  return updated;
+}
+
+/**
  * Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir
  * js/components/notesBlock.js. Additif uniquement, jamais d'édition ni de suppression d'une
  * note existante. Renvoie le tableau à jour pour que le composant puisse se rafraîchir sans
