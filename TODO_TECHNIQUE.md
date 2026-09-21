@@ -159,7 +159,7 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous ; TODO-035 ajoutée le 21/09/2026, voir note ci-dessous)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous ; TODO-035 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-036 et TODO-037 ajoutées le 21/09/2026, voir note ci-dessous)
 
 *Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
@@ -174,6 +174,8 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 *Ajout du 21/09/2026 (6)* : TODO-033 et TODO-034 sont, comme TODO-032, des découvertes hors périmètre faites en travaillant sur TODO-009A (LOT 4A), signalées sans être corrigées conformément à la même règle du lot. TODO-033 reprend le volet « dernière activité `usageEvents` » de TODO-009A lui-même, dont les deux solutions proposées par la roadmap se sont révélées, à l'examen, disproportionnées par rapport au risque « faible » annoncé (voir TODO-009A ci-dessous) — Charles-Henri a tranché en `AskUserQuestion` de le laisser tel quel et de le journaliser en backlog plutôt que de l'implémenter dans ce lot. TODO-034 documente 4 autres points d'appel du même motif que celui corrigé sur `renderLinkedSection` (`fetchBundle()`+`resolveRef()` rechargeant 9 collections pour résoudre une seule référence), repérés par recherche mais non listés dans le périmètre déclaré de TODO-009A, donc non touchés. Ni l'une ni l'autre ne provient des 9 audits sources ; elles ne s'ajoutent donc pas aux 157 problèmes ni aux 22 actions d'origine.
 
 *Ajout du 21/09/2026 (7)* : TODO-035 est encore différente — ni besoin produit, ni bug utilisateur au sens fonctionnel, ni scission technique, mais une découverte de dette technique (fichier mort) faite en diagnostiquant l'incident de cache de Service Worker (`sw.js`) remonté par Charles-Henri après la livraison de LOT 4A (voir le correctif dédié `sw.js`, hors roadmap car ne se rattachant à aucun TODO). Ne provient d'aucun des 9 audits sources, ne s'ajoute donc pas aux 157 problèmes ni aux 22 actions d'origine.
+
+*Ajout du 21/09/2026 (8)* : TODO-036 et TODO-037 proviennent toutes deux du traitement de TODO-011/TODO-010 en LOT 4B. TODO-036 reprend le volet « implémentation de la purge assistée » de TODO-011, formellement sorti de ce TODO sur décision explicite de Charles-Henri (documentation seulement retenue pour ce lot, voir TODO-011 ci-dessous) — pas un nouveau besoin, mais la partie non réalisée d'un TODO déjà comptabilisé. TODO-037 est une découverte hors périmètre faite en travaillant sur TODO-010 : `js/domain/people.js`/`resources.js`/`meetings.js`/`decisions.js` ont chacun un `addNote()` non ciblé du même type que ceux convertis par TODO-010, mais aucun de ces 4 fichiers ne figure dans le périmètre déclaré de ce TODO, signalée sans être corrigée. Ni l'une ni l'autre ne s'ajoute aux 157 problèmes ni aux 22 actions d'origine.
 
 ## [ ] P0 — TODO-001 — Vérifier, verrouiller et versionner les règles de sécurité Firestore réelles
 
@@ -485,6 +487,8 @@ Validation : TEST-006, TEST-007
 
 Ordre recommandé : LOT 4B, peut suivre TODO-009A/TODO-009B
 
+Statut (21/09/2026, LOT 4B) : **Terminé.** Deux nouvelles primitives ajoutées à `storage.js` — `appendToArray(collectionName, id, field, item)` (écriture Firestore ciblée via `updateDoc()`+`arrayUnion()`, sans lecture préalable) et `setFields(collectionName, id, fields)` (remplacement de champs inconditionnel, même mécanique) — toutes deux réutilisant la MÊME file de sérialisation par document (`enqueue()`, extraite du code existant de `update()` plutôt que dupliquée) que `update()`, pour garantir qu'un appel `update()` et un appel `appendToArray()`/`setFields()` sur le même document restent mutuellement exclusifs : la garantie CODE-021 (aucune écriture perdue) est donc préservée malgré ce nouveau chemin d'écriture qui ne relit plus le document. Converties en conséquence, pour les mutations identifiées comme purement additives ou de remplacement inconditionnel (sans logique conditionnelle nécessitant l'état courant) : `tasks.js#addNote/addChecklistItem/addOutlookMeeting/setWaitingNote`, `projects.js#addNote/addPart`, `followups.js#addNote/addChecklistItem`. Volontairement laissées sur `update()` (lecture nécessaire pour localiser un élément existant par id, ou pour journaliser une valeur retirée) : `toggleChecklistItem`/`removeChecklistItem`/`toggleStep`/`removeOutlookMeeting` (tasks.js), `updatePartStatus`/`removePart`/`toggleStep`/`updateProject` (projects.js), `toggleChecklistItem`/`removeChecklistItem`/`updateFollowUp` (followups.js). L'extraction de `notesLog` en sous-collection dédiée, mentionnée par ce TODO comme piste "à plus long terme", n'a pas été entreprise — la roadmap elle-même ne la range pas dans le périmètre immédiat. Effet de bord positif constaté (non recherché délibérément, conséquence naturelle d'`arrayUnion`) : contrairement à `update()`/`put()` (un `setDoc()` complet, donc "dernier écrivain gagne" en cas d'écriture concurrente multi-onglets/multi-appareils sur le MÊME champ — comportement documenté comme limite acceptée par TEST-007), une écriture `arrayUnion()` est fusionnée de façon atomique côté serveur Firestore : deux ajouts concurrents à `notesLog`/`checklist`/`outlookMeetings`/`parts` depuis deux appareils différents ne s'écrasent plus l'un l'autre pour les fonctions converties ci-dessus. Test écrit (`tests/unit/lot4b-targeted-writes.spec.js`, TEST-006/TEST-007 déclinés) : couvre `appendToArray`/`setFields` isolément, le cas MIXTE `appendToArray()`+`update()` concurrents sur le même document (le risque explicitement cité par ce TODO), et le comportement de bout en bout de chaque fonction convertie. Comme pour tous les tests de cette phase, non exécuté dans l'environnement de réalisation (registre npm bloqué) — à confirmer par un passage réel du workflow GitHub Actions. Découverte hors périmètre, signalée sans être corrigée : `js/domain/people.js`, `resources.js`, `meetings.js` et `decisions.js` ont chacun un `addNote()` suivant exactement le même schéma non ciblé, mais aucun de ces 4 fichiers ne figure dans le périmètre déclaré de ce TODO — journalisé sous **TODO-037** (section 5).
+
 ## [ ] P2 — TODO-011 — Politique de rétention pour les collections non bornées
 
 Type : DATA
@@ -512,6 +516,8 @@ Complexité : S (documentation de la politique retenue) puis M (implémentation 
 Validation : TEST-006/TEST-007 pour la non-régression des données ; scénario manuel de confirmation avant purge à ajouter
 
 Ordre recommandé : LOT 4B, par étapes — documentation de la politique retenue d'abord, implémentation de la purge assistée ensuite
+
+Statut (21/09/2026, LOT 4B) : **Partiellement terminé — première étape faite, seconde reportée sur décision explicite de Charles-Henri.** Avant d'implémenter quoi que ce soit, un point bloquant a été constaté et soumis à Charles-Henri via `AskUserQuestion` : `usageEvents` porte, depuis le 20/09/2026, une règle Firestore explicite `allow update, delete: if false` (voir `firestore.rules` et le commentaire de `js/services/usageTracking.js`) — aucune suppression n'y est possible tant que cette règle n'est pas modifiée, un changement de sécurité sensible distinct de ce TODO (même famille que SEC-011/TODO-028). `history`/Inbox archivé n'ont pas ce blocage (déjà en écriture complète pour leur propriétaire). **Décision de Charles-Henri (21/09/2026)** : documentation seulement pour ce lot, sur les 3 collections, sans aucun mécanisme de suppression. Réalisé en conséquence : un bloc de documentation détaillé ajouté dans chacun des 3 fichiers concernés (`js/services/usageTracking.js`, `js/domain/history.js`, `js/domain/inbox.js`, près d'`autoArchiveStaleKept()`) reprenant la politique du 15/09/2026 telle quelle (24-36 mois, confirmation utilisateur explicite, jamais de suppression automatique/silencieuse), et précisant pour chacune l'état technique réel (bloquée par les règles pour `usageEvents`, techniquement possible mais non implémentée pour les deux autres). **Non fait, sur ce même arbitrage** : l'écran/flux de purge assistée lui-même (avec confirmation utilisateur), et la modification de `firestore.rules` que nécessiterait `usageEvents` — les deux formellement sortis de ce TODO et repris par **TODO-036** (section 5), backlog, non affectée à un lot. TODO-011 est donc partiellement terminé : la documentation (le volet à risque/complexité "faible"/"S" annoncé par ce TODO) est faite pour les 3 collections ; l'implémentation de la purge (le volet "moyen"/"M") est intégralement différée, par choix explicite plutôt que par manque de temps.
 
 ## [ ] P1 — TODO-012 — Documentation de référence : schéma de données et stratégies de migration
 
@@ -1179,6 +1185,66 @@ Ordre recommandé : non affectée à un lot pour l'instant, à planifier (bas ri
 
 ---
 
+## [ ] P2 — TODO-036 — Implémenter la purge assistée (`usageEvents`/`history`/Inbox archivé)
+
+*Ajoutée le 21/09/2026 — volet de TODO-011 (LOT 4B) délibérément non traité dans ce lot, sur décision explicite de Charles-Henri : documentation de la politique de rétention faite (voir TODO-011 ci-dessus), implémentation de la purge elle-même différée.*
+
+Type : DATA / UX
+
+Problème : `usageEvents`, `history` et `inboxItems` archivés grandissent aujourd'hui sans aucun moyen, même manuel, de purger les entrées les plus anciennes (au-delà de la fenêtre de conservation cible de 24-36 mois actée le 15/09/2026 et documentée en LOT 4B).
+
+Cause racine : SYS-005 (même famille que TODO-011)
+
+Solution : concevoir puis implémenter un écran/flux de purge assistée (jamais automatique) avec confirmation explicite de l'utilisateur, pour `history` et l'Inbox archivée d'abord — techniquement réalisables dès aujourd'hui (règles Firestore déjà permissives pour leur propriétaire, aucune modification de `firestore.rules` requise). Pour `usageEvents` : bloqué tant que `firestore.rules` porte `allow update, delete: if false` sur cette collection (posée volontairement le 20/09/2026 pour garantir l'intégrité de ce journal d'audit) — nécessite une décision et une modification de règle dédiées avant toute implémentation, à traiter avec la même prudence que SEC-011/TODO-028 (déploiement réel et vérification en console hors de cet environnement).
+
+Fichiers concernés : `js/services/usageTracking.js`, `js/domain/history.js`, `js/domain/inbox.js`, `firestore.rules` (pour `usageEvents` uniquement), plus l'écran/composant de confirmation à créer (emplacement à déterminer — candidat naturel : 🔧 Administration, `js/components/adminPanel.js`, à confirmer avec Charles-Henri)
+
+Fonctions concernées : mécanisme de purge assistée à créer (avec écran de confirmation utilisateur)
+
+Dépendances : SEC-007 ; pour `usageEvents`, une décision produit/sécurité sur la modification de `firestore.rules`
+
+Problèmes résolus : (reprend le volet non réalisé de DATA-006, DATA-012, FIREBASE-006, SEC-007, initialement sous TODO-011)
+
+Risque : moyen — ne doit jamais supprimer sans confirmation explicite ; élevé pour le volet `firestore.rules` d'`usageEvents` (changement de règle de sécurité)
+
+Complexité : M pour `history`/Inbox archivé ; nécessite une décision dédiée pour `usageEvents`
+
+Validation : scénario manuel de confirmation avant purge à ajouter ; TEST-006/TEST-007 pour la non-régression des données
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier
+
+---
+
+## [ ] P3 — TODO-037 — Étendre les écritures ciblées (`appendToArray`) aux `addNote()` de people.js/resources.js/meetings.js/decisions.js
+
+*Ajoutée le 21/09/2026 — découverte hors périmètre en travaillant sur TODO-010 (LOT 4B), signalée sans être corrigée conformément à la règle du lot ("si tu identifies un problème hors périmètre, ne le corrige pas").*
+
+Type : CODE / PERFORMANCE
+
+Problème : TODO-010 (LOT 4B) a converti `addNote()` (et équivalents additifs) de `tasks.js`/`projects.js`/`followups.js` vers les nouvelles primitives d'écriture ciblée `storage.appendToArray()`/`storage.setFields()`. Le même `addNote()`, suivant exactement le même schéma de lecture-modification-écriture complète, existe aussi, inchangé, dans `js/domain/people.js`, `js/domain/resources.js`, `js/domain/meetings.js` et `js/domain/decisions.js` — mais aucun de ces 4 fichiers ne figurait dans le périmètre déclaré de TODO-010.
+
+Cause racine : SYS-001 (même famille que TODO-010)
+
+Solution : appliquer la même conversion (`storage.appendToArray(COLLECTION, id, "notesLog", note)`) aux 4 `addNote()` restants, et mettre à jour leurs appelants (`js/views/people.js` pour Person, `js/views/resources.js`, `js/views/dashboard.js` pour Réunion/Décision) selon le même principe que pour tasks.js/projects.js/followups.js — voir TODO-010 et le commentaire de `storage.appendToArray()` dans storage.js.
+
+Fichiers concernés : `js/domain/people.js`, `js/domain/resources.js`, `js/domain/meetings.js`, `js/domain/decisions.js`, `js/views/people.js`, `js/views/resources.js`, `js/views/dashboard.js`
+
+Fonctions concernées : `addNote` (les 4 modules), leurs appelants respectifs
+
+Dépendances : TODO-010 (déjà réalisé — la primitive `storage.appendToArray()` existe et peut être réutilisée telle quelle)
+
+Problèmes résolus : (extension du périmètre de DATA-001/FIREBASE-007, non couverte par TODO-010)
+
+Risque : faible — même conversion mécanique, déjà éprouvée par TODO-010 sur 3 autres modules
+
+Complexité : S
+
+Validation : même principe que `tests/unit/lot4b-targeted-writes.spec.js`
+
+Ordre recommandé : non affectée à un lot pour l'instant, à planifier
+
+---
+
 ## 6. Lots de correction (ordre de correction recommandé)
 
 ### LOT 0A — Sécurité Firestore
@@ -1261,6 +1327,9 @@ Tests écrits (`tests/unit/lot4a-subscribe-mutualization.spec.js`, `tests/unit/l
 **Modifications principales** : écritures partielles ciblées, politique de rétention documentée
 **Tests nécessaires** : TEST-006, TEST-007
 **Risques** : moyen sur TODO-010 (écritures ciblées) — à traiter avec précaution vis-à-vis de la sérialisation existante (CODE-021)
+**Statut (21/09/2026)** : **Partiellement terminé.** TODO-010 est Terminé : primitives d'écriture ciblée ajoutées à `storage.js` (`appendToArray`, `setFields`), réutilisant la file de sérialisation existante (garantie CODE-021 préservée), et appliquées aux mutations additives de `tasks.js`/`projects.js`/`followups.js`. TODO-011 est partiellement terminé : un point bloquant a été soumis à Charles-Henri avant toute implémentation (`usageEvents` interdit techniquement toute suppression via sa règle Firestore actuelle) — décision prise de documenter la politique de rétention sur les 3 collections concernées pour ce lot, et de reporter l'implémentation de la purge assistée elle-même (et la question `firestore.rules` d'`usageEvents`) vers **TODO-036**, backlog, hors périmètre de LOT 4B. Voir TODO-010/TODO-011 en section 5 pour le détail complet. Deux découvertes hors périmètre signalées sans être corrigées : le même `addNote()` non ciblé existe dans 4 autres modules de domaine non couverts par TODO-010 (**TODO-037**) — déjà couvertes ci-dessus.
+
+Test écrit (`tests/unit/lot4b-targeted-writes.spec.js`, TEST-006/TEST-007 déclinés), non exécuté dans l'environnement de réalisation (registre npm bloqué) — à confirmer par un passage réel du workflow GitHub Actions, comme pour tous les lots précédents. **Ce lot ne passe donc pas à Terminé** et n'enchaîne pas automatiquement sur LOT 5, en attente de la confirmation CI et de la validation de Charles-Henri.
 
 ### LOT 5 — Documentation de référence
 **Objectif** : donner un point de référence unique pour le schéma de données et le vocabulaire, réduisant le coût de chaque future évolution.
