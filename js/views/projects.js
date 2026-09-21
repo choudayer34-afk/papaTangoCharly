@@ -265,6 +265,15 @@ export function renderProjects(container) {
     const icon = preferencesApi.categoryIcon(categories, project.category);
     const isArchived = projectsApi.isArchived(project);
     const draggable = !isArchived && (sortMode === "manual" || categoryMode);
+    // Retour de Charles-Henri (21/09/2026, en réaction à la livraison de TODO-005/LOT 3) :
+    // rendre le score de santé visible aussi sur les cartes de l'onglet Projets lui-même
+    // (vues "📋 Liste" et "🗂️ Par catégorie" — la vue "🩺 Santé" l'affiche déjà en entier),
+    // pas seulement en fiche détail et sur le Dashboard. `buildProjectCard` est déjà partagée
+    // entre ces deux vues (voir commentaire au-dessus de cette fonction), donc un seul endroit à
+    // modifier suffit à couvrir les deux. Même règle que partout ailleurs pour ce badge : jamais
+    // affiché sur un projet fermé, qui n'a plus besoin d'être surveillé (même filtre que
+    // `rankByHealth`).
+    const health = isArchived ? null : projectHealthApi.computeHealth(project, projectTasks, followUps);
 
     const card = document.createElement("div");
     card.className = "card";
@@ -274,7 +283,7 @@ export function renderProjects(container) {
     if (draggable) card.style.cursor = "grab";
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:baseline;">
-        <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${project.critical ? ` <span class="badge badge-critical">⭐ Prioritaire</span>` : ""}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}</div>
+        <div class="item-title">${icon ? icon + " " : ""}${escapeHtml(project.name)}${project.critical ? ` <span class="badge badge-critical">⭐ Prioritaire</span>` : ""}${isArchived ? ` <span class="badge badge-archived">🗄️ Fermé</span>` : ""}${health ? ` <span class="badge badge-health-${health.level}" title="Score de santé : ${health.score}/100${health.signals[0] ? " · " + escapeAttr(health.signals[0].text) : ""}">🩺 ${health.score}</span>` : ""}</div>
         <div style="font-weight:700;color:var(--color-primary);">${progress.percent}%</div>
       </div>
       ${project.objective ? `<div class="item-meta" style="margin-bottom:8px;">${escapeHtml(project.objective)}</div>` : ""}
@@ -497,9 +506,11 @@ export function renderProjects(container) {
     tasks = items;
     renderCurrent();
   });
-  // Suivis en retard rattachés au projet — un des signaux de "🩺 Santé" (§49) ; jamais utilisé
-  // par les vues Liste/Par catégorie, mais un seul abonnement partagé plutôt qu'un chargement à
-  // chaque bascule vers ce mode évite un flash "aucun signal" le temps de la requête.
+  // Suivis en retard rattachés au projet — un des signaux de "🩺 Santé" (§49). Un seul
+  // abonnement partagé plutôt qu'un chargement à chaque bascule vers ce mode évite un flash
+  // "aucun signal" le temps de la requête. Utilisé par la vue "🩺 Santé" ET, depuis TODO-005
+  // (retour de Charles-Henri, 21/09/2026), par `buildProjectCard` — le badge de santé affiché sur
+  // les cartes Liste/Par catégorie dépend donc aussi de ces Suivis.
   const unsubFollowUps = followUpsApi.subscribe((items) => {
     followUps = items;
     renderCurrent();
