@@ -1787,7 +1787,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
   }
   renderChecklist(body.querySelector("#fu-edit-checklist"), followUp.checklist || [], {
     onAdd: async (text) => {
-      const updated = await followUpsApi.addChecklistItem(followUp.id, text);
+      // TODO-010 (LOT 4B) : followUpsApi.addChecklistItem() renvoie désormais l'élément ajouté
+      // seul (écriture ciblée, plus de relecture du tableau complet).
+      const item = await followUpsApi.addChecklistItem(followUp.id, text);
+      const updated = item ? [...(followUp.checklist || []), item] : followUp.checklist;
       followUp.checklist = updated;
       updateChecklistTitle();
       return updated;
@@ -1808,7 +1811,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
 
   renderNotesBlock(body.querySelector("#detail-notes"), followUp.notesLog || [], {
     onAdd: async (text) => {
-      const updated = await followUpsApi.addNote(followUp.id, text);
+      // TODO-010 (LOT 4B) : followUpsApi.addNote() renvoie désormais la note ajoutée seule
+      // (écriture ciblée) — voir le commentaire équivalent sur la checklist juste au-dessus.
+      const note = await followUpsApi.addNote(followUp.id, text);
+      const updated = note ? [...(followUp.notesLog || []), note] : followUp.notesLog;
       followUp.notesLog = updated;
       return updated;
     },
