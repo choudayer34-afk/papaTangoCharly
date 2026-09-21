@@ -33,6 +33,25 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "☑️ Traiter plusieurs éléments Inbox en une fois (Information / Idée / Archiver)",
+        text: "L'Inbox et la Revue hebdomadaire proposent maintenant un mode « Traiter en lot », à activer explicitement — le traitement reste un par un par défaut, exactement comme avant. Une fois activé, une case à cocher apparaît sur chaque élément en attente : sélectionne-en plusieurs puis choisis Information, Idée ou Archiver pour les qualifier d'un coup. Volontairement limité à ces 3 issues, qui ne demandent aucun formulaire — Action, Suivi, Projet, Réunion, Décision et Ressource continuent de se traiter un par un, avec leur formulaire habituel.",
+        howTo: "Onglet Inbox (ou Revue hebdomadaire → section \"📥 Inbox\") → bouton \"☑️ Traiter en lot\" → coche les éléments concernés → choisis Information / Idée / Archiver dans la barre qui apparaît.",
+        gain: "Vider d'un coup les captures qui n'ont clairement besoin d'aucun traitement particulier, sans perdre le réflexe \"un par un\" pour tout ce qui mérite réellement un formulaire (Action, Suivi...).",
+      },
+      {
+        type: "add",
+        title: "🔗 Lien automatique entre une Tâche/Suivi/Réunion/Décision qualifiée et son projet",
+        text: "Quand une capture Inbox est qualifiée en Tâche, Suivi, Réunion ou Décision ET qu'un projet est déjà choisi à ce moment-là, un lien est désormais posé automatiquement entre l'élément créé et ce projet — visible dans la section \"🔗 Lié\" des deux fiches, sans rien à faire de plus. Sans projet choisi à la qualification, rien ne change : le lien peut toujours être ajouté à la main ensuite.",
+        howTo: "Qualifie une capture en Tâche/Suivi/Réunion/Décision en choisissant un projet dans le formulaire — le lien apparaît directement dans la fiche créée et dans celle du projet.",
+        gain: "Retrouver depuis le projet tout ce qui en est directement issu, sans avoir à poser le lien soi-même après coup.",
+      },
+    ],
+  },
+  {
+    date: "21 septembre 2026",
+    items: [
+      {
+        type: "add",
         title: "🩺 Score de santé visible sur la fiche projet, l'Accueil et l'onglet Projets",
         text: "Le score de santé d'un projet (calculé depuis les tâches en retard/bloquées/en pause et les suivis en retard) n'était visible que dans l'onglet Projets, vue \"🩺 Santé\" — il apparaît désormais aussi en en-tête de la fiche projet, sur chaque carte de la section \"📦 Mes projets\" de l'Accueil, et sur les cartes de l'onglet Projets lui-même (vues \"📋 Liste\" et \"🗂️ Par catégorie\"), là où la décision se prend.",
         howTo: "Ouvre n'importe quel projet actif, regarde l'Accueil → \"📦 Mes projets\", ou l'onglet Projets (Liste ou Par catégorie) : le badge \"🩺\" est visible sans action supplémentaire.",
