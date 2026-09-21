@@ -100,19 +100,22 @@ export async function enableCommunicationCanevas(id) {
  * note existante. Renvoie le tableau à jour pour que le composant puisse se rafraîchir sans
  * recharger toute la tâche.
  */
+// BUG corrigé (21/09/2026, audit performance, TODO-010, LOT 4B) : cette fonction relisait puis
+// réécrivait l'INTÉGRALITÉ de la tâche (via `storage.update()`) pour un simple ajout au tableau
+// `notesLog` — coûteux sur une tâche déjà volumineuse (checklist, historique Outlook...) alors
+// que l'ajout d'une note n'a besoin de connaître ni les autres champs, ni même le contenu actuel
+// de `notesLog` (l'élément posé a son propre id généré, jamais un remplacement). Remplacé par
+// `storage.appendToArray()` (voir son commentaire détaillé dans storage.js) : écriture Firestore
+// ciblée sur le seul champ `notesLog`, sans lecture préalable. Ne renvoie plus le tableau complet
+// (jamais relu ici) mais la note ajoutée seule — voir js/views/kanban.js#openTaskDetail pour la
+// reconstruction de `task.notesLog` côté appelant.
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  // BUG corrigé (15/09/2026, audit "anomalies silencieuses") : storage.update() sérialise la
-  // séquence lecture-modification-écriture par document — voir son commentaire détaillé dans
-  // js/services/storage.js. Deux ajouts (note, sous-étape...) sur la MÊME tâche à quelques
-  // millisecondes d'intervalle ne peuvent plus s'écraser l'un l'autre.
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Tâche introuvable : " + id);
-    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
-  });
+  const note = { id: generateId(), text: trimmed, createdAt: Date.now() };
+  await storage.appendToArray(COLLECTION, id, "notesLog", note);
   await storage.logHistory("Task", id, "note_added", { text: trimmed });
-  return updated.notesLog;
+  return note;
 }
 
 /**
@@ -122,14 +125,17 @@ export async function addNote(id, text) {
  * plusieurs fois par jour, journaliser chaque case ferait du bruit dans le fil d'audit sans
  * rien apporter — même choix que toggleStep().
  */
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée — même raisonnement que
+// addNote() ci-dessus. `toggleChecklistItem`/`removeChecklistItem` juste en dessous restent sur
+// `storage.update()` : ils doivent localiser un élément EXISTANT par son id pour le modifier ou
+// le retirer, ce que `arrayUnion` ne peut pas exprimer (voir le commentaire de
+// `storage.appendToArray()`).
 export async function addChecklistItem(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Tâche introuvable : " + id);
-    return { checklist: [...(current.checklist || []), { id: generateId(), text: trimmed, done: false }] };
-  });
-  return updated.checklist;
+  const item = { id: generateId(), text: trimmed, done: false };
+  await storage.appendToArray(COLLECTION, id, "checklist", item);
+  return item;
 }
 
 export async function toggleChecklistItem(id, itemId, done) {
@@ -160,11 +166,12 @@ export async function removeChecklistItem(id, itemId) {
  * depuis. Volontairement sans historique dédié, même principe que la checklist ci-dessus —
  * une information qu'on ajuste au fil de l'eau, pas un événement à journaliser.
  */
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée : la nouvelle valeur ne dépend
+// jamais de l'ancienne (remplacement inconditionnel), donc `storage.setFields()` évite la lecture
+// préalable que `storage.update()` imposait ici sans raison — voir le commentaire détaillé de
+// `storage.setFields()` dans storage.js.
 export async function setWaitingNote(id, text) {
-  return storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Tâche introuvable : " + id);
-    return { waitingOn: (text || "").trim() };
-  });
+  return storage.setFields(COLLECTION, id, { waitingOn: (text || "").trim() });
 }
 
 /** Coche/décoche une étape du canevas Communication — même principe que projects.js/meetings.js.
@@ -188,13 +195,17 @@ export async function toggleStep(id, stepKey, done) {
 // ci-dessus journalise déjà ses événements — ces deux fonctions ne journalisaient rien, alors
 // qu'une réunion Outlook rattachée/détachée est une information tout aussi structurante pour la
 // tâche que l'ajout d'une note.
+// Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée — même raisonnement que
+// addNote()/addChecklistItem() ci-dessus. Renvoie désormais la réunion ajoutée seule (plus le
+// document complet) — voir js/views/kanban.js pour la reconstruction de `task.outlookMeetings`
+// côté appelant. `removeOutlookMeeting()` juste en dessous reste sur `storage.update()` : il a
+// besoin de relire le titre de l'élément retiré pour l'historique, une lecture que `arrayRemove`
+// ne fournit pas.
 export async function addOutlookMeeting(id, { title, date }) {
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Tâche introuvable : " + id);
-    return { outlookMeetings: [...(current.outlookMeetings || []), { id: generateId(), title, date: date || null }] };
-  });
+  const meeting = { id: generateId(), title, date: date || null };
+  await storage.appendToArray(COLLECTION, id, "outlookMeetings", meeting);
   await storage.logHistory("Task", id, "outlook_meeting_added", { title });
-  return updated;
+  return meeting;
 }
 
 export async function removeOutlookMeeting(id, outlookId) {
