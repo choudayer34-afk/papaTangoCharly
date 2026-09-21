@@ -914,6 +914,12 @@ function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredC
         <div class="item-meta">${meta} · Ajouté le ${formatDate(f.createdAt)}</div>
       </div>
       <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
+      ${f.status !== "done" ? `
+        <div class="followup-quick-actions">
+          <button type="button" class="followup-quick-btn" data-quick-relance title="Relancer" aria-label="Relancer">🔁</button>
+          <button type="button" class="followup-quick-btn" data-quick-done title="Marquer réglé" aria-label="Marquer réglé">✅</button>
+        </div>
+      ` : ""}
     `;
     if (coveredIds) {
       const checkWrap = row.querySelector(".covered-check");
@@ -924,6 +930,33 @@ function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredC
         else coveredIds.delete(f.id);
         row.classList.toggle("item-row-covered", e.target.checked);
         onCoveredChange?.();
+      });
+    }
+    // TODO-004 (LOT 2, 21/09/2026) : action rapide "🔁 Relancer / ✅ Réglé" à 1 clic, sans ouvrir
+    // la fiche complète — même principe que .covered-check ci-dessus (stopPropagation pour ne
+    // pas déclencher aussi le clic sur `row`). `appendFollowUpRows` est appelé depuis 3 contextes
+    // différents (liste "👀 Suivis" — redessinée par followUpsApi.subscribe —, mais aussi la
+    // fiche Personne et la préparation de point, qui affichent un instantané non réactif) : la
+    // ligne est donc mise à jour ICI, localement, plutôt que de compter sur un redessin externe
+    // qui n'arrive pas dans ces deux derniers cas.
+    const quickActions = row.querySelector(".followup-quick-actions");
+    if (quickActions) {
+      quickActions.addEventListener("click", (e) => e.stopPropagation());
+      const badgeEl = row.querySelector(".badge");
+      quickActions.querySelector("[data-quick-relance]").addEventListener("click", async () => {
+        await followUpsApi.setStatus(f.id, "relaunched");
+        f.status = "relaunched";
+        badgeEl.className = "badge badge-relaunched";
+        badgeEl.textContent = followUpsApi.STATUS_LABELS.relaunched;
+        showToast("Suivi relancé");
+      });
+      quickActions.querySelector("[data-quick-done]").addEventListener("click", async () => {
+        await followUpsApi.setStatus(f.id, "done");
+        f.status = "done";
+        badgeEl.className = "badge badge-done";
+        badgeEl.textContent = followUpsApi.STATUS_LABELS.done;
+        quickActions.remove();
+        showToast("Suivi réglé");
       });
     }
     row.addEventListener("click", () => (onOpen ? onOpen(f) : openEditFollowUpModal(f)));
