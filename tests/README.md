@@ -9,9 +9,35 @@ l'exception d'une dérogation ciblée et documentée dans `js/services/firebase.
 `AUDIT_TESTS.md` — TEST-001, TEST-002, TEST-006, TEST-018 (partiellement), TEST-020, TEST-021,
 TEST-027. Les 20 autres restent en backlog non planifié (section 4.2 de `TODO_TECHNIQUE.md`).
 
-## ⚠️ État au 21/09/2026 : premier passage GitHub Actions en cours de correction
+## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
-**Correction du 21/09/2026** : le premier lancement réel du workflow GitHub Actions
+**3ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 3/9 → corrections apportées)** :
+une fois les deux problèmes d'infrastructure précédents résolus, `npm run test:rules` est passé
+au vert (12/12). `npm run test:e2e` a lui révélé 6 échecs, tous diagnostiqués :
+
+- **3 échecs `unit/isEmailAllowed.spec.js` (TEST-001)** — `FirebaseError: false for 'get'`. La
+  règle corrigée en LOT 0A (FIREBASE-002/SEC-004) n'autorise la lecture de
+  `allowedUsers/{email}` que par son propre titulaire authentifié ; le test appelait
+  `isEmailAllowed()` pour trois emails différents (inconnu, alice, bob) sans jamais se
+  connecter. Corrigé en ajoutant un compte Auth émulateur par email testé
+  (`e2e/global-setup.js#UNIT_TEST_USERS`) et une connexion (`signInEmail`) avant chaque
+  vérification.
+- **3 échecs `e2e/capture-qualification.spec.js`, `e2e/projet-creation-cloture.spec.js` et
+  `unit/regressions.spec.js` (TEST-020, TEST-021, TEST-018)** — `.fab`/boutons jamais visibles
+  après connexion. Ces trois fichiers naviguent directement vers `/index.html` (la vraie page de
+  l'app) sans jamais poser `globalThis.__PILOTAGE_USE_FIREBASE_EMULATOR__ = true` : contrairement
+  à `support/harness.html` (qui le pose via un `<script>` classique avant l'import du module),
+  rien ne posait ce drapeau pour ces trois tests — l'app se connectait donc à la vraie production
+  Firebase, où le compte de test `alice@example.com` n'existe pas, faisant échouer la connexion
+  silencieusement. Corrigé en ajoutant `page.addInitScript(() => { window.__PILOTAGE_USE_FIREBASE_EMULATOR__ = true; })`
+  avant le premier `page.goto()` de chacun de ces trois fichiers.
+
+Aucun fichier applicatif n'a été touché par ces corrections — uniquement des fichiers de ce
+dossier `tests/`. Un bug distinct, trouvé par `test:rules` lors de ce même passage et corrigé
+dans `firestore.rules` lui-même (pas un problème de test), est documenté dans `TODO_TECHNIQUE.md`
+→ TODO-001.
+
+**2ᵉ correction du 21/09/2026** : le premier lancement réel du workflow GitHub Actions
 (`.github/workflows/tests.yml`) a échoué dès `npm run test:rules` avec
 `Error: ../firestore.rules is outside of project directory`. Le CLI Firebase interdit qu'un
 fichier référencé dans `firebase.json` (ici, `firestore.rules`) se trouve en dehors du dossier
