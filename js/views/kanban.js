@@ -18,6 +18,7 @@ import * as preferencesApi from "../domain/preferences.js";
 import * as casquettesApi from "../domain/casquettes.js";
 import * as pilotageView from "../services/pilotageViewStore.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
+import { validateRequiredFields, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
@@ -114,6 +115,13 @@ export function renderKanban(container) {
            kanban-project-filter, kanban-group-by...) : tout le câblage plus bas continue de
            cibler les mêmes éléments, seul leur emplacement dans le DOM change. -->
       <div class="chip-row" id="kanban-filters" style="flex-wrap:wrap;">
+        <!-- "+ Tâche" (LOT 1, TODO-007 — UX-001/AUDIT_USAGE_EFFICACITE.md : "aucun point
+             d'entrée de création de tâche depuis l'écran Pilotage", contrairement au Projet, qui
+             a déjà son "+ Projet" au même endroit de sa propre vue, voir js/views/projects.js).
+             Ouvre le même formulaire que partout ailleurs (openCreateTaskModal), sans projet
+             préassigné — la tâche créée apparaît automatiquement via l'abonnement temps réel
+             tasksApi.subscribe() ci-dessous, pas besoin d'un rafraîchissement manuel. -->
+        <button id="new-task-btn" class="btn btn-primary btn-sm">+ Tâche</button>
         <button type="button" class="chip" data-view="trello">🗂️ Trello</button>
         <button type="button" class="chip" data-view="table">📊 Tableau</button>
         <span id="kanban-status-info"></span>
@@ -163,6 +171,7 @@ export function renderKanban(container) {
   );
   renderInfoTip(container.querySelector("#kanban-hat-info"), casquettesApi.HAT_INFO_HTML);
   renderInfoTip(container.querySelector("#kanban-status-info"), tasksApi.STATUS_INFO_HTML);
+  container.querySelector("#new-task-btn").addEventListener("click", () => openCreateTaskModal());
 
   const board = container.querySelector("#kanban-board");
   const tableEl = container.querySelector("#kanban-table");
@@ -1317,11 +1326,13 @@ export async function openCreateTaskModal(prefill = {}) {
         ${projects.map((p) => `<option value="${p.id}" ${p.id === prefill.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
-    <div class="field" style="display:flex;align-items:center;gap:8px;">
-      <input id="new-task-communication" type="checkbox" style="width:auto;" ${prefill.communication ? "checked" : ""} />
-      <label for="new-task-communication" style="margin:0;">📣 C'est une communication (article, message) — activer son canevas de production</label>
-    </div>
   `;
+  // Case "📣 C'est une communication" retirée d'ici (LOT 1, TODO-007 — UX-010 : décision validée
+  // par Charles-Henri le 15/09/2026, "réglage avancé exposé sans expliquer sa conséquence" au
+  // moment même de la création). Le choix du canevas de communication se fait désormais après
+  // coup, depuis la fiche détail — voir openTaskDetail ci-dessous, bouton "📣 Activer le canevas
+  // de communication" et tasksApi.enableCommunicationCanevas().
+  clearFieldErrorOnInput(body, ["#new-task-title"]);
   attachProjectQuickCreate(body.querySelector("#new-task-project"), {
     reopen: (newProjectId) => {
       openCreateTaskModal({
@@ -1329,7 +1340,6 @@ export async function openCreateTaskModal(prefill = {}) {
         title: body.querySelector("#new-task-title").value,
         description: body.querySelector("#new-task-description").value,
         dueDate: body.querySelector("#new-task-due").value,
-        communication: body.querySelector("#new-task-communication").checked,
         projectId: newProjectId !== null ? newProjectId : body.querySelector("#new-task-project").value || null,
       });
     },
@@ -1344,15 +1354,16 @@ export async function openCreateTaskModal(prefill = {}) {
         variant: "primary",
         closesModal: false,
         onClick: async () => {
+          // Retour visuel explicite sur champ obligatoire vide (LOT 1, TODO-006 — UX-002 :
+          // remplace l'ancien `if (!title) return;` muet, qui laissait la modale identique sans
+          // aucun signe que le clic avait échoué).
+          if (!validateRequiredFields(bodyEl, [{ selector: "#new-task-title", label: "Le titre" }])) return;
           const title = bodyEl.querySelector("#new-task-title").value.trim();
-          if (!title) return;
-          const isCommunication = bodyEl.querySelector("#new-task-communication").checked;
           const payload = {
             title,
             description: bodyEl.querySelector("#new-task-description").value.trim(),
             dueDate: bodyEl.querySelector("#new-task-due").value || null,
             projectId: bodyEl.querySelector("#new-task-project").value || null,
-            type: isCommunication ? "communication" : "action",
           };
           const task = prefill.createFn ? await prefill.createFn(payload) : await tasksApi.createTask(payload);
           close();
@@ -1452,6 +1463,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         <input id="detail-blocked" type="checkbox" style="width:auto;" ${task.isBlocked ? "checked" : ""} />
         <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
       </div>
+      <!-- Réglage avancé "Communication" (LOT 1, TODO-007 — UX-010), déplacé ici depuis le
+           formulaire de création : à sens unique, comme l'était la case à cocher qu'il remplace
+           (aucun chemin ne désactivait un canevas déjà actif). -->
+      ${task.type !== "communication" ? `
+      <div class="field">
+        <button type="button" id="detail-enable-communication" class="btn btn-secondary btn-sm">📣 Activer le canevas de communication</button>
+      </div>
+      ` : ""}
       <div id="detail-canevas"></div>
     </div>
 
@@ -1525,6 +1544,7 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     </div>
   `;
 
+  clearFieldErrorOnInput(body, ["#detail-title"]);
   attachProjectQuickCreate(body.querySelector("#detail-project"), {
     // Contrairement à un simple formulaire de création, cette fiche modifie une Tâche déjà
     // existante : plutôt que de perdre silencieusement Titre/Description/Critère/Échéance/
@@ -1544,6 +1564,25 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       const updated = await tasksApi.updateTask(task.id, patch);
       openTaskDetail(updated, projects, { onClose });
     },
+  });
+
+  // "📣 Activer le canevas de communication" (LOT 1, TODO-007 — UX-010) : même principe que le
+  // rattachement quick-create juste au-dessus — enregistre d'abord les champs déjà modifiés dans
+  // cette fiche (mêmes champs que "💾 Enregistrer"), pour ne rien perdre en rouvrant la fiche une
+  // fois le canevas activé.
+  body.querySelector("#detail-enable-communication")?.addEventListener("click", async () => {
+    const patch = {
+      title: body.querySelector("#detail-title").value.trim() || task.title,
+      description: body.querySelector("#detail-description").value,
+      successCriteria: body.querySelector("#detail-criteria").value,
+      dueDate: body.querySelector("#detail-due").value || null,
+      status: body.querySelector("#detail-status").value,
+      isBlocked: body.querySelector("#detail-blocked").checked,
+      projectId: body.querySelector("#detail-project").value || null,
+    };
+    await tasksApi.updateTask(task.id, patch);
+    const updated = await tasksApi.enableCommunicationCanevas(task.id);
+    openTaskDetail(updated, projects, { onClose });
   });
 
   // "Remonter au projet depuis la Tâche" (retour de Charles-Henri, 13/09/2026 : "quand je suis
@@ -1829,8 +1868,10 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         compact: true,
         closesModal: false,
         onClick: async () => {
+          // Même échec silencieux que openCreateTaskModal (UX-002) — corrigé ici aussi, en
+          // modification, pas seulement à la création.
+          if (!validateRequiredFields(bodyEl, [{ selector: "#detail-title", label: "Le titre" }])) return;
           const title = bodyEl.querySelector("#detail-title").value.trim();
-          if (!title) return;
           const newStatus = bodyEl.querySelector("#detail-status").value;
           const prevStatus = task.status;
           await tasksApi.updateTask(task.id, {
