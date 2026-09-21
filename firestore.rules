@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// firestore.rules — versionné pour la première fois le 15/09/2026 (TODO-001 / LOT 0A,
+// voir TODO_TECHNIQUE.md). Avant ce fichier, le texte des règles n'existait que recopié dans
+// des commentaires/tutoriels de l'application (js/components/adminPanel.js,
+// js/services/usageTracking.js) et dans la console Firebase elle-même, sans aucune garantie
+// qu'ils restent synchronisés (SEC-003).
+//
+// IMPORTANT — ce fichier n'a PAS encore été comparé ligne à ligne au contenu réel de l'onglet
+// Rules de la console Firebase du projet `papatangocharly`, et n'a pas été déployé depuis cet
+// environnement (aucun accès réseau au projet Firebase réel, comme documenté dans
+// AUDIT_SECURITY.md/AUDIT_FIREBASE.md). Cette vérification, puis le déploiement, restent une
+// action à réaliser par Charles-Henri depuis la console (accès requis, hors de cet
+// environnement) — voir TODO_TECHNIQUE.md → TODO-001, section "Validation". Tant que cette
+// vérification n'a pas eu lieu, aucune des corrections ci-dessous ne doit être considérée
+// comme "validée en production", seulement comme préparée.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- allowedUsers : liste blanche des comptes autorisés à utiliser Pilotage -------------
+    // Un document par email autorisé (voir js/services/firebase.js#isEmailAllowed). Le champ
+    // `disabled` (absent = compte autorisé) reflète la fermeture/réouverture faite depuis
+    // "👥 Comptes" (js/services/accountAdmin.js#setAccountClosed).
+    match /allowedUsers/{email} {
+      // FIREBASE-002 / SEC-004 : la règle précédemment déployée ouvrait `read` (qui recouvre
+      // à la fois get ET list en Firestore) à n'importe quel utilisateur authentifié, ce qui
+      // permettait à quiconque de lister l'intégralité des emails invités en une requête.
+      // Corrigé ici : chacun ne peut consulter QUE son propre statut (ce qui suffit à
+      // isEmailAllowed(), qui n'interroge jamais que l'email de l'utilisateur courant, voir
+      // js/app.js) ; seul l'administrateur peut lister l'ensemble de la collection (panneau
+      // "👥 Comptes", js/services/accountAdmin.js#listAccounts).
+      allow get: if request.auth != null
+                  && request.auth.token.email.lower() == email;
+      allow list: if request.auth != null
+                   && request.auth.token.email.lower() == "ch-houdayer@hotmail.fr";
+
+      // Écriture réservée à l'administrateur. L'invitation initiale d'un nouveau compte reste
+      // manuelle depuis la console (voir le tutoriel 🔥 Firebase de adminPanel.js), mais la
+      // fermeture/réouverture d'un compte (`setAccountClosed`) et le marquage de vidage
+      // (`markAccountContentWiped`) se font depuis l'app elle-même
+      // (js/services/accountAdmin.js, fonctionnalité "👥 Comptes" livrée le 14/09/2026) et ont
+      // donc besoin d'un accès en écriture pour l'admin sur ce document.
+      // Point d'attention (découvert en préparant ce fichier, non rattaché à un identifiant
+      // SEC/FIREBASE existant) : le tutoriel in-app documentait jusqu'ici `allow write: if
+      // false` sur cette collection ("Charles-Henri gère l'invitation à la main") — si c'était
+      // réellement le texte déployé, cela aurait bloqué "👥 Comptes" en permission-denied.
+      // Corrigé ici pour rester fidèle au comportement attendu de cette fonctionnalité déjà
+      // livrée ; À VÉRIFIER EN PRIORITÉ dans la console (voir TODO-001, "Éléments restant à
+      // valider").
+      allow write: if request.auth != null
+                    && request.auth.token.email.lower() == "ch-houdayer@hotmail.fr";
+    }
+
+    // --- users/{uid} : espace de données applicatif propre à chaque utilisateur -------------
+    match /users/{uid}/{document=**} {
+      // SEC-001 : la liste blanche est bien appliquée au niveau de la règle elle-même (confirmé
+      // réel par FIREBASE-001), pas seulement côté client (js/app.js#onAuthChange) — corrige
+      // l'hypothèse la plus pessimiste envisagée dans AUDIT_SECURITY.md.
+      // FIREBASE-001 : la vérification ne portait jusqu'ici que sur l'EXISTENCE du document
+      // `allowedUsers/{email}`, jamais sur son champ `disabled` — fermer un compte depuis
+      // "👥 Comptes" ne révoquait donc pas l'accès Firestore direct tant qu'une session/jeton
+      // restait valide (jusqu'à ~1h, voir FIREBASE-001). Corrigé ici en vérifiant
+      // explicitement `disabled`, comme recommandé dans AUDIT_FIREBASE.md.
+      allow read, write: if request.auth != null
+                           && request.auth.uid == uid
+                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.disabled != true;
+
+      // SEC-002 : accès administrateur large à TOUTES les données de tous les utilisateurs,
+      // nécessaire à l'export/suppression de compte depuis "👥 Comptes"
+      // (js/services/firebase.js#exportAllUserData/deleteAllUserData). Décision produit du
+      // 15/09/2026 (Charles-Henri — voir TODO_TECHNIQUE.md, section 1) : cet accès permanent
+      // est CONSERVÉ ET ASSUMÉ comme choix d'architecture, il n'est PAS limité dans le temps.
+      // Une Cloud Function avec Admin SDK (bypass des règles côté serveur) reste une
+      // alternative théorique, non retenue — elle représenterait un changement d'architecture
+      // hors périmètre de cette roadmap.
+      allow read, write: if request.auth != null
+                           && request.auth.token.email.lower() == "ch-houdayer@hotmail.fr";
+    }
+
+    // --- usageEvents : suivi d'usage superadmin ---------------------------------------------
+    // HORS PÉRIMÈTRE de TODO-001 (ni SEC-001..005, ni FIREBASE-001/002 ne portent sur cette
+    // collection). Corrigé le 20/09/2026 (retour de Charles-Henri) : la version précédente,
+    // recopiée depuis le commentaire de js/services/usageTracking.js, avait perdu deux
+    // vérifications par rapport à la règle réellement voulue — la présence dans la liste
+    // blanche (n'importe quel compte Google authentifié pouvait sinon écrire ici) et
+    // l'anti-usurpation du `uid`. Rétabli ci-dessous à l'identique de la règle de référence.
+    match /usageEvents/{eventId} {
+      allow create: if request.auth != null
+                      && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower()))
+                      && request.resource.data.email == request.auth.token.email.lower()
+                      && request.resource.data.uid == request.auth.uid;
+      allow read: if request.auth != null
+                      && request.auth.token.email.lower() == "ch-houdayer@hotmail.fr";
+      allow update, delete: if false;
+    }
+  }
+}
