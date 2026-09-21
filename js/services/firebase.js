@@ -11,11 +11,13 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   signOut,
+  connectAuthEmulator,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
+  connectFirestoreEmulator,
   doc,
   getDoc,
   collection,
@@ -41,6 +43,20 @@ export const auth = getAuth(app);
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
 });
+
+// Dérogation exceptionnelle LOT 0B (TODO-002, voir TODO_TECHNIQUE.md) : permet aux tests
+// (émulateur Firebase + les 2 parcours E2E, TEST-001/006/018/020/021) de faire tourner l'app
+// contre l'émulateur local plutôt que contre le projet de production `papatangocharly` — sans
+// ça, ces tests écriraient dans de vraies données et la connexion Google ne peut de toute façon
+// pas être automatisée. INACTIF PAR DÉFAUT, ne change RIEN au comportement de production : ne
+// se déclenche que si `globalThis.__PILOTAGE_USE_FIREBASE_EMULATOR__` a été posé à `true` AVANT
+// le chargement de ce module (le harnais de test le fait via un script d'initialisation de
+// page, jamais l'app elle-même). Doit rester la SEULE dérogation de ce lot à « aucun fichier
+// applicatif modifié » — voir tests/README.md pour l'usage exact.
+if (globalThis.__PILOTAGE_USE_FIREBASE_EMULATOR__ === true) {
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+}
 
 export function onAuthChange(callback) {
   return onAuthStateChanged(auth, callback);
