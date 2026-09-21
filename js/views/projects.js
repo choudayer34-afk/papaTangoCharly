@@ -12,6 +12,7 @@ import * as historyApi from "../domain/history.js";
 import * as preferencesApi from "../domain/preferences.js";
 import * as pilotageView from "../services/pilotageViewStore.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
+import { validateRequiredFields, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
@@ -581,6 +582,38 @@ export function attachProjectQuickCreate(selectEl, { reopen } = {}) {
   });
 }
 
+/**
+ * Confirmation avant création silencieuse d'une nouvelle catégorie (LOT 1, TODO-006 — UX-008/
+ * AUDIT_USAGE_EFFICACITE.md : "une catégorie de projet peut être dupliquée sans confirmation",
+ * ex. faute de frappe créant "Cse" à côté de "CSE" existant). `existingNames` porte les
+ * catégories déjà enregistrées (`preferencesApi`) : une correspondance insensible à la casse
+ * réutilise le nom existant tel quel plutôt que de proposer une confirmation inutile pour ce qui
+ * n'est, à la casse près, pas une nouvelle catégorie. Seul un nom réellement absent déclenche la
+ * confirmation. Renvoie `null` si l'utilisateur annule (aucune catégorie ne doit alors être
+ * appliquée), sinon le nom à utiliser.
+ * @param {string} rawName
+ * @param {string[]} existingNames
+ * @returns {Promise<string|null>}
+ */
+function resolveCategoryName(rawName, existingNames) {
+  const trimmed = rawName.trim();
+  if (!trimmed) return Promise.resolve(null);
+  const existingMatch = existingNames.find((n) => n.toLowerCase() === trimmed.toLowerCase());
+  if (existingMatch) return Promise.resolve(existingMatch);
+  return new Promise((resolve) => {
+    const body = document.createElement("div");
+    body.textContent = `« ${trimmed} » n'existe pas encore parmi tes catégories de projet. La créer ?`;
+    openModal({
+      title: "Nouvelle catégorie ?",
+      body,
+      actions: [
+        { label: "Annuler", variant: "ghost", onClick: () => resolve(null) },
+        { label: "Créer la catégorie", variant: "primary", onClick: () => resolve(trimmed) },
+      ],
+    });
+  });
+}
+
 export async function openCreateProjectModal(prefill = {}) {
   const prefs = await preferencesApi.getPreferences();
   const categoryNames = Object.keys(prefs.categories || {});
@@ -593,7 +626,7 @@ export async function openCreateProjectModal(prefill = {}) {
     </div>
     <div class="field">
       <label for="project-category">Catégorie (optionnel — CSE, Modernisation...)</label>
-      <input id="project-category" type="text" list="project-category-options" placeholder="Choisir ou créer une catégorie" />
+      <input id="project-category" type="text" list="project-category-options" value="${escapeAttr(prefill.category || "")}" placeholder="Choisir ou créer une catégorie" />
       <datalist id="project-category-options">
         ${categoryNames.map((c) => `<option value="${escapeAttr(c)}"></option>`).join("")}
       </datalist>
@@ -608,6 +641,7 @@ export async function openCreateProjectModal(prefill = {}) {
     </div>
     <div>${guideLinkHtml("usecase-nouveau-projet", "📖 Par où commencer sur un nouveau projet")}</div>
   `;
+  clearFieldErrorOnInput(body, ["#project-name"]);
   const { bodyEl, close } = openModal({
     title: "Nouveau projet",
     body,
@@ -618,16 +652,26 @@ export async function openCreateProjectModal(prefill = {}) {
         variant: "primary",
         closesModal: false,
         onClick: async () => {
+          // Retour visuel explicite sur champ obligatoire vide (LOT 1, TODO-006 — UX-002).
+          if (!validateRequiredFields(bodyEl, [{ selector: "#project-name", label: "Le nom" }])) return;
           const name = bodyEl.querySelector("#project-name").value.trim();
-          if (!name) return;
-          const category = bodyEl.querySelector("#project-category").value.trim();
-          if (category) await preferencesApi.registerCategory(category);
-          const project = await projectsApi.createProject({
-            name,
-            category: category || null,
-            objective: bodyEl.querySelector("#project-objective").value.trim(),
-            critical: bodyEl.querySelector("#project-critical").checked,
-          });
+          const rawCategory = bodyEl.querySelector("#project-category").value.trim();
+          const objective = bodyEl.querySelector("#project-objective").value.trim();
+          const critical = bodyEl.querySelector("#project-critical").checked;
+          // Confirmation avant création silencieuse d'une nouvelle catégorie (UX-008) : ouvre sa
+          // propre modale, qui referme celle-ci (une seule modale à la fois, voir modal.js) — en
+          // cas d'annulation, on rouvre le formulaire avec tout ce qui avait déjà été saisi,
+          // même principe que le rattachement quick-create (attachProjectQuickCreate ci-dessus).
+          let category = null;
+          if (rawCategory) {
+            category = await resolveCategoryName(rawCategory, categoryNames);
+            if (category === null) {
+              openCreateProjectModal({ ...prefill, name, category: rawCategory, objective, critical });
+              return;
+            }
+            await preferencesApi.registerCategory(category);
+          }
+          const project = await projectsApi.createProject({ name, category, objective, critical });
           close();
           showToast("Projet créé");
           prefill.onCreated?.(project);
@@ -808,6 +852,8 @@ export async function openProjectDetail(project, tasks) {
       </div>
     </div>
   `;
+
+  clearFieldErrorOnInput(body, ["#detail-name"]);
 
   // Bascule d'onglet — même mécanique que la fiche Tâche (voir js/views/kanban.js#openTaskDetail) :
   // chaque panneau existe en permanence, seul l'attribut `hidden` change.
@@ -1168,9 +1214,26 @@ export async function openProjectDetail(project, tasks) {
         closesModal: false,
         onClick: () => {
           closeModal();
+          // Impact réel avant confirmation (LOT 1, TODO-007 — UX-001/DATA-003/AUDIT_USAGE_
+          // EFFICACITE.md : "supprimer un Projet [...] ne prévient jamais du nombre d'entités qui
+          // en dépendent"). Comptes déjà calculés plus haut dans cette même fonction (tasks,
+          // linkedFollowUps, linkedMeetings, linkedDecisions, linkedResources) — pas de requête
+          // supplémentaire. `removeProject` ne cascade toujours pas (politique assumée, voir
+          // js/domain/projects.js) : ces entités perdent seulement leur lien, elles ne sont pas
+          // supprimées avec le projet.
+          const impactParts = [
+            tasks.length ? `${tasks.length} tâche${tasks.length > 1 ? "s" : ""}` : null,
+            linkedFollowUps.length ? `${linkedFollowUps.length} suivi${linkedFollowUps.length > 1 ? "s" : ""}` : null,
+            linkedMeetings.length ? `${linkedMeetings.length} réunion${linkedMeetings.length > 1 ? "s" : ""}` : null,
+            linkedDecisions.length ? `${linkedDecisions.length} décision${linkedDecisions.length > 1 ? "s" : ""}` : null,
+            linkedResources.length ? `${linkedResources.length} ressource${linkedResources.length > 1 ? "s" : ""}` : null,
+          ].filter(Boolean);
+          const impactSentence = impactParts.length
+            ? ` ${new Intl.ListFormat("fr", { type: "conjunction" }).format(impactParts)} qui lui étaient rattaché(e)s ne seront pas supprimé(e)s — ils perdent simplement leur lien vers ce projet.`
+            : " Rien n'y est rattaché aujourd'hui.";
           confirmDelete({
             title: "Supprimer ce projet ?",
-            message: `« ${project.name} » sera définitivement supprimé. Les tâches, suivis, réunions, décisions et ressources qui lui étaient rattachés ne sont pas supprimés — ils perdent simplement leur lien vers ce projet.`,
+            message: `« ${project.name} » sera définitivement supprimé.${impactSentence}`,
             onConfirm: async () => {
               await projectsApi.removeProject(project.id);
               showToast("Projet supprimé");
@@ -1186,13 +1249,26 @@ export async function openProjectDetail(project, tasks) {
         compact: true,
         closesModal: false,
         onClick: async () => {
+          // Retour visuel explicite sur champ obligatoire vide (LOT 1, TODO-006 — UX-002).
+          if (!validateRequiredFields(bodyEl, [{ selector: "#detail-name", label: "Le nom" }])) return;
           const name = bodyEl.querySelector("#detail-name").value.trim();
-          if (!name) return;
-          const category = bodyEl.querySelector("#detail-category").value.trim();
-          if (category) await preferencesApi.registerCategory(category);
+          const rawCategory = bodyEl.querySelector("#detail-category").value.trim();
+          // Confirmation avant création silencieuse d'une nouvelle catégorie (UX-008) — même
+          // principe que openCreateProjectModal ci-dessus. En cas d'annulation, la fiche se
+          // rouvre fraîche (même convention que "Fermer"/"Supprimer" plus haut dans cette même
+          // fiche : la confirmation referme déjà la fiche, voir modal.js#openModal).
+          let category = null;
+          if (rawCategory) {
+            category = await resolveCategoryName(rawCategory, Object.keys(prefs.categories || {}));
+            if (category === null) {
+              openProjectDetail(project, tasks);
+              return;
+            }
+            await preferencesApi.registerCategory(category);
+          }
           await projectsApi.updateProject(project.id, {
             name,
-            category: category || null,
+            category,
             objective: bodyEl.querySelector("#detail-objective").value.trim(),
             successCriteria: bodyEl.querySelector("#detail-criteria").value.trim(),
             critical: bodyEl.querySelector("#detail-critical").checked,
