@@ -1066,6 +1066,15 @@ tbody.drag-over-group {
   border-radius: var(--radius-md);
   padding: var(--space-3);
   background: var(--color-surface);
+  /* BUG corrigé (LOT 10, TODO-023, BESOIN-003) : un `<button>` n'hérite PAS de la couleur de
+     texte de son parent par défaut (feuille de style du navigateur : `color: buttontext`,
+     un noir/gris foncé indépendant du thème de la page) — contrairement à `.btn`/`.btn-primary`
+     etc. plus haut, qui posent chacun leur propre `color`, `.choice-btn` ne le faisait pas.
+     Invisible en mode clair (noir sur fond clair, par coïncidence), mais illisible en mode
+     sombre (texte resté noir sur `--color-surface` devenu sombre) — exactement le "texte de
+     chaque élément en noir" signalé par Charles-Henri sur l'écran de traitement de l'Inbox
+     (js/views/inbox.js#openQualifyModal, aussi utilisé par js/components/linkedItems.js). */
+  color: var(--color-text);
   cursor: pointer;
   text-align: left;
   transition: border-color var(--transition), background var(--transition);
@@ -1488,8 +1497,17 @@ tbody.drag-over-group {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  background: var(--color-text);
-  color: var(--color-text-inverse);
+  /* BUG corrigé (LOT 10, TODO-023, BESOIN-003) : `background`/`color` utilisaient jusqu'ici
+     `--color-text`/`--color-text-inverse` — correct par coïncidence en mode clair
+     (`--color-text` alors foncé, donc pastille sombre + texte blanc), mais cassé en mode
+     sombre puisque `--color-text` s'y inverse en clair (#EDEFFB) : pastille quasi blanche avec
+     texte blanc dessus, illisible ("toasts à fond blanc avec écriture blanche" signalé par
+     Charles-Henri). `--color-toast-bg`/`--color-toast-text` (styles/tokens.css) sont des jetons
+     dédiés, jamais redéfinis en mode sombre : le toast reste la même pastille sombre à texte
+     blanc dans les deux thèmes, comme c'était déjà le cas visuellement en mode clair avant ce
+     correctif. */
+  background: var(--color-toast-bg);
+  color: var(--color-toast-text);
   padding: 10px 18px;
   border-radius: var(--radius-pill);
   font-size: var(--font-size-sm);
@@ -1502,7 +1520,7 @@ tbody.drag-over-group {
   flex: none;
   background: none;
   border: none;
-  color: var(--color-text-inverse);
+  color: var(--color-toast-text);
   font-weight: 700;
   text-decoration: underline;
   cursor: pointer;
