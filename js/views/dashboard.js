@@ -19,7 +19,7 @@ import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
-import { openEditFollowUpModal, openObjectiveDetail, renderObjectiveDetailsFieldset, groupObjectivesByPeriod } from "./people.js";
+import { openEditFollowUpModal, openObjectiveDetail, renderObjectiveDetailsFieldset, groupObjectivesByPeriod, openImportObjectiveTextModal } from "./people.js";
 import { openProjectDetail, attachProjectQuickCreate } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -1171,12 +1171,17 @@ export function renderDashboard(container) {
   /** Création d'un objectif personnel — même champs que la création d'un objectif de
    *  collaborateur (js/views/people.js#openCreateObjectiveModal), sans le champ Personne
    *  puisque `personId` reste `null` (voir openMyObjectivesModal ci-dessus). */
-  function openCreatePersonalObjectiveModal(projects, { onDone } = {}) {
+  function openCreatePersonalObjectiveModal(projects, { onDone, prefill } = {}) {
+    // Indicateurs importés en attente (mode import, 22/09/2026 — voir
+    // js/views/people.js#openImportObjectiveTextModal et son usage identique dans
+    // js/views/people.js#openCreateObjectiveModal) : même mécanique de mise en file, ajoutés en
+    // boucle juste après la création.
+    const queuedIndicators = prefill?.indicators || [];
     const body = document.createElement("div");
     body.innerHTML = `
       <div class="field">
         <label for="my-obj-title">Objectif</label>
-        <input id="my-obj-title" type="text" placeholder="Ex. Passer moins de temps en reporting, sécuriser la refonte X..." />
+        <input id="my-obj-title" type="text" placeholder="Ex. Passer moins de temps en reporting, sécuriser la refonte X..." value="${escapeAttr(prefill?.title || "")}" />
       </div>
       <div class="field">
         <label for="my-obj-project">Projet (optionnel)</label>
@@ -1188,6 +1193,10 @@ export function renderDashboard(container) {
             .join("")}
         </select>
       </div>
+      <div style="margin-bottom:8px;">
+        <button id="my-obj-import-text-btn" type="button" class="btn btn-secondary btn-sm">📋 Importer depuis un texte</button>
+      </div>
+      ${queuedIndicators.length ? `<div class="item-meta" style="margin-bottom:8px;">📊 ${queuedIndicators.length} indicateur(s) importé(s) seront ajoutés à la création.</div>` : ""}
       <div id="my-obj-details-fieldset"></div>
     `;
     attachProjectQuickCreate(body.querySelector("#my-obj-project"));
@@ -1196,7 +1205,14 @@ export function renderDashboard(container) {
     // modèle d'objectif, jamais deux formulaires distincts (voir le commentaire en tête de
     // openMyObjectivesModal ci-dessus). Reste optionnel : un objectif personnel simple n'a pas à
     // ouvrir ce bloc.
-    const details = renderObjectiveDetailsFieldset(body.querySelector("#my-obj-details-fieldset"));
+    const details = renderObjectiveDetailsFieldset(body.querySelector("#my-obj-details-fieldset"), prefill || {});
+    body.querySelector("#my-obj-import-text-btn").addEventListener("click", () => {
+      closeModal();
+      openImportObjectiveTextModal({
+        onParsed: (parsed) => openCreatePersonalObjectiveModal(projects, { onDone, prefill: parsed }),
+        onCancel: () => openCreatePersonalObjectiveModal(projects, { onDone, prefill }),
+      });
+    });
     const { bodyEl, close } = openModal({
       title: "Nouvel objectif",
       body,
@@ -1210,7 +1226,8 @@ export function renderDashboard(container) {
             const title = bodyEl.querySelector("#my-obj-title").value.trim();
             if (!title) return;
             const projectId = bodyEl.querySelector("#my-obj-project").value || null;
-            await objectivesApi.createObjective({ personId: null, title, projectId, ...details.read() });
+            const created = await objectivesApi.createObjective({ personId: null, title, projectId, ...details.read() });
+            for (const ind of queuedIndicators) await objectivesApi.addIndicator(created.id, ind);
             close();
             showToast("Objectif ajouté");
             onDone?.();
