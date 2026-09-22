@@ -21,6 +21,18 @@
 // js/views/people.js) qui ne les passent pas : leur ordre reste celui dans lequel les sous-étapes
 // ont été tapées, sans bouton de purge groupée, comme avant ce patch.
 //
+// (22/09/2026, retour direct de Charles-Henri) — `sortDoneToBottom` est désormais également
+// activé sur les checklists de Tâche (`js/views/kanban.js#openTaskDetail`) et de Suivi
+// (`js/views/people.js#openEditFollowUpModal`) : "idem pour les étapes, quand je coche une
+// étape, les étapes cochées se mettent après les non cochées et se trient du plus récent au
+// plus ancien." Le tri du groupe "coché" par date de coche décroissante (`doneAt`, déjà
+// horodaté par l'appelant à chaque coche — voir plus haut) est nouveau à cette occasion :
+// jusqu'ici `sortDoneToBottom` ne faisait que déplacer le groupe coché en bas, en conservant son
+// ordre d'origine à l'intérieur du groupe (voir `sortChecklistForDisplay` ci-dessous, exportée
+// pour être réutilisée à l'identique par le mini-aperçu de la carte Kanban, qui n'utilise pas ce
+// composant). Le groupe "non coché" garde son ordre d'origine (aucune autre date pertinente à y
+// appliquer), sans changement de comportement pour lui.
+//
 // Bouton "+" compact plutôt que "+ Ajouter" en toutes lettres (retour de Charles-Henri,
 // 14/09/2026 : "le + ajouter sort de la modale, il faudrait juste un + à côté du champ") — ce
 // composant vit aussi dans des modales de largeur contrainte (fiche Tâche/Suivi) où le bouton
@@ -29,6 +41,20 @@
 // du Pense-bête).
 
 import { guardClick } from "./modal.js";
+
+/**
+ * Tri d'affichage partagé (voir le commentaire du 22/09/2026 plus haut) : non cochés d'abord
+ * (ordre d'origine préservé), puis cochés, triés par date de coche la plus récente en premier
+ * (`doneAt` décroissant — les éléments cochés sans `doneAt`, cas hérité d'avant son introduction
+ * en vague 21, restent groupés à la fin de ce sous-groupe plutôt que de faire planter le tri).
+ * Exportée pour être réutilisée telle quelle par `js/views/kanban.js#renderCard` (mini-aperçu de
+ * checklist sur la carte, qui n'appelle pas `renderChecklist` ci-dessous).
+ */
+export function sortChecklistForDisplay(items) {
+  const notDone = items.filter((it) => !it.done);
+  const done = [...items.filter((it) => it.done)].sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  return [...notDone, ...done];
+}
 
 export function renderChecklist(
   container,
@@ -70,13 +96,10 @@ export function renderChecklist(
       listEl.innerHTML = `<div class="empty-state" style="padding:12px;">${emptyLabel}</div>`;
       return;
     }
-    // Les éléments cochés descendent en bas de la liste (retour de Charles-Henri, 14/09/2026 :
-    // "pour que les éléments restants soit toujours visible en premier") — un simple tri stable
-    // par groupe (non cochés puis cochés), qui préserve l'ordre relatif à l'intérieur de chaque
-    // groupe plutôt que de trier par date de coche ou de tout mélanger.
-    const visible = sortDoneToBottom
-      ? [...current.filter((it) => !it.done), ...current.filter((it) => it.done)]
-      : current;
+    // Les éléments cochés descendent en bas de la liste, triés entre eux par date de coche la
+    // plus récente en premier (retour de Charles-Henri, 14/09/2026 puis 22/09/2026 — voir le
+    // commentaire en tête de ce fichier) — voir `sortChecklistForDisplay` ci-dessus.
+    const visible = sortDoneToBottom ? sortChecklistForDisplay(current) : current;
     listEl.innerHTML = "";
     for (const item of visible) {
       const row = document.createElement("div");
