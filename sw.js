@@ -355,7 +355,26 @@
 // jour est retirée, devenue redondante avec le nouveau widget), `js/app.js` (montage/démontage du
 // widget), `styles/components.css` (styles du widget flottant). `CACHE_NAME` incrémenté en
 // conséquence.
-const CACHE_NAME = "pilotage-cache-v76";
+//
+// Complément du 24/09/2026 (retour direct de Charles-Henri) : (1) "🧠 Mon bureau" apparaît
+// désormais dans "Ordre des rubriques" (⚙️ Personnaliser l'accueil) même pour un compte ayant
+// déjà un ordre personnalisé enregistré avant l'ajout de cette rubrique (LOT 13, 22/09/2026) —
+// voir `js/views/dashboard.js#openDashboardSettingsModal`. (2) "🔍 Tout voir" prend désormais
+// toute la largeur disponible de la fenêtre (nouvelle option `wide` sur `openModal()`, voir
+// `js/components/modal.js` et la classe `.modal--wide`/`.bureau-full-canvas-wrap` dans
+// `styles/components.css`), avec défilement horizontal si un post-it se retrouve hors de la
+// zone visible (`js/components/bureau.js#recalcCanvasSize`, ex `recalcCanvasHeight`). Fichiers
+// précachés modifiés : `js/views/dashboard.js`, `js/components/bureau.js`,
+// `js/components/modal.js`, `styles/components.css`, `js/views/whatsnew.js` (nouvelle entrée).
+// `CACHE_NAME` incrémenté en conséquence.
+//
+// Correction du 25/09/2026 (CI, avant LOT G2 de TODO_GAMIFICATION.md — voir tests/README.md et
+// TODO_TECHNIQUE.md → LOT 13, "Correction du 25/09/2026") : `js/components/bureau.js` modifié
+// (bascule de mode texte/checklist du plan de travail complet rendue optimiste, même principe
+// déjà appliqué à `note.checklist`) — fichier précaché, `CACHE_NAME` incrémenté en conséquence.
+// Aucun autre fichier précaché touché par ce correctif (le fichier de test corrigé au passage,
+// tests/e2e/lot13-bureau-conversion.spec.js, ne fait pas partie de l'app livrée).
+const CACHE_NAME = "pilotage-cache-v78";
 const APP_SHELL = [
   "./",
   "./index.html",
