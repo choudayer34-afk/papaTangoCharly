@@ -21,8 +21,12 @@ import * as peopleApi from "../domain/people.js";
 import * as convertApi from "../domain/convert.js";
 import { fetchBundle, resolveRef } from "./linkedItems.js";
 
-const TARGET_LABELS = { task: "📝 Tâche", followup: "🔁 Suivi (collaborateur)", kept: "🧠 Information / 💡 Idée" };
-const SHORT_LABELS = { task: "Tâche", followup: "Suivi", kept: "Information/Idée" };
+// TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
+// (décision produit du 15/09/2026) : plus qu'une seule destination "kept" à l'affichage, le
+// choix "idée ou information" retiré ci-dessous (voir #convert-idea-field) ne servait de toute
+// façon qu'à distinguer un libellé désormais unique.
+const TARGET_LABELS = { task: "📝 Tâche", followup: "🔁 Suivi (collaborateur)", kept: "🧠 Information" };
+const SHORT_LABELS = { task: "Tâche", followup: "Suivi", kept: "Information" };
 const TARGET_ENTITY_TYPE = { task: "Task", followup: "FollowUp", kept: "Kept" };
 
 /**
@@ -40,7 +44,7 @@ export async function openChangeTypeModal(sourceType, entity, targets, { personN
   body.innerHTML = `
     <p class="item-meta" style="margin-bottom:16px;">
       Titre, description, projet, échéance, sous-étapes et notes (quand compatibles avec le
-      nouveau type) sont repris — une Information/Idée n'a pas de sous-étapes, celles-ci ne
+      nouveau type) sont repris — une Information n'a pas de sous-étapes, celles-ci ne
       peuvent donc pas la suivre dans ce cas précis. L'élément d'origine est supprimé après la
       conversion ; son historique garde une trace du lien vers le nouvel élément, mais pas ses
       tags ni ses éléments liés (🔗), qui restent orphelins.
@@ -58,17 +62,11 @@ export async function openChangeTypeModal(sourceType, entity, targets, { personN
         ${people.map((p) => `<option value="${p.id}">${p.type === "manager" ? "👔" : "👤"} ${p.name}</option>`).join("")}
       </select>
     </div>
-    <div class="field" id="convert-idea-field" style="display:none;">
-      <label class="chip-radio" style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="convert-is-idea" style="width:auto;" /> C'est plutôt une 💡 idée qu'une 🧠 information
-      </label>
-    </div>
   `;
 
   const syncFields = () => {
     const target = body.querySelector("#convert-target").value;
     body.querySelector("#convert-person-field").style.display = target === "followup" ? "" : "none";
-    body.querySelector("#convert-idea-field").style.display = target === "kept" ? "" : "none";
   };
   body.querySelector("#convert-target").addEventListener("change", syncFields);
   syncFields();
@@ -84,7 +82,11 @@ export async function openChangeTypeModal(sourceType, entity, targets, { personN
         closesModal: false,
         onClick: async () => {
           const target = body.querySelector("#convert-target").value;
-          const keptAsType = body.querySelector("#convert-is-idea")?.checked ? "idea" : "kept";
+          // TODO-021 (LOT 9) : plus de choix "idée ou information" ici (voir plus haut) — une
+          // conversion vers "kept" pose toujours "kept" ; le champ technique `keptAsType`
+          // lui-même reste inchangé côté domaine (js/domain/convert.js), seul ce point d'entrée
+          // ne propose plus jamais "idea" pour une NOUVELLE conversion.
+          const keptAsType = "kept";
           const personId = body.querySelector("#convert-person")?.value || "";
           if (target === "followup" && !personId) {
             showToast("Choisis une personne pour ce suivi");
