@@ -11,6 +11,7 @@
 // diverger si une des deux écritures échoue.
 
 import * as storage from "../services/storage.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "links";
 
@@ -23,6 +24,14 @@ export async function createLink(a, b) {
   const link = await storage.put(COLLECTION, { a, b });
   await storage.logHistory(a.type, a.id, "linked", { to: b });
   await storage.logHistory(b.type, b.id, "linked", { to: a });
+  // Gamification (LOT G3, TODO_GAMIFICATION.md §5.1, famille "Collaboration") : compte les
+  // liens créés (clé de dédoublonnage dédiée, sans XP direct — voir
+  // gamification.js#marquerEvenementCompte) puis réévalue les badges de la famille. Note pour
+  // le bilan : la roadmap indique js/components/linkedItems.js (fichier UI) comme "fonction/
+  // fichier source" de cet événement, mais la création persistée a réellement lieu ici, dans
+  // le domaine — c'est donc ici que l'événement est compté. Jamais bloquant pour l'écriture
+  // métier ci-dessus.
+  gamification.recordLinkCreated(link.id).catch((err) => console.error("[gamification] Échec de la mise à jour des badges (Collaboration) :", err));
   return link;
 }
 
