@@ -106,6 +106,16 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await note.el.locator(".sticky-note-textarea").fill(content);
     await note.el.locator(".sticky-note-textarea").press("Tab");
 
+    // CI du 24/09/2026 (nouveau passage réel du workflow GitHub Actions, sur le code du
+    // complément post-it flottants du 23/09/2026, voir TODO_TECHNIQUE.md) :
+    // #new-task-description arrivait vide alors que le contenu était bien tapé et sauvegardé.
+    // Cause : la sauvegarde du textarea déclenche une écriture Firestore, qui émet DEUX snapshots
+    // (optimiste local puis confirmé serveur) ; renderFullCanvas (js/components/bureau.js)
+    // reconstruit tout le DOM du "Tout voir" — et donc le `note` capturé par la closure du menu
+    // "⋯" — à CHAQUE snapshot. Cliquer le menu avant que les deux snapshots soient passés pouvait
+    // encore fermer sur l'état pré-sauvegarde (content vide). On attend donc ici la fin des deux
+    // écritures avant d'ouvrir le menu de conversion.
+    await page.waitForTimeout(500);
     await openWholeNoteConvertMenu(page, note.id, "Tâche");
     await expect(page.locator("#new-task-title")).toHaveValue(title, { timeout: 5_000 });
     await expect(page.locator("#new-task-description")).toHaveValue(content);
@@ -128,6 +138,9 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await note.el.locator(".sticky-note-textarea").fill(content);
     await note.el.locator(".sticky-note-textarea").press("Tab");
 
+    // Voir le commentaire détaillé dans le test "Post-it ENTIER → Tâche" ci-dessus (même race
+    // entre le double snapshot Firestore de la sauvegarde et l'ouverture du menu "⋯").
+    await page.waitForTimeout(500);
     await openWholeNoteConvertMenu(page, note.id, "Ressource");
     await expect(page.locator("#res-title")).toHaveValue(title, { timeout: 5_000 });
     // BUG corrigé (LOT 13) : avant ce lot, `prefill.description` n'était jamais posé dans ce
@@ -151,6 +164,9 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await note.el.locator(".sticky-note-textarea").fill(content);
     await note.el.locator(".sticky-note-textarea").press("Tab");
 
+    // Voir le commentaire détaillé dans le test "Post-it ENTIER → Tâche" plus haut (même race
+    // entre le double snapshot Firestore de la sauvegarde et l'ouverture du menu "⋯").
+    await page.waitForTimeout(500);
     await openWholeNoteConvertMenu(page, note.id, "Décision");
     await expect(page.locator("#new-decision-title")).toHaveValue(title, { timeout: 5_000 });
     await expect(page.locator("#new-decision-context")).toHaveValue(content);
@@ -191,6 +207,9 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await note.el.locator(".sticky-note-textarea").fill(content);
     await note.el.locator(".sticky-note-textarea").press("Tab");
 
+    // Voir le commentaire détaillé dans le test "Post-it ENTIER → Tâche" plus haut (même race
+    // entre le double snapshot Firestore de la sauvegarde et l'ouverture du menu "⋯").
+    await page.waitForTimeout(500);
     await openWholeNoteConvertMenu(page, note.id, "Suivi");
     await expect(page.locator("#fu-title")).toHaveValue(title, { timeout: 5_000 });
     // BUG corrigé (LOT 13) : avant ce lot, `defaultDescription` n'existait pas comme paramètre —
@@ -217,6 +236,10 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await note.el.locator(".sticky-note-title-input").press("Tab");
     await note.el.locator(".sticky-note-textarea").fill(content);
     await note.el.locator(".sticky-note-textarea").press("Tab");
+
+    // Voir le commentaire détaillé dans le test "Post-it ENTIER → Tâche" plus haut (même race
+    // entre le double snapshot Firestore de la sauvegarde et l'ouverture du menu "⋯").
+    await page.waitForTimeout(500);
 
     // Aucune modale intermédiaire à remplir (js/components/bureau.js#convertToInformation) : la
     // fiche "Information" s'ouvre directement, avec le contenu du post-it comme `rawContent`.
@@ -247,6 +270,18 @@ test.describe("LOT 13 — Mon bureau : conversion intelligente (une seule ligne 
     await note.el.locator("#checklist-new-text").fill(lineToKeep);
     await note.el.locator("#checklist-new-text").press("Enter");
     await expect(note.el.getByText(lineToKeep)).toBeVisible({ timeout: 5_000 });
+
+    // CI du 24/09/2026 (nouveau passage réel du workflow GitHub Actions, sur le code du
+    // complément post-it flottants du 23/09/2026, voir TODO_TECHNIQUE.md) : ce test échouait par
+    // intermittence sur l'assertion `toBeVisible` juste au-dessus, l'élément
+    // restant "hidden" pour Playwright bien que présent et correctement structuré dans le DOM
+    // (confirmé par l'inspection de la trace CI). Cause : chaque ajout de ligne déclenche une
+    // écriture Firestore, qui émet DEUX snapshots (optimiste local puis confirmé serveur) ;
+    // renderFullCanvas (js/components/bureau.js) reconstruit tout le DOM du "Tout voir" à CHAQUE
+    // snapshot, sans diffing. Enchaîner directement sur le clic du menu "⋯" de la ligne pouvait
+    // tomber pendant l'un de ces re-rendus. On attend donc ici que les deux lignes soient
+    // pleinement propagées avant d'ouvrir ce menu.
+    await page.waitForTimeout(500);
 
     // Menu "⋯" DE LA LIGNE (pas celui du post-it) — voir js/components/checklist.js#onLineMenu.
     const rowToConvert = note.el.locator(".checklist-item", { hasText: lineToConvert });
