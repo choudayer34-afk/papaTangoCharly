@@ -140,7 +140,7 @@ Constats de croisement notables (au-delà des causes systémiques détaillées e
 
 ### 4.1 Problèmes isolés couverts par un TODO dédié
 
-USE-UX-007 (TODO-013), USE-UX-026 (TODO-008), COMP-UX-001/002 (TODO-016), COMP-UX-005/006/007 (TODO-015), COMP-UX-009/010 (TODO-019) *(COMP-UX-011 retiré de cette liste le 15/09/2026 — clos sans action par décision produit, voir section 8)*, COMP-UX-012/013/014/015 (TODO-014 et TODO-018), COMP-UX-016/017/018 (TODO-016), COMP-UX-020/021/022/023/024 (TODO-017), USE-UX-021/022/027 (TODO-020).
+USE-UX-007 (TODO-013), USE-UX-026 (TODO-008), COMP-UX-001/002 (TODO-016), COMP-UX-005/006/007 (TODO-015), COMP-UX-009/010 (TODO-019) *(COMP-UX-011 retiré de cette liste le 15/09/2026 — clos sans action par décision produit, voir section 8)*, COMP-UX-012/014/015 (TODO-014 et TODO-018) *(COMP-UX-013 retiré de cette liste le 22/09/2026 — mal rattaché, sans rapport avec TODO-014 ni TODO-018, voir TODO-018 section 5)*, COMP-UX-016/017/018 (TODO-016), COMP-UX-020/021/022/023/024 (TODO-017), USE-UX-021/022/027 (TODO-020).
 
 ### 4.2 Problèmes isolés sans TODO dédié à ce jour — backlog non planifié, conservés pour traçabilité uniquement
 
@@ -675,7 +675,7 @@ Aucun test automatisé écrit, conformément à la roadmap ("Validation : Non d�
 
 **Clôture (21/09/2026)** : **confirmé par Charles-Henri** (« cloture le lot 7 »). Ce TODO est **définitivement clos** : les trois volets (filtres, création rapide, troncature) sont livrés, l'incident de syntaxe a été corrigé et re-vérifié, et le filtre Personne a été retiré par décision produit — validation manuelle effectuée par Charles-Henri conformément à la Validation prévue pour cet écran.
 
-## [ ] P2 — TODO-016 — Accessibilité clavier des modales et formulaires
+## [x] P2 — TODO-016 — Accessibilité clavier des modales et formulaires — **Terminé**
 
 Type : UX
 
@@ -708,9 +708,11 @@ Statut (21/09/2026, LOT 8) : **Terminé (implémentation) — en attente de vér
 3. **Repli `:focus-visible` généralisé (COMP-UX-016/017/018)** : `styles/components.css`, règle `.field input:focus, .field textarea:focus, .field select:focus` — cette règle retirait l'outline par défaut du navigateur sur tout focus (y compris au clic souris) sans aucun repli clavier, ne laissant que le changement de couleur de bordure comme seul indicateur. Une règle `:focus-visible` a été ajoutée à côté (sans modifier la règle `:focus` existante), reprenant exactement le style déjà utilisé pour le sélecteur de thème (`.theme-toggle-switch input:focus-visible`) : `outline: 2px solid var(--color-primary); outline-offset: 2px;`, actif uniquement quand le focus vient du clavier.
 4. **Autofocus manquant sur les formulaires de création Tâche/Projet** : ajouté dans `js/views/kanban.js#openCreateTaskModal` (`#new-task-title`) et `js/views/projects.js#openCreateProjectModal` (`#project-name`), selon le même pattern que le reste de l'app (`setTimeout(() => champ.focus(), 30)`, déjà utilisé par la Capture, la recherche, les Prompts...). Le piège de focus générique du point 1 place déjà le focus sur le premier champ focusable à l'ouverture de n'importe quelle modale, ce qui couvre déjà ce cas en pratique ; cet ajout explicite est conservé en plus, pour rester conforme à ce que demandait la Solution sur ces deux formulaires précisément (et rester robuste si le comportement générique de `openModal()` évolue un jour).
 
-Aucun test automatisé écrit, conformément à la roadmap ("Validation : Non déterminé — vérification manuelle au clavier recommandée") : vérification faite par inspection de code et par relecture manuelle du comportement attendu (`js/components/modal.js` avant/après, les 77 appels existants d'`openModal()` parcourus pour vérifier qu'aucun ne dépend d'un focus resté en dehors de la modale ni d'un contenu ajouté après coup de façon incompatible avec le recalcul dynamique des éléments focusables), l'environnement de rédaction ne pouvant de toute façon pas lancer l'app ni Playwright (registre npm bloqué). Aucune régression identifiable sur les mécanismes déjà en place : la fermeture centralisée (`closeModal()`), la garde anti-double-clic (`guardClick`), le mode hors-ligne (toast à 2,5s) et les raccourcis clavier globaux (`js/services/shortcuts.js`, qui se basent sur la présence de `.modal-overlay` dans le DOM, jamais sur la position du focus) ne sont pas affectés par ces changements. **Point d'attention à valider manuellement en priorité** : le comportement d'`Échap` sur une modale avec un champ modifiable ne ferme plus rien — seul un bouton explicite le fait désormais ; à confirmer que cela ne surprend pas à l'usage (c'est le changement de comportement le plus visible de ce lot). **Ce TODO ne sera considéré comme définitivement clos qu'après vérification manuelle par Charles-Henri au clavier** (seule Validation prévue).
+Aucun test automatisé écrit, conformément à la roadmap ("Validation : Non déterminé — vérification manuelle au clavier recommandée") : vérification faite par inspection de code et par relecture manuelle du comportement attendu (`js/components/modal.js` avant/après, les 77 appels existants d'`openModal()` parcourus pour vérifier qu'aucun ne dépend d'un focus resté en dehors de la modale ni d'un contenu ajouté après coup de façon incompatible avec le recalcul dynamique des éléments focusables), l'environnement de rédaction ne pouvant de toute façon pas lancer l'app ni Playwright (registre npm bloqué). Aucune régression identifiable sur les mécanismes déjà en place : la fermeture centralisée (`closeModal()`), la garde anti-double-clic (`guardClick`), le mode hors-ligne (toast à 2,5s) et les raccourcis clavier globaux (`js/services/shortcuts.js`, qui se basent sur la présence de `.modal-overlay` dans le DOM, jamais sur la position du focus) ne sont pas affectés par ces changements.
 
-## [ ] P3 — TODO-017 — Cibles tactiles et zones sûres (mobile)
+**Clôture (21/09/2026)** : **confirmé par Charles-Henri** (« le lot est validé »). Ce TODO est **définitivement clos** : les quatre volets (piège de focus, alignement d'Échap, repli `:focus-visible`, autofocus Tâche/Projet) sont livrés et validés manuellement au clavier par Charles-Henri, conformément à la Validation prévue pour ce TODO.
+
+## [x] P3 — TODO-017 — Cibles tactiles et zones sûres (mobile) — **Terminé**
 
 Type : UX
 
@@ -736,7 +738,22 @@ Validation : Non déterminé — vérification sur appareil réel recommandée
 
 Ordre recommandé : LOT 9, backlog *(déplacé de LOT 8 le 15/09/2026 — regroupement avec l'accessibilité clavier jugé sans lien de cause commune par la revue critique)*
 
-## [ ] P3 — TODO-018 — Retour visuel immédiat sur les poids de Priorisation et pagination des longues listes
+Statut (21/09/2026, LOT 9) : **Partiellement terminé (implémentation) — en attente de vérification manuelle par Charles-Henri sur appareil réel**, conformément à la Validation prévue. Quatre des cinq volets de la Solution sont implémentés dans `styles/components.css` :
+
+1. **Zones tactiles agrandies (COMP-UX-020)** : `.kanban-move-btn`, `.pilotage-table-open-btn`, `.pilotage-table-notes-add-btn` et `.pomodoro-widget-toggle` — les quatre contrôles circulaires les plus fréquents sous la taille recommandée — gagnent chacun un pseudo-élément `::before` invisible (`position: absolute; inset: -Npx;`), dimensionné pour porter leur zone cliquable/tactile totale à 44×44px, sans changer la taille ni l'apparence de l'icône visible.
+2. **Zones sûres `env(safe-area-inset-*)` (COMP-UX-021)** : deux nouveaux tokens `--safe-top`/`--safe-bottom` ajoutés à `styles/tokens.css` (repli `0px` si non supporté), appliqués à `.topbar` (padding-top) et `.bottom-nav` (hauteur + padding-bottom). **Extension au-delà des seuls éléments cités par l'audit** : `.fab`, `.help-fab`, `.search-fab`, `.admin-fab`, `.pomodoro-widget` et `.toast` se positionnent tous par rapport à `--nav-height` — sans ajuster aussi leur propre décalage de `+ var(--safe-bottom)`, ils se seraient retrouvés visuellement chevauchés par la barre du bas désormais plus haute sur un appareil à zone sûre non nulle (ex. ~34px sur iPhone à barre de gestes, contre 16px de marge existante). Cette extension n'est pas une amélioration opportuniste mais une conséquence nécessaire pour éviter une régression visuelle directe introduite par le point précédent — documentée en commentaire dans le CSS.
+3. **Tailles de police remontées au token existant (COMP-UX-022)** : `.nav-badge` (10px→12px) et `.cal-pill`/`.cal-more` (11px→12px) reprennent désormais `var(--font-size-xs)`.
+4. **Contraste (COMP-UX-023)** — *ajouté à ce volet bien que non explicitement listé dans la Solution d'origine, car mesuré lors des travaux de ce TODO* : vérification chiffrée (calcul de contraste WCAG à partir des couleurs réelles) montrant que `.cal-cell-outside .cal-cell-num` (jour hors mois du Calendrier), combinant `--color-text-muted` et `opacity: 0.4`, tombe à environ 1,67:1 sur `--color-bg` — très en dessous du seuil de 4,5:1 — alors que `--color-text-muted` seul, sans cette opacité, est conforme (4,55:1 et 4,91:1 selon le fond). Correctif ciblé : suppression de la seule règle `opacity: 0.4`, sans toucher au token `--color-text-muted` (déjà conforme partout ailleurs où il est utilisé).
+
+**5ᵉ volet non implémenté — décision produit nécessaire (COMP-UX-024, grille du Calendrier resserrée sur petit écran)** : la Solution de la roadmap dit elle-même « envisager » une bascule automatique vers la vue Semaine sous un certain seuil de largeur, et l'audit source qualifie sa propre proposition de « Non déterminé... à valider selon l'usage réel sur mobile ». Changer automatiquement la vue affichée à l'utilisateur sans qu'il l'ait demandé est une décision de comportement produit, pas un simple ajustement CSS comme les quatre points ci-dessus — conformément à la consigne de ce chantier de ne trancher aucune décision produit unilatéralement, ce volet n'a pas été implémenté et reste en attente d'un arbitrage explicite de Charles-Henri (bascule automatique sous quel seuil de largeur, ou statu quo).
+
+Aucun test automatisé écrit (CSS pur, "Validation : Non déterminé — vérification sur appareil réel recommandée"). Vérifié : `node --input-type=module --check` n'est pas pertinent ici (pas de JS touché sauf les tokens CSS) ; le fichier `styles/components.css` a été vérifié équilibré (autant d'accolades ouvrantes que fermantes) après tous les changements du LOT 9.
+
+**Point d'écart mineur avec la roadmap** : `styles/tokens.css` a dû être modifié en plus des `Fichiers concernés` listés (`styles/components.css`, `index.html`) pour porter les deux nouveaux tokens `--safe-top`/`--safe-bottom` — `index.html` n'a pas eu besoin d'être touché (`viewport-fit=cover` y est déjà déclaré). Signalé ici plutôt que corrigé silencieusement dans la liste.
+
+**Clôture (22/09/2026)** : **confirmé par Charles-Henri** (vérification manuelle validée). **Arbitrage produit sur le 5ᵉ volet (COMP-UX-024)** : la bascule automatique Calendrier → Semaine sous un seuil de largeur, laissée en attente ci-dessus, est **définitivement écartée** — décision de Charles-Henri : « Ne pas implémenter la bascule automatique. Conserver la vue Mois comme vue stable. » Elle est remplacée par une exigence de navigation manuelle **à l'intérieur de la grille Mois elle-même**, quand celle-ci est trop grande pour la hauteur disponible : balayage/défilement pour la parcourir dans ce cas, **sans que ce geste change de mois** — le changement de mois reste exclusivement le rôle des boutons `‹`/`Aujourd'hui`/`›` (`.cal-nav`), inchangés. Précision apportée le 22/09/2026 par Charles-Henri suite à une première formulation ambiguë de cette clôture, qui avait à tort associé le balayage à un changement de période. **Point à connaître** : ce lot n'a implémenté aucun code pour ce remplacement (hors périmètre de cette clôture, limitée à la documentation à la demande explicite de Charles-Henri) — la grille Mois (`#calendar-body`) ne porte aujourd'hui aucun mécanisme de défilement/balayage interne dédié dans `js/views/calendar.js`/`styles/components.css` : sur un contenu qui dépasse la hauteur disponible, seul le défilement naturel de la page entière s'applique actuellement (aucun `overflow: hidden` ne l'empêche), pas un défilement circonscrit à la grille elle-même. Ce TODO est **définitivement clos** : les 4 volets CSS sont livrés et validés manuellement, et le 5ᵉ volet est tranché par décision produit plutôt que laissé en suspens — une éventuelle implémentation d'un défilement/balayage propre à la grille Mois, si elle s'avère nécessaire, relève d'un nouveau TODO distinct plutôt que d'une réouverture de celui-ci.
+
+## [x] P3 — TODO-018 — Retour visuel immédiat sur les poids de Priorisation et pagination des longues listes — **Terminé**
 
 Type : UX
 
@@ -752,7 +769,7 @@ Fonctions concernées : `openWeightsModal`, `renderList`, `buildList`
 
 Dépendances : aucune
 
-Problèmes résolus : COMP-UX-003, COMP-UX-004, COMP-UX-013, COMP-UX-015
+Problèmes résolus : COMP-UX-003, COMP-UX-004, COMP-UX-015 *(COMP-UX-013 retiré de cette liste le 22/09/2026 — mal rattaché : le UX-013 réel de `AUDIT_UX.md` porte sur la récupération automatique de titre/favicon d'une ressource, sans rapport avec ce TODO, voir Statut)*
 
 Risque : faible
 
@@ -762,7 +779,18 @@ Validation : Non déterminé
 
 Ordre recommandé : LOT 9, backlog
 
-## [ ] P3 — TODO-019 — Rappels : fiabilité documentée, réversibilité de l'opt-in
+Statut (21/09/2026, LOT 9) : **Terminé (implémentation) — en attente de vérification manuelle par Charles-Henri**, conformément à la Validation prévue ("Non déterminé"). Les deux volets de la Solution sont implémentés :
+
+1. **Aperçu en direct des poids (`openWeightsModal`)** : chaque curseur (Urgence/Impact/Blocage) déclenche désormais, sur son évènement `input`, un recalcul et un nouvel affichage du classement (`previewWeights()` lit les valeurs courantes, non encore enregistrées ; `showPreview()` rappelle `renderList` avec ce classement provisoire) — sans attendre le clic sur "Enregistrer". Le bouton "Réinitialiser" déclenche le même aperçu après avoir remis les curseurs à leur valeur par défaut. La modale se voit ajouter `onClose: () => renderAll()`, qui resynchronise systématiquement l'écran réel sur les poids effectivement enregistrés, quelle que soit la façon dont la modale se ferme (Enregistrer a déjà mis à jour `weights` avant de fermer ; Annuler/clic en dehors/Échap laissent `weights` inchangé, donc `renderAll()` restaure l'affichage d'avant-ouverture). Volontairement limité à `renderList` (pas `renderQuadrant`/`renderLegend`), conformément aux `Fonctions concernées` de ce TODO.
+2. **Pagination "+ Afficher N de plus" (`renderList`, `buildList`)** : Priorisation (`js/views/priorisation.js`) et Ressources (`js/views/resources.js`) n'affichent plus que les 20 premiers éléments, avec un bouton en bas de liste pour dérouler le reste — implémenté séparément dans chaque fichier avec la stratégie d'état adaptée à son propre mode de rendu (compteur de page persistant entre les rendus pour Priorisation, reconstruction complète à chaque `render()` pour Ressources, sans état externe nécessaire).
+
+**Signalement (pas corrigé, hors périmètre du Solution de ce TODO)** : la liste `Problèmes résolus` de ce TODO cite **COMP-UX-013**, mais le UX-013 réel de `AUDIT_UX.md` ("Aucune récupération automatique de titre/favicon pour une ressource") est une fonctionnalité totalement différente, sans rapport avec l'aperçu de pondération ou la pagination — aucun champ, aucune fonction, aucun fichier du Problème/Solution de TODO-018 ne s'y rapporte. Ni implémenté (hors périmètre réel de ce TODO) ni ignoré silencieusement : recommandation de retirer COMP-UX-013 de la liste `Problèmes résolus` de TODO-018 lors d'une prochaine relecture de la roadmap.
+
+Aucun test automatisé écrit ("Validation : Non déterminé"). Vérifié : `node --input-type=module --check` OK sur `js/views/priorisation.js` et `js/views/resources.js`.
+
+**Clôture (22/09/2026)** : **confirmé par Charles-Henri** (vérification manuelle validée). Ce TODO est **définitivement clos** : l'aperçu en direct des poids et la pagination des deux listes sont livrés et validés. Correction documentaire demandée par Charles-Henri appliquée ci-dessus : l'intitulé COMP-UX-013, mal rattaché, est retiré de la liste `Problèmes résolus` (aucun changement de code associé).
+
+## [x] P3 — TODO-019 — Rappels : fiabilité documentée, réversibilité de l'opt-in — **Terminé**
 
 *Modifié le 15/09/2026 — décision produit : pas de besoin confirmé pour un rappel indépendant d'une échéance. Ce sous-chantier est retiré ; TODO-019 ne conserve que la documentation de la limite des notifications et la réactivation de l'opt-in.*
 
@@ -790,7 +818,16 @@ Validation : Non déterminé
 
 Ordre recommandé : LOT 9, backlog
 
-## [ ] P3 — TODO-020 — Navigation : Management visible, clarté de nommage
+Statut (21/09/2026, LOT 9) : **Terminé (implémentation) — en attente de vérification manuelle par Charles-Henri**, conformément à la Validation prévue ("Non déterminé"). Les deux volets (documentation + réactivation) sont implémentés dans `js/views/dashboard.js` :
+
+1. **Documentation de la limite dans le bandeau d'opt-in (COMP-UX-009/010)** : une ligne en italique a été ajoutée sous le texte existant du bandeau — « Ne fonctionne que pendant que l'app est déjà ouverte — aucune alerte n'est envoyée si l'app est fermée, faute d'infrastructure de notification côté serveur. » — sans toucher au reste du bandeau ni à son comportement.
+2. **Contrôle de réactivation** : la fenêtre de réglages de l'Accueil (`openDashboardSettingsModal`) gagne un nouveau bloc « 🔔 Alerte de retard au démarrage » (affiché uniquement quand `Notification` existe dans le navigateur, même garde que le bandeau lui-même), avec une ligne de statut ("Activée."/"Désactivée."/"Jamais proposée pour l'instant.") et un bouton "↺ Redemander mon choix" qui réinitialise immédiatement la préférence (`preferencesApi.setNotifOptIn(null)`) et fait réapparaître le bandeau — effet immédiat, indépendant du bouton "Enregistrer" de cette fenêtre (qui ne gouverne que l'ordre des rubriques de l'Accueil, un réglage distinct).
+
+Le commentaire d'en-tête de `js/domain/preferences.js` documentant `notifOptIn` a été mis à jour en conséquence ("plus jamais reproposé automatiquement" devient "plus jamais reproposé automatiquement, sauf demande explicite via le nouveau bouton de réactivation").
+
+Aucun test automatisé écrit ("Validation : Non déterminé"). Vérifié : `node --input-type=module --check` OK sur `js/views/dashboard.js` et `js/domain/preferences.js`.
+
+## [x] P3 — TODO-020 — Navigation : Management visible, clarté de nommage — **Terminé**
 
 Type : UX
 
@@ -816,7 +853,20 @@ Validation : Non déterminé
 
 Ordre recommandé : LOT 9, backlog
 
-## [ ] P3 — TODO-021 — Harmoniser le vocabulaire Inbox « Information »/« Idée » en un seul libellé
+Statut (21/09/2026, LOT 9) : **Terminé (implémentation) — en attente de vérification manuelle par Charles-Henri**, conformément à la Validation prévue ("Non déterminé"). Les quatre volets de la Solution sont implémentés :
+
+1. **« Management » visible dans Équipe (USE-UX-021)** — dans `js/views/people.js`, le rail `#people-mode-toggle` (4 modes : Tous / Mon manager / Charge / Suivis) reçoit la classe `fiche-tabs`, exactement le même style déjà utilisé par `js/components/pilotageSubNav.js` pour résoudre le même problème ailleurs (« filtre caché » vs « vrai sous-onglet ») — sans changer les 4 modes eux-mêmes ni leur logique de bascule.
+2. **Clarté de nommage pour Priorisation (USE-UX-020)** — sous-titre enrichi dans `js/views/priorisation.js`, reprenant le complément suggéré par l'audit lui-même : « réglez les poids et voyez la matrice complète, au-delà du Focus du jour du Dashboard ». Aucune fusion avec le Kanban (décision déjà actée le 15/09/2026, non remise en cause).
+3. **« Plus » regroupé par intention (USE-UX-022)** — dans `js/views/more.js`, les 5 destinations portent désormais un champ `group` ("Aide" : Guide+Nouveautés ; "Bibliothèques" : Ressources+Prompts ; "Pause" : Mémoire & TDAH), affiché via des en-têtes `.section-title` entre les groupes — même style que les sous-sections déjà utilisées sur les fiches Projet/Personne. Aucune route, aucun libellé ni sous-titre de ligne existant n'a changé.
+4. **Sous-titres distinctifs Guide/Nouveautés (USE-UX-027)** — reprend telle quelle la formulation suggérée par l'audit : Guide affiche désormais « Comment ça marche : [sous-titre existant] », Nouveautés affiche « Ce qui a changé : [sous-titre existant] ».
+
+**Signalement (pas bloquant, `Fichiers concernés` incomplet)** : la liste `Fichiers concernés` de ce TODO cite `js/app.js` mais pas `js/views/people.js` — or c'est bien dans ce dernier que vit le rail « Management » à rendre visible (le Problème et la Solution le disent explicitement : « sous-onglet visible dans Équipe »). Aucune modification n'a été nécessaire dans `js/app.js` lui-même : la table de routes/navigation ne change pas, puisque la décision retenue (sous-onglet à l'intérieur d'Équipe, pas une nouvelle route de barre du bas) ne l'exige pas. Recommandation : ajouter `js/views/people.js` à la liste `Fichiers concernés` de TODO-020 lors d'une prochaine relecture.
+
+Aucun test automatisé écrit ("Validation : Non déterminé"). Vérifié : `node --input-type=module --check` OK sur `js/views/people.js`, `js/views/priorisation.js`, `js/views/more.js`, `js/views/guide.js`, `js/views/whatsnew.js`.
+
+**Clôture (22/09/2026)** : **confirmé par Charles-Henri** (vérification manuelle validée). Ce TODO est **définitivement clos** : les quatre volets (sous-onglets Équipe, sous-titre Priorisation, regroupement de Plus, sous-titres Guide/Nouveautés) sont livrés et validés.
+
+## [x] P3 — TODO-021 — Harmoniser le vocabulaire Inbox « Information »/« Idée » en un seul libellé — **Terminé**
 
 *Modifié le 15/09/2026 — décision produit : FUSION. Ce chantier n'est plus bloqué par une question ouverte ; c'est désormais un chantier d'harmonisation à part entière.*
 
@@ -843,6 +893,22 @@ Complexité : S
 Validation : relecture manuelle de tous les libellés affichés après fusion
 
 Ordre recommandé : LOT 9, backlog
+
+Statut (21/09/2026, LOT 9) : **Terminé (implémentation) — en attente de la relecture manuelle prévue par Charles-Henri** ("relecture manuelle de tous les libellés affichés après fusion").
+
+**Constat préalable** : l'examen du code a montré que le choix "💡 Idée" dans l'Inbox (`QUALIFY_CHOICES`) portait déjà `mapsTo: "kept"` — cliquer dessus produisait donc déjà, avant ce TODO, exactement le même `outcome` ("kept"), le même toast ("Conservé comme information") et le même `keptAsType` stocké que "🧠 Information". C'est cohérent avec le Problème tel que décrit ("sans nuance réelle retenue") : la fusion demandée était déjà presque entièrement effective côté données pour ce chemin de qualification ; il ne restait réellement à fusionner que l'affichage, plus la suppression du bouton "Idée" désormais strictement redondant avec "Information".
+
+**Un seul libellé, appliqué partout où un élément "kept" est affiché** — `KEPT_TYPE_LABEL = "🧠 Information"` (remplace l'ancien `KEPT_TYPE_LABELS = { kept, idea }`) dans `js/views/inbox.js` et `js/views/dashboard.js` ; emoji unifié à "🧠" dans `js/components/linkedItems.js` (2 occurrences) et `js/components/search.js` ; type de résultat de recherche renommé "Information/Idée" → "Information" (`SEARCH_TYPES`, `js/components/search.js`) ; `js/components/changeType.js` : `TARGET_LABELS.kept`/`SHORT_LABELS.kept` simplifiés à "🧠 Information"/"Information", et la case à cocher "C'est plutôt une 💡 idée qu'une 🧠 information" retirée du formulaire de conversion (elle ne distinguait plus qu'un champ technique sans plus aucun effet visible) ; `js/components/weeklyReview.js` : entrée "idea" retirée de `WR_BULK_CHOICES`, en miroir de `js/views/inbox.js` ; `js/components/onboarding.js` et `js/services/shortcuts.js` : textes d'aide alignés (« 9 types »→« 8 types », « Information/Idée »→« Information ») ; `js/views/guide.js` : trois mentions vivantes de « Information/Idée » alignées sur « Information » (les entrées **historiques** de `js/views/whatsnew.js`, qui documentent ce qui existait à une date passée, n'ont volontairement **pas** été réécrites — seule une nouvelle entrée datée d'aujourd'hui a été ajoutée pour ce changement lui-même).
+
+**Le statut technique `entityType: "Kept"`/`keptAsType` n'est pas touché**, conformément à la Solution : aucune migration de données, `js/domain/convert.js` continue d'accepter un `keptAsType` arbitraire en paramètre (utilisé nulle part ailleurs que par la case à cocher désormais retirée), et un élément historique portant `keptAsType: "idea"` s'affiche simplement avec le même libellé unique que les autres, sans distinction.
+
+**Signalement (pas bloquant, `Fichiers concernés` très incomplet)** : ce TODO ne liste que `js/domain/inbox.js` et `js/domain/tags.js` — deux fichiers du domaine qui ne contiennent en réalité **aucun** libellé affiché à l'utilisateur (uniquement des commentaires et la logique de stockage). Le libellé "🧠 Information"/"💡 Idée" réellement affiché vit dans les 8 fichiers de vues/composants listés ci-dessus, indispensables pour que la fusion soit réellement visible pour l'utilisateur — sans eux, ce TODO n'aurait aucun effet observable. `js/domain/tags.js` a été relu : il ne contient qu'une note de migration historique, aucune modification n'y était nécessaire. `js/domain/inbox.js` a reçu une mise à jour de son commentaire de documentation (aucun changement fonctionnel).
+
+**Point ouvert — contradiction à trancher par Charles-Henri, non résolue unilatéralement** : la Solution demande de « mettre à jour le glossaire ajouté par TODO-012 en conséquence ». Or le statut de clôture de TODO-012 (LOT 5, 21/09/2026) indique explicitement que le volet « glossaire objet ↔ libellé utilisateur » envisagé un temps sous TODO-012 a été **retiré de son périmètre le 15/09/2026 et n'a jamais été livré** — « porté exclusivement par TODO-021 (non planifié à ce jour) ». Il n'existe donc aujourd'hui aucun glossaire objet↔libellé à mettre à jour : TODO-012 ne l'a pas créé. Deux lectures possibles : (a) TODO-021 devait aussi créer ce glossaire de zéro, ou (b) la mention dans TODO-021 est restée obsolète après le retrait du 15/09/2026 et n'a plus d'objet. Créer une nouvelle section de documentation de fond dans `PROJECT_CONTEXT.md` est une décision de architecture documentaire distincte du correctif UI demandé ici — elle n'a donc pas été prise unilatéralement dans ce LOT ; ce volet de la Solution reste non traité, en attente d'arbitrage.
+
+Aucun test automatisé écrit ("Validation : relecture manuelle de tous les libellés affichés après fusion" — relecture qui reste à faire par Charles-Henri). Vérifié : `node --input-type=module --check` OK sur les 10 fichiers JS touchés (`js/views/inbox.js`, `js/views/dashboard.js`, `js/components/weeklyReview.js`, `js/components/changeType.js`, `js/components/linkedItems.js`, `js/components/search.js`, `js/components/onboarding.js`, `js/services/shortcuts.js`, `js/views/guide.js`, `js/domain/inbox.js`) ; recherche exhaustive (`grep`) confirmant qu'aucune occurrence utilisateur restante de "Idée"/"idea" ne subsiste hors commentaires, `keptAsType` et entrées historiques de `js/views/whatsnew.js`.
+
+**Clôture (22/09/2026)** : **confirmé par Charles-Henri** (vérification manuelle validée — relecture des libellés effectuée). Ce TODO est **définitivement clos** : le libellé unique "🧠 Information" est en place partout où un élément qualifié s'affiche. **Le glossaire objet ↔ libellé évoqué par la Solution reste explicitement hors périmètre** — confirmé par Charles-Henri (« Ne crée pas le glossaire évoqué : il reste hors périmètre »), sans trancher la question ouverte de savoir s'il devra un jour être créé ; ce point n'est donc pas résolu, seulement neutralisé pour cette clôture.
 
 ## [x] P1 — TODO-022 — Carte indicateur « Échéances du jour » (tri : à faire d'abord, puis suivi/contrôle) — **Terminé**
 
@@ -1438,7 +1504,7 @@ Aucun test automatisé écrit, conformément à la roadmap ("Tests nécessaires 
 
 **Clôture (21/09/2026)** : **confirmé par Charles-Henri** (« cloture le lot 7 »). TODO-014 et TODO-015 sont tous deux **définitivement clos** (voir chacun en section 5). Le LOT 7 est désormais **définitivement clos**. Passage au LOT 8 sur instruction explicite de Charles-Henri, le même jour.
 
-### LOT 8 — Accessibilité clavier
+### LOT 8 — Accessibilité clavier — **Terminé**
 
 *Recentré le 15/09/2026 suite à la revue critique : TODO-017 (cibles tactiles mobiles) déplacé vers LOT 9 — aucune cause commune avec l'accessibilité clavier (fichiers, méthode de validation et priorité différents).*
 
@@ -1449,15 +1515,21 @@ Aucun test automatisé écrit, conformément à la roadmap ("Tests nécessaires 
 **Tests nécessaires** : vérification manuelle recommandée (aucun test automatisé prévu)
 **Risques** : faible
 
-**Statut (21/09/2026)** : **Terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri.** TODO-016, seul TODO de ce lot, est terminé au niveau de l'implémentation (voir TODO-016 en section 5 pour le détail complet des quatre volets) ; aucun test automatisé n'est prévu (Validation "Non déterminé — vérification manuelle au clavier recommandée"), donc pas de passage CI à attendre ici — une vérification manuelle au clavier par Charles-Henri reste due avant de considérer ce lot réellement terminé. Point signalé à valider en priorité : `Échap` ne ferme plus une modale contenant un champ modifiable (alignement demandé sur le comportement du clic en dehors), ce qui est le changement de comportement le plus visible de ce lot — à confirmer que cela correspond à l'usage attendu. Aucune régression identifiable sur les 77 appels existants d'`openModal()` dans l'app (fermeture centralisée, garde anti-double-clic, mode hors-ligne, raccourcis clavier globaux). **Ce LOT n'est donc pas considéré comme définitivement clos** tant que Charles-Henri n'a pas testé manuellement la navigation au clavier sur au moins quelques modales représentatives. Il n'enchaîne pas automatiquement sur le LOT 9.
+**Statut (21/09/2026)** : TODO-016, seul TODO de ce lot, a d'abord été terminé au niveau de l'implémentation (voir TODO-016 en section 5 pour le détail complet des quatre volets) ; aucun test automatisé n'était prévu (Validation "Non déterminé — vérification manuelle au clavier recommandée"), donc pas de passage CI à attendre. Point signalé à valider en priorité avant clôture : `Échap` ne ferme plus une modale contenant un champ modifiable (alignement demandé sur le comportement du clic en dehors), le changement de comportement le plus visible de ce lot. Aucune régression identifiable sur les 77 appels existants d'`openModal()` dans l'app (fermeture centralisée, garde anti-double-clic, mode hors-ligne, raccourcis clavier globaux).
 
-### LOT 9 — Backlog : mobile, navigation, priorisation, rappels avancés, vocabulaire
+**Clôture (21/09/2026)** : **confirmé par Charles-Henri** (« le lot est validé »). TODO-016 est **définitivement clos** (voir section 5). Le LOT 8 est désormais **définitivement clos**.
+
+### LOT 9 — Backlog : mobile, navigation, priorisation, rappels avancés, vocabulaire — **Terminé**
 **Objectif** : traiter les améliorations de confort restantes, sans urgence.
 **Problèmes concernés** : TODO-017, TODO-018, TODO-019, TODO-020, TODO-021
 **Prérequis** : aucun — les décisions produit sur le rappel indépendant (TODO-019, tranchée le 15/09/2026 : non retenu) et sur le vocabulaire Inbox (TODO-021, tranchée le 15/09/2026 : fusion) ont été prises
 **Modifications principales** : cibles tactiles mobiles, retour visuel Priorisation, pagination, navigation, vocabulaire
 **Tests nécessaires** : Non déterminé
 **Risques** : faible — peut rester en backlog indéfiniment sans dégrader l'existant
+
+**Statut (21/09/2026)** : **Partiellement terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri.** Les cinq TODO sont implémentés, à une exception près : TODO-017 livre 4 de ses 5 volets (cibles tactiles, zones sûres, tailles de police, contraste), le 5ᵉ (bascule automatique du Calendrier vers la vue Semaine sur petit écran, COMP-UX-024) restant délibérément non traité — décision de comportement produit non arbitrée, l'audit source qualifiant lui-même sa propre proposition de « Non déterminé ». Aucun des cinq TODO de ce lot ne prévoit de test automatisé ("Validation : Non déterminé" partout, sauf TODO-021 : relecture manuelle des libellés) ; aucun passage CI n'est donc attendu ici, mais une vérification manuelle en conditions réelles (notamment sur appareil mobile réel pour TODO-017) reste due avant de considérer ce lot terminé. Voir chaque TODO en section 5 pour le détail complet, y compris deux signalements documentés plutôt que corrigés silencieusement : un intitulé "COMP-UX-013" mal rattaché à TODO-018 (le UX-013 réel de `AUDIT_UX.md` est sans rapport), et une contradiction non résolue sur le "glossaire ajouté par TODO-012" que réclame TODO-021 (ce glossaire n'a en réalité jamais été livré par TODO-012, retiré de son périmètre le 15/09/2026).
+
+**Clôture (22/09/2026)** : **confirmé par Charles-Henri** (vérifications manuelles validées pour les cinq TODO). **Arbitrage produit reçu pour le 5ᵉ volet de TODO-017** (bascule automatique Calendrier → Semaine, restée en suspens ci-dessus) : écartée définitivement, remplacée par une exigence de navigation manuelle *à l'intérieur de la grille Mois* quand elle est trop grande pour la hauteur disponible (balayage/défilement pour la parcourir, sans changer de mois — le changement de mois reste le rôle des boutons `‹`/`Aujourd'hui`/`›`), voir le détail sous TODO-017. **Correction documentaire appliquée** (sur demande explicite, sans modification de code) : l'intitulé "COMP-UX-013", mal rattaché à TODO-018, est retiré de sa liste `Problèmes résolus` et de l'index de synthèse (section 4.1). **Le glossaire évoqué par TODO-021 reste explicitement hors périmètre**, confirmé par Charles-Henri — non créé, question non tranchée pour la suite. Le LOT 9 est **définitivement clos** : TODO-017 à TODO-021 sont tous les cinq terminés et validés.
 
 ---
 
