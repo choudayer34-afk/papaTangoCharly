@@ -45,6 +45,17 @@
 // quelle par LOT G5 plutôt que réimplémentée une seconde fois — risque explicitement identifié
 // par la roadmap pour ce futur lot (§11, LOT G5, "la logique jour ouvré doit être centralisée en
 // un seul endroit").
+//
+// Portée EXACTE de LOT G5 (voir TODO_GAMIFICATION.md → §11, LOT G5) : les 4 SÉRIES du §5.3
+// (Pilotage, Inbox, Tâches — journalières, jours ouvrés consécutifs, §2.1 ; Revue hebdo —
+// hebdomadaire, semaine ISO 8601) : longueur courante, record personnel, jamais un simple total
+// d'actions. `estJourOuvre` (LOT G4) est réutilisée telle quelle, comme anticipé ci-dessus.
+// Contrairement aux badges (mensuels comme permanents), une série n'est PAS seulement mise à jour
+// en écriture au fil des actions : sa longueur "affichable" doit rester correcte même en LECTURE
+// SEULE après une absence (`longueurSerieJournaliereCourante`/`longueurSerieHebdoCourante` plus
+// bas), exactement comme le niveau (LOT G2) n'est jamais stocké figé — risque explicitement
+// anticipé par la roadmap pour ce lot (§11, "la série doit se recalculer correctement
+// rétroactivement, pas seulement en direct"). Aucune UI dans ce lot (écran Progression = LOT G8).
 
 import * as storage from "../services/storage.js";
 
@@ -85,6 +96,18 @@ function withDefaults(raw) {
     // bascule (comportement voulu, §5.2 : "un badge mensuel non obtenu à la fin du mois disparaît
     // simplement de la course, pas de rattrapage").
     badgesMensuelsHistorique: {},
+    // Séries (§5.3, §10 point 1, LOT G5) — état BRUT persisté par série, jamais la longueur
+    // "affichable" (voir `longueurSerieJournaliereCourante`/`longueurSerieHebdoCourante` plus
+    // bas, qui la recalculent à la demande). Les 3 séries journalières (Pilotage/Inbox/Tâches)
+    // portent `dernierJour` ("YYYY-MM-DD" local, `null` tant qu'aucune action n'a jamais eu
+    // lieu) ; la série hebdomadaire (Revue hebdo) porte `derniereSemaine` ("YYYY-Www" ISO 8601,
+    // §5.3 : "à l'échelle de la semaine ISO plutôt que du jour"). `record` ne redescend jamais.
+    series: {
+      pilotage: { longueur: 0, record: 0, dernierJour: null },
+      inbox: { longueur: 0, record: 0, dernierJour: null },
+      taches: { longueur: 0, record: 0, dernierJour: null },
+      revueHebdo: { longueur: 0, record: 0, derniereSemaine: null },
+    },
     ...raw,
   };
 }
@@ -98,12 +121,14 @@ export async function getGamificationState() {
  *  l'utilisateur, jamais `toISOString()` qui repasse en UTC — même précaution que
  *  js/services/dateUtils.js#addDaysToIsoDate, reprise ici à l'identique plutôt que dupliquée
  *  différemment). Fonction privée : dateUtils.js n'est pas un fichier concerné par ce moteur.
- *  Sert au throttle de l'événement "Objectif mis à jour" (LOT G1) ET, depuis LOT G4, de clé de
- *  jour distinct pour les badges mensuels (`enregistrerJoursMensuels`, ses 7 premiers caractères
- *  donnant directement le mois au format "YYYY-MM"). */
-function localDateKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+ *  Sert au throttle de l'événement "Objectif mis à jour" (LOT G1), de clé de jour distinct pour
+ *  les badges mensuels (LOT G4, `enregistrerJoursMensuels`, ses 7 premiers caractères donnant
+ *  directement le mois au format "YYYY-MM") et, depuis LOT G5, aux séries journalières
+ *  (`enregistrerSerieJournaliere`). Accepte un paramètre `date` optionnel (par défaut `new
+ *  Date()`) uniquement pour permettre à `longueurSerieJournaliereCourante()` de raisonner sur un
+ *  "aujourd'hui" donné sans dépendre de l'horloge réelle (fonction pure, testable). */
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -298,56 +323,233 @@ async function evaluerFamille(familleId, valeurCourante) {
   }
 }
 
+// --- Séries (LOT G5, §5.3) — helpers utilisés uniquement par le barème XP ci-dessous (les 10
+// événements du §3, jamais par les 3 points d'écoute LOT G3 sans XP, exactement comme "Régulier"
+// au LOT G4 — voir le mapping détaillé sur chaque `recordXxx()` plus bas). --------------------
+
+/** Variante de `estJourOuvre()` pour une date "calendrier" tagguée UTC (construite via
+ *  `Date.UTC(...)`, voir `veilleOuvree()`/les helpers de semaine ISO ci-dessous) : utilise
+ *  `getUTCDay()` et non `getDay()`, pour ne JAMAIS mélanger les deux familles de getters
+ *  (piège classique : appeler `getDay()` — local — sur une date construite en UTC peut décaler
+ *  le jour de la semaine selon le fuseau horaire d'exécution). `estJourOuvre()` reste réservée
+ *  aux dates réelles ("maintenant"), celle-ci uniquement aux dates de calendrier internes. */
+function estJourOuvreUTC(date) {
+  const jour = date.getUTCDay();
+  return jour !== 0 && jour !== 6;
+}
+
+/** Jour OUVRÉ précédant `date` (§2.1 : lundi renvoie le vendredi précédent, tout autre jour
+ *  ouvré renvoie simplement la veille), au format "YYYY-MM-DD". Travaille sur une date
+ *  "calendrier" taguée UTC construite à partir des seuls composants LOCAUX année/mois/jour de
+ *  `date` (extraits une seule fois à l'entrée) — même précaution que les helpers de semaine ISO
+ *  ci-dessous, pour ne jamais laisser un changement d'heure (DST) décaler le résultat : on ne
+ *  raisonne ici que sur un calendrier de dates, jamais sur un instant réel. */
+function veilleOuvree(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  do {
+    d.setUTCDate(d.getUTCDate() - 1);
+  } while (!estJourOuvreUTC(d));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** Semaine ISO 8601 (lundi-dimanche, §5.3) d'une date "calendrier" donnée par ses composants
+ *  année/mois (0-11)/jour, au format "YYYY-Www" — l'année ISO (celle du JEUDI de la semaine,
+ *  règle standard) peut différer de l'année civile pour les tout premiers/derniers jours de
+ *  l'année. Toujours en UTC "calendrier" (voir `veilleOuvree()` ci-dessus pour la même
+ *  précaution) : ne jamais appeler avec des composants qui ne soient pas déjà LOCAUX. */
+function semaineIsoDepuisYMD(annee, mois, jour) {
+  const d = new Date(Date.UTC(annee, mois, jour));
+  const jourIso = d.getUTCDay() || 7; // lundi=1 ... dimanche=7
+  d.setUTCDate(d.getUTCDate() + 4 - jourIso); // jeudi de cette semaine ISO — détermine l'année ISO
+  const anneeIso = d.getUTCFullYear();
+  const debutAnnee = new Date(Date.UTC(anneeIso, 0, 1));
+  const numeroSemaine = Math.ceil(((d - debutAnnee) / 86400000 + 1) / 7);
+  return `${anneeIso}-W${String(numeroSemaine).padStart(2, "0")}`;
+}
+
+/** Semaine ISO de la date LOCALE donnée (§2.2) — point d'entrée public de `semaineIsoDepuisYMD`
+ *  à partir d'un objet `Date` réel ("maintenant"), composants extraits une seule fois ici. */
+function semaineIsoLocale(date) {
+  return semaineIsoDepuisYMD(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+/** Clé de la semaine ISO précédant immédiatement `semaineKey` (ex. "2026-W01" → "2025-W52" ou
+ *  "2025-W53" selon l'année) — recalculée en reculant de 7 jours à partir du JEUDI de la semaine
+ *  donnée (le 4 janvier appartient toujours à la semaine 1, règle ISO) puis en réappliquant
+ *  `semaineIsoDepuisYMD`, plutôt que par arithmétique directe sur le numéro de semaine (qui
+ *  casserait au changement d'année ISO, semaine 1 ↔ semaine 52/53). */
+function semaineIsoPrecedente(semaineKey) {
+  const [anneeStr, semaineStr] = semaineKey.split("-W");
+  const annee = Number(anneeStr);
+  const semaine = Number(semaineStr);
+  const jeudiSemaine1 = new Date(Date.UTC(annee, 0, 4));
+  const jourIsoJ1 = jeudiSemaine1.getUTCDay() || 7;
+  jeudiSemaine1.setUTCDate(jeudiSemaine1.getUTCDate() + 4 - jourIsoJ1); // jeudi réel de la semaine 1
+  const jeudiCourant = new Date(jeudiSemaine1.getTime());
+  jeudiCourant.setUTCDate(jeudiCourant.getUTCDate() + (semaine - 1) * 7);
+  const jeudiPrecedent = new Date(jeudiCourant.getTime());
+  jeudiPrecedent.setUTCDate(jeudiPrecedent.getUTCDate() - 7);
+  return semaineIsoDepuisYMD(jeudiPrecedent.getUTCFullYear(), jeudiPrecedent.getUTCMonth(), jeudiPrecedent.getUTCDate());
+}
+
+/**
+ * Enregistre qu'une action valorisant la série JOURNALIÈRE `serieId` (Pilotage/Inbox/Tâches,
+ * §5.3) a eu lieu aujourd'hui (date locale, §2.2). Ignore silencieusement les week-ends (§2.1,
+ * "une action réalisée un week-end ne compte ni pour ni contre une série") : aucune écriture.
+ * Sinon :
+ *  - Si cette série a déjà été enregistrée AUJOURD'HUI, ne fait rien (idempotent — "une action
+ *    valide suffit", §5.3, jamais un seuil de quantité).
+ *  - Sinon, compare `dernierJour` au jour OUVRÉ précédant aujourd'hui (`veilleOuvree`) : s'ils
+ *    coïncident (ou si `dernierJour` est `null`, tout premier enregistrement), la série CONTINUE
+ *    (longueur + 1). Sinon (au moins un jour ouvré sans action s'est déjà écoulé depuis
+ *    `dernierJour`), la série CASSE et repart à 1 dès aujourd'hui (§5.3 : "un jour ouvré sans
+ *    l'action concernée casse la série, elle retombe à 0, un nouveau départ commence dès la
+ *    prochaine action valide" — un jour ouvré AVEC action ne peut donc jamais laisser la série
+ *    à 0).
+ *  - Le record personnel ne redescend jamais (`record = max(record, longueur)`).
+ * Moteur PARESSEUX, comme le reste de ce fichier (aucune tâche planifiée séparée) : la cassure
+ * éventuelle n'est détectée en ÉCRITURE qu'au moment de la PROCHAINE action, quelle que soit la
+ * durée de l'absence — risque explicitement anticipé par la roadmap pour ce lot (§11, LOT G5,
+ * "la série doit se recalculer correctement rétroactivement, pas seulement en direct"). Pour la
+ * LECTURE (affichage), voir `longueurSerieJournaliereCourante()` plus bas, qui détecte la même
+ * cassure SANS attendre une prochaine action ni écrire quoi que ce soit — même principe que le
+ * niveau (LOT G2), jamais figé plus longtemps que nécessaire.
+ */
+async function enregistrerSerieJournaliere(serieId) {
+  const maintenant = new Date();
+  if (!estJourOuvre(maintenant)) return undefined; // week-end (§2.1) — ignoré, aucune écriture
+  const aujourdhui = localDateKey(maintenant);
+
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    const serie = current.series[serieId];
+    if (serie.dernierJour === aujourdhui) return undefined; // déjà compté aujourd'hui
+
+    const veille = veilleOuvree(maintenant);
+    const continuite = serie.dernierJour === null || serie.dernierJour === veille;
+    const longueur = continuite ? serie.longueur + 1 : 1;
+    const record = Math.max(serie.record, longueur);
+
+    return { series: { ...current.series, [serieId]: { longueur, record, dernierJour: aujourdhui } } };
+  });
+}
+
+/**
+ * Même principe que `enregistrerSerieJournaliere()` ci-dessus, à l'échelle de la semaine ISO
+ * (lundi-dimanche) plutôt que du jour ouvré (§5.3 : "la série Revue hebdo suit la même logique à
+ * l'échelle de la semaine ISO plutôt que du jour") — aucune notion de week-end ici, chaque
+ * semaine ISO compte. Seule série concernée dans ce lot : `revueHebdo`.
+ */
+async function enregistrerSerieHebdomadaire(serieId) {
+  const maintenant = new Date();
+  const semaineCourante = semaineIsoLocale(maintenant);
+
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    const serie = current.series[serieId];
+    if (serie.derniereSemaine === semaineCourante) return undefined; // déjà compté cette semaine
+
+    const semainePrecedente = semaineIsoPrecedente(semaineCourante);
+    const continuite = serie.derniereSemaine === null || serie.derniereSemaine === semainePrecedente;
+    const longueur = continuite ? serie.longueur + 1 : 1;
+    const record = Math.max(serie.record, longueur);
+
+    return { series: { ...current.series, [serieId]: { longueur, record, derniereSemaine: semaineCourante } } };
+  });
+}
+
+/**
+ * Longueur ACTUELLE affichable d'une série JOURNALIÈRE (Pilotage/Inbox/Tâches, §5.3), à partir de
+ * son état persisté brut `{ longueur, dernierJour }` — jamais un simple retour de `longueur`
+ * telle quelle : si au moins un jour ouvré s'est déjà écoulé sans action depuis `dernierJour`
+ * (donc AVANT même qu'une prochaine action ne déclenche la cassure en écriture, voir
+ * `enregistrerSerieJournaliere` ci-dessus), la série est déjà cassée AUX YEUX DU CALENDRIER,
+ * qu'une action ait eu lieu depuis ou non — se recalcule donc à la demande, jamais stocké plus
+ * longtemps que nécessaire (même principe que `niveauDepuisXP`, LOT G2). Fonction PURE (aucun
+ * accès storage), `maintenant` optionnel (par défaut `new Date()`) uniquement pour la rendre
+ * testable sans dépendre de l'horloge réelle. Aucune UI ne l'utilise dans ce lot (l'écran
+ * Progression, qui l'affichera, est LOT G8).
+ */
+export function longueurSerieJournaliereCourante(serieRaw, maintenant = new Date()) {
+  if (!serieRaw || !serieRaw.dernierJour) return 0;
+  const aujourdhui = localDateKey(maintenant);
+  if (serieRaw.dernierJour === aujourdhui) return serieRaw.longueur;
+  if (serieRaw.dernierJour === veilleOuvree(maintenant)) return serieRaw.longueur;
+  return 0; // au moins un jour ouvré sans action déjà passé — cassée, quoi qu'il arrive ensuite
+}
+
+/** Même principe que `longueurSerieJournaliereCourante()` ci-dessus, à l'échelle de la semaine
+ *  ISO (§5.3) — pour `revueHebdo` uniquement dans ce lot. Fonction PURE, `maintenant` optionnel
+ *  pour la même raison de testabilité. */
+export function longueurSerieHebdoCourante(serieRaw, maintenant = new Date()) {
+  if (!serieRaw || !serieRaw.derniereSemaine) return 0;
+  const semaineCourante = semaineIsoLocale(maintenant);
+  if (serieRaw.derniereSemaine === semaineCourante) return serieRaw.longueur;
+  if (serieRaw.derniereSemaine === semaineIsoPrecedente(semaineCourante)) return serieRaw.longueur;
+  return 0; // au moins une semaine ISO entière déjà écoulée sans revue — cassée
+}
+
 // --- Barème XP (§3 de la roadmap) — une fonction par ligne du tableau, montants et clés de
 // dédoublonnage figés ici, jamais recalculés ni redéfinis par un appelant. ------------------
 
 /** Tâche terminée — 10 XP, une fois par Tâche (première transition vers "done" seulement,
  *  voir js/domain/tasks.js#updateTask). LOT G3 : alimente aussi la famille de badges
  *  Productivité (§5.1), sur la base du même registre (voir `compterParPrefixe`). LOT G4 :
- *  alimente les badges mensuels "Focus" (§5.2) et "Régulier" (action valorisée du barème §3). */
+ *  alimente les badges mensuels "Focus" (§5.2) et "Régulier" (action valorisée du barème §3).
+ *  LOT G5 : alimente les séries "Pilotage" et "Tâches" (§5.3). */
 export async function recordTaskCompleted(taskId) {
   await awardXpOnce(`tache-terminee:${taskId}`, 10);
   const state = await getGamificationState();
   await evaluerFamille("productivite", compterParPrefixe(state, "tache-terminee:"));
   await enregistrerJoursMensuels(["focus", "regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
+  await enregistrerSerieJournaliere("taches");
 }
 
 /** Suivi terminé — 8 XP, une fois par Suivi (voir js/domain/followups.js#updateFollowUp).
  *  LOT G4 : alimente les badges mensuels "Livreur" (Suivi terminé OU Projet clôturé, §5.2) et
- *  "Régulier". Aucune famille de badges permanents (LOT G3) ne correspond à cette action. */
+ *  "Régulier". Aucune famille de badges permanents (LOT G3) ne correspond à cette action.
+ *  LOT G5 : alimente uniquement la série "Pilotage" (§5.3) — aucune série dédiée aux Suivis. */
 export async function recordFollowUpCompleted(followUpId) {
   await awardXpOnce(`suivi-termine:${followUpId}`, 8);
   await enregistrerJoursMensuels(["livreur", "regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 /** Projet clôturé — 40 XP, une fois par Projet (voir js/domain/projects.js#closeProject).
  *  LOT G3 : alimente aussi la famille de badges Delivery (§5.1). LOT G4 : alimente les badges
- *  mensuels "Livreur" (Suivi terminé OU Projet clôturé, §5.2) et "Régulier". */
+ *  mensuels "Livreur" (Suivi terminé OU Projet clôturé, §5.2) et "Régulier". LOT G5 : alimente
+ *  uniquement la série "Pilotage" (§5.3). */
 export async function recordProjectClosed(projectId) {
   await awardXpOnce(`projet-cloture:${projectId}`, 40);
   const state = await getGamificationState();
   await evaluerFamille("delivery", compterParPrefixe(state, "projet-cloture:"));
   await enregistrerJoursMensuels(["livreur", "regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 /** Réunion créée — 5 XP, une fois par Réunion (voir js/domain/meetings.js#createMeeting).
  *  LOT G3 : alimente aussi la famille de badges Réunions (§5.1). LOT G4 : aucun badge mensuel
- *  dédié aux Réunions (§5.2) — alimente uniquement "Régulier" (action valorisée du barème §3). */
+ *  dédié aux Réunions (§5.2) — alimente uniquement "Régulier" (action valorisée du barème §3).
+ *  LOT G5 : alimente uniquement la série "Pilotage" (§5.3). */
 export async function recordMeetingCreated(meetingId) {
   await awardXpOnce(`reunion-creee:${meetingId}`, 5);
   const state = await getGamificationState();
   await evaluerFamille("reunions", compterParPrefixe(state, "reunion-creee:"));
   await enregistrerJoursMensuels(["regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 /** Décision créée — 6 XP, une fois par Décision (voir js/domain/decisions.js#createDecision).
  *  LOT G3 : alimente aussi la famille de badges Décisions (§5.1). LOT G4 : alimente les badges
- *  mensuels "Décideur" et "Régulier" (§5.2). */
+ *  mensuels "Décideur" et "Régulier" (§5.2). LOT G5 : alimente uniquement la série "Pilotage"
+ *  (§5.3) — aucune série dédiée aux Décisions. */
 export async function recordDecisionCreated(decisionId) {
   await awardXpOnce(`decision-creee:${decisionId}`, 6);
   const state = await getGamificationState();
   await evaluerFamille("decisions", compterParPrefixe(state, "decision-creee:"));
   await enregistrerJoursMensuels(["decideur", "regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 /**
@@ -363,10 +565,13 @@ export async function recordDecisionCreated(decisionId) {
  * — aucun badge mensuel dédié à "Objectif mis à jour" lui-même. Contrairement à l'XP (throttlée à
  * une fois par jour ET par Objectif), le jour ouvré compte pour "Régulier" dès le premier appel
  * du jour, cohérent avec la définition du badge ("au moins une action valorisée ce jour-là").
+ * LOT G5 : même principe pour la série "Pilotage" (§5.3) — aucune série dédiée à "Objectif mis à
+ * jour" (la série "Revue hebdo" ne concerne QUE `recordObjectiveReviewAdded` ci-dessous).
  */
 export async function recordObjectiveUpdated(objectiveId) {
   await awardXpOnce(`objectif-maj:${objectiveId}:${localDateKey()}`, 8);
   await enregistrerJoursMensuels(["regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 /** Revue EADP ajoutée — 6 XP, une fois par point de suivi ajouté (`entry.id`, généré à chaque
@@ -374,43 +579,53 @@ export async function recordObjectiveUpdated(objectiveId) {
  *  ci-dessus : ce sont deux lignes différentes du barème (§3), jamais fusionnées.
  *  LOT G3 : alimente aussi la famille de badges Objectifs (§5.1, revues EADP, à ne pas confondre
  *  avec "Objectif mis à jour" ci-dessus qui ne fait partie d'aucune famille de badges). LOT G4 :
- *  aucun badge mensuel dédié aux revues EADP (§5.2) — alimente uniquement "Régulier". */
+ *  aucun badge mensuel dédié aux revues EADP (§5.2) — alimente uniquement "Régulier". LOT G5 :
+ *  alimente la série "Pilotage" ET la série hebdomadaire "Revue hebdo" (§5.3, seule action
+ *  déclenchant cette dernière). */
 export async function recordObjectiveReviewAdded(entryId) {
   await awardXpOnce(`revue-eadp:${entryId}`, 6);
   const state = await getGamificationState();
   await evaluerFamille("objectifs", compterParPrefixe(state, "revue-eadp:"));
   await enregistrerJoursMensuels(["regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
+  await enregistrerSerieHebdomadaire("revueHebdo");
 }
 
 /** Inbox qualifiée — 4 XP, une fois par item, quel que soit le type de qualification choisi (y
  *  compris "Archiver", voir §3 et js/domain/inbox.js#qualify). LOT G3 : alimente aussi la
  *  famille de badges Inbox (§5.1). LOT G4 : alimente les badges mensuels "Organisé" et
- *  "Régulier" (§5.2). */
+ *  "Régulier" (§5.2). LOT G5 : alimente les séries "Pilotage" et "Inbox" (§5.3). */
 export async function recordInboxItemQualified(itemId) {
   await awardXpOnce(`inbox-qualifiee:${itemId}`, 4);
   const state = await getGamificationState();
   await evaluerFamille("inbox", compterParPrefixe(state, "inbox-qualifiee:"));
   await enregistrerJoursMensuels(["organise", "regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
+  await enregistrerSerieJournaliere("inbox");
 }
 
 /** Ressource créée — 3 XP, une fois par Ressource (voir js/domain/resources.js#createResource).
  *  LOT G3 : alimente aussi la famille de badges Ressources (§5.1). LOT G4 : aucun badge mensuel
- *  dédié aux Ressources (§5.2) — alimente uniquement "Régulier". */
+ *  dédié aux Ressources (§5.2) — alimente uniquement "Régulier". LOT G5 : alimente uniquement la
+ *  série "Pilotage" (§5.3). */
 export async function recordResourceCreated(resourceId) {
   await awardXpOnce(`ressource-creee:${resourceId}`, 3);
   const state = await getGamificationState();
   await evaluerFamille("ressources", compterParPrefixe(state, "ressource-creee:"));
   await enregistrerJoursMensuels(["regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 /** Prompt créé — 3 XP, une fois par Prompt (voir js/domain/prompts.js#createPrompt).
  *  LOT G3 : alimente aussi la famille de badges Prompts (§5.1). LOT G4 : aucun badge mensuel
- *  dédié aux Prompts (§5.2) — alimente uniquement "Régulier". */
+ *  dédié aux Prompts (§5.2) — alimente uniquement "Régulier". LOT G5 : alimente uniquement la
+ *  série "Pilotage" (§5.3). */
 export async function recordPromptCreated(promptId) {
   await awardXpOnce(`prompt-cree:${promptId}`, 3);
   const state = await getGamificationState();
   await evaluerFamille("prompts", compterParPrefixe(state, "prompt-cree:"));
   await enregistrerJoursMensuels(["regulier"]);
+  await enregistrerSerieJournaliere("pilotage");
 }
 
 // --- Badges permanents (LOT G3, §5.1) — catalogue COMPLET, transcrit tel quel depuis le tableau
