@@ -56,6 +56,27 @@
 // bas), exactement comme le niveau (LOT G2) n'est jamais stocké figé — risque explicitement
 // anticipé par la roadmap pour ce lot (§11, "la série doit se recalculer correctement
 // rétroactivement, pas seulement en direct"). Aucune UI dans ce lot (écran Progression = LOT G8).
+//
+// Portée EXACTE de LOT G6 (voir TODO_GAMIFICATION.md → §11, LOT G6) : PREMIER écran UI de toute
+// la roadmap gamification — la Galerie des badges (§7), qui affiche UNIQUEMENT la collection
+// (badges obtenus/verrouillés/progression/raretés, voir js/views/gamification.js), jamais les
+// données de pilotage (XP/niveau/séries — écran "Progression", LOT G8, décision produit déjà
+// actée). Ce fichier n'ajoute ici que des exports de LECTURE SEULE au service de cet écran —
+// aucune nouvelle attribution, aucun nouveau compteur : `BADGES` (désormais exporté),
+// `FAMILLES_BADGES` (catalogue des 14 familles pour un affichage groupé stable), et
+// `valeurCouranteFamille()` (valeur courante d'une famille pour afficher sa progression) — voir
+// la section "Galerie des badges (LOT G6)" juste après le catalogue `BADGES` ci-dessous.
+// DEUX LIMITATIONS actées avec Charles-Henri (AskUserQuestion, 25/09/2026) avant tout
+// développement de ce lot :
+//  - Déblocages (§7 exige, pour chaque badge, la liste des mentions de son déblocage — Tables
+//    B/C de LOT G7, qui n'est pas construit : aucune donnée n'existe) — section OMISE dans cet
+//    écran pour l'instant, décision "construire le reste maintenant, ajouter plus tard sans
+//    retoucher la structure de l'écran".
+//  - Illustrations (§7/§8 exigent une illustration couleur réelle par badge — LOT G9, production
+//    graphique externe, non démarrée) — remplacées par un emoji/pictogramme par FAMILLE
+//    (`FAMILLES_BADGES` ci-dessous) avec un traitement CSS par RARETÉ (grisé si verrouillé,
+//    halo/bordure/dégradé croissant du Bronze au Légendaire, §8), swappable pour une vraie
+//    illustration SVG plus tard sans restructurer l'écran.
 
 import * as storage from "../services/storage.js";
 
@@ -650,7 +671,7 @@ export async function recordPromptCreated(promptId) {
 //    dans AUCUN écran de l'app actuelle : `js/domain/templates.js` ne contient que 4 canevas
 //    FIXES et codés en dur (Réunion/Suivi/Projet/Communication), et documente lui-même qu'aucun
 //    éditeur de canevas personnalisé n'existe ("ces modèles sont fixes pour l'instant").
-const BADGES = [
+export const BADGES = [
   // Productivité — Tâches terminées (cumul), js/domain/tasks.js#updateTask.
   { id: "productivite-1-tache", nom: "Premier pas", description: "Termine ta toute première Tâche.", rarete: "bronze", famille: "productivite", seuil: 1, illustration: "Coche stylisée — traitement Bronze (§8)", condition: "1 Tâche terminée (cumul)", xp: 5 },
   { id: "productivite-25-taches", nom: "Sur sa lancée", description: "Termine 25 Tâches.", rarete: "argent", famille: "productivite", seuil: 25, illustration: "Coche stylisée — traitement Argent (§8)", condition: "25 Tâches terminées (cumul)", xp: 15 },
@@ -753,6 +774,99 @@ const BADGES = [
   { id: "expert-9000-xp", nom: "Virtuose", description: "Cumule 9 000 XP au total.", rarete: "platine", famille: "expert", seuil: 9000, illustration: "Étoile à cinq branches pleine — traitement Platine (§8)", condition: "XP total cumulé ≥ 9 000", xp: 100 },
   { id: "expert-15000-xp", nom: "Légende de Pilotage", description: "Cumule 15 000 XP au total.", rarete: "legendaire", famille: "expert", seuil: 15000, illustration: "Étoile à cinq branches pleine — traitement Légendaire (§8)", condition: "XP total cumulé ≥ 15 000 (dépasse le total du niveau 30 — reste atteignable grâce au niveau infini, §4)", xp: 250 },
 ];
+
+// --- Galerie des badges (LOT G6, §7/§8) — métadonnées et lecture PURES au service du seul
+// écran de collection : aucune de ces exports n'attribue quoi que ce soit, elles ne font que
+// décrire le catalogue (`FAMILLES_BADGES`) ou lire l'état déjà écrit par les lots précédents
+// (`valeurCouranteFamille`, `subscribe`). Les 14 familles sont listées ici dans le même ordre
+// que dans le catalogue `BADGES` ci-dessus, pour que l'écran puisse les parcourir dans un ordre
+// stable sans avoir à le redéduire lui-même à partir des entrées du catalogue.
+export const FAMILLES_BADGES = [
+  { id: "productivite", label: "Productivité", emoji: "✅" },
+  { id: "delivery", label: "Delivery", emoji: "🚀" },
+  { id: "collaboration", label: "Collaboration", emoji: "🔗" },
+  { id: "management", label: "Management", emoji: "🧑‍🤝‍🧑" },
+  { id: "objectifs", label: "Objectifs", emoji: "🎯" },
+  { id: "documentation", label: "Documentation", emoji: "📖" },
+  { id: "organisation", label: "Organisation", emoji: "🗒️" },
+  { id: "decisions", label: "Décisions", emoji: "⚖️" },
+  { id: "reunions", label: "Réunions", emoji: "🗓️" },
+  { id: "inbox", label: "Inbox", emoji: "📥" },
+  { id: "ressources", label: "Ressources", emoji: "📎" },
+  { id: "prompts", label: "Prompts", emoji: "💬" },
+  { id: "regularite", label: "Régularité", emoji: "🔥" },
+  { id: "expert", label: "Expert", emoji: "⭐" },
+];
+
+/** Préfixe `rewardedKeys` associé à chaque famille comptée par simple préfixe (via
+ *  `compterParPrefixe`, voir plus bas) — promu depuis le mapping ad-hoc déjà vérifié par les
+ *  tests LOT G3 (`tests/unit/lotG3-gamification-badges.spec.js`), afin que la Galerie affiche la
+ *  même valeur de progression que celle réellement utilisée par `evaluerFamille()`. Les 4
+ *  familles absentes de ce mapping sont calculées différemment par `valeurCouranteFamille()`
+ *  ci-dessous : `management` (collaborateurs distincts, paramètre externe) et `expert` (XP total)
+ *  ont chacune leur propre lecture directe ; `documentation` et `regularite` (familles VOLONTAIREMENT
+ *  SANS DÉTECTION, voir le commentaire au-dessus du catalogue `BADGES`) n'ont pas de valeur
+ *  courante fiable à afficher — `regularite` fait exception : son seuil se compare au record
+ *  personnel de la Série Pilotage (§5.3, déjà livré par LOT G5), une donnée réellement
+ *  disponible même si l'attribution du badge reste bloquée (voir `valeurCouranteFamille`). */
+const PREFIXES_PAR_FAMILLE = {
+  productivite: "tache-terminee:",
+  delivery: "projet-cloture:",
+  collaboration: "lien-cree:",
+  objectifs: "revue-eadp:",
+  inbox: "inbox-qualifiee:",
+  ressources: "ressource-creee:",
+  prompts: "prompt-cree:",
+  decisions: "decision-creee:",
+  reunions: "reunion-creee:",
+  organisation: "postit-cree:",
+};
+
+/**
+ * Valeur courante de la métrique comptée par une famille de badges (§5.1), à comparer au `seuil`
+ * de chaque badge de cette famille pour afficher sa progression dans la Galerie (LOT G6). Fonction
+ * PURE côté lecture pour `management`/`expert`/`regularite`/`documentation` (dérivée entièrement
+ * de `state` et, pour `management` uniquement, du paramètre `collaborateursDistincts` — cette
+ * valeur ne vit dans aucun compteur `rewardedKeys`, voir `recordObjectiveCreated` ci-dessus,
+ * l'appelant doit donc la calculer lui-même via `objectivesApi.listAll()` et la transmettre ici).
+ * - `management` : nombre de collaborateurs distincts suivis (paramètre `collaborateursDistincts`).
+ * - `expert` : XP total cumulé (`state.xpTotal`).
+ * - `regularite` : record personnel de la Série Pilotage (`state.series.pilotage.record`, §5.3) —
+ *   une lecture honnête de la seule donnée réellement disponible pour cette famille, alors même
+ *   que son attribution reste bloquée (voir le commentaire au-dessus du catalogue `BADGES`) ;
+ *   permet à la Galerie d'afficher une progression réelle plutôt qu'un compteur figé à 0.
+ * - `documentation` : aucune donnée fiable n'existe (voir le même commentaire) — renvoie toujours
+ *   0, l'écran doit donc afficher une note explicative dédiée plutôt que se fier à ce chiffre.
+ * - toute autre famille du mapping `PREFIXES_PAR_FAMILLE` : nombre d'entrées `rewardedKeys`
+ *   commençant par le préfixe associé (même mécanique que `evaluerFamille`).
+ */
+export function valeurCouranteFamille(state, familleId, collaborateursDistincts = 0) {
+  if (familleId === "management") return collaborateursDistincts;
+  if (familleId === "expert") return state.xpTotal || 0;
+  if (familleId === "regularite") return state.series?.pilotage?.record || 0;
+  if (familleId === "documentation") return 0;
+  const prefixe = PREFIXES_PAR_FAMILLE[familleId];
+  if (!prefixe) return 0;
+  return compterParPrefixe(state, prefixe);
+}
+
+/**
+ * Écoute temps réel de l'état de gamification (LOT G6, pour que la Galerie se mette à jour
+ * immédiatement quand un badge est obtenu pendant que l'écran est ouvert, sans rechargement
+ * manuel) — simple adaptation de `storage.subscribe`, qui écoute par COLLECTION (potentiellement
+ * plusieurs documents) alors que la gamification n'en a qu'un seul (`COLLECTION`/`DOC_ID`
+ * ci-dessus) : ne retient que ce document unique et lui applique `withDefaults()`, exactement
+ * comme le ferait un appel à `getGamificationState()`, pour que l'appelant reçoive toujours un
+ * état complet même avant la toute première écriture. Retourne la fonction de désabonnement,
+ * à appeler dans le `cleanup()` de l'écran (même convention que tous les autres `subscribe`
+ * exposés par ce dépôt, voir js/domain/resources.js#subscribe par exemple).
+ */
+export function subscribe(callback) {
+  return storage.subscribe(COLLECTION, (items) => {
+    const doc = items.find((item) => item.id === DOC_ID);
+    callback(withDefaults(doc || {}));
+  });
+}
 
 /** Lien créé via « 🔗 Lié » — AUCUN XP de base (Collaboration n'est pas une ligne du barème §3),
  *  uniquement un compteur pour la famille de badges Collaboration (§5.1). Voir
