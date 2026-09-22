@@ -1993,3 +1993,98 @@ tbody.drag-over-group {
   margin-bottom: var(--space-2);
 }
 .notes-entry-text { white-space: pre-wrap; margin-top: 2px; }
+
+/* ---------- Galerie des badges (LOT G6, js/views/gamification.js) ----------
+   Traitement par RARETÉ demandé au §8 de TODO_GAMIFICATION.md, "dérivé de la palette déjà en
+   place" (arbitrage AskUserQuestion du 25/09/2026 : pas de nouvelle illustration par badge tant
+   que LOT G9 n'est pas fait — un emoji de famille, voir gamification.js#FAMILLES_BADGES, reçoit
+   ici un traitement croissant du Bronze au Légendaire) : AUCUNE nouvelle couleur introduite,
+   uniquement les jetons existants de tokens.css, déjà valides dans les deux thèmes clair/sombre
+   puisqu'ils le sont déjà partout ailleurs dans l'app. Une tuile verrouillée (badge non obtenu)
+   applique toujours `.badge-tuile--verrouille` PAR-DESSUS le modificateur de rareté ci-dessous
+   (placé après dans ce fichier pour gagner la cascade à spécificité égale, voir son commentaire)
+   plutôt que d'omettre le modificateur de rareté : la tuile grisée garde son gabarit exact
+   (largeur de bordure, etc.) et ne bouge donc pas visuellement quand le badge est obtenu. */
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.badge-tuile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.badge-tuile-emoji { font-size: 1.8rem; line-height: 1; }
+.badge-tuile-nom { font-weight: 600; font-size: var(--font-size-sm); }
+.badge-tuile-rarete { font-size: var(--font-size-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.badge-tuile-condition { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.badge-tuile-progression { font-size: var(--font-size-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.badge-tuile-obtenu { font-size: var(--font-size-xs); color: var(--color-success); font-weight: 600; }
+
+/* Bronze — le plus discret des 5 paliers, une simple bordure teintée (comme §9, palier "Bronze"
+   des niveaux, réutilise le même principe de teinte neutre). */
+.badge-tuile--bronze { border-color: var(--color-text-muted); }
+.badge-tuile--bronze .badge-tuile-rarete { color: var(--color-text-muted); }
+
+/* Argent — bordure plus épaisse + légère ombre, un cran au-dessus du Bronze sans nouvelle
+   teinte (toujours `--color-border`, déjà la bordure par défaut de `.card`). */
+.badge-tuile--argent { border-width: 2px; box-shadow: var(--shadow-sm); }
+.badge-tuile--argent .badge-tuile-rarete { color: var(--color-text-muted); }
+
+/* Or — réutilise `--color-warning`, déjà un ton ambre/or dans la palette existante (coïncidence
+   heureuse signalée dans le bilan de ce lot) : aucune nouvelle couleur, un badge Or a
+   simplement l'air... or. */
+.badge-tuile--or { border-color: var(--color-warning); background: var(--color-warning-bg); }
+.badge-tuile--or .badge-tuile-rarete { color: var(--color-warning); }
+
+/* Platine — bordure dégradée (technique double-`background-image`, la seule qui respecte
+   `border-radius` contrairement à `border-image`) dérivée des deux teintes d'accent déjà
+   utilisées ailleurs dans l'app (`--color-info` du bleu informatif, `--color-primary` de la
+   marque). */
+.badge-tuile--platine {
+  border-width: 2px;
+  border-color: transparent;
+  background-image: linear-gradient(var(--color-surface), var(--color-surface)), linear-gradient(135deg, var(--color-info), var(--color-primary));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: var(--shadow-md);
+}
+.badge-tuile--platine .badge-tuile-rarete { color: var(--color-primary); }
+
+/* Légendaire — même technique de bordure dégradée que Platine, dérivée de `--color-primary` et
+   `--color-waiting` (violet déjà utilisé pour "⭐ Projet prioritaire"), plus un halo statique
+   (`box-shadow` supplémentaire, jamais d'animation) pour marquer le palier le plus rare. */
+.badge-tuile--legendaire {
+  border-width: 2px;
+  border-color: transparent;
+  background-image: linear-gradient(var(--color-surface), var(--color-surface)), linear-gradient(135deg, var(--color-primary), var(--color-waiting));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: 0 0 0 3px var(--color-waiting-bg), var(--shadow-md);
+}
+.badge-tuile--legendaire .badge-tuile-rarete { color: var(--color-waiting); }
+
+/* Verrouillé — DOIT rester déclaré après les 5 modificateurs de rareté ci-dessus : à
+   spécificité CSS égale (une seule classe), c'est l'ORDRE dans cette feuille qui tranche, donc
+   ce bloc l'emporte sur `--bronze`/`--argent`/`--or`/`--platine`/`--legendaire` quel qu'il soit,
+   sans avoir besoin d'un seul `!important`. Réinitialise explicitement chaque propriété que les
+   5 modificateurs peuvent avoir posée (`background` en raccourci efface aussi
+   `background-image`) plutôt que de ne poser qu'un filtre, pour qu'une tuile verrouillée ait
+   toujours EXACTEMENT le même rendu neutre, quelle que soit sa rareté réelle. */
+.badge-tuile--verrouille {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+  box-shadow: none;
+  opacity: 0.65;
+}
+.badge-tuile--verrouille .badge-tuile-rarete,
+.badge-tuile--verrouille .badge-tuile-nom { color: var(--color-text-muted); }
+.badge-tuile--verrouille .badge-tuile-emoji { filter: grayscale(1); }
