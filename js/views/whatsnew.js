@@ -80,6 +80,20 @@ const WHATS_NEW = [
         howTo: "Clique sur le 📅 à côté d'une échéance ou d'un prochain contrôle, puis \"+1 j\", \"+7 j\" ou choisis une date.",
         gain: "Reporter une date en un clic, sans quitter l'écran de préparation ou la fiche Personne.",
       },
+      {
+        type: "fix",
+        title: "🛠️ Objectif : un indicateur ajouté s'affiche désormais tout de suite",
+        text: "Ajouter un indicateur, un suivi ou un lien à un objectif rafraîchissait la fiche avec les données d'avant l'ajout : le nouvel élément n'apparaissait qu'après avoir refermé la fiche puis rouvert l'objectif depuis la liste. Corrigé : la fiche affiche désormais immédiatement ce qui vient d'être ajouté.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Plus besoin de refermer puis rouvrir un objectif pour voir un indicateur, un suivi ou un lien qu'on vient d'ajouter.",
+      },
+      {
+        type: "add",
+        title: "📋 Objectif : import depuis un texte généré par IA",
+        text: "Un objectif construit avec un assistant IA (catégorie, SMART, indicateurs...) peut désormais être collé tel quel pour préremplir sa fiche à la création, ou pour ajouter d'un coup ses indicateurs à un objectif déjà existant — au lieu de ressaisir à la main un texte déjà structuré.",
+        howTo: "À la création d'un objectif : bouton \"📋 Importer depuis un texte\". Sur un objectif déjà créé : bouton \"📋 Importer\" à côté de \"+ Indicateur\". Colle le texte généré par l'IA, puis \"Analyser\".",
+        gain: "Un copier-coller au lieu de ressaisir chaque champ et chaque indicateur à la main.",
+      },
     ],
   },
   {
