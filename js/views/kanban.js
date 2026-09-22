@@ -29,7 +29,7 @@ import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
 import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
-import { renderChecklist } from "../components/checklist.js";
+import { renderChecklist, sortChecklistForDisplay } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
 import { renderInfoTip } from "../components/infoTip.js";
 import { copyEntityLink } from "../components/copyLink.js";
@@ -471,23 +471,12 @@ export function renderKanban(container) {
 // copie exacte de celle de js/views/dashboard.js, même correctif — voir js/services/dateUtils.js.
 const daysFromToday = dateUtils.daysFromToday;
 
-/**
- * TODO-003 (LOT 2) : calcule la nouvelle échéance pour un report rapide "+N jours". Base de
- * calcul : la date d'échéance actuelle si elle existe et n'est pas déjà dépassée, sinon
- * aujourd'hui — reporter une tâche déjà en retard "+1 jour" doit l'amener à demain, pas la
- * laisser en retard un jour de plus. Reprend `dateUtils.parseLocalDate` (minuit LOCAL, jamais
- * `new Date(dateStr)` seul) pour le parsing, et reformate à partir des composants locaux
- * (jamais `toISOString()`, qui repasse en UTC) — même précaution que documentée dans
- * js/services/dateUtils.js pour éviter de réintroduire le bug de décalage de jour déjà corrigé.
- */
-function addDaysToIsoDate(currentIsoDate, days) {
-  const base = currentIsoDate && daysFromToday(currentIsoDate) >= 0
-    ? dateUtils.parseLocalDate(currentIsoDate)
-    : new Date();
-  base.setHours(0, 0, 0, 0);
-  base.setDate(base.getDate() + days);
-  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
-}
+// TODO-003 (LOT 2) : report rapide d'échéance "+N jours" — calcul déplacé vers
+// `js/services/dateUtils.js#addDaysToIsoDate` le 22/09/2026 (retour direct de Charles-Henri :
+// même contrôle nécessaire sur les dates de Suivi, `js/views/people.js`, voir TODO-030) plutôt
+// que dupliqué une seconde fois là-bas — la mutualisation que ce TODO envisageait déjà lui-même.
+// Repris ici tel quel, aucun changement de comportement.
+const addDaysToIsoDate = dateUtils.addDaysToIsoDate;
 
 /**
  * Petit retour positif à la clôture d'une tâche (retour de Charles-Henri, 01/09/2026 — piste
@@ -1273,7 +1262,7 @@ function renderCard(task, projects) {
     </div>
     ${hasChecklist ? `
       <div class="kanban-card-checklist" data-checklist-body style="display:${isExpanded ? "block" : "none"};">
-        ${checklist.map((c) => `
+        ${sortChecklistForDisplay(checklist).map((c) => `
           <label class="kanban-checklist-item">
             <input type="checkbox" data-checklist-id="${c.id}" ${c.done ? "checked" : ""} />
             <span class="${c.done ? "done" : ""}">${escapeHtml(c.text)}</span>
@@ -1748,6 +1737,10 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       updateChecklistTitle();
       return updated;
     },
+    // Retour direct de Charles-Henri (22/09/2026) : "idem pour les étapes, quand je coche une
+    // étape, les étapes cochées se mettent après les non cochées et se trient du plus récent au
+    // plus ancien" — voir le commentaire en tête de js/components/checklist.js.
+    sortDoneToBottom: true,
   });
   renderNotesBlock(body.querySelector("#detail-notes"), task.notesLog || [], {
     onAdd: async (text) => {
