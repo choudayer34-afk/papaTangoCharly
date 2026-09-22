@@ -38,6 +38,7 @@ import { generateId } from "../services/id.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 import * as tagsApi from "../domain/tags.js";
 import * as dateUtils from "../services/dateUtils.js";
+import { MODULE_CATALOG, DEFAULT_NAV_MAIN, notifyNavChanged } from "../services/navConfig.js";
 
 // TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
 // (décision produit du 15/09/2026, voir js/views/inbox.js) : un seul libellé affiché désormais,
@@ -276,6 +277,10 @@ export function renderDashboard(container) {
   // Ordre explicite des rubriques (même retour, second volet) — vide tant que Charles-Henri n'a
   // rien déplacé lui-même, voir defaultHomeOrder()/applyHomeOrder().
   let dashboardOrder = [];
+  // Barre de navigation personnalisée (LOT 12, TODO-026) — les 4 clés de
+  // js/services/navConfig.js#MODULE_CATALOG choisies pour la barre principale, voir
+  // openNavCustomizationModal() plus bas ; vide tant que Charles-Henri n'a rien personnalisé.
+  let navigationMain = [];
   // Mémorisé ici (LOT 9, TODO-019) pour que openDashboardSettingsModal (le contrôle de
   // préférences "↺ Redemander mon choix", voir plus bas) connaisse le choix actuel sans devoir
   // relire les préférences à chaque ouverture — tenu à jour par renderNotifOptIn() et par les
@@ -319,6 +324,7 @@ export function renderDashboard(container) {
     // sa garde `if (el)`) mais s'afficherait aussi telle quelle, sans libellé, dans la liste
     // réordonnable de ⚙️ Personnaliser l'accueil.
     dashboardOrder = (prefs.dashboardOrder || []).filter((k) => k !== "postit");
+    navigationMain = prefs.navigationMain || [];
     renderReviewReminder(prefs.lastWeeklyReviewAt);
     notifOptIn = prefs.notifOptIn;
     renderNotifOptIn(notifOptIn);
@@ -954,6 +960,11 @@ export function renderDashboard(container) {
         <div id="home-order-list"></div>
         <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre par défaut</button>
       </div>
+      <div class="field" style="margin-top:20px;">
+        <label style="display:block;margin-bottom:6px;">🧭 Navigation</label>
+        <p class="item-meta" style="margin:0 0 8px;">Choisis les 4 icônes de ta barre du bas (☰ Plus reste toujours la 5e) — identique sur web et mobile, propre à ton compte.</p>
+        <button type="button" id="open-nav-custom-btn" class="btn btn-ghost btn-sm">🧭 Personnaliser la navigation</button>
+      </div>
       ${
         // Contrôle de préférences pour réactiver l'opt-in (LOT 9, TODO-019, COMP-UX-010) —
         // jusqu'ici, une fois "Activer"/"Non merci" cliqué une fois sur le bandeau de l'Accueil,
@@ -1013,6 +1024,13 @@ export function renderDashboard(container) {
       renderOrderList();
     });
 
+    // LOT 12 (TODO-026) : ouvre la modale dédiée à la personnalisation de la navigation — voir
+    // openNavCustomizationModal() plus bas. openModal() ferme d'abord celle-ci automatiquement
+    // (une seule modale à la fois, voir js/components/modal.js), donc rien d'autre à faire ici.
+    body.querySelector("#open-nav-custom-btn").addEventListener("click", () => {
+      openNavCustomizationModal();
+    });
+
     const notifStatusEl = body.querySelector("#notif-optin-status");
     if (notifStatusEl) {
       notifStatusEl.textContent =
@@ -1065,6 +1083,157 @@ export function renderDashboard(container) {
             applyHomeModeVisibility();
             applyHomeOrder();
             showToast("Accueil mis à jour");
+          },
+        },
+      ],
+    });
+  }
+
+  /**
+   * "🧭 Personnaliser la navigation" (LOT 12, TODO-026 — US-026 du 21/09/2026, retour de
+   * Charles-Henri : personnaliser sa barre de navigation selon ses usages, identique web/mobile,
+   * strictement individuel). Ouverte DEPUIS ⚙️ Personnaliser l'accueil ci-dessus plutôt que
+   * depuis un menu latéral (qui n'existe nulle part dans cette app — un seul et même bandeau
+   * `.bottom-nav` partout, web comme mobile, voir js/app.js) ou un appui long sur la barre
+   * (aucune gestuelle de ce type nulle part ailleurs dans l'app) : Charles-Henri a explicitement
+   * choisi ce point d'entrée UNIQUE plutôt que d'introduire une nouvelle zone d'interface ou un
+   * geste supplémentaire.
+   *
+   * Réutilise le mécanisme ▲/▼ de "Ordre des rubriques" ci-dessus (même arbitrage de
+   * Charles-Henri : boutons ▲/▼ + bouton de bascule plutôt qu'un vrai glisser-déposer, qui
+   * n'existe nulle part ailleurs dans cette app vanilla JS) plutôt que le glisser-déposer
+   * littéralement décrit par la spec.
+   *
+   * Invariant "la barre principale contient 4 modules personnalisables + Plus" (règle métier
+   * explicite de la spec) gardé VRAI à tout instant plutôt que vérifié seulement à
+   * l'enregistrement : aucun bouton ne permet de retirer un module de la barre principale sans
+   * qu'un autre le remplace aussitôt — faire descendre un module en dernière position (▼) puis
+   * cliquer "→ Barre principale" sur un module de Plus l'évince automatiquement, qui réapparaît
+   * en tête de "Dans Plus". Impossible d'arriver à 3 ou 5 modules dans la barre principale, donc
+   * jamais besoin d'un message de validation bloquant à l'enregistrement. Décision
+   * d'implémentation propre à ce mécanisme (le "bouton de bascule" choisi par Charles-Henri ne
+   * précisait pas ce détail) — signalée dans le bilan de LOT 12 plutôt que revalidée séparément,
+   * risque jugé faible : un simple hint texte l'explique dans la modale elle-même.
+   *
+   * "☰ Plus" n'apparaît dans aucune des deux colonnes : fixe, non supprimable, non déplaçable
+   * (règle métier explicite de la spec) — voir js/services/navConfig.js#MODULE_CATALOG, qui ne le
+   * liste d'ailleurs pas comme un module personnalisable.
+   */
+  function openNavCustomizationModal() {
+    let currentMain = navigationMain && navigationMain.length === 4 ? [...navigationMain] : [...DEFAULT_NAV_MAIN];
+    let currentPlus = MODULE_CATALOG.filter((m) => !currentMain.includes(m.key)).map((m) => m.key);
+    let changed = false;
+    let resetRequested = false;
+
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <p class="item-meta" style="margin:0 0 12px;">Identique sur web et mobile — ce choix est propre à ton compte, sans effet pour les autres personnes utilisant Pilotage.</p>
+      <div class="field">
+        <label style="display:block;margin-bottom:6px;">Barre principale (4 modules + ☰ Plus, toujours en 5e position)</label>
+        <div id="nav-main-list"></div>
+      </div>
+      <div class="field" style="margin-top:20px;">
+        <label style="display:block;margin-bottom:6px;">Dans ☰ Plus</label>
+        <p class="item-meta" style="margin:0 0 8px;">Pour faire entrer un module ici dans la barre principale : fais-le d'abord passer en dernière position (▼) à gauche, puis clique "→ Barre principale" sur le module voulu — il prend automatiquement la place du dernier de la barre.</p>
+        <div id="nav-plus-list"></div>
+      </div>
+      <button type="button" id="nav-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:16px;">↺ Revenir à Accueil, Inbox, Pilotage, Équipe, Plus</button>
+    `;
+
+    function moduleLabel(key) {
+      const m = MODULE_CATALOG.find((mod) => mod.key === key);
+      return m ? `${m.icon} ${m.label}` : key;
+    }
+
+    function renderLists() {
+      const mainEl = body.querySelector("#nav-main-list");
+      mainEl.innerHTML = currentMain
+        .map(
+          (key, idx) => `
+        <div class="item-row" style="padding:6px 0;">
+          <div class="item-main"><div class="item-title">${moduleLabel(key)}</div></div>
+          <div style="display:flex;gap:4px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-dir="up" data-idx="${idx}" aria-label="Monter" ${idx === 0 ? "disabled" : ""}>▲</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-dir="down" data-idx="${idx}" aria-label="Descendre" ${idx === currentMain.length - 1 ? "disabled" : ""}>▼</button>
+          </div>
+        </div>`
+        )
+        .join("");
+      mainEl.querySelectorAll("button[data-dir]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const idx = Number(btn.dataset.idx);
+          const swapIdx = idx + (btn.dataset.dir === "up" ? -1 : 1);
+          [currentMain[idx], currentMain[swapIdx]] = [currentMain[swapIdx], currentMain[idx]];
+          changed = true;
+          resetRequested = false;
+          renderLists();
+        });
+      });
+
+      const plusEl = body.querySelector("#nav-plus-list");
+      plusEl.innerHTML = currentPlus
+        .map(
+          (key) => `
+        <div class="item-row" style="padding:6px 0;">
+          <div class="item-main"><div class="item-title">${moduleLabel(key)}</div></div>
+          <button type="button" class="btn btn-ghost btn-sm" data-swap="${key}">→ Barre principale</button>
+        </div>`
+        )
+        .join("");
+      plusEl.querySelectorAll("button[data-swap]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const key = btn.dataset.swap;
+          currentPlus = currentPlus.filter((k) => k !== key);
+          const evicted = currentMain.pop();
+          currentPlus.unshift(evicted);
+          currentMain.push(key);
+          changed = true;
+          resetRequested = false;
+          renderLists();
+        });
+      });
+    }
+    renderLists();
+
+    body.querySelector("#nav-reset-btn").addEventListener("click", () => {
+      currentMain = [...DEFAULT_NAV_MAIN];
+      currentPlus = MODULE_CATALOG.filter((m) => !currentMain.includes(m.key)).map((m) => m.key);
+      changed = false;
+      resetRequested = true;
+      renderLists();
+    });
+
+    openModal({
+      title: "🧭 Personnaliser la navigation",
+      body,
+      actions: [
+        {
+          label: "Annuler",
+          variant: "ghost",
+          // Revient à ⚙️ Personnaliser l'accueil plutôt que de fermer entièrement — cohérent
+          // avec le fait que ce réglage vit à l'intérieur de cette modale-là (voir le bouton
+          // "🧭 Personnaliser la navigation" ci-dessus). openModal() ferme d'abord celle-ci
+          // automatiquement (une seule modale à la fois, voir js/components/modal.js).
+          onClick: () => openDashboardSettingsModal(),
+        },
+        {
+          label: "Enregistrer",
+          variant: "primary",
+          closesModal: false,
+          onClick: async () => {
+            if (resetRequested) {
+              navigationMain = [];
+              await preferencesApi.setNavigationMain([]);
+            } else if (changed) {
+              navigationMain = currentMain;
+              await preferencesApi.setNavigationMain(currentMain);
+            }
+            // Signale à js/app.js de reconstruire la barre du bas déjà montée, sans recharger
+            // l'application (voir js/services/navConfig.js#notifyNavChanged).
+            notifyNavChanged();
+            closeModal();
+            showToast("Navigation mise à jour");
+            openDashboardSettingsModal();
           },
         },
       ],
