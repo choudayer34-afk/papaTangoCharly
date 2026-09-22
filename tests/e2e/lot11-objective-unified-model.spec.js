@@ -78,39 +78,61 @@ test("Objectif personnel : le bloc Détails (catégorie, campagne/période, SMAR
 });
 
 test("Objectif personnel : deux campagnes distinctes coexistent sans s'écraser, avec titres de groupe et statut Atteint", async ({ page }) => {
-  const titleA = `Test LOT 11 — obj campagne A ${Date.now()}`;
-  const titleB = `Test LOT 11 — obj campagne B ${Date.now()}`;
+  // CORRIGÉ (22/09/2026, premier passage réel sur GitHub Actions — échec initial : `.prep-group-
+  // label` avait 3 éléments et non 2). Cause : ce test partage le même compte et le même
+  // émulateur Firestore que TOUS les autres tests e2e du run, jamais réinitialisé entre deux
+  // tests (voir tests/e2e/global-setup.js, exécuté une seule fois) — "Mes objectifs" est donc un
+  // flux global qui accumule les objectifs personnels créés par les tests précédents du même
+  // fichier (le test ci-dessus, sans période → groupe "Sans période", et celui d'encore
+  // au-dessus, avec la période littérale "2026-2027", RÉUTILISÉE ici par erreur pour la
+  // campagne B). Un compte total (`toHaveCount(2)`) ou une position absolue de groupe est donc
+  // fragile par construction dans cette suite. Corrigé en rendant les deux périodes uniques à ce
+  // test (`Date.now()`, même principe déjà appliqué aux titres) et en scopant les assertions aux
+  // deux groupes de CE test uniquement, jamais à un compte global.
+  const stamp = Date.now();
+  const periodA = `Test LOT 11 — campagne A ${stamp}`;
+  const periodB = `Test LOT 11 — campagne B ${stamp}`;
+  const titleA = `Test LOT 11 — obj campagne A ${stamp}`;
+  const titleB = `Test LOT 11 — obj campagne B ${stamp}`;
 
   await login(page);
 
-  // Objectif de la campagne "2025".
+  // Objectif de la campagne A.
   await page.click("#my-objectives-btn");
   await page.click("#add-my-objective-btn");
   await page.fill("#my-obj-title", titleA);
   await page.getByText("Détails (optionnel", { exact: false }).click();
-  await page.fill("#objd-period", "2025");
+  await page.fill("#objd-period", periodA);
   await page.getByRole("button", { name: "Créer" }).click();
   await expect(page.getByText("Objectif ajouté")).toBeVisible({ timeout: 10_000 });
 
-  // Objectif de la campagne "2026-2027", depuis la même liste rouverte.
+  // Objectif de la campagne B, depuis la même liste rouverte.
   await page.click("#add-my-objective-btn");
   await page.fill("#my-obj-title", titleB);
   await page.getByText("Détails (optionnel", { exact: false }).click();
-  await page.fill("#objd-period", "2026-2027");
+  await page.fill("#objd-period", periodB);
   await page.getByRole("button", { name: "Créer" }).click();
   await expect(page.getByText("Objectif ajouté")).toBeVisible({ timeout: 10_000 });
 
   // Les deux groupes apparaissent, chacun gardant son propre objectif (pas d'écrasement du champ
-  // `period` d'un objectif par l'autre) — le plus récemment créé ("2026-2027") en premier
-  // (js/views/people.js#groupObjectivesByPeriod, tri décroissant par récence).
-  const groupLabels = page.locator(".prep-group-label");
-  await expect(groupLabels).toHaveCount(2);
-  await expect(groupLabels.nth(0)).toHaveText("2026-2027");
-  await expect(groupLabels.nth(1)).toHaveText("2025");
+  // `period` d'un objectif par l'autre) — vérifié par la présence de CES deux groupes précis,
+  // jamais par un compte total (voir l'avertissement ci-dessus).
+  await expect(page.locator(".prep-group-label", { hasText: periodA })).toHaveCount(1);
+  await expect(page.locator(".prep-group-label", { hasText: periodB })).toHaveCount(1);
   await expect(page.getByText(titleA, { exact: false })).toBeVisible();
   await expect(page.getByText(titleB, { exact: false })).toBeVisible();
 
-  // Modification + statut : cocher "Objectif atteint" sur la campagne 2025 ne touche pas 2026-2027.
+  // Le groupe de la campagne B (créée en dernier) apparaît avant celui de la campagne A
+  // (js/views/people.js#groupObjectivesByPeriod, tri décroissant par récence) — comparé par
+  // position relative entre CES deux groupes, jamais par index absolu dans la liste complète.
+  const allLabelTexts = await page.locator(".prep-group-label").allTextContents();
+  const indexA = allLabelTexts.indexOf(periodA);
+  const indexB = allLabelTexts.indexOf(periodB);
+  expect(indexA).toBeGreaterThanOrEqual(0);
+  expect(indexB).toBeGreaterThanOrEqual(0);
+  expect(indexB).toBeLessThan(indexA);
+
+  // Modification + statut : cocher "Objectif atteint" sur la campagne A ne touche pas la campagne B.
   await page.getByText(titleA, { exact: false }).click();
   await page.locator("#obj-done").check();
   await page.getByRole("button", { name: "Enregistrer" }).click();
