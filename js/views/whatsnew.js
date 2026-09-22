@@ -29,6 +29,25 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "23 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "📌 Post-it épinglés : visibles partout dans l'app, au-dessus de tout",
+        text: "Un post-it épinglé (menu \"⋯\" → \"📌 Épingler\", ou coché par défaut à la création) n'est plus limité à la section \"🧠 Mon bureau\" de l'Accueil : il flotte désormais directement sur l'écran, où que tu sois dans l'app (Kanban, Équipe, etc.), et reste visible même par-dessus une fiche ou une autre fenêtre ouverte. Glisse-le n'importe où sur l'écran pour le ranger où tu veux — sa position est mémorisée. Un simple clic dessus (sans le glisser) ouvre son contenu pour le modifier directement. Le bouton 📌 sur le post-it lui-même le désépingle en un geste.",
+        howTo: "Un post-it épinglé apparaît automatiquement à l'écran. Glisse-le pour le repositionner, clique dessus pour l'ouvrir et le modifier, ou clique son 📌 pour le désépingler.",
+        gain: "Garder un rappel important sous les yeux pendant que tu travailles ailleurs dans l'app, sans qu'une fiche ouverte ne le cache.",
+      },
+      {
+        type: "add",
+        title: "🔍 \"Tout voir\" : le plan de travail complet du Bureau, dans un écran dédié",
+        text: "La section \"🧠 Mon bureau\" de l'Accueil est désormais repliable, et n'affiche plus qu'un point d'entrée : \"+ Nouveau post-it\", \"🗄️ Archivés\" et \"🔍 Tout voir\", ce dernier ouvrant l'ensemble de tes post-it (épinglés ou non) sur un plan de travail libre — glisser-déposer, redimensionnement, position enregistrée — comme avant. Un nouveau post-it créé à la volée est désormais épinglé par défaut, donc immédiatement visible à l'écran sans avoir à ouvrir \"Tout voir\".",
+        howTo: "Accueil → section \"🧠 Mon bureau\" → \"🔍 Tout voir\" pour organiser librement l'ensemble de tes post-it.",
+        gain: "Une section Accueil compacte au quotidien, avec l'organisation complète toujours accessible en un clic quand tu en as besoin.",
+      },
+    ],
+  },
+  {
     date: "22 septembre 2026",
     items: [
       {
