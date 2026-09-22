@@ -40,6 +40,17 @@
 // de Charles-Henri), plus neutre pour les trois usages (sous-étapes de Tâche/Suivi, notes libres
 // du Pense-bête).
 //
+// `onLineMenu` (LOT 13, TODO-027, 22/09/2026 — "Bureau : post-it libres") — troisième option
+// OPTIONNELLE, réservée aux post-it Checklist du Bureau (js/components/bureau.js) : un bouton
+// "⋯" par ligne, qui ouvre le menu de conversion ligne par ligne ("Créer une Tâche / un Suivi /
+// une Ressource / une Décision / une Information" à partir de CETTE seule ligne — voir la spec
+// "Conversion d'une seule ligne (Checklist)"). Absent des trois usages existants (Tâche, Suivi,
+// Pense-bête, ce dernier disparaissant de toute façon avec ce lot) : convertir une sous-étape de
+// Tâche/Suivi en une autre fiche n'a jamais fait partie du besoin, seul le Bureau le demande.
+// `onLineMenu(item)` reçoit l'élément cliqué ; à charge de l'appelant d'ouvrir son propre menu
+// (aucune valeur de retour attendue, contrairement aux autres callbacks ci-dessous qui persistent
+// puis renvoient le tableau à jour).
+//
 // `onEdit`/`onReorder` (22/09/2026, retour direct de Charles-Henri : "si je me suis trompé dans
 // le nom d'une sous étape, je suis aujourd'hui obligé de supprimer et de le réécrire. je ne peux
 // pas le modifier ni ordonner les sous étapes non terminées") — deux options OPTIONNELLES,
@@ -77,7 +88,7 @@ export function sortChecklistForDisplay(items) {
 export function renderChecklist(
   container,
   items,
-  { onAdd, onToggle, onRemove, onEdit, onReorder, onClearDone, sortDoneToBottom = false, emptyLabel = "Pas encore de sous-étape." } = {}
+  { onAdd, onToggle, onRemove, onEdit, onReorder, onClearDone, onLineMenu, sortDoneToBottom = false, emptyLabel = "Pas encore de sous-étape." } = {}
 ) {
   let current = items || [];
   container.innerHTML = `
@@ -180,6 +191,20 @@ export function renderChecklist(
         editBtn.textContent = "✏️";
         editBtn.addEventListener("click", () => startEdit(item, textSpan));
         row.appendChild(editBtn);
+      }
+
+      // "⋯" — menu de conversion de cette seule ligne (voir le commentaire en tête de fichier),
+      // avant le bouton de suppression pour ne jamais changer la position de ce dernier sur les
+      // trois usages existants qui ne passent pas `onLineMenu`.
+      if (onLineMenu) {
+        const lineMenuBtn = document.createElement("button");
+        lineMenuBtn.type = "button";
+        lineMenuBtn.className = "btn btn-ghost btn-sm";
+        lineMenuBtn.setAttribute("aria-label", "Créer une fiche à partir de cette ligne");
+        lineMenuBtn.title = "Créer une fiche à partir de cette ligne";
+        lineMenuBtn.textContent = "⋯";
+        lineMenuBtn.addEventListener("click", () => onLineMenu(item));
+        row.appendChild(lineMenuBtn);
       }
 
       const removeBtn = document.createElement("button");
