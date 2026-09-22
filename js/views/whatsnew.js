@@ -29,6 +29,37 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "25 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "🏅 Galerie des badges",
+        text: "Un nouvel écran regroupe tous les badges à collectionner (14 familles, ex. Productivité, Delivery, Collaboration...) : ceux déjà obtenus avec leur date d'obtention, ceux encore verrouillés avec ta progression actuelle vers le seuil suivant, et un filtre par rareté (Bronze à Légendaire). Deux familles (Régularité, Documentation) restent pour l'instant hors de portée — l'écran l'indique clairement plutôt que de les laisser silencieusement bloquées à zéro.",
+        howTo: "☰ Plus → 🏅 Galerie des badges.",
+        gain: "Voir d'un coup d'œil ce que tu as déjà accompli et ce qu'il te reste à débloquer, sans avoir à deviner où tu en es.",
+      },
+    ],
+  },
+  {
+    date: "24 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "⚙️ Personnaliser l'accueil : \"🧠 Mon bureau\" repositionnable dans \"Ordre des rubriques\"",
+        text: "Si tu avais déjà réorganisé l'ordre des rubriques de l'Accueil avant l'arrivée de \"🧠 Mon bureau\", cette rubrique restait absente de la liste \"Ordre des rubriques\" dans ⚙️ Personnaliser l'accueil — impossible de la déplacer où tu veux, alors qu'elle s'affichait bien (en dernière position) sur l'Accueil lui-même. Elle apparaît désormais dans cette liste comme les autres.",
+        howTo: "☰ Plus → ⚙️ Personnaliser l'accueil → \"Ordre des rubriques\" → \"🧠 Mon bureau\" se déplace maintenant avec ▲/▼ comme les autres rubriques.",
+        gain: "Placer \"🧠 Mon bureau\" exactement où tu veux sur l'Accueil, sans être limité à sa position par défaut.",
+      },
+      {
+        type: "change",
+        title: "🔍 \"Tout voir\" : plan de travail en plein écran",
+        text: "La fenêtre \"🧠 Mon bureau — Tout voir\" prend désormais toute la largeur disponible de ta fenêtre, au lieu d'être limitée comme les autres fenêtres de l'app — plus de place pour organiser tes post-it. Si un post-it se retrouve malgré tout positionné hors de la zone visible (par exemple après avoir réduit la fenêtre), une barre de défilement horizontale apparaît pour pouvoir l'atteindre.",
+        howTo: "Rien à faire, c'est automatique dès la prochaine ouverture de \"🔍 Tout voir\".",
+        gain: "Plus d'espace pour disposer tes post-it, et l'assurance qu'aucun post-it ne reste inaccessible.",
+      },
+    ],
+  },
+  {
     date: "23 septembre 2026",
     items: [
       {
