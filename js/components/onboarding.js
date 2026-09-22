@@ -16,7 +16,7 @@ const TOUR_STEPS = [
   {
     emoji: "📥",
     title: "L'Inbox : le sas d'entrée",
-    text: "Chaque capture attend d'être qualifiée en un des 9 types (Action, Suivi, Projet, Réunion, Décision, Ressource, Information, Idée, Archiver). Une capture en attente n'est jamais un retard.",
+    text: "Chaque capture attend d'être qualifiée en un des 8 types (Action, Suivi, Projet, Réunion, Décision, Ressource, Information, Archiver). Une capture en attente n'est jamais un retard.",
   },
   {
     emoji: "✅",
@@ -101,7 +101,7 @@ function openHelpModal() {
     <strong>👀 Suivi</strong> — quelqu'un d'autre s'engage. Va sur sa fiche dans Équipe, avec une date à laquelle je dois vérifier.</p>
 
     <div class="section-title">Le cycle d'une info</div>
-    <p>➕ Capturer (n'importe où) → 📥 Inbox (en attente) → Qualifier (9 choix) → ça devient une vraie fiche, jamais perdue.</p>
+    <p>➕ Capturer (n'importe où) → 📥 Inbox (en attente) → Qualifier (8 choix) → ça devient une vraie fiche, jamais perdue.</p>
 
     <div class="section-title">S'y retrouver plus tard</div>
     <p>Chaque fiche garde son 🕒 Historique. Le bouton 🕒 Tout l'historique sur l'Accueil ouvre le fil complet, tous types confondus.</p>
