@@ -63,11 +63,17 @@ export function renderPeople(container) {
       </div>
     </div>
     <div class="view">
-      <div class="chip-row" id="people-mode-toggle">
-        <button type="button" class="chip" data-mode="all">👥 Tous</button>
-        <button type="button" class="chip" data-mode="manager">👔 Mon manager</button>
-        <button type="button" class="chip" data-mode="load">⚖️ Charge</button>
-        <button type="button" class="chip" data-mode="followups">👀 Suivis</button>
+      <!-- Rail façon "Réglages iPhone" (COMP-UX-021 / USE-UX-021, LOT 9 : "Management invisible,
+           traité comme un filtre caché" — même remède que pilotageSubNav.js : réutilisation de
+           `.fiche-tabs` sur une rangée qui n'était jusqu'ici qu'une `.chip-row` ordinaire, pour
+           que "👔 Mon manager" (et les 3 autres modes) se lisent comme de vrais sous-onglets de
+           l'écran Équipe plutôt que comme un filtre secondaire. Aucun changement de comportement :
+           mêmes 4 modes, même logique de bascule ci-dessous. -->
+      <div class="chip-row fiche-tabs" id="people-mode-toggle" role="tablist">
+        <button type="button" class="chip" data-mode="all" role="tab">👥 Tous</button>
+        <button type="button" class="chip" data-mode="manager" role="tab">👔 Mon manager</button>
+        <button type="button" class="chip" data-mode="load" role="tab">⚖️ Charge</button>
+        <button type="button" class="chip" data-mode="followups" role="tab">👀 Suivis</button>
       </div>
       <div id="people-list"></div>
     </div>
