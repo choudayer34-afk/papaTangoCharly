@@ -14,7 +14,10 @@ a { color: inherit; }
 #app {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding-bottom: calc(var(--nav-height) + var(--space-5));
+  /* `+ var(--safe-bottom)` ajouté (LOT 9, TODO-017, COMP-UX-021) : la navigation du bas occupe
+     désormais `--nav-height + --safe-bottom` de haut en bas (voir `.bottom-nav`) — sans ce même
+     ajout ici, le bas du contenu défilant resterait masqué sous l'espace de zone sûre ajouté. */
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-5));
 }
 /* Le tableau de pilotage (Kanban) prend toute la largeur en mode web (retour de
    Charles-Henri : éviter la scrollbar horizontale) — appliqué seulement à partir d'une
@@ -32,7 +35,12 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-4) var(--space-3);
+  /* Zone sûre du haut ajoutée en plus du padding existant (LOT 9, TODO-017, COMP-UX-021) —
+     `viewport-fit=cover` (index.html) est déclaré sans aucune compensation nulle part dans ce
+     fichier ; sans elle, le titre d'écran risque de se retrouver trop proche de l'encoche en PWA
+     installée. `--safe-top` vaut 0px sur un appareil sans encoche/zone sûre, donc aucun
+     changement visuel là où ce n'est pas nécessaire. */
+  padding: calc(var(--space-4) + var(--safe-top)) var(--space-4) var(--space-3);
   background: var(--color-bg);
 }
 .topbar h1 {
@@ -60,7 +68,17 @@ a { color: inherit; }
 .bottom-nav {
   position: fixed;
   bottom: 0; left: 0; right: 0;
-  height: var(--nav-height);
+  /* Zone sûre du bas ajoutée en plus de la hauteur existante (LOT 9, TODO-017, COMP-UX-021) —
+     même principe que `.topbar` ci-dessus, pour la barre d'accueil d'un iPhone sans bouton
+     Home. La hauteur totale grandit de `--safe-bottom`, mais `padding-bottom` de la même valeur
+     (avec `box-sizing: border-box` posé globalement en tête de ce fichier) laisse la zone de
+     contenu réellement disponible pour les icônes strictement égale à `--nav-height` comme avant
+     — les icônes ne descendent pas dans la zone sûre, elles gardent leur position, seul un espace
+     vide s'ajoute en dessous. Les éléments empilés au-dessus de cette barre (`.fab` et consorts,
+     voir plus bas) doivent donc eux aussi compter `--safe-bottom` en plus pour rester à la même
+     distance visuelle du dessus de cette barre, désormais plus haute. */
+  height: calc(var(--nav-height) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
   background: var(--color-surface);
   border-top: 1px solid var(--color-border);
   display: flex;
@@ -106,7 +124,10 @@ a { color: inherit; }
   border-radius: var(--radius-pill);
   background: var(--color-danger);
   color: var(--color-text-inverse);
-  font-size: 10px;
+  /* Remonté de 10px au token --font-size-xs (12px), sous le seuil de lisibilité courant
+     recommandé (LOT 9, TODO-017, COMP-UX-022) — ce badge porte une information utile (nombre
+     d'éléments Inbox en attente), pas seulement décorative. */
+  font-size: var(--font-size-xs);
   font-weight: 600;
   line-height: 16px;
 }
@@ -151,7 +172,13 @@ a { color: inherit; }
 .fab {
   position: fixed;
   right: var(--space-4);
-  bottom: calc(var(--nav-height) + var(--space-4));
+  /* `+ var(--safe-bottom)` ajouté (LOT 9, TODO-017, COMP-UX-021), comme pour `.bottom-nav`
+     ci-dessus dont ce bouton est empilé juste au-dessus : sans cet ajout, ce bouton se
+     retrouverait à cheval sur la zone sûre agrandie de la barre du bas sur un appareil qui en a
+     une (0px ailleurs, donc aucun changement là où ce n'est pas nécessaire). Les boutons empilés
+     par-dessus celui-ci (`.help-fab`, `.search-fab`, `.admin-fab`, `.pomodoro-widget`, plus bas)
+     reprennent ce même ajout, pour garder leur espacement relatif inchangé. */
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4));
   width: 60px; height: 60px;
   border-radius: 50%;
   background: var(--color-primary);
@@ -170,7 +197,7 @@ a { color: inherit; }
 .help-fab {
   position: fixed;
   left: var(--space-4);
-  bottom: calc(var(--nav-height) + var(--space-4));
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4)); /* voir commentaire sur .fab ci-dessus */
   width: 40px; height: 40px;
   border-radius: 50%;
   background: var(--color-surface);
@@ -190,7 +217,7 @@ a { color: inherit; }
 .search-fab {
   position: fixed;
   left: var(--space-4);
-  bottom: calc(var(--nav-height) + var(--space-4) + 50px);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4) + 50px); /* voir commentaire sur .fab ci-dessus */
   width: 40px; height: 40px;
   border-radius: 50%;
   background: var(--color-surface);
@@ -208,7 +235,7 @@ a { color: inherit; }
 /* ---------- Administration (empilé au-dessus d'Aide/Recherche, visible uniquement pour le
    compte ch-houdayer@hotmail.fr — voir js/components/adminPanel.js) ---------- */
 .admin-fab {
-  bottom: calc(var(--nav-height) + var(--space-4) + 100px);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4) + 100px); /* voir commentaire sur .fab ci-dessus */
   font-size: 16px;
 }
 .admin-fab:active { transform: scale(0.94); }
@@ -221,7 +248,7 @@ a { color: inherit; }
 .pomodoro-widget {
   position: fixed;
   right: var(--space-4);
-  bottom: calc(var(--nav-height) + var(--space-4) + 68px);
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4) + 68px); /* voir commentaire sur .fab ci-dessus */
   display: none;
   align-items: center;
   gap: 6px;
@@ -246,6 +273,12 @@ a { color: inherit; }
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   flex: none;
+  position: relative; /* voir commentaire sur .kanban-move-btn, plus haut dans ce fichier */
+}
+.pomodoro-widget-toggle::before {
+  content: "";
+  position: absolute;
+  inset: -8px; /* 28px + 2×8px = 44px */
 }
 
 /* ---------- Badge ---------- */
@@ -508,6 +541,18 @@ a { color: inherit; }
   line-height: 1;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
+  position: relative; /* ancre le ::before d'agrandissement de la zone cliquable ci-dessous */
+}
+/* Cible tactile agrandie sans agrandir l'icône visible (LOT 9, TODO-017, COMP-UX-020 — audit UX
+   "geste le plus rapide de toute l'application", 28×28px, nettement sous les ~44×44px
+   recommandés) : un ::before invisible étend la zone réellement cliquable jusqu'à 44×44px, le
+   cercle visible (28px) restant inchangé — repris à l'identique sur les 3 autres boutons ronds
+   concernés par ce même TODO (.pilotage-table-open-btn, .pilotage-table-notes-add-btn,
+   .pomodoro-widget-toggle plus bas dans ce fichier), chacun avec un inset propre à sa taille. */
+.kanban-move-btn::before {
+  content: "";
+  position: absolute;
+  inset: -8px; /* 28px + 2×8px = 44px */
 }
 .kanban-move-btn:disabled { opacity: 0.25; cursor: default; }
 .kanban-move-btn:active:not(:disabled) { transform: scale(0.9); }
@@ -720,6 +765,12 @@ thead .pilotage-table-th-pinned {
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   font-size: var(--font-size-sm);
+  position: relative; /* voir commentaire sur .kanban-move-btn, plus haut dans ce fichier */
+}
+.pilotage-table-open-btn::before {
+  content: "";
+  position: absolute;
+  inset: -9px; /* 26px + 2×9px = 44px */
 }
 .pilotage-table td select,
 .pilotage-table td input[type="date"] {
@@ -837,6 +888,12 @@ tbody.drag-over-group {
   display: flex; align-items: center; justify-content: center;
   font-size: var(--font-size-sm);
   line-height: 1;
+  position: relative; /* voir commentaire sur .kanban-move-btn, plus haut dans ce fichier */
+}
+.pilotage-table-notes-add-btn::before {
+  content: "";
+  position: absolute;
+  inset: -11px; /* 22px + 2×11px = 44px */
 }
 .pilotage-table-notes-input {
   flex: 1;
@@ -1352,7 +1409,13 @@ tbody.drag-over-group {
   transition: background var(--transition);
 }
 .cal-cell-outside { background: var(--color-bg); color: var(--color-text-muted); }
-.cal-cell-outside .cal-cell-num { opacity: 0.4; }
+/* `opacity: 0.4` retirée (LOT 9, TODO-017, COMP-UX-023) — mesure de contraste réelle : cette
+   opacité, cumulée à la couleur déjà atténuée `--color-text-muted` héritée de `.cal-cell-outside`
+   ci-dessus, faisait tomber le numéro du jour à un ratio d'environ 1,7:1 sur le fond de la
+   cellule — bien en dessous des 4,5:1 recommandés pour du texte courant (`--color-text-muted`
+   seul, sans cette opacité, est à ~4,5:1, conforme). Le fond de cellule différent (`--color-bg`
+   au lieu de `--color-surface`) et la couleur déjà atténuée suffisent à distinguer visuellement
+   un jour hors du mois en cours, sans ajouter cette opacité en plus. */
 .cal-cell-today .cal-cell-num {
   display: inline-flex;
   align-items: center;
@@ -1365,8 +1428,11 @@ tbody.drag-over-group {
 .cal-cell-num { font-size: var(--font-size-sm); font-weight: 600; margin-bottom: 2px; }
 .cal-drop-target { background: var(--color-primary-light); }
 .cal-pills { display: flex; flex-direction: column; gap: 2px; }
+/* Remonté de 11px au token --font-size-xs (12px) sur .cal-pill/.cal-more, sous le seuil de
+   lisibilité courant recommandé (LOT 9, TODO-017, COMP-UX-022) — ce texte porte une information
+   utile (titre d'un rendez-vous, nombre d'éléments masqués), pas seulement décorative. */
 .cal-pill {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   padding: 1px 4px;
   border-radius: 4px;
   background: var(--color-surface-alt);
@@ -1375,7 +1441,7 @@ tbody.drag-over-group {
   text-overflow: ellipsis;
   cursor: grab;
 }
-.cal-more { font-size: 11px; color: var(--color-text-muted); padding-left: 4px; }
+.cal-more { font-size: var(--font-size-xs); color: var(--color-text-muted); padding-left: 4px; }
 .cal-week-day-label {
   font-size: var(--font-size-sm);
   font-weight: 700;
@@ -1417,7 +1483,7 @@ tbody.drag-over-group {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--nav-height) + var(--space-4));
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4)); /* voir commentaire sur .fab, plus haut dans ce fichier */
   transform: translateX(-50%);
   display: flex;
   align-items: center;
