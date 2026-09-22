@@ -71,10 +71,25 @@ async function createNoteAndLocate(page) {
 
 /** Supprime DÉFINITIVEMENT un post-it déjà archivé (nettoyage de fin de test), identifié par son
  *  titre unique — la ligne de "🗄️ Post-it archivés" n'expose aucun `data-id` (voir le même
- *  constat dans lot13-bureau-notes.spec.js). */
+ *  constat dans lot13-bureau-notes.spec.js).
+ *
+ *  CORRECTIF (CI du 25/09/2026, premier passage réel du workflow GitHub Actions sur ce fichier) :
+ *  le locator `.item-row` était posé SANS scope (page entière). "🗄️ Post-it archivés" n'est
+ *  qu'UNE seule modale à la fois (`js/components/modal.js#openModal`, "une seule modale à la
+ *  fois"), mais le reste de l'Accueil derrière elle reste dans le DOM (juste recouvert
+ *  visuellement par `.modal-overlay`) — Playwright ne considère PAS un élément recouvert comme
+ *  masqué (`toBeVisible` ne teste pas l'occlusion visuelle, seulement `display`/`visibility`/
+ *  taille). Le titre du post-it converti est réutilisé tel quel comme titre de la Tâche créée
+ *  (voir `openWholeNoteConvertMenu`) : si "🎯 Focus du jour" (js/views/dashboard.js#renderFocusSection)
+ *  la reprend dans son repli "3 tâches les plus urgentes" (aucune tâche en retard/due sur le
+ *  compte de test partagé), sa propre `.item-row` — présente ailleurs sur l'Accueil, derrière la
+ *  modale — contient elle aussi le titre recherché, d'où le "resolved to 2 elements" en mode
+ *  strict. Corrigé en scopant le locator à `.modal-body` (même précédent déjà documenté dans
+ *  tests/README.md, TEST-010 : "une seule modale active à cet instant").
+ */
 async function deleteArchivedNoteByTitle(page, title) {
   await page.click("#bureau-archived-btn");
-  const row = page.locator(".item-row", { hasText: title });
+  const row = page.locator(".modal-body .item-row", { hasText: title });
   await expect(row).toBeVisible({ timeout: 5_000 });
   await row.locator("button[aria-label='Supprimer définitivement']").click();
   await page.getByRole("button", { name: "Supprimer", exact: true }).click();
@@ -264,6 +279,24 @@ test.describe("LOT 13 — Mon bureau : conversion intelligente (une seule ligne 
     await note.el.locator('.sticky-note-mode-btn[data-mode="checklist"]').click();
     await expect(note.el.locator('.sticky-note-mode-btn[data-mode="checklist"]')).toHaveClass(/active/);
 
+    // CORRECTIF (CI du 25/09/2026, deuxième passage réel du workflow GitHub Actions, sur le
+    // même code que lot13-bureau-notes.spec.js) : ce test échouait ICI (assertion `toBeVisible`
+    // sur `lineToConvert`, juste en dessous), l'élément restant durablement "hidden" pour
+    // Playwright bien que présent et correctement structuré dans le DOM — jamais résolu par le
+    // `page.waitForTimeout(500)` qui avait été ajouté après le clic du menu "⋯" (trop tard :
+    // cette course se joue ICI, entre le clic sur le mode "checklist" ci-dessus et la frappe qui
+    // suit, jamais entre l'ajout des lignes et le menu). Cause réelle, identique à
+    // lot13-bureau-notes.spec.js#"Bascule texte ↔ checklist" (voir son commentaire détaillé) :
+    // le bouton de bascule de mode (js/components/bureau.js) ne faisait QUE lancer l'écriture
+    // Firestore du nouveau type, sans réafficher localement — le passage en mode "checklist"
+    // restait donc entièrement suspendu aux deux snapshots Firestore (optimiste puis confirmé),
+    // et rien ne suspendait le rebuild de `renderFullCanvas` tant que le focus n'était pas encore
+    // posé dans le nouveau `#checklist-new-text`. Corrigé À LA SOURCE dans
+    // js/components/bureau.js (bascule de mode désormais optimiste, réaffichage local immédiat,
+    // même principe que `note.checklist`) plutôt qu'en allongeant cette attente : le focus se
+    // pose maintenant dans le nouveau champ avant même que Firestore ne réponde, et le mécanisme
+    // de suspension de rendu (déjà en place) protège normalement la frappe qui suit. Non exécuté
+    // dans cet environnement (voir tests/README.md) — à reconfirmer au premier lancement réel.
     await note.el.locator("#checklist-new-text").fill(lineToConvert);
     await note.el.locator("#checklist-new-text").press("Enter");
     await expect(note.el.getByText(lineToConvert)).toBeVisible({ timeout: 5_000 });
@@ -271,16 +304,9 @@ test.describe("LOT 13 — Mon bureau : conversion intelligente (une seule ligne 
     await note.el.locator("#checklist-new-text").press("Enter");
     await expect(note.el.getByText(lineToKeep)).toBeVisible({ timeout: 5_000 });
 
-    // CI du 24/09/2026 (nouveau passage réel du workflow GitHub Actions, sur le code du
-    // complément post-it flottants du 23/09/2026, voir TODO_TECHNIQUE.md) : ce test échouait par
-    // intermittence sur l'assertion `toBeVisible` juste au-dessus, l'élément
-    // restant "hidden" pour Playwright bien que présent et correctement structuré dans le DOM
-    // (confirmé par l'inspection de la trace CI). Cause : chaque ajout de ligne déclenche une
-    // écriture Firestore, qui émet DEUX snapshots (optimiste local puis confirmé serveur) ;
-    // renderFullCanvas (js/components/bureau.js) reconstruit tout le DOM du "Tout voir" à CHAQUE
-    // snapshot, sans diffing. Enchaîner directement sur le clic du menu "⋯" de la ligne pouvait
-    // tomber pendant l'un de ces re-rendus. On attend donc ici que les deux lignes soient
-    // pleinement propagées avant d'ouvrir ce menu.
+    // Marge de sécurité conservée (pas la cause du bug ci-dessus, voir son commentaire) : laisse
+    // les deux snapshots Firestore des deux écritures de ligne se propager avant d'ouvrir le menu
+    // "⋯" de la ligne, par précaution symétrique avec le test "Post-it ENTIER → Tâche" plus haut.
     await page.waitForTimeout(500);
 
     // Menu "⋯" DE LA LIGNE (pas celui du post-it) — voir js/components/checklist.js#onLineMenu.
