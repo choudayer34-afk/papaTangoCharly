@@ -108,6 +108,13 @@ const WHATS_NEW = [
         howTo: "Rien à faire, c'est automatique.",
         gain: "Retrouver directement ce qu'on vient d'ajouter, sans avoir à re-cliquer sur l'onglet quitté entre-temps.",
       },
+      {
+        type: "add",
+        title: "🧭 Barre de navigation personnalisable",
+        text: "La barre en bas d'écran (Accueil/Inbox/Pilotage/Équipe/Plus) peut désormais être personnalisée : choisis les 4 modules qui t'intéressent le plus parmi Accueil, Inbox, Pilotage, Équipe, Ressources, Prompts, Guide, Nouveautés et Mémoire & TDAH, dans l'ordre que tu veux. \"☰ Plus\" reste toujours la 5e icône fixe et regroupe automatiquement tout ce qui n'est pas dans tes 4 choix — un nouveau module ajouté par une future mise à jour y apparaît d'abord, jamais directement dans ta barre. Réglage propre à ton compte, identique sur web et mobile.",
+        howTo: "Accueil → ⚙️ Personnaliser l'accueil → \"🧭 Personnaliser la navigation\". Boutons ▲/▼ pour réordonner la barre principale, \"→ Barre principale\" sur un module de \"Dans ☰ Plus\" pour l'y faire entrer (il prend la place du dernier module affiché) — ou \"↺ Revenir à Accueil, Inbox, Pilotage, Équipe, Plus\" pour tout remettre comme au premier jour.",
+        gain: "Une barre du bas qui reflète ton propre usage plutôt qu'un choix unique pour tout le monde — par exemple Ressources ou Prompts directement accessibles d'un tap, si c'est ce que tu consultes le plus.",
+      },
     ],
   },
   {
