@@ -90,7 +90,12 @@ test("Indicateurs : création (plusieurs), modification de statut, suppression a
   await expect(page.getByText("Suivi ajouté")).toBeVisible({ timeout: 10_000 });
 
   // Suppression de "Documentation à jour".
-  const docRow = page.locator(".item-row", { hasText: "Documentation à jour" });
+  // CORRECTIF (premier passage réel du 22/09/2026, GitHub Actions — "strict mode violation",
+  // 2 éléments) : "Documentation à jour" apparaît maintenant DEUX fois dans la fiche — la ligne
+  // d'indicateur (#obj-indicators) ET la ligne du suivi qui la référence, juste ajoutée
+  // ci-dessus (#obj-entries, qui affiche le nom de l'indicateur concerné) — il faut cibler
+  // explicitement la ligne d'INDICATEUR, celle qu'on veut ouvrir pour la supprimer.
+  const docRow = page.locator("#obj-indicators .item-row", { hasText: "Documentation à jour" });
   await docRow.click();
   await page.getByRole("button", { name: "🗑️ Supprimer" }).click();
   await page.getByRole("button", { name: "Supprimer", exact: true }).click();
@@ -156,7 +161,12 @@ test("Suivi lié à un indicateur : contexte affiché, statut synchronisé, réf
 
   // Le statut de l'indicateur est synchronisé depuis le suivi (`updateIndicator` appelé quand
   // `indicatorId` ET `status` sont renseignés — js/views/people.js#openAddObjectiveEntryModal).
-  await expect(page.locator(".item-row", { hasText: "Participation ateliers" }).locator(".badge-done")).toBeVisible();
+  // CORRECTIF (premier passage réel du 22/09/2026, GitHub Actions — "strict mode violation",
+  // 2 éléments) : "Participation ateliers" + ".badge-done" matchent À LA FOIS la ligne
+  // d'indicateur (#obj-indicators, ce qu'on veut vérifier ici) ET la ligne du suivi qui vient
+  // d'être ajouté (#obj-entries, qui affiche aussi "Atteint") — même correctif que le test
+  // précédent de ce fichier.
+  await expect(page.locator("#obj-indicators .item-row", { hasText: "Participation ateliers" }).locator(".badge-done")).toBeVisible();
   // Le dernier suivi affiche l'indicateur concerné, son statut, la note et la référence résolue.
   const entryRow = page.locator("#obj-entries .item-row").first();
   await expect(entryRow).toContainText("Participation ateliers");
