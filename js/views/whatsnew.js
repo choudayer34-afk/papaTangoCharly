@@ -33,6 +33,74 @@ const WHATS_NEW = [
     items: [
       {
         type: "fix",
+        title: "📱 Boutons plus faciles à toucher sur mobile",
+        text: "Certains petits boutons ronds (déplacer une tâche dans le Kanban, ouvrir une ligne du tableau Pilotage, ajouter une note à une ressource, réduire le minuteur Pomodoro) avaient une zone cliquable/tactile plus petite que leur icône ne le laissait penser. La zone qui réagit au clic/tactile est désormais agrandie tout autour, sans changer la taille visible du bouton.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Toucher ces boutons du premier coup sur téléphone, sans viser aussi précisément qu'avant.",
+      },
+      {
+        type: "fix",
+        title: "📱 L'app respecte désormais l'encoche et la barre de gestes du téléphone",
+        text: "Sur un téléphone avec encoche ou barre de gestes en bas (ex. iPhone), la barre du haut et la barre de navigation du bas pouvaient empiéter sur ces zones réservées par le système. L'app laisse désormais l'espace nécessaire, sans réduire la hauteur utile des icônes et boutons.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Rien n'est plus caché ni difficile à atteindre derrière l'encoche ou la barre de gestes du téléphone.",
+      },
+      {
+        type: "fix",
+        title: "🔤 Textes du badge de navigation et du Calendrier légèrement agrandis",
+        text: "Le numéro sur le badge de la barre du bas et les pastilles d'évènements du Calendrier (vue Mois) s'affichaient dans une taille de police en dessous du minimum recommandé pour rester confortablement lisible. Ils reprennent désormais la même taille que le reste des petits textes de l'app.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Lire ces textes sans effort, notamment sur petit écran.",
+      },
+      {
+        type: "fix",
+        title: "🎨 Contraste corrigé sur les jours hors mois du Calendrier",
+        text: "Les jours du mois précédent/suivant, affichés en grisé dans la vue Mois du Calendrier, étaient si peu contrastés qu'ils devenaient presque illisibles. Le contraste respecte désormais les recommandations d'accessibilité.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Distinguer clairement le numéro d'un jour hors mois, même sur un écran peu lumineux.",
+      },
+      {
+        type: "add",
+        title: "🎯 Aperçu en direct en réglant les poids de Priorisation",
+        text: "Dans la fenêtre \"⚖️ Régler les poids\", déplacer un curseur (Urgence/Impact/Blocage) met désormais à jour la liste classée en temps réel, avant même de cliquer sur \"Enregistrer\" — jusqu'ici, il fallait valider pour voir l'effet. Fermer la fenêtre sans enregistrer (Annuler, clic en dehors, Échap) restaure le classement précédent.",
+        howTo: "Onglet Pilotage → Priorisation → \"⚖️ Régler les poids\" → bouge un curseur.",
+        gain: "Voir immédiatement l'effet d'un réglage avant de le confirmer, sans aller-retour.",
+      },
+      {
+        type: "add",
+        title: "➕ \"Afficher plus\" sur les longues listes de Priorisation et Ressources",
+        text: "La liste classée de Priorisation et la liste de Ressources s'affichaient jusqu'ici en entier, quelle que soit leur longueur. Elles s'arrêtent désormais à 20 éléments avec un bouton \"+ Afficher N de plus\" pour dérouler le reste.",
+        howTo: "Rien à faire pour les 20 premiers éléments ; bouton en bas de liste pour voir la suite.",
+        gain: "Un écran moins long à faire défiler quand la liste est courte à consulter, sans jamais perdre l'accès aux éléments suivants.",
+      },
+      {
+        type: "add",
+        title: "🔔 Redemander l'activation des alertes de retard",
+        text: "L'app ne reproposait plus jamais la bannière \"Activer les alertes de retard\" une fois qu'on y avait répondu (oui ou non) — aucun moyen de revenir sur ce choix en cas de clic \"Non\" par erreur ou de changement d'avis depuis. Un nouveau bouton dans les réglages de l'Accueil permet de redemander ce choix. Pour rappel, cette alerte ne fonctionne que pendant que l'app est déjà ouverte dans le navigateur — elle n'envoie rien si l'app est fermée, faute d'infrastructure de notification côté serveur.",
+        howTo: "Accueil → ⚙️ (réglages) → \"🔔 Alerte de retard au démarrage\" → \"↺ Redemander mon choix\".",
+        gain: "Revenir sur un choix passé sans avoir à réinitialiser tout son navigateur.",
+      },
+      {
+        type: "change",
+        title: "🧭 Navigation plus lisible : Équipe, Priorisation, Plus, Guide/Nouveautés",
+        text: "Dans l'onglet Équipe, les 4 modes (Tous / Mon manager / Charge / Suivis) ressemblaient à de simples filtres alors qu'ils changent complètement l'écran affiché — ils se présentent désormais comme de vrais sous-onglets, dans le même style que Pilotage. L'onglet Priorisation précise maintenant, dans son sous-titre, ce qu'il apporte en plus du \"Focus du jour\" de l'Accueil. L'écran \"☰ Plus\" regroupe désormais ses 5 destinations par intention (Aide, Bibliothèques, Pause) plutôt qu'en liste plate. Guide et Nouveautés, aux rôles proches, précisent chacun le leur en sous-titre (\"Comment ça marche\" / \"Ce qui a changé\").",
+        howTo: "Rien à faire, c'est automatique — à voir directement sur ces écrans.",
+        gain: "Comprendre en un coup d'œil ce que fait chaque écran, sans avoir à l'ouvrir pour le découvrir.",
+      },
+      {
+        type: "change",
+        title: "🧠 \"Information\" et \"Idée\" fusionnés en un seul libellé",
+        text: "Une capture qualifiée en \"🧠 Information\" ou en \"💡 Idée\" depuis l'Inbox donnait déjà, dans les faits, exactement le même résultat — la distinction n'apportait plus de nuance réelle. Elle est désormais présentée partout sous un seul libellé, \"🧠 Information\" : dans l'Inbox, la Revue hebdomadaire, la recherche, les fiches liées et le changement de type. Rien n'est perdu ni renommé dans les données déjà existantes.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Un seul mot à retenir pour ce type de capture, plus de question \"information ou idée ?\" sans réponse claire.",
+      },
+    ],
+  },
+  {
+    date: "21 septembre 2026",
+    items: [
+      {
+        type: "fix",
         title: "⌨️ Le clavier ne fait plus sortir d'une fiche ouverte",
         text: "Dans une fiche ou un formulaire ouvert (Tâche, Projet, Suivi...), la touche Tab pouvait faire sortir le focus clavier vers l'écran en dessous, invisible sous la fiche mais toujours atteignable au clavier — il fallait alors deviner où on se trouvait. Tab/Maj+Tab restent désormais dans la fiche ouverte, et le focus revient automatiquement à l'endroit d'où on l'a ouverte une fois qu'on la referme.",
         howTo: "Rien à faire, c'est automatique.",
@@ -1079,7 +1147,10 @@ export function renderWhatsNew(container) {
     <div class="topbar">
       <div>
         <h1>🆕 Nouveautés</h1>
-        <div class="subtitle">Ce qui a été ajouté à l'app, du plus récent au plus ancien</div>
+        <!-- USE-UX-027 (LOT 9, "Guide et Nouveautés aux rôles proches, distinction non explicite") :
+             sous-titre explicite retenu tel quel par l'audit ("Comment ça marche" / "Ce qui a
+             changé") pour que les deux écrans se distinguent sans avoir à les ouvrir. -->
+        <div class="subtitle">Ce qui a changé : ce qui a été ajouté à l'app, du plus récent au plus ancien</div>
       </div>
       <a href="#/dashboard" class="btn btn-secondary btn-sm">← Retour</a>
     </div>
