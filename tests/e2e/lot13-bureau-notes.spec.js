@@ -139,7 +139,7 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     await expect(noteEl.locator('.sticky-note-mode-btn[data-mode="checklist"]')).toHaveClass(/active/);
     await expect(noteEl.locator(".sticky-note-textarea")).toHaveCount(0); // le mode checklist remplace l'affichage du texte
 
-    // CI du 24/09/2026 (nouveau passage réel du workflow GitHub Actions, sur le code du
+    // CI du 24/09/2026 (premier passage réel du workflow GitHub Actions, sur le code du
     // complément post-it flottants du 23/09/2026, voir TODO_TECHNIQUE.md) :
     // ce test échouait par intermittence ici, avec la trace montrant "element was detached from
     // the DOM, retrying" pendant le fill() suivant, puis l'élément retrouvé mais durablement
@@ -147,9 +147,28 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     // Firestore, qui émet DEUX snapshots (optimiste local puis confirmé serveur — comportement
     // Firestore standard) ; renderFullCanvas (js/components/bureau.js) reconstruit tout le DOM du
     // "Tout voir" à CHAQUE snapshot, sans diffing. Si la frappe suivante démarre entre ces deux
-    // snapshots, l'input est reconstruit en plein milieu de l'action. On attend donc ici que les
-    // deux snapshots soient passés avant de continuer (même précaution que page.reload() plus haut
-    // dans ce fichier).
+    // snapshots, l'input est reconstruit en plein milieu de l'action.
+    //
+    // CORRECTIF (CI du 25/09/2026, ce même test a échoué UNE SECONDE FOIS malgré l'attente
+    // ci-dessous — voir aussi lot13-bureau-conversion.spec.js#"Conversion d'UNE SEULE ligne",
+    // touché par la même cause) : l'attente fixe réduisait la fenêtre de course sans l'éliminer
+    // (toujours possible qu'un aller-retour Firestore réel dépasse 500ms sous charge CI). Cause
+    // racine identifiée : le bouton de bascule de mode (js/components/bureau.js) ne faisait QUE
+    // lancer l'écriture Firestore (`stickyNotesApi.setType`), sans mettre à jour `note.type` ni
+    // réafficher le corps du post-it localement — contrairement à
+    // js/components/stickyNoteShared.js#openStickyNoteEditor, qui applique déjà ce même
+    // changement de façon optimiste. Le passage en mode "checklist" restait donc ENTIÈREMENT
+    // suspendu aux deux snapshots Firestore, sans que le mécanisme de suspension de rendu
+    // (`shouldSuspend`/`focusedInside`) ne puisse encore protéger quoi que ce soit, puisque le
+    // focus n'était pas encore posé dans le nouveau `#checklist-new-text` tant que ce dernier
+    // n'existait pas. Corrigé À LA SOURCE dans js/components/bureau.js (bascule de mode
+    // désormais optimiste, réaffichage local immédiat, même principe déjà appliqué à
+    // `note.checklist` — voir le commentaire de renderNoteBody) : le focus se pose maintenant
+    // dans le nouveau champ avant même la réponse de Firestore, et la suspension de rendu déjà en
+    // place protège normalement la frappe qui suit. L'attente ci-dessous est conservée par
+    // précaution (marge de sécurité, plus la cause du bug) mais ne devrait plus être nécessaire
+    // pour ce cas précis. Non exécuté dans cet environnement (voir tests/README.md) — à
+    // reconfirmer au premier lancement réel.
     await page.waitForTimeout(500);
 
     // Ajout d'une ligne via le composant checklist générique (js/components/checklist.js) —
