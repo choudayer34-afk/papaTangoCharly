@@ -1737,6 +1737,19 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       updateChecklistTitle();
       return updated;
     },
+    // Retour direct de Charles-Henri (22/09/2026) : "si je me suis trompé dans le nom d'une sous
+    // étape [...] je ne peux pas le modifier ni ordonner les sous étapes non terminées" — voir le
+    // commentaire en tête de js/components/checklist.js.
+    onEdit: async (itemId, text) => {
+      const updated = await tasksApi.editChecklistItem(task.id, itemId, text);
+      task.checklist = updated || task.checklist;
+      return task.checklist;
+    },
+    onReorder: async (orderedIds) => {
+      const updated = await tasksApi.reorderChecklist(task.id, orderedIds);
+      task.checklist = updated;
+      return updated;
+    },
     // Retour direct de Charles-Henri (22/09/2026) : "idem pour les étapes, quand je coche une
     // étape, les étapes cochées se mettent après les non cochées et se trient du plus récent au
     // plus ancien" — voir le commentaire en tête de js/components/checklist.js.
