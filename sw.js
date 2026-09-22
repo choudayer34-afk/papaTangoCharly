@@ -290,7 +290,17 @@
 // Fichiers précachés modifiés : js/domain/objectives.js, js/views/people.js,
 // js/views/dashboard.js, js/views/whatsnew.js (nouvelles entrées). `CACHE_NAME` incrémenté en
 // conséquence.
-const CACHE_NAME = "pilotage-cache-v70";
+// (22/09/2026, v71, TODO-041) : besoin produit traité en parenthèse, message suivant
+// immédiatement TODO-040 — retour direct de Charles-Henri : "si je me suis trompé dans le nom
+// d'une sous étape, je suis aujourd'hui obligé de supprimer et de le réécrire. je ne peux pas le
+// modifier ni ordonner les sous étapes non terminées." `js/components/checklist.js` gagne deux
+// options optionnelles `onEdit`/`onReorder` (édition en place via un bouton "✏️", montée/descente
+// des éléments non cochés via deux boutons ▲/▼ réutilisant `.kanban-move-btn`), câblées sur les
+// trois usages existants (checklist Tâche, checklist Suivi, Pense-bête). Fichiers précachés
+// modifiés : js/components/checklist.js, js/domain/tasks.js, js/domain/followups.js,
+// js/views/kanban.js, js/views/people.js, js/views/dashboard.js, js/views/whatsnew.js (nouvelles
+// entrées). `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v71";
 const APP_SHELL = [
   "./",
   "./index.html",
