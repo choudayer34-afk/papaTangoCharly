@@ -176,6 +176,37 @@ environnement (registre npm bloqué, comme tout le reste de ce dossier). À reco
 lancement réel (GitHub Actions) — en particulier la simulation de glisser/redimensionner via
 `page.mouse`, jamais utilisée ailleurs dans ce dossier avant ce lot.
 
+**Correction du 23/09/2026 (premier passage réel du workflow GitHub Actions, artefact transmis
+par Charles-Henri)** : 3 échecs sur les fichiers LOT 13 (`test.describe.serial` dans
+`e2e/lot13-bureau-notes.spec.js` ayant fait sauter les 3 tests suivant le premier échec de ce
+fichier, jamais exécutés à ce passage) :
+
+- `e2e/lot13-bureau-notes.spec.js` ("...survivent à un rechargement") — `content` retrouvé vide
+  après `page.reload()`. Défaut du TEST : le rechargement partait immédiatement après le
+  `press("Tab")` (blur), sans attendre que l'écriture asynchrone déclenchée
+  (`stickyNotesApi.setContent`) ait atteint l'émulateur. `page.waitForLoadState("networkidle")`
+  ÉCARTÉ délibérément : les écoutes `onSnapshot` (`js/services/storage.js#subscribe`) maintiennent
+  une connexion réseau permanente tant qu'une section de l'Accueil est montée, donc "networkidle"
+  ne se stabiliserait jamais. Corrigé par une courte attente fixe (`page.waitForTimeout(500)`)
+  avant chaque `page.reload()` de ce fichier (glisser/redimensionner compris, même risque bien que
+  non encore atteint par ce passage).
+- `e2e/lot13-bureau-conversion.spec.js` ("...post-it archivé après création" et "...le post-it
+  restent intacts") — les DEUX étaient une conséquence directe d'un vrai bug applicatif remonté le
+  même jour par Charles-Henri (voir `TODO_TECHNIQUE.md` → LOT 13, "Correctifs du 23/09/2026") :
+  `js/components/bureau.js` suspendait le rebuild du plan de travail dès qu'un focus touchait
+  N'IMPORTE quel élément du Bureau (y compris un bouton), et le piège de focus des modales
+  ramenait justement le focus sur le bouton "⋯" du post-it après chaque conversion — corrigé côté
+  application (`isEditableFocusTarget`, ne suspend plus que pour un vrai champ de saisie texte) ;
+  **aucun changement nécessaire dans ces deux fichiers de test**, qui décrivaient le comportement
+  attendu correctement.
+
+Ce même passage a aussi révélé 2 échecs dans `e2e/lot11-objective-indicators-entries.spec.js`
+(LOT 11, sans rapport avec LOT 13) : `strict mode violation` sur des sélecteurs ambigus
+(`"Documentation à jour"` et `"Participation ateliers"` + `.badge-done` matchaient à la fois une
+ligne de `#obj-indicators` ET une ligne de `#obj-entries`, qui affiche aussi le nom/statut de
+l'indicateur concerné par le suivi qu'elle décrit). Corrigés en scopant les deux locators à
+`#obj-indicators` — défaut du TEST, aucun changement applicatif.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
