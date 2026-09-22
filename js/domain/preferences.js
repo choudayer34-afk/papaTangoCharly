@@ -74,6 +74,18 @@
 //    de paramétrage") : masqué par défaut la première fois que cette vague tourne, plutôt que
 //    d'apparaître d'emblée sans que Charles-Henri l'ait demandé. Ne se redéclenche jamais après.
 //
+// "🧠 Mon bureau" (LOT 13, TODO-027, 22/09/2026) — remplace le Pense-bête ci-dessus (arbitrage de
+// Charles-Henri : "Mon bureau remplace le Pense-bête") par une vraie collection de post-it libres
+// (js/domain/stickyNotes.js), pas un simple champ de préférence. Seul un drapeau de migration
+// reste ici :
+//  - `bureauMigratedV1` : bascule one-shot (même mécanique que `postitMigratedV1` juste au-dessus)
+//    qui protège la reprise UNIQUE de l'ancien contenu `postitText`/`postitChecklist` comme
+//    PREMIER post-it du Bureau (voir js/views/dashboard.js) — ne se redéclenche jamais après,
+//    donc supprimer ensuite ce premier post-it ne le fait jamais réapparaître. `postitText`/
+//    `postitChecklist`/`postitMode`/`postitMigratedV1` restent en base (jamais nettoyés, même
+//    principe que `myObjectives` avant eux) mais ne sont plus lus par aucun écran une fois cette
+//    migration passée.
+//
 // "🗂️ Accueil réorganisable" (même retour, second volet — "pouvoir positionner, organiser des
 // rubriques comme je l'entends sur web et mobile") :
 //  - `dashboardOrder` : ordre EXPLICITE des rubriques de l'Accueil (tableau de clés), posé
@@ -144,6 +156,8 @@ function withDefaults(raw) {
     tagsMigratedV1: false,
     disabledTags: [],
     personalObjectivesMigratedV1: false,
+    // LOT 13 (TODO-027, 22/09/2026) — voir le commentaire détaillé en tête de fichier.
+    bureauMigratedV1: false,
     // LOT 12 (TODO-026, US-026 du 21/09/2026, retour de Charles-Henri : "personnaliser sa barre
     // de navigation en fonction de ses usages... la personnalisation est strictement
     // individuelle") — les 4 clés de js/services/navConfig.js#MODULE_CATALOG affichées dans la
@@ -392,6 +406,12 @@ export async function setPostitChecklist(items) {
  */
 export async function markPostitMigratedV1() {
   return storage.update(COLLECTION, DOC_ID, () => ({ postitMigratedV1: true }));
+}
+
+/** Bascule one-shot du Bureau (LOT 13, TODO-027) — voir le commentaire détaillé en tête de
+ *  fichier, même principe exact que `markPostitMigratedV1()` juste au-dessus. */
+export async function markBureauMigratedV1() {
+  return storage.update(COLLECTION, DOC_ID, () => ({ bureauMigratedV1: true }));
 }
 
 /** Ordre explicite des rubriques de l'Accueil (⚙️ Personnaliser → "Ordre des rubriques") —
