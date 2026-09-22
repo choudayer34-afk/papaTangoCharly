@@ -38,6 +38,7 @@
 
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "stickyNotes";
 
@@ -67,6 +68,14 @@ export async function createStickyNote(data = {}) {
     pinned: !!data.pinned,
     archived: false,
   });
+  // Gamification (LOT G3, TODO_GAMIFICATION.md §5.1, famille "Organisation") : compte les
+  // post-it créés (clé de dédoublonnage dédiée, sans XP direct) puis réévalue les badges de la
+  // famille. Point d'attention pour le bilan : la migration unique Pense-bête → Bureau (voir
+  // js/views/dashboard.js) appelle cette même fonction pour créer le premier post-it migré —
+  // ce post-it comptera donc, une seule fois, comme un post-it "créé" au sens de ce badge, ce
+  // qui est un effet de bord mineur assumé plutôt que traité comme un cas spécial. Jamais
+  // bloquant pour l'écriture métier ci-dessus.
+  gamification.recordStickyNoteCreated(note.id).catch((err) => console.error("[gamification] Échec de la mise à jour des badges (Organisation) :", err));
   return note;
 }
 
