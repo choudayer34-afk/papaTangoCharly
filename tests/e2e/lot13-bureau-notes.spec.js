@@ -76,6 +76,17 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     await noteEl.locator(".sticky-note-textarea").fill(uniqueContent);
     await noteEl.locator(".sticky-note-textarea").press("Tab");
 
+    // CORRECTIF (premier passage réel du 22/09/2026, GitHub Actions — `content` retrouvé vide
+    // après rechargement) : la sauvegarde déclenchée par le blur (`stickyNotesApi.setContent`)
+    // est un aller-retour réseau non attendu par l'écouteur — un `page.reload()` immédiatement
+    // après le `press("Tab")` pouvait couper la page avant que l'écriture n'ait atteint
+    // l'émulateur. `page.waitForLoadState("networkidle")` n'est PAS la bonne solution ici : les
+    // écoutes `onSnapshot` (js/services/storage.js#subscribe) maintiennent une connexion réseau
+    // permanente au flux Firestore, donc "networkidle" ne se stabilise jamais tant qu'une section
+    // de l'Accueil est montée. Une courte attente fixe est le compromis le plus simple et le plus
+    // robuste, largement supérieure au temps d'aller-retour réel vers l'émulateur local.
+    await page.waitForTimeout(500);
+
     // Rechargement complet : le Bureau se remonte depuis Firestore (mountBureau + subscribe),
     // pas depuis un état mémoire — seule façon de prouver une vraie sauvegarde automatique.
     await page.reload();
@@ -199,6 +210,10 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     const heightAfterResize = parseInt(styleAfterResize.height, 10);
     expect(widthAfterResize).toBeGreaterThanOrEqual(160); // MIN_WIDTH, voir js/domain/stickyNotes.js
     expect(heightAfterResize).toBeGreaterThanOrEqual(120); // MIN_HEIGHT
+
+    // Même précaution que pour le test de sauvegarde texte plus haut : l'écriture déclenchée au
+    // relâchement du pointeur (attachDrag/attachResize) n'est pas attendue avant de continuer.
+    await page.waitForTimeout(500);
 
     // Persistance : la position/taille visibles à l'écran juste avant rechargement doivent être
     // celles retrouvées après (écrite au relâchement du pointeur, voir attachDrag/attachResize).
