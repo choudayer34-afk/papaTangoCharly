@@ -41,8 +41,10 @@
 //    via `resolveRef()` (comme le lien profond du .ics) pour ne jamais afficher un titre
 //    devenu obsolète si la fiche a été renommée depuis.
 //  - `notifOptIn` : `null` tant que Charles-Henri n'a pas répondu à la proposition d'alerte au
-//    démarrage (voir le bandeau sur l'Accueil), `true`/`false` ensuite — jamais reproposé une
-//    fois tranché.
+//    démarrage (voir le bandeau sur l'Accueil), `true`/`false` ensuite — plus jamais reproposé
+//    automatiquement une fois tranché (LOT 9, TODO-019, COMP-UX-010 : bouton "↺ Redemander mon
+//    choix" dans ⚙️ Personnaliser l'accueil, js/views/dashboard.js#openDashboardSettingsModal,
+//    qui ramène explicitement cette valeur à `null` pour refaire réapparaître le bandeau).
 //  - `lastNotifShownDate` : évite de répéter l'alerte plusieurs fois le même jour à chaque
 //    ouverture de l'app (YYYY-MM-DD, même principe que `focusOverride.date`).
 //
