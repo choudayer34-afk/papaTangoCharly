@@ -115,6 +115,13 @@ const WHATS_NEW = [
         howTo: "Accueil → ⚙️ Personnaliser l'accueil → \"🧭 Personnaliser la navigation\". Boutons ▲/▼ pour réordonner la barre principale, \"→ Barre principale\" sur un module de \"Dans ☰ Plus\" pour l'y faire entrer (il prend la place du dernier module affiché) — ou \"↺ Revenir à Accueil, Inbox, Pilotage, Équipe, Plus\" pour tout remettre comme au premier jour.",
         gain: "Une barre du bas qui reflète ton propre usage plutôt qu'un choix unique pour tout le monde — par exemple Ressources ou Prompts directement accessibles d'un tap, si c'est ce que tu consultes le plus.",
       },
+      {
+        type: "add",
+        title: "🧠 \"Mon bureau\" : des post-it libres sur l'Accueil, remplace le Pense-bête",
+        text: "Le \"📌 Pense-bête\" unique est remplacé par \"🧠 Mon bureau\" : autant de post-it que tu veux, chacun avec son titre, sa couleur (jaune/bleu/vert/rose/violet/gris), son type (texte libre ou checklist), sa position et sa taille — glisse-les où tu veux, redimensionne-les par la poignée en bas à droite, tout est enregistré automatiquement. Depuis le menu \"⋯\" d'un post-it : épingle-le (reste toujours au-dessus des autres), archive-le, supprime-le, ou transforme-le directement en Tâche/Suivi/Ressource/Décision/Information — une ligne de checklist se transforme aussi individuellement, sans toucher au reste. Ton éventuel Pense-bête d'avant cette mise à jour devient automatiquement le premier post-it, rien n'est perdu.",
+        howTo: "Accueil → section \"🧠 Mon bureau\", juste sous les indicateurs. \"+ Nouveau post-it\" pour en créer un, \"⋯\" sur un post-it pour le gérer ou le transformer, \"🗄️ Archivés\" pour retrouver ceux mis de côté.",
+        gain: "Noter plusieurs sujets en parallèle pendant une réunion (un post-it par sujet) sans devoir choisir entre eux comme avec l'ancien Pense-bête unique, puis transformer chacun en action concrète le moment venu.",
+      },
     ],
   },
   {
