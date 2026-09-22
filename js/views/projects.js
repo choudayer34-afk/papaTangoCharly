@@ -2,6 +2,7 @@
 // jusqu'à la tâche précise (§71).
 
 import * as projectsApi from "../domain/projects.js";
+import * as dateUtils from "../services/dateUtils.js";
 import * as tasksApi from "../domain/tasks.js";
 import * as resourcesApi from "../domain/resources.js";
 import * as followUpsApi from "../domain/followups.js";
@@ -937,13 +938,37 @@ export async function openProjectDetail(project, tasks) {
   if (!tasks.length) {
     tasksEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune tâche liée pour l'instant.</div>`;
   } else {
-    for (const task of tasks) {
+    tasksEl.innerHTML = "";
+    // Retour direct de Charles-Henri (22/09/2026) : tâches organisées par statut — tout ce qui
+    // n'est pas terminé d'abord, trié par échéance la plus proche en premier (celles sans
+    // échéance ensuite, dans leur ordre d'origine, faute d'autre critère) — puis les tâches
+    // terminées à part, triées par date de clôture la plus récente en premier (symétrique à
+    // "Suivis récents" ailleurs dans l'app). Non appliqué au Kanban lui-même, déjà organisé par
+    // statut via ses colonnes ; cette liste plate de la fiche Projet ne l'était pas du tout.
+    const notDone = tasks.filter((t) => t.status !== "done");
+    const done = tasks.filter((t) => t.status === "done");
+    // `dateUtils.parseLocalDate` (minuit LOCAL) plutôt que `new Date(dateStr)` seul, même
+    // précaution que documentée dans js/services/dateUtils.js — sans effet réel sur l'ORDRE
+    // relatif ici (le même décalage UTC/local s'appliquerait aux deux dates comparées), mais
+    // évite de réintroduire le motif que ce fichier a justement pour rôle de proscrire.
+    const notDoneWithDate = notDone
+      .filter((t) => t.dueDate)
+      .sort((a, b) => dateUtils.parseLocalDate(a.dueDate) - dateUtils.parseLocalDate(b.dueDate));
+    const notDoneWithoutDate = notDone.filter((t) => !t.dueDate);
+    const doneSorted = [...done].sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+
+    function appendTaskRow(task) {
+      const late = task.status !== "done" && tasksApi.isLate(task);
       const row = document.createElement("div");
       row.className = "item-row";
       row.style.cursor = "pointer";
+      const dateLabel = task.status === "done"
+        ? task.completedAt ? `Terminée le ${formatDate(task.completedAt)}` : "Terminée"
+        : task.dueDate ? `Échéance : ${formatDate(task.dueDate)}` : "Pas d'échéance";
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(task.title)}</div>
+          <div class="item-meta">${late ? `<span class="badge badge-late">${dateLabel}</span>` : dateLabel}</div>
         </div>
         <span class="badge badge-${task.status}">${tasksApi.STATUS_LABELS[task.status]}</span>
       `;
@@ -955,6 +980,18 @@ export async function openProjectDetail(project, tasks) {
         openTaskDetail(task, allProjects, { onClose: reopenProject });
       });
       tasksEl.appendChild(row);
+    }
+
+    for (const task of [...notDoneWithDate, ...notDoneWithoutDate]) appendTaskRow(task);
+    if (doneSorted.length) {
+      // "voir à part" (retour de Charles-Henri) : un titre de groupe sépare visuellement les
+      // tâches terminées du reste, même composant que le regroupement par campagne des
+      // Objectifs (js/views/people.js#groupObjectivesByPeriod) plutôt qu'un nouveau style.
+      const doneLabel = document.createElement("div");
+      doneLabel.className = "prep-group-label";
+      doneLabel.textContent = `Terminées (${doneSorted.length})`;
+      tasksEl.appendChild(doneLabel);
+      for (const task of doneSorted) appendTaskRow(task);
     }
   }
 
