@@ -1009,6 +1009,31 @@ function renderGroupedFollowUpList(container, groups, { onOpen, coveredIds } = {
   }
 }
 
+/**
+ * Regroupe des Objectifs par campagne/période (LOT 11, TODO-024, "notion de campagne/période")
+ * — `period` est un simple champ texte libre (voir le commentaire en tête de
+ * js/domain/objectives.js pour l'arbitrage complet : pas de véritable entité "campagne" dans ce
+ * lot). Les objectifs sans période vont dans un groupe "Sans période" ; les groupes sont triés
+ * par la date de création la plus récente qu'ils contiennent, décroissante — volontairement
+ * PAS de notion de "campagne courante" à deviner ou à configurer, la récence suffit à faire
+ * ressortir les objectifs actuels avant les plus anciens, exactement le besoin exprimé
+ * ("distinguer clairement les objectifs de la campagne courante des objectifs historiques")
+ * sans construire de gestion de campagnes.
+ */
+export function groupObjectivesByPeriod(objectives) {
+  const groups = new Map();
+  for (const o of objectives) {
+    const key = o.period || "__none__";
+    if (!groups.has(key)) groups.set(key, { period: o.period || null, items: [] });
+    groups.get(key).items.push(o);
+  }
+  return [...groups.values()].sort((a, b) => {
+    const maxA = Math.max(0, ...a.items.map((o) => o.createdAt || 0));
+    const maxB = Math.max(0, ...b.items.map((o) => o.createdAt || 0));
+    return maxB - maxA;
+  });
+}
+
 /** Objectifs de campagne (§ préparation EADP) : liste + accès à leurs points de suivi datés. */
 function renderObjectivesList(container, objectives, person, reopen, projects = []) {
   if (!objectives.length) {
@@ -1016,23 +1041,134 @@ function renderObjectivesList(container, objectives, person, reopen, projects = 
     return;
   }
   container.innerHTML = "";
-  for (const o of objectives) {
-    const project = projects.find((p) => p.id === o.projectId);
-    const row = document.createElement("div");
-    row.className = "item-row";
-    row.style.cursor = "pointer";
-    row.innerHTML = `
-      <div class="item-main">
-        <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
-        <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
-      </div>
-    `;
-    row.addEventListener("click", () => {
-      closeModal();
-      openObjectiveDetail(o, person, { onDone: reopen });
-    });
-    container.appendChild(row);
+  const groups = groupObjectivesByPeriod(objectives);
+  const showGroupTitles = groups.length > 1;
+  for (const group of groups) {
+    if (showGroupTitles) {
+      const label = document.createElement("div");
+      label.className = "prep-group-label";
+      label.textContent = group.period || "Sans période";
+      container.appendChild(label);
+    }
+    for (const o of group.items) {
+      const project = projects.find((p) => p.id === o.projectId);
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+          <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openObjectiveDetail(o, person, { onDone: reopen });
+      });
+      container.appendChild(row);
+    }
   }
+}
+
+/**
+ * Bloc optionnel "Détails" d'un Objectif (LOT 11, TODO-024) — repliable, replié par défaut sauf
+ * si `initial` porte déjà l'une de ces valeurs (fiche d'un objectif déjà enrichi). Réutilisé
+ * TEL QUEL par la création (collaborateur ici, personnelle depuis js/views/dashboard.js) et par
+ * la fiche détail (`openObjectiveDetail` plus bas) : un seul jeu de champs, jamais deux
+ * formulaires distincts — c'est le principe central demandé par Charles-Henri pour ce lot. Rien
+ * ici n'est obligatoire ; un objectif personnel simple n'a jamais besoin d'ouvrir ce bloc.
+ */
+export function renderObjectiveDetailsFieldset(container, initial = {}) {
+  const smart = initial.smart || {};
+  const hasAnyDetail =
+    initial.category || initial.scope || initial.description || initial.period || initial.reviewFrequency ||
+    initial.actionPlan || initial.responsibilityLevels || initial.watchPoints ||
+    smart.specific || smart.measurable || smart.achievable || smart.relevant || smart.timeBound;
+
+  container.innerHTML = `
+    <details ${hasAnyDetail ? "open" : ""}>
+      <summary class="section-title" style="cursor:pointer;margin-top:0;">Détails (optionnel — campagne, SMART, EADP...)</summary>
+      <div class="field">
+        <label for="objd-category">Catégorie</label>
+        <input id="objd-category" type="text" placeholder="Ex. Technique, Managérial, Client..." value="${escapeAttr(initial.category || "")}" />
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <div class="chip-row">
+          <label class="chip-radio"><input type="radio" name="objd-scope" value="" ${!initial.scope ? "checked" : ""} /> — Aucun —</label>
+          ${objectivesApi.SCOPES.map((s) => `<label class="chip-radio"><input type="radio" name="objd-scope" value="${s}" ${initial.scope === s ? "checked" : ""} /> ${objectivesApi.SCOPE_LABELS[s]}</label>`).join("")}
+        </div>
+      </div>
+      <div class="field">
+        <label for="objd-description">Description / intention</label>
+        <textarea id="objd-description" placeholder="Contexte libre : pourquoi cet objectif ?">${escapeHtml(initial.description || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-period">Campagne / période</label>
+        <input id="objd-period" type="text" placeholder="Ex. 2026-2027, T3 2026..." value="${escapeAttr(initial.period || "")}" />
+      </div>
+      <div class="field">
+        <label for="objd-review-frequency">Fréquence de revue</label>
+        <input id="objd-review-frequency" type="text" placeholder="Ex. Mensuelle, à chaque point..." value="${escapeAttr(initial.reviewFrequency || "")}" />
+      </div>
+      <div class="section-title">SMART</div>
+      <div class="field">
+        <label for="objd-smart-specific">Spécifique</label>
+        <textarea id="objd-smart-specific" placeholder="Quoi, précisément ?">${escapeHtml(smart.specific || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-measurable">Mesurable</label>
+        <textarea id="objd-smart-measurable" placeholder="Comment sait-on que c'est atteint ?">${escapeHtml(smart.measurable || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-achievable">Atteignable</label>
+        <textarea id="objd-smart-achievable" placeholder="Réaliste avec les moyens disponibles ?">${escapeHtml(smart.achievable || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-relevant">Réaliste / Pertinent</label>
+        <textarea id="objd-smart-relevant" placeholder="En quoi ça compte vraiment ?">${escapeHtml(smart.relevant || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-time-bound">Temporel</label>
+        <textarea id="objd-smart-time-bound" placeholder="Pour quand ?">${escapeHtml(smart.timeBound || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-action-plan">Plan / actions</label>
+        <textarea id="objd-action-plan" placeholder="Grandes étapes envisagées">${escapeHtml(initial.actionPlan || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-responsibility">Niveaux de responsabilité</label>
+        <textarea id="objd-responsibility" placeholder="Qui décide, qui contribue, qui est informé...">${escapeHtml(initial.responsibilityLevels || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-watch-points">Points d'attention</label>
+        <textarea id="objd-watch-points" placeholder="Risques, dépendances, vigilance particulière...">${escapeHtml(initial.watchPoints || "")}</textarea>
+      </div>
+    </details>
+  `;
+
+  return {
+    read() {
+      const val = (id) => container.querySelector(id).value.trim();
+      return {
+        category: val("#objd-category") || null,
+        scope: container.querySelector('input[name="objd-scope"]:checked')?.value || null,
+        description: val("#objd-description"),
+        period: val("#objd-period") || null,
+        reviewFrequency: val("#objd-review-frequency"),
+        actionPlan: val("#objd-action-plan"),
+        responsibilityLevels: val("#objd-responsibility"),
+        watchPoints: val("#objd-watch-points"),
+        smart: {
+          specific: val("#objd-smart-specific"),
+          measurable: val("#objd-smart-measurable"),
+          achievable: val("#objd-smart-achievable"),
+          relevant: val("#objd-smart-relevant"),
+          timeBound: val("#objd-smart-time-bound"),
+        },
+      };
+    },
+  };
 }
 
 async function openCreateObjectiveModal(person, { onDone } = {}) {
@@ -1054,8 +1190,10 @@ async function openCreateObjectiveModal(person, { onDone } = {}) {
         ${sortProjectsByName(projects).map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
+    <div id="obj-details-fieldset"></div>
   `;
   attachProjectQuickCreate(body.querySelector("#obj-project"));
+  const details = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"));
   const { bodyEl, close } = openModal({
     title: "Nouvel objectif",
     body,
@@ -1069,7 +1207,7 @@ async function openCreateObjectiveModal(person, { onDone } = {}) {
           const title = bodyEl.querySelector("#obj-title").value.trim();
           if (!title) return;
           const projectId = bodyEl.querySelector("#obj-project").value || null;
-          await objectivesApi.createObjective({ personId: person.id, title, projectId });
+          await objectivesApi.createObjective({ personId: person.id, title, projectId, ...details.read() });
           close();
           showToast("Objectif ajouté");
           onDone?.();
@@ -1081,6 +1219,7 @@ async function openCreateObjectiveModal(person, { onDone } = {}) {
 
 export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   const entries = [...(objective.entries || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const indicators = objective.indicators || [];
   // "Projet" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un
   // projet") — chargé ici plutôt que reçu en paramètre : cette fonction est aussi appelée
   // directement depuis js/components/search.js et js/components/linkedItems.js sans que ces
@@ -1100,12 +1239,22 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
         ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === objective.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
-    <div class="section-title" style="margin-top:0;">🕒 Points de suivi (${entries.length})</div>
-    <div class="card" id="obj-entries" style="margin-bottom:16px;"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-      <input id="obj-entry-date" type="date" value="${new Date().toISOString().slice(0, 10)}" style="flex:1;min-width:130px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <input id="obj-entry-note" type="text" placeholder="Où en est-on ?" style="flex:2;min-width:160px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <button id="add-entry-btn" type="button" class="btn btn-secondary btn-sm">+ Point</button>
+    <div id="obj-details-fieldset" style="margin-bottom:8px;"></div>
+
+    <!-- Indicateurs (LOT 11, TODO-024, points 3/4/6) — données structurées PROPRES à
+         l'Objectif, jamais une fiche indépendante (arbitrage "Option A", voir le commentaire en
+         tête de js/domain/objectives.js) : pas de section "🔗 Lié" par indicateur, uniquement au
+         niveau de l'Objectif entier (section plus bas, inchangée). -->
+    <div class="section-title">📊 Indicateurs (${indicators.length})</div>
+    <div class="card" id="obj-indicators" style="margin-bottom:8px;"></div>
+    <div style="margin-bottom:16px;">
+      <button id="add-indicator-btn" type="button" class="btn btn-secondary btn-sm">+ Indicateur</button>
+    </div>
+
+    <div class="section-title">🕒 Suivis récents (${entries.length})</div>
+    <div class="card" id="obj-entries" style="margin-bottom:8px;"></div>
+    <div style="margin-bottom:16px;">
+      <button id="add-entry-btn" type="button" class="btn btn-secondary btn-sm">+ Ajouter un suivi</button>
     </div>
     <div class="section-title">🏷️ Tags</div>
     <div id="obj-tags" style="margin-bottom:16px;"></div>
@@ -1121,37 +1270,82 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
       <button id="obj-create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
     </div>
   `;
+
+  const objDetails = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"), objective);
+
+  const indicatorById = new Map(indicators.map((ind) => [ind.id, ind]));
+  const indicatorsEl = body.querySelector("#obj-indicators");
+  function renderIndicators(list) {
+    if (!list.length) {
+      indicatorsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun indicateur pour l'instant.</div>`;
+      return;
+    }
+    indicatorsEl.innerHTML = "";
+    for (const ind of list) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      const metaParts = [];
+      if (ind.target) metaParts.push(`Cible : ${escapeHtml(ind.target)}`);
+      if (ind.measurement) metaParts.push(`Mesure : ${escapeHtml(ind.measurement)}`);
+      if (ind.evidenceSource) metaParts.push(`Preuve : ${escapeHtml(ind.evidenceSource)}`);
+      if (ind.frequency) metaParts.push(`Fréquence : ${escapeHtml(ind.frequency)}`);
+      if (ind.currentValue) metaParts.push(`Valeur actuelle : ${escapeHtml(ind.currentValue)}`);
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(ind.label || "(sans libellé)")} <span class="badge badge-${ind.status}">${objectivesApi.INDICATOR_STATUS_LABELS[ind.status] || ind.status}</span></div>
+          ${metaParts.length ? `<div class="item-meta">${metaParts.join(" · ")}</div>` : ""}
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openIndicatorModal(objective, ind, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+      });
+      indicatorsEl.appendChild(row);
+    }
+  }
+  renderIndicators(indicators);
+  body.querySelector("#add-indicator-btn").addEventListener("click", () => {
+    closeModal();
+    openIndicatorModal(objective, null, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+  });
+
   const entriesEl = body.querySelector("#obj-entries");
   function renderEntries(list) {
     if (!list.length) {
-      entriesEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun point de suivi pour l'instant.</div>`;
+      entriesEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun suivi pour l'instant.</div>`;
       return;
     }
     entriesEl.innerHTML = "";
     for (const e of list) {
+      const ind = e.indicatorId ? indicatorById.get(e.indicatorId) : null;
       const row = document.createElement("div");
       row.className = "item-row";
-      row.innerHTML = `<div class="item-main"><div class="item-title">${escapeHtml(e.note)}</div><div class="item-meta">${formatDate(e.date)}</div></div>`;
+      const titleParts = [];
+      if (ind) titleParts.push(`📊 ${escapeHtml(ind.label || "(indicateur)")}`);
+      if (e.status) titleParts.push(`<span class="badge badge-${e.status}">${objectivesApi.INDICATOR_STATUS_LABELS[e.status] || e.status}</span>`);
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${formatDate(e.date)}${titleParts.length ? " — " + titleParts.join(" ") : ""}</div>
+          ${e.note ? `<div>${escapeHtml(e.note)}</div>` : ""}
+          ${e.nextSteps ? `<div class="item-meta">Prévu avant le prochain point : ${escapeHtml(e.nextSteps)}</div>` : ""}
+          <div class="item-meta" id="obj-entry-ref-${e.id}"></div>
+        </div>
+      `;
       entriesEl.appendChild(row);
+      if (e.ref) {
+        linkedItemsApi.resolveRefDirect(e.ref).then((resolved) => {
+          const refEl = row.querySelector(`#obj-entry-ref-${e.id}`);
+          if (refEl) refEl.textContent = resolved ? `🔗 ${resolved.emoji} ${resolved.title}` : "🔗 Élément supprimé";
+        });
+      }
     }
   }
   renderEntries(entries);
-  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
-  // non désactivé pendant l'écriture — un double-clic dupliquait le point de suivi.
-  const addEntryBtn = body.querySelector("#add-entry-btn");
-  addEntryBtn.addEventListener(
-    "click",
-    guardClick(addEntryBtn, async () => {
-      const note = body.querySelector("#obj-entry-note").value.trim();
-      if (!note) return;
-      const date = body.querySelector("#obj-entry-date").value || null;
-      const updated = await objectivesApi.addEntry(objective.id, { date, note });
-      objective.entries = updated.entries;
-      renderEntries([...updated.entries].sort((a, b) => new Date(b.date) - new Date(a.date)));
-      body.querySelector("#obj-entry-note").value = "";
-      showToast("Point de suivi ajouté");
-    })
-  );
+  body.querySelector("#add-entry-btn").addEventListener("click", () => {
+    closeModal();
+    openAddObjectiveEntryModal(objective, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+  });
 
   const objProjectSelectEl = body.querySelector("#obj-detail-project");
   attachProjectQuickCreate(objProjectSelectEl);
@@ -1209,9 +1403,260 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
         onClick: async () => {
           await objectivesApi.updateObjective(objective.id, {
             status: bodyEl.querySelector("#obj-done").checked ? "done" : "active",
+            ...objDetails.read(),
           });
           close();
           showToast("Objectif mis à jour");
+          onDone?.();
+        },
+      },
+    ],
+  });
+}
+
+/** Ajouter/modifier un indicateur (LOT 11, TODO-024, points 3/4) — petite modale imbriquée,
+ *  même convention que partout ailleurs dans ce fichier (fermer/rouvrir la fiche parente au
+ *  clic). `indicator` à `null` = création, sinon modification en place. */
+function openIndicatorModal(objective, indicator, { onDone } = {}) {
+  const isEdit = !!indicator;
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="ind-label">Libellé</label>
+      <input id="ind-label" type="text" placeholder="Ex. Participation à des contacts utilisateurs" value="${escapeAttr(indicator?.label || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-target">Cible</label>
+      <input id="ind-target" type="text" placeholder="Ex. 6 contacts terrain sur la période" value="${escapeAttr(indicator?.target || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-measurement">Mode de mesure</label>
+      <input id="ind-measurement" type="text" placeholder="Ex. Nombre de comptes rendus de contact" value="${escapeAttr(indicator?.measurement || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-evidence">Source de preuve</label>
+      <input id="ind-evidence" type="text" placeholder="Ex. Comptes rendus partagés sur le drive" value="${escapeAttr(indicator?.evidenceSource || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-frequency">Fréquence</label>
+      <input id="ind-frequency" type="text" placeholder="Ex. Mensuelle" value="${escapeAttr(indicator?.frequency || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-current-value">Valeur actuelle (optionnel)</label>
+      <input id="ind-current-value" type="text" placeholder="Ex. 3 contacts réalisés à ce jour" value="${escapeAttr(indicator?.currentValue || "")}" />
+    </div>
+    <div class="field">
+      <label>Statut</label>
+      <div class="chip-row">
+        ${objectivesApi.INDICATOR_STATUSES.map(
+          (s) => `<label class="chip-radio"><input type="radio" name="ind-status" value="${s}" ${(indicator?.status || "todo") === s ? "checked" : ""} /> ${objectivesApi.INDICATOR_STATUS_LABELS[s]}</label>`
+        ).join("")}
+      </div>
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: isEdit ? "Modifier l'indicateur" : "Nouvel indicateur",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      ...(isEdit
+        ? [
+            {
+              label: "🗑️ Supprimer",
+              variant: "danger",
+              closesModal: false,
+              onClick: () => {
+                closeModal();
+                confirmDelete({
+                  title: "Supprimer cet indicateur ?",
+                  message: `« ${indicator.label || "Cet indicateur"} » sera définitivement supprimé. Les suivis déjà enregistrés qui le concernaient sont conservés.`,
+                  onConfirm: async () => {
+                    await objectivesApi.removeIndicator(objective.id, indicator.id);
+                    showToast("Indicateur supprimé");
+                    onDone?.();
+                  },
+                  onCancel: () => openIndicatorModal(objective, indicator, { onDone }),
+                });
+              },
+            },
+          ]
+        : []),
+      {
+        label: isEdit ? "Enregistrer" : "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const patch = {
+            label: bodyEl.querySelector("#ind-label").value.trim(),
+            target: bodyEl.querySelector("#ind-target").value.trim(),
+            measurement: bodyEl.querySelector("#ind-measurement").value.trim(),
+            evidenceSource: bodyEl.querySelector("#ind-evidence").value.trim(),
+            frequency: bodyEl.querySelector("#ind-frequency").value.trim(),
+            currentValue: bodyEl.querySelector("#ind-current-value").value.trim(),
+            status: bodyEl.querySelector('input[name="ind-status"]:checked')?.value || "todo",
+          };
+          if (!patch.label) return;
+          if (isEdit) await objectivesApi.updateIndicator(objective.id, indicator.id, patch);
+          else await objectivesApi.addIndicator(objective.id, patch);
+          close();
+          showToast(isEdit ? "Indicateur mis à jour" : "Indicateur ajouté");
+          onDone?.();
+        },
+      },
+    ],
+  });
+}
+
+/**
+ * "+ Ajouter un suivi" sur un Objectif (LOT 11, TODO-024, point 7) — le formulaire ne redemande
+ * JAMAIS la cible/le mode de mesure/la source de preuve : ces informations sont déjà celles de
+ * l'indicateur choisi, affichées en contexte au-dessus du formulaire (retour de Charles-Henri :
+ * "le but est que le manager ou le collaborateur puisse faire un point en quelques minutes").
+ * Sans indicateur sur l'objectif (cas "Mes objectifs" simple), le sélecteur d'indicateur et le
+ * contexte associé n'apparaissent simplement pas — formulaire réduit à statut/réalisé/prévu/lien,
+ * l'expérience légère demandée pour un objectif personnel.
+ */
+function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
+  const indicators = objective.indicators || [];
+  const lastEntryFor = (indicatorId) =>
+    [...(objective.entries || [])]
+      .filter((e) => (indicatorId ? e.indicatorId === indicatorId : !e.indicatorId))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    ${
+      indicators.length
+        ? `<div class="field">
+      <label for="oe-indicator">Indicateur concerné</label>
+      <select id="oe-indicator">
+        <option value="">— Suivi général de l'objectif —</option>
+        ${indicators.map((ind) => `<option value="${ind.id}" ${prefill.indicatorId === ind.id ? "selected" : ""}>${escapeHtml(ind.label || "(sans libellé)")}</option>`).join("")}
+      </select>
+    </div>
+    <div class="card" id="oe-context" style="margin-bottom:16px;"></div>`
+        : ""
+    }
+    <div class="field">
+      <label>Statut</label>
+      <div class="chip-row">
+        <label class="chip-radio"><input type="radio" name="oe-status" value="" ${!prefill.status ? "checked" : ""} /> — Inchangé —</label>
+        ${objectivesApi.INDICATOR_STATUSES.map((s) => `<label class="chip-radio"><input type="radio" name="oe-status" value="${s}" ${prefill.status === s ? "checked" : ""} /> ${objectivesApi.INDICATOR_STATUS_LABELS[s]}</label>`).join("")}
+      </div>
+    </div>
+    <div class="field">
+      <label for="oe-date">Date</label>
+      <input id="oe-date" type="date" value="${escapeAttr(prefill.date || new Date().toISOString().slice(0, 10))}" />
+    </div>
+    <div class="field">
+      <label for="oe-note">Qu'est-ce qui a été réalisé ?</label>
+      <textarea id="oe-note" placeholder="Où en est-on depuis le dernier point ?">${escapeHtml(prefill.note || "")}</textarea>
+    </div>
+    <div class="field">
+      <label for="oe-next-steps">Qu'est-ce qui est prévu avant le prochain point ?</label>
+      <textarea id="oe-next-steps" placeholder="Optionnel">${escapeHtml(prefill.nextSteps || "")}</textarea>
+    </div>
+    <div class="field">
+      <label>Lien vers un élément existant (preuve/contexte, optionnel)</label>
+      <div id="oe-ref-display" class="item-meta" style="margin-bottom:6px;"></div>
+      <button type="button" id="oe-ref-pick-btn" class="btn btn-secondary btn-sm">🔗 Choisir une fiche</button>
+      <button type="button" id="oe-ref-clear-btn" class="btn btn-ghost btn-sm" style="display:none;">Retirer</button>
+    </div>
+  `;
+
+  let pickedRef = prefill.ref || null;
+  const refDisplay = body.querySelector("#oe-ref-display");
+  const refClearBtn = body.querySelector("#oe-ref-clear-btn");
+  function renderPickedRef() {
+    refClearBtn.style.display = pickedRef ? "" : "none";
+    if (!pickedRef) {
+      refDisplay.textContent = "";
+      return;
+    }
+    refDisplay.textContent = "Chargement...";
+    linkedItemsApi.resolveRefDirect(pickedRef).then((resolved) => {
+      refDisplay.textContent = resolved ? `🔗 ${resolved.emoji} ${resolved.title}` : "🔗 Élément supprimé";
+    });
+  }
+  // Snapshot des champs déjà saisis avant d'ouvrir le sélecteur de fiche — cette modale se
+  // referme forcément le temps du choix (`openModal()` n'affiche jamais deux modales à la
+  // fois), donc la saisie en cours est reprise via `prefill` à la réouverture plutôt que
+  // perdue, même principe qu'ailleurs dans ce fichier pour une modale imbriquée.
+  function snapshot() {
+    return {
+      indicatorId: body.querySelector("#oe-indicator")?.value || null,
+      status: body.querySelector('input[name="oe-status"]:checked')?.value || null,
+      date: body.querySelector("#oe-date").value,
+      note: body.querySelector("#oe-note").value,
+      nextSteps: body.querySelector("#oe-next-steps").value,
+      ref: pickedRef,
+    };
+  }
+  body.querySelector("#oe-ref-pick-btn").addEventListener("click", () => {
+    const current = snapshot();
+    closeModal();
+    linkedItemsApi.pickRef({
+      // Liste exacte demandée par Charles-Henri (LOT 11, TODO-024, point 7) : Suivi, Réunion,
+      // Décision, Information, Ressource, Projet — jamais Tâche/Personne/Objectif ici.
+      types: ["FollowUp", "Meeting", "Decision", "Kept", "Resource", "Project"],
+      title: "Choisir une fiche liée à ce suivi",
+      onPick: (ref) => openAddObjectiveEntryModal(objective, { onDone, prefill: { ...current, ref } }),
+      onCancel: () => openAddObjectiveEntryModal(objective, { onDone, prefill: current }),
+    });
+  });
+  refClearBtn.addEventListener("click", () => {
+    pickedRef = null;
+    renderPickedRef();
+  });
+
+  function fillContext(indicatorId) {
+    const contextEl = body.querySelector("#oe-context");
+    if (!contextEl) return;
+    const ind = indicators.find((i) => i.id === indicatorId);
+    if (!ind) {
+      contextEl.innerHTML = "";
+      return;
+    }
+    const last = lastEntryFor(indicatorId);
+    const lines = [];
+    if (ind.target) lines.push(`Cible : ${escapeHtml(ind.target)}`);
+    if (ind.measurement) lines.push(`Mesure : ${escapeHtml(ind.measurement)}`);
+    if (ind.evidenceSource) lines.push(`Source de preuve : ${escapeHtml(ind.evidenceSource)}`);
+    lines.push(`Statut actuel : ${objectivesApi.INDICATOR_STATUS_LABELS[ind.status] || ind.status}`);
+    if (last) {
+      lines.push(`Dernier suivi (${formatDate(last.date)}) : ${escapeHtml(last.note || "—")}`);
+      if (last.nextSteps) lines.push(`Prévu à ce moment-là : ${escapeHtml(last.nextSteps)}`);
+    }
+    contextEl.innerHTML = lines.map((l) => `<div class="item-meta">${l}</div>`).join("");
+  }
+  if (indicators.length) {
+    const select = body.querySelector("#oe-indicator");
+    select.addEventListener("change", () => fillContext(select.value));
+    if (prefill.indicatorId) fillContext(prefill.indicatorId);
+  }
+
+  renderPickedRef();
+
+  const { bodyEl, close } = openModal({
+    title: "Ajouter un suivi",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      {
+        label: "Ajouter",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const indicatorId = bodyEl.querySelector("#oe-indicator")?.value || null;
+          const status = bodyEl.querySelector('input[name="oe-status"]:checked')?.value || null;
+          const date = bodyEl.querySelector("#oe-date").value || null;
+          const note = bodyEl.querySelector("#oe-note").value.trim();
+          const nextSteps = bodyEl.querySelector("#oe-next-steps").value.trim();
+          if (!note && !nextSteps && !status) return;
+          await objectivesApi.addEntry(objective.id, { date, note, nextSteps, indicatorId, status, ref: pickedRef });
+          if (indicatorId && status) await objectivesApi.updateIndicator(objective.id, indicatorId, { status });
+          close();
+          showToast("Suivi ajouté");
           onDone?.();
         },
       },
@@ -1463,6 +1908,18 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
         <label class="chip-radio"><input type="radio" name="fu-notable" value="negative" /> 👎 Négatif</label>
       </div>
     </div>
+    <!-- LOT 11, TODO-025 — arbitrage explicite de Charles-Henri : décision INDÉPENDANTE du
+         "Sens" (direction, ci-dessus), disponible dès la création plutôt qu'à travers l'écran
+         de masquage privé (js/views/prepMask.js) qui reste la seule autre façon de la changer
+         plus tard. Réutilise le champ hiddenFromPrep déjà existant (js/domain/followups.js) —
+         aucune nouvelle valeur de direction créée, PAS de "suivi personnel" (voir l'arbitrage de
+         Charles-Henri : ce besoin n'a pas été retenu pour ce lot). Coché par défaut : un Suivi
+         remonte normalement au prochain point, comme c'était déjà le cas avant ce lot pour tout
+         Suivi jamais masqué. -->
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input id="fu-remonte-prep" type="checkbox" style="width:auto;" checked />
+      <label for="fu-remonte-prep" style="margin:0;">Remonter au prochain point</label>
+    </div>
   `;
 
   // "Créer un projet à la volée" (retour de Charles-Henri, vague 21 : "dans la fiche nouveau
@@ -1568,6 +2025,9 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
             dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-due").value || null,
             controlDate: bodyEl.querySelector("#fu-control").value || null,
             projectId: bodyEl.querySelector("#fu-project").value || null,
+            // LOT 11, TODO-025 — voir le commentaire au-dessus du champ dans le HTML de ce
+            // formulaire : indépendant de `direction`, jamais déduit automatiquement.
+            hiddenFromPrep: !bodyEl.querySelector("#fu-remonte-prep").checked,
           };
 
           // Mode "saisie en masse" (vague 22) : le bloc multi-personnes n'existe que quand
