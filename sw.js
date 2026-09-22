@@ -340,7 +340,22 @@
 // section repliable comme les autres rubriques de l'Accueil, `<details>`) et `js/domain/
 // stickyNotes.js` (nouveau paramètre optionnel `pinned` sur `createStickyNote`) précachés
 // modifiés — `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v75";
+//
+// Complément du 23/09/2026 (même jour, second retour direct de Charles-Henri : "je dois pouvoir
+// [mettre un post-it épinglé] n'importe où dans l'écran même en dehors du bureau [...] il [ne
+// doit pas passer] au dessous de toutes les autres modales") — un post-it épinglé n'est plus une
+// carte dans la section "Mon bureau" de l'Accueil mais un widget flottant (`position: fixed`)
+// visible sur TOUT écran de l'app, comme le mini-minuteur Pomodoro. Nouveaux fichiers précachés :
+// `js/components/stickyNoteShared.js` (menu "⋯"/édition rapide/conversion, extraits de
+// `js/components/bureau.js` pour être partagés avec le nouveau widget) et `js/components/
+// pinnedNotesOverlay.js` (widget flottant lui-même, monté/démonté dans `js/app.js` comme
+// `pomodoroWidget.js`). Fichiers précachés modifiés : `js/domain/stickyNotes.js` (nouveaux champs
+// `floatX`/`floatY`, nouvelle fonction `setFloatPosition`), `js/components/bureau.js` (section
+// "Mon bureau" simplifiée : la liste des épinglés qui y vivait quelques minutes plus tôt ce même
+// jour est retirée, devenue redondante avec le nouveau widget), `js/app.js` (montage/démontage du
+// widget), `styles/components.css` (styles du widget flottant). `CACHE_NAME` incrémenté en
+// conséquence.
+const CACHE_NAME = "pilotage-cache-v76";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -425,6 +440,8 @@ const APP_SHELL = [
   "./js/components/decisionGrid.js",
   "./js/components/projectHealth.js",
   "./js/components/bureau.js",
+  "./js/components/stickyNoteShared.js",
+  "./js/components/pinnedNotesOverlay.js",
   "./js/views/dashboard.js",
   "./js/views/inbox.js",
   "./js/views/kanban.js",
