@@ -255,6 +255,97 @@ réel — en particulier le test de superposition au-dessus d'une modale (`e2e/l
 notes.spec.js`, 2ᵉ test), qui repose sur l'échec d'actionabilité Playwright en cas de recouvrement
 plutôt que sur une simple vérification de présence.
 
+**Correction du 24/09/2026 (nouveau passage réel du workflow GitHub Actions, artefact transmis par
+Charles-Henri — exécuté sur le code du complément "post-it flottants" du 23/09/2026 ci-dessus)** :
+3 échecs, tous des défauts de TEST (aucun changement applicatif) — même famille de course que la
+correction du 23/09/2026 plus haut, mais un point différent du cycle Firestore :
+
+- `e2e/lot13-bureau-conversion.spec.js` ("...post-it archivé après création") — `#new-task-
+  description` retrouvé vide après ouverture du menu de conversion, alors que le contenu avait bien
+  été tapé et son `press("Tab")` déclenché juste avant.
+- `e2e/lot13-bureau-conversion.spec.js` ("...le post-it restent intacts", conversion d'une seule
+  ligne) et `e2e/lot13-bureau-notes.spec.js` ("...le texte libre n'est jamais perdu") — une ligne de
+  checklist tout juste ajoutée restait `toBeVisible()` → `hidden` pendant les 5 secondes du timeout,
+  alors que l'inspection de la trace CI (`trace.zip` de l'artefact transmis) montre l'élément
+  correctement structuré dans le DOM (`<span class="checklist-item-text">...</span>` bien présent,
+  jamais recréé pendant l'attente).
+
+Cause commune, confirmée par la trace du 3ᵉ échec (`e2e/lot13-bureau-notes.spec.js`) : le journal
+d'appels Playwright y montre littéralement `element was detached from the DOM, retrying` pendant le
+`fill()` de `#checklist-new-text`, juste après le changement de mode texte→checklist. Chaque
+écriture Firestore (`stickyNotesApi.setContent`/`setType`/`addChecklistItem`, `js/services/
+storage.js`) émet DEUX évènements `onSnapshot` pour une seule écriture locale — un snapshot
+optimiste immédiat (`metadata.hasPendingWrites: true`, avant même la confirmation serveur) puis un
+second une fois l'écriture confirmée — comportement standard de Firestore, pas un bug de ce dépôt.
+Or `renderFullCanvas` (`js/components/bureau.js`) reconstruit tout le DOM du "Tout voir" à CHAQUE
+snapshot reçu, sans diffing (seulement suspendu pendant qu'un CHAMP DE SAISIE TEXTE a le focus,
+voir `isEditableFocusTarget` — la correction du 23/09/2026 ci-dessus). Quand une action de test
+enchaîne immédiatement sur une saisie ou un clic sans laisser le temps aux DEUX snapshots de
+passer, l'action suivante peut retomber en plein milieu d'un de ces rebuilds : soit sur un `note`
+capturé par une closure pré-sauvegarde (description vide dans le menu de conversion), soit sur un
+élément DOM en cours de remplacement (ligne de checklist jugée "hidden" par Playwright alors que
+son remplaçant, identique visuellement, n'est pas encore celui interrogé).
+
+Corrigé par l'ajout d'un `page.waitForTimeout(500)` aux points de course identifiés — même
+mitigation, déjà établie et documentée dans ce dossier, que celle utilisée avant chaque
+`page.reload()` depuis la correction du 23/09/2026 : après la sauvegarde du titre+contenu et avant
+l'ouverture du menu de conversion (les 5 tests de `test.describe.serial("...conversion intelligente
+(post-it entier)")`), après l'ajout des deux lignes de checklist et avant le clic sur le menu "⋯" de
+la ligne (conversion d'une seule ligne), et après la bascule texte→checklist et avant la saisie de
+la première ligne (`e2e/lot13-bureau-notes.spec.js`).
+
+Note annexe (observée mais non retenue comme cause) : ce même passage montre, dans l'instantané
+ARIA au moment de l'échec, des post-it résiduels d'un test précédemment en échec dans la MÊME
+exécution (compte de test partagé, jamais nettoyés faute d'avoir atteint leur propre suppression) —
+sans incidence sur le diagnostic ci-dessus (ces résidus se dissipent d'eux-mêmes au prochain
+passage, l'émulateur Firestore étant réinitialisé entre deux exécutions CI) mais qui explique la
+présence de plusieurs post-it/widgets flottants inattendus dans cet instantané.
+
+**Correction du 25/09/2026 (nouveau passage réel du workflow GitHub Actions, artefact transmis par
+Charles-Henri avant de démarrer LOT G2 de `TODO_GAMIFICATION.md` — 3 échecs, la mitigation du
+24/09/2026 ci-dessus s'est révélée insuffisante en pratique)** :
+
+- `e2e/lot13-bureau-conversion.spec.js` ("...post-it archivé après création") — `strict mode
+  violation` : `page.locator(".item-row", { hasText: title })` (dans `deleteArchivedNoteByTitle`)
+  résolvait à 2 éléments. Défaut du TEST, pas un bug applicatif : ce locator n'était scopé à
+  AUCUNE modale. Le titre du post-it converti est réutilisé tel quel comme titre de la Tâche créée
+  ; sur le compte de test partagé, sans tâche en retard/due, "🎯 Focus du jour"
+  (`js/views/dashboard.js#renderFocusSection`) reprend cette tâche toute neuve dans son repli "3
+  tâches les plus urgentes" — sa propre `.item-row`, affichée sur l'Accueil DERRIÈRE la modale
+  "🗄️ Post-it archivés" (une seule modale à la fois, mais le reste de l'Accueil reste dans le DOM,
+  seulement recouvert visuellement — `toBeVisible()` ne teste pas l'occlusion), contient elle
+  aussi le titre recherché. Corrigé en scopant ce locator à `.modal-body` — même précédent déjà
+  documenté plus haut dans ce fichier pour TEST-010 ("une seule modale active à cet instant").
+- `e2e/lot13-bureau-conversion.spec.js` ("...le post-it restent intacts", conversion d'une seule
+  ligne) et `e2e/lot13-bureau-notes.spec.js` ("...le texte libre n'est jamais perdu") — même
+  symptôme que le 24/09/2026 (ligne de checklist tout juste ajoutée restant `toBeVisible()` →
+  `hidden` pendant les 5 secondes du timeout), au MÊME point du parcours (juste après la bascule
+  de mode texte → checklist) malgré le `page.waitForTimeout(500)` déjà en place à cet endroit
+  depuis le 24/09/2026. Cette fois-ci, un vrai bug applicatif : `js/components/bureau.js`, sur le
+  bouton de bascule de mode d'un post-it du plan de travail complet, ne faisait QUE lancer
+  l'écriture Firestore (`stickyNotesApi.setType`) — contrairement à
+  `js/components/stickyNoteShared.js#openStickyNoteEditor` (l'édition rapide depuis un widget
+  flottant), qui met à jour `note.type` et réaffiche le corps du post-it IMMÉDIATEMENT, de façon
+  optimiste, sans attendre l'aller-retour Firestore (même principe déjà appliqué à
+  `note.checklist`, voir le commentaire de `renderNoteBody`). Le passage en mode "checklist" du
+  plan de travail complet restait donc entièrement suspendu aux deux évènements `onSnapshot`
+  (optimiste puis confirmé) de cette écriture ; tant que le nouveau `#checklist-new-text`
+  n'existait pas encore, le mécanisme de suspension de rendu (`shouldSuspend`/`focusedInside`,
+  correction du 23/09/2026 ci-dessus) ne pouvait pas encore protéger la frappe qui suivait,
+  d'où la fenêtre de course. Une attente fixe plus longue n'aurait fait que réduire la probabilité
+  du problème sans l'éliminer (aucune garantie qu'un aller-retour réel vers l'émulateur reste
+  toujours sous un seuil donné en CI). Corrigé À LA SOURCE dans `js/components/bureau.js` en
+  alignant ce bouton sur le même principe optimiste que `stickyNoteShared.js` et que
+  `note.checklist` : le focus se pose désormais dans le nouveau champ avant même la réponse de
+  Firestore, les deux snapshots qui arrivent ensuite (qui ne font que reconfirmer la même valeur)
+  sont normalement mis en attente par la suspension de rendu déjà en place. Les deux
+  `page.waitForTimeout(500)` posés le 24/09/2026 à cet endroit précis sont conservés par précaution
+  (marge de sécurité, plus la cause du bug) mais ne devraient plus être nécessaires pour ce cas.
+
+**AVERTISSEMENT (25/09/2026)** : comme le reste de ce dossier, cette correction n'a pas pu être
+exécutée dans l'environnement où elle a été rédigée (registre npm bloqué, émulateur Firebase non
+disponible ici). À reconfirmer au premier lancement réel qui suit ce correctif.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
