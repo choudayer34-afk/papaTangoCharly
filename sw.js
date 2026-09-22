@@ -260,7 +260,18 @@
 // js/components/linkedItems.js, js/views/people.js, js/views/dashboard.js, js/views/whatsnew.js
 // (nouvelle entrée, qui inclut au passage le rattrapage de l'entrée manquante pour le hotfix
 // Guide du v67). `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v68";
+//
+// (22/09/2026, v69, TODO-038/TODO-039) : besoins produits traités en parenthèse pendant la
+// vérification du LOT 11 (voir TODO_TECHNIQUE.md) — tâches d'un projet triées par statut/
+// échéance avec les terminées à part (js/views/projects.js), étapes cochées d'une checklist
+// Tâche/Suivi reléguées en bas et triées par date de coche (js/components/checklist.js,
+// js/views/kanban.js, js/views/people.js), et report rapide "+1j/+7j" sur l'échéance/le
+// prochain contrôle d'un Suivi (js/views/people.js, calcul mutualisé dans
+// js/services/dateUtils.js). Fichiers précachés modifiés : js/views/projects.js,
+// js/components/checklist.js, js/views/kanban.js, js/views/people.js, js/services/dateUtils.js,
+// styles/components.css, js/views/whatsnew.js (nouvelles entrées). `CACHE_NAME` incrémenté en
+// conséquence.
+const CACHE_NAME = "pilotage-cache-v69";
 const APP_SHELL = [
   "./",
   "./index.html",
