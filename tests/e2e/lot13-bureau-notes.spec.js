@@ -19,10 +19,23 @@
 // vérifier le geste lui-même (attachDrag/attachResize), déjà couvert côté données par
 // tests/unit/lot13-sticky-notes-model.spec.js#setLayout.
 //
-// AVERTISSEMENT (22/09/2026) : écrit et relu manuellement à partir du code réel, mais jamais
-// exécuté dans l'environnement où il a été rédigé (registre npm bloqué, voir tests/README.md).
-// À reconfirmer au premier lancement réel — en particulier la simulation de glisser/redimensionner
-// via `page.mouse`, jamais utilisée ailleurs dans ce dossier avant ce lot.
+// AVERTISSEMENT (22/09/2026, complété le 23/09/2026) : écrit et relu manuellement à partir du
+// code réel, mais jamais exécuté dans l'environnement où il a été rédigé (registre npm bloqué,
+// voir tests/README.md). À reconfirmer au premier lancement réel — en particulier la simulation
+// de glisser/redimensionner via `page.mouse`, jamais utilisée ailleurs dans ce dossier avant ce
+// lot.
+//
+// MISE À JOUR du 23/09/2026 (complément du même jour, retour direct de Charles-Henri : "je dois
+// pouvoir [épingler] n'importe où dans l'écran [...] au-dessus des autres modales") : un nouveau
+// post-it est désormais créé ÉPINGLÉ par défaut et n'apparaît donc plus directement dans l'Accueil
+// comme avant — il apparaît immédiatement comme widget flottant (`.pinned-float-note`, voir
+// tests/e2e/lot13-pinned-float-notes.spec.js pour la couverture dédiée à ce widget) et son
+// contenu ne se manipule (texte/checklist/glisser/redimensionner, `.sticky-note`) que dans le
+// plan de travail complet ouvert via "🔍 Tout voir" (`#bureau-full-canvas`) — plus jamais
+// directement sur l'Accueil (`#bureau-canvas` n'existe plus en dehors de cette modale). Chaque
+// test ci-dessous crée donc son post-it, récupère son `data-id` via le widget flottant (seul
+// endroit où il apparaît avant l'ouverture de la modale), PUIS ouvre "🔍 Tout voir" pour le reste
+// de l'interaction.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -37,20 +50,31 @@ async function loginAndGoToDashboard(page) {
   await page.fill("#login-password", E2E_TEST_USER.password);
   await page.click("#login-email-submit");
   await dismissFirstRunModals(page);
-  await expect(page.locator("#bureau-canvas")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
 }
 
-/** Crée un nouveau post-it via l'UI et renvoie son locator, identifié par `data-id` (diff des
- *  identifiants présents avant/après le clic) — robuste face aux post-it déjà présents dans le
- *  Bureau du compte de test partagé, voir le commentaire en tête de ce fichier. */
+/** Ouvre le plan de travail complet et attend qu'il soit prêt — remplace les anciennes attentes
+ *  sur `#bureau-canvas` (retiré de l'Accueil, voir la note du 23/09/2026 en tête de ce fichier). */
+async function openFullCanvas(page) {
+  await page.click("#bureau-see-all-btn");
+  await expect(page.locator("#bureau-full-canvas")).toBeVisible({ timeout: 10_000 });
+}
+
+/** Crée un nouveau post-it via l'UI et renvoie son locator (dans le plan de travail complet,
+ *  ouvert par cette fonction), identifié par `data-id` diffé sur les widgets FLOTTANTS (créé
+ *  épinglé par défaut, voir la note du 23/09/2026 en tête de ce fichier) — robuste face aux
+ *  post-it déjà présents dans le Bureau du compte de test partagé. */
 async function createNoteAndLocate(page) {
-  const idsBefore = await page.locator(".sticky-note").evaluateAll((els) => els.map((e) => e.dataset.id));
+  const idsBefore = await page.locator(".pinned-float-note").evaluateAll((els) => els.map((e) => e.dataset.id));
   await page.click("#bureau-new-note-btn");
-  await expect(page.locator(".sticky-note")).toHaveCount(idsBefore.length + 1, { timeout: 10_000 });
-  const idsAfter = await page.locator(".sticky-note").evaluateAll((els) => els.map((e) => e.dataset.id));
+  await expect(page.locator(".pinned-float-note")).toHaveCount(idsBefore.length + 1, { timeout: 10_000 });
+  const idsAfter = await page.locator(".pinned-float-note").evaluateAll((els) => els.map((e) => e.dataset.id));
   const newId = idsAfter.find((id) => !idsBefore.includes(id));
   expect(newId).toBeTruthy();
-  return page.locator(`.sticky-note[data-id="${newId}"]`);
+  await openFullCanvas(page);
+  const el = page.locator(`.sticky-note[data-id="${newId}"]`);
+  await expect(el).toBeVisible({ timeout: 10_000 });
+  return el;
 }
 
 /** Supprime définitivement un post-it encore visible sur le canevas (menu "⋯" → "Supprimer" →
@@ -88,9 +112,12 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     await page.waitForTimeout(500);
 
     // Rechargement complet : le Bureau se remonte depuis Firestore (mountBureau + subscribe),
-    // pas depuis un état mémoire — seule façon de prouver une vraie sauvegarde automatique.
+    // pas depuis un état mémoire — seule façon de prouver une vraie sauvegarde automatique. La
+    // modale "Tout voir" se referme au rechargement (jamais restaurée automatiquement) — il faut
+    // la rouvrir pour retrouver le contenu du post-it.
     await page.reload();
-    await expect(page.locator("#bureau-canvas")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
+    await openFullCanvas(page);
     const reloadedNote = page.locator(`.sticky-note[data-id="${noteId}"]`);
     await expect(reloadedNote.locator(".sticky-note-title-input")).toHaveValue(uniqueTitle, { timeout: 10_000 });
     await expect(reloadedNote.locator(".sticky-note-textarea")).toHaveValue(uniqueContent);
@@ -135,7 +162,7 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     await deleteNote(page, page.locator(`.sticky-note[data-id="${noteId}"]`));
   });
 
-  test("Menu ⋯ : couleur, épingler, archiver/restaurer, puis suppression définitive depuis les archives", async ({ page }) => {
+  test("Menu ⋯ : couleur, désépingler/réépingler, archiver/restaurer, puis suppression définitive depuis les archives", async ({ page }) => {
     const uniqueTitle = `Test LOT 13 — menu ${Date.now()}`;
     await loginAndGoToDashboard(page);
     const noteEl = await createNoteAndLocate(page);
@@ -148,12 +175,21 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     await noteEl.locator(".sticky-note-title-input").fill(uniqueTitle);
     await noteEl.locator(".sticky-note-title-input").press("Tab");
 
+    // Créé épinglé par défaut (retour direct de Charles-Henri, 23/09/2026 : "je dois toujours
+    // pouvoir créer un post-it à la volée qui sera épinglé par défaut") — l'icône 📌 est donc déjà
+    // visible dans l'en-tête, sans action supplémentaire.
+    await expect(page.locator(`.sticky-note[data-id="${noteId}"] .sticky-note-pin`)).toBeVisible({ timeout: 5_000 });
+
     // Couleur — la classe CSS fixe (jamais réactive au thème, voir styles/components.css) change.
     await noteEl.locator(".sticky-note-menu-btn").click();
     await page.locator('#note-menu-colors [data-color="blue"]').click();
     await expect(page.locator(`.sticky-note[data-id="${noteId}"]`)).toHaveClass(/sticky-note--blue/, { timeout: 5_000 });
 
-    // Épingler — icône 📌 visible dans l'en-tête.
+    // Désépingler puis réépingler — le libellé du bouton s'inverse selon l'état courant, l'icône
+    // 📌 disparaît/réapparaît dans l'en-tête en conséquence.
+    await page.locator(`.sticky-note[data-id="${noteId}"]`).locator(".sticky-note-menu-btn").click();
+    await page.getByRole("button", { name: "📌 Désépingler" }).click();
+    await expect(page.locator(`.sticky-note[data-id="${noteId}"] .sticky-note-pin`)).toHaveCount(0, { timeout: 5_000 });
     await page.locator(`.sticky-note[data-id="${noteId}"]`).locator(".sticky-note-menu-btn").click();
     await page.getByRole("button", { name: "📌 Épingler" }).click();
     await expect(page.locator(`.sticky-note[data-id="${noteId}"] .sticky-note-pin`)).toBeVisible({ timeout: 5_000 });
@@ -217,8 +253,11 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
 
     // Persistance : la position/taille visibles à l'écran juste avant rechargement doivent être
     // celles retrouvées après (écrite au relâchement du pointeur, voir attachDrag/attachResize).
+    // La modale "Tout voir" se referme au rechargement — il faut la rouvrir (voir le commentaire
+    // du 23/09/2026 en tête de ce fichier).
     await page.reload();
-    await expect(page.locator("#bureau-canvas")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
+    await openFullCanvas(page);
     const reloadedNote = page.locator(`.sticky-note[data-id="${noteId}"]`);
     await expect(reloadedNote).toBeVisible({ timeout: 10_000 });
     const styleAfterReload = await reloadedNote.evaluate((el) => ({ left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height }));
