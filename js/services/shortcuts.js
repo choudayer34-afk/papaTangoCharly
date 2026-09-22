@@ -58,7 +58,7 @@ export const BUILTIN_SHORTCUTS = [
   },
   {
     combo: "Alt+1 … Alt+8 (dans la recherche)",
-    description: "Bascule le filtre de type correspondant (Tâche, Projet, Personne, Suivi, Ressource, Réunion, Décision, Information/Idée) sans quitter le clavier.",
+    description: "Bascule le filtre de type correspondant (Tâche, Projet, Personne, Suivi, Ressource, Réunion, Décision, Information) sans quitter le clavier.",
   },
   {
     combo: "Ctrl+Alt+<lettre ou chiffre>",
