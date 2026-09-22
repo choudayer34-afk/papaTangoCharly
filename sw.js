@@ -320,7 +320,18 @@
 // en dur), js/domain/preferences.js (nouvelle préférence `navigationMain`), js/views/dashboard.js
 // (nouvel écran de personnalisation), js/views/whatsnew.js (nouvelle entrée). `CACHE_NAME`
 // incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v73";
+//
+// LOT 13 (TODO-027, 22/09/2026) — "🧠 Mon bureau" (post-it libres), remplace le "📌 Pense-bête"
+// (arbitrage de Charles-Henri : "Mon bureau remplace le Pense-bête"). Nouveaux fichiers précachés
+// js/domain/stickyNotes.js (collection Firestore dédiée) et js/components/bureau.js (canevas
+// glisser/redimensionner + menus de conversion). Fichiers précachés modifiés :
+// js/domain/preferences.js (nouveau drapeau `bureauMigratedV1`), js/components/checklist.js
+// (nouveau paramètre optionnel `onLineMenu`), js/views/resources.js et js/views/people.js
+// (préremplissage de description jusqu'ici manquant sur leurs formulaires de création),
+// js/views/dashboard.js (section "Mon bureau" remplace le Pense-bête), js/views/whatsnew.js
+// (nouvelle entrée), styles/components.css (styles des post-it). `CACHE_NAME` incrémenté en
+// conséquence.
+const CACHE_NAME = "pilotage-cache-v74";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -370,6 +381,7 @@ const APP_SHELL = [
   "./js/domain/priorisation.js",
   "./js/domain/workload.js",
   "./js/domain/projectHealth.js",
+  "./js/domain/stickyNotes.js",
   "./js/components/modal.js",
   // BUG corrigé (21/09/2026, même correctif que le bump de CACHE_NAME ci-dessus) : ce fichier
   // (LOT 1, TODO-006, "validation partagée") n'avait jamais été ajouté ici depuis sa création —
@@ -403,6 +415,7 @@ const APP_SHELL = [
   "./js/components/duplicateTask.js",
   "./js/components/decisionGrid.js",
   "./js/components/projectHealth.js",
+  "./js/components/bureau.js",
   "./js/views/dashboard.js",
   "./js/views/inbox.js",
   "./js/views/kanban.js",
