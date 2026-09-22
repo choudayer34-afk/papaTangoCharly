@@ -12,6 +12,7 @@ import * as followUpsApi from "./followups.js";
 import * as meetingsApi from "./meetings.js";
 import * as decisionsApi from "./decisions.js";
 import * as resourcesApi from "./resources.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "inboxItems";
 
@@ -347,6 +348,14 @@ export async function qualify(itemId, outcome, extra = {}) {
     // l'élément a dormi en Inbox avant d'être qualifié).
     return { status: "kept", keptAsType: outcome, keptAt: Date.now() };
   });
+
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Inbox qualifiée", 4 XP, une seule fois par
+  // item — QUEL QUE SOIT le type de qualification choisi (y compris "archived", explicitement
+  // cité par cette ligne du barème comme "un traitement actif de l'Inbox"), d'où un appel unique
+  // ici, après le storage.update() ci-dessus commun à tous les outcomes, plutôt que dupliqué dans
+  // chacune des branches outcome-spécifiques qui suivent. Jamais bloquant pour la qualification
+  // elle-même, déjà effectuée ci-dessus.
+  gamification.recordInboxItemQualified(itemId).catch((err) => console.error("[gamification] Échec du crédit XP (Inbox qualifiée) :", err));
 
   if (outcome === "task") {
     await storage.logHistory("InboxItem", itemId, "qualified_as_task", { taskId: task.id });
