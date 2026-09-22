@@ -16,6 +16,7 @@
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
 import * as dateUtils from "../services/dateUtils.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "followUps";
 
@@ -229,8 +230,10 @@ export async function addNote(id, text) {
 
 export async function updateFollowUp(id, patch) {
   let finalPatch = patch;
+  let previousStatus = null;
   const updated = await storage.update(COLLECTION, id, (current) => {
     if (!current) throw new Error("Suivi introuvable : " + id);
+    previousStatus = current.status;
     // Même règle qu'à la création (voir `resolveControlDate` plus haut) — seulement quand
     // `dueDate` fait partie de CE patch : un appelant qui ne touche pas l'échéance (ex. cocher
     // "terminé", ajouter une note) ne doit jamais voir sa date de contrôle recalculée dans son
@@ -250,6 +253,13 @@ export async function updateFollowUp(id, patch) {
     return finalPatch;
   });
   await storage.logHistory("FollowUp", id, "updated", { patch: finalPatch });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Suivi terminé", 8 XP, une seule fois par
+  // Suivi (première transition vers "done" seulement, même principe que
+  // js/domain/tasks.js#updateTask) — voir le commentaire détaillé là-bas pour le raisonnement
+  // complet (registre "déjà récompensé", jamais bloquant pour l'écriture métier ci-dessus).
+  if (patch.status === "done" && previousStatus !== "done") {
+    gamification.recordFollowUpCompleted(id).catch((err) => console.error("[gamification] Échec du crédit XP (Suivi terminé) :", err));
+  }
   return updated;
 }
 
