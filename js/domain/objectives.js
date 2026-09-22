@@ -106,6 +106,14 @@ export async function createObjective(data) {
     indicators: [], // voir addIndicator/updateIndicator/removeIndicator ci-dessous
   });
   await storage.logHistory("Objective", objective.id, "created", { title: objective.title });
+  // Gamification (LOT G3, TODO_GAMIFICATION.md §5.1, famille "Management") : pas de compteur
+  // persisté dédié — recordObjectiveCreated() recalcule à chaque appel, via une lecture directe
+  // de la collection, le nombre de collaborateurs distincts ayant au moins un objectif
+  // (personId non nul), pour éviter tout risque de désynchronisation d'un compteur maintenu à
+  // la main. Aucun autre point de l'app ne modifie `personId` après création (vérifié), donc
+  // aucun appel équivalent n'est nécessaire dans updateObjective() ci-dessous. Jamais bloquant
+  // pour l'écriture métier ci-dessus.
+  gamification.recordObjectiveCreated().catch((err) => console.error("[gamification] Échec de la mise à jour des badges (Management) :", err));
   return objective;
 }
 
