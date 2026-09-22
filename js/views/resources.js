@@ -202,7 +202,12 @@ function openCreateResourceModal(prefill = {}) {
     </div>
     <div class="field">
       <label for="res-description">Description (optionnel)</label>
-      <textarea id="res-description"></textarea>
+      <!-- BUG corrigé (LOT 13, TODO-027, 22/09/2026) : prefill.description n'était jusqu'ici
+           jamais posé dans ce champ (contrairement à prefill.title/prefill.url juste au-dessus)
+           — un appelant qui préremplissait la description (aucun avant ce lot, voir
+           js/components/bureau.js "Transformer en Ressource", premier à en avoir besoin) la
+           voyait silencieusement disparaître à l'ouverture de cette modale. -->
+      <textarea id="res-description">${escapeHtml(prefill.description || "")}</textarea>
     </div>
   `;
   const urlInput = body.querySelector("#res-url");
