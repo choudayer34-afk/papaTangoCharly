@@ -64,6 +64,14 @@
   --transition: 0.18s ease;
   --max-width: 760px;
   --nav-height: 64px;
+
+  /* Zones sûres (LOT 9, TODO-017, COMP-UX-021) — `viewport-fit=cover` (index.html) autorise
+     l'app à dessiner sous l'encoche/la barre d'accueil d'un iPhone, mais sans ces deux jetons
+     rien ne compensait, en PWA installée (`display: standalone`, voir manifest.json). `0px` de
+     repli explicite pour un navigateur qui ne supporte pas `env()` — sans lui, `env(...)` non
+     supporté est traité comme une valeur invalide et la déclaration entière est ignorée. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Mode sombre — retour de Charles-Henri, 13/09/2026 : interrupteur clair/sombre sur l'écran
