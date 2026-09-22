@@ -957,7 +957,20 @@ export function renderDashboard(container) {
     // à `true` que sur un vrai clic ▲/▼ : ouvrir la modale et cliquer "Enregistrer" pour une
     // tout autre raison (juste décocher une section) ne doit JAMAIS figer l'ordre par défaut
     // réactif web/mobile en un ordre fixe que Charles-Henri n'a pas demandé.
-    let currentOrder = dashboardOrder && dashboardOrder.length ? [...dashboardOrder] : defaultHomeOrder();
+    // CORRECTIF (retour direct de Charles-Henri, 24/09/2026 : "🧠 Mon bureau" absent de la liste
+    // "Ordre des rubriques") : une préférence `dashboardOrder` déjà enregistrée AVANT l'ajout de
+    // "bureau" à HOME_ORDER_KEYS (LOT 13, 22/09/2026) reste un tableau à 6 clés pour toujours —
+    // rien ne la migre automatiquement. `applyHomeOrder()` s'en accommode déjà (elle rajoute
+    // silencieusement toute clé manquante en fin de liste, voir son commentaire plus haut), mais
+    // cette modale, elle, se contentait de recopier `dashboardOrder` tel quel : la rubrique
+    // manquante n'apparaissait donc jamais dans "Ordre des rubriques", où qu'elle se trouve
+    // réellement affichée sur l'Accueil (en toute fin, par le même mécanisme défensif). Même
+    // filet de sécurité repris ici, pour qu'une clé future ajoutée à HOME_ORDER_KEYS apparaisse
+    // elle aussi automatiquement dans cette liste sans nouveau correctif.
+    const savedOrder = dashboardOrder && dashboardOrder.length ? dashboardOrder : null;
+    let currentOrder = savedOrder
+      ? [...savedOrder, ...HOME_ORDER_KEYS.filter((k) => !savedOrder.includes(k))]
+      : defaultHomeOrder();
     let orderChanged = false;
     let resetRequested = false;
     const body = document.createElement("div");
