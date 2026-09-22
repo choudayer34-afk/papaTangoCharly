@@ -43,6 +43,7 @@
 
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "objectives";
 
@@ -114,6 +115,12 @@ export async function updateObjective(id, patch) {
     return patch;
   });
   await storage.logHistory("Objective", id, "updated", { patch });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Objectif mis à jour", 8 XP, au plus une
+  // fois par jour calendaire et par Objectif (clé de dédoublonnage datée, voir
+  // gamification.js#recordObjectiveUpdated) — même appel que addIndicator()/updateIndicator()
+  // ci-dessous, qui partagent cette même ligne du barème (§3). Jamais bloquant pour l'écriture
+  // métier ci-dessus.
+  gamification.recordObjectiveUpdated(id).catch((err) => console.error("[gamification] Échec du crédit XP (Objectif mis à jour) :", err));
   return updated;
 }
 
@@ -154,6 +161,13 @@ export async function addEntry(id, { date, note, indicatorId, status, nextSteps,
     };
   });
   await storage.logHistory("Objective", id, "entry_added", { note });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Revue EADP ajoutée", 6 XP, une fois par
+  // point de suivi (ligne du barème distincte de "Objectif mis à jour" ci-dessus — jamais
+  // fusionnées). Clé de dédoublonnage sur l'id du point de suivi lui-même (généré ci-dessus,
+  // toujours nouveau), donc jamais recrédité même si cette même fonction est rappelée sur le
+  // même Objectif. Jamais bloquant pour l'écriture métier ci-dessus.
+  const addedEntry = updated.entries[updated.entries.length - 1];
+  gamification.recordObjectiveReviewAdded(addedEntry.id).catch((err) => console.error("[gamification] Échec du crédit XP (Revue EADP ajoutée) :", err));
   return updated;
 }
 
@@ -190,6 +204,10 @@ export async function addIndicator(id, { label, target, measurement, evidenceSou
     return { indicators: [...(current.indicators || []), indicator] };
   });
   await storage.logHistory("Objective", id, "indicator_added", { label: indicator.label });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Objectif mis à jour", 8 XP, au plus une
+  // fois par jour calendaire et par Objectif — voir le commentaire détaillé sur
+  // updateObjective() ci-dessus.
+  gamification.recordObjectiveUpdated(id).catch((err) => console.error("[gamification] Échec du crédit XP (Objectif mis à jour) :", err));
   return indicator;
 }
 
@@ -201,6 +219,10 @@ export async function updateIndicator(id, indicatorId, patch) {
     };
   });
   await storage.logHistory("Objective", id, "indicator_updated", { indicatorId, patch });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Objectif mis à jour", 8 XP, au plus une
+  // fois par jour calendaire et par Objectif — voir le commentaire détaillé sur
+  // updateObjective() ci-dessus.
+  gamification.recordObjectiveUpdated(id).catch((err) => console.error("[gamification] Échec du crédit XP (Objectif mis à jour) :", err));
   return updated;
 }
 
