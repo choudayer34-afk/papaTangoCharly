@@ -241,7 +241,12 @@
 // Charles-Henri — un v64 encore non déployé est simplement remplacé par ce v65 qui inclut déjà
 // le correctif ; un v64 déjà déployé (donc avec le bug people.js) est corrigé par ce nouveau
 // cache. Aucun autre fichier précaché n'a changé depuis le commentaire ci-dessus.
-const CACHE_NAME = "pilotage-cache-v65";
+//
+// (22/09/2026, v66, LOT 10/TODO-023) : `styles/tokens.css` et `styles/components.css`, tous
+// deux précachés, modifiés pour corriger les 3 régressions d'affichage en mode sombre
+// (BESOIN-003) — voir TODO_TECHNIQUE.md. `js/views/whatsnew.js`, également précaché, modifié
+// pour la nouvelle entrée correspondante. `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v66";
 const APP_SHELL = [
   "./",
   "./index.html",
