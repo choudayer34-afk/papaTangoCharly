@@ -72,6 +72,28 @@
      supporté est traité comme une valeur invalide et la déclaration entière est ignorée. */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Toast (LOT 10, TODO-023, BESOIN-003) — jetons dédiés, volontairement SÉPARÉS de
+     `--color-text`/`--color-text-inverse` : le toast (styles/components.css#.toast) doit
+     rester une pastille sombre à texte blanc dans les deux thèmes (comme avant cette vague en
+     mode clair), jamais l'inverse du thème courant. Avant ce correctif, `.toast` utilisait
+     `background: var(--color-text)` + `color: var(--color-text-inverse)` : correct par hasard
+     en mode clair (`--color-text` alors foncé), mais cassé en mode sombre puisque
+     `--color-text` y devient clair (#EDEFFB) — pastille quasi blanche + texte blanc dessus,
+     donc illisible. Voir TODO-023 (Charles-Henri, 21/09/2026).
+     `color-scheme` (LOT 10, TODO-023, BESOIN-003) — indique au navigateur d'adapter les
+     composants natifs (sélecteur `<input type="date">`, sa mini-icône calendrier et le panneau
+     de sélection lui-même, barres de défilement, etc.) : sans cette propriété, ces éléments
+     natifs restent rendus en clair par défaut quel que soit le thème appliqué par l'app via ses
+     propres jetons de couleur ci-dessus — d'où les calendriers illisibles (noir sur fond
+     sombre) signalés dans TODO-023. `light dark` en base laisse le navigateur suivre l'appareil
+     par défaut (cas "system", cohérent avec le bloc media plus bas) ; les valeurs figées posées
+     dans `:root[data-theme="light"]`/`:root[data-theme="dark"]` ci-dessous forcent le rendu
+     natif à suivre le choix explicite de l'utilisateur, dans les deux sens, comme le reste des
+     jetons de cette feuille. */
+  --color-toast-bg: #23263B;
+  --color-toast-text: #FFFFFF;
+  color-scheme: light dark;
 }
 
 /* Mode sombre — retour de Charles-Henri, 13/09/2026 : interrupteur clair/sombre sur l'écran
@@ -106,4 +128,14 @@
   --color-text: #EDEFFB;
   --color-text-muted: #A2A5C7;
   --color-primary-light: #2A2D5E;
+  color-scheme: dark;
+}
+
+/* Choix explicite CLAIR (LOT 10, TODO-023) : force le rendu natif (voir commentaire sur
+   `color-scheme` plus haut) même si l'appareil est réglé en sombre — même logique que les
+   jetons de couleur, qui n'ont besoin d'aucun bloc dédié ici puisque `:root` porte déjà les
+   valeurs claires par défaut et que le bloc media ci-dessus est neutralisé par
+   `:not([data-theme="light"])`. */
+:root[data-theme="light"] {
+  color-scheme: light;
 }
