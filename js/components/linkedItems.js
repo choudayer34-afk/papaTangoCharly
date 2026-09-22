@@ -136,7 +136,10 @@ export function resolveRef(bundle, ref) {
       // affiché comme "Élément supprimé" plutôt que de planter, jamais une perte silencieuse.
       return (
         k && {
-          emoji: k.keptAsType === "idea" ? "💡" : "🧠",
+          // TODO-021 (LOT 9) : libellé/emoji "Information" unique, "idea" fusionné (voir
+          // js/views/inbox.js) — `k.keptAsType` peut encore valoir "idea" pour un élément
+          // ancien, l'affichage ne le distingue plus.
+          emoji: "🧠",
           title: k.rawContent,
           onOpen: () => openKeptItemDetail(k),
         }
@@ -264,7 +267,8 @@ async function resolveRefDirect(ref) {
       return (
         k &&
         k.status === "kept" && {
-          emoji: k.keptAsType === "idea" ? "💡" : "🧠",
+          // TODO-021 (LOT 9) : voir le même commentaire ci-dessus, cas "Kept" de fetchBundle().
+          emoji: "🧠",
           title: k.rawContent,
           onOpen: () => openKeptItemDetail(k),
         }
