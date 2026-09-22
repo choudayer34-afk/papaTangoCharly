@@ -159,7 +159,7 @@ Ces identifiants restent des problèmes actifs des audits sources, mais ne bén�
 
 ---
 
-## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous ; TODO-035 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-036 et TODO-037 ajoutées le 21/09/2026, voir note ci-dessous)
+## 5. Roadmap — actions consolidées (TODO-001 à TODO-021, 22 actions au total depuis la scission de TODO-009 en TODO-009A/TODO-009B le 15/09/2026 ; TODO-022 à TODO-027 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-028 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-029 et TODO-030 ajoutées le 21/09/2026, voir note ci-dessous et section 9 ; TODO-031 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-032 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-033 et TODO-034 ajoutées le 21/09/2026, voir note ci-dessous ; TODO-035 ajoutée le 21/09/2026, voir note ci-dessous ; TODO-036 et TODO-037 ajoutées le 21/09/2026, voir note ci-dessous ; TODO-038 et TODO-039 ajoutées et traitées immédiatement le 22/09/2026, besoins produits exprimés directement par Charles-Henri en parenthèse pendant la vérification du LOT 11, voir chacune en section 5)
 
 *Ajout du 21/09/2026* : TODO-022 à TODO-027 ne proviennent d'aucun des 9 audits sources (elles ne comptent donc pas dans les 157 problèmes ni les 22 actions mentionnés ci-dessus, dont le calcul reste inchangé) — ce sont des besoins produit exprimés directement par Charles-Henri le 21/09/2026, ajoutés au backlog et priorisés à sa demande explicite, **sans être traités dans l'immédiat** (« nous continuons la suite des lots de la todo après ajout dans ton backlog »). Voir section 9 pour le détail de chaque besoin d'origine (BESOIN-001 à BESOIN-005).
 
@@ -1201,6 +1201,8 @@ Validation : Non déterminé
 
 Ordre recommandé : après TODO-003 (LOT 14)
 
+Note (22/09/2026) : voir **TODO-039**, traitée directement sur demande de Charles-Henri — couvre un besoin proche mais avec un périmètre différent (lignes de Suivi déjà affichées dans le point/la fiche Personne, pas le formulaire de création/édition visé ici). Le périmètre propre à ce TODO-030 (`#fu-due`/`#fu-control`) reste non traité.
+
 ## [ ] P2 — TODO-031 — Remplacer le `<datalist>` natif par une liste de suggestions qui s'affiche aussi sur iOS Safari
 
 *Ajoutée le 21/09/2026 — bug remonté par Charles-Henri en testant la confirmation de catégorie (TODO-006, LOT 1) sur iPhone, hors des 9 audits sources. Diagnostic confirmé par échange direct (21/09/2026) : sur PC/navigateur de bureau, la liste de suggestions s'affiche normalement ; sur iPhone (Safari), rien ne s'affiche jamais.*
@@ -1404,6 +1406,68 @@ Complexité : S
 Validation : même principe que `tests/unit/lot4b-targeted-writes.spec.js`
 
 Ordre recommandé : non affectée à un lot pour l'instant, à planifier
+
+## [ ] P2 — TODO-038 — Tri des tâches par statut/échéance dans la fiche Projet, et des étapes cochées par date de coche
+
+*Ajoutée le 22/09/2026 — besoin produit exprimé directement par Charles-Henri, en parenthèse pendant la vérification manuelle du LOT 11 ("une parenthèse a créer maintenant pendant que je valide le lot 11"). Traitée immédiatement, hors du flux de lots habituel — comme TODO-022/TODO-023 avant elle, chacune elles aussi des besoins produits exprimés directement plutôt qu'issus d'un audit.*
+
+Type : UX
+
+Problème : (1) la liste des tâches d'un projet (fiche Projet, onglet Contenu, `#detail-tasks`) n'était ni organisée par statut ni triée par échéance — un ordre non déterminé, sans indication d'échéance sur chaque ligne ; (2) une étape (sous-élément coché d'une checklist Tâche/Suivi) restait à sa position d'origine une fois cochée, mélangée aux étapes restantes, sans indication de quand elle avait été cochée.
+
+Cause racine : besoin produit (hors audits)
+
+Solution retenue, précisée par échange direct avec Charles-Henri (le sens du tri par échéance étant ambigu tel que formulé — clarifié explicitement avant implémentation) :
+- Fiche Projet (`#detail-tasks`) : tâches non terminées d'abord (avec échéance triées de la plus proche à la plus lointaine, confirmé par Charles-Henri comme le sens voulu ; sans échéance ensuite, dans leur ordre d'origine), puis les tâches terminées **à part** (titre de groupe dédié), triées par date de clôture (`completedAt`) la plus récente en premier. Échéance (ou date de clôture) désormais affichée sur chaque ligne.
+- Checklists (Tâche `js/views/kanban.js#openTaskDetail`, Suivi `js/views/people.js#openEditFollowUpModal`) : `sortDoneToBottom` de `js/components/checklist.js` (déjà existant, jusqu'ici réservé au Pense-bête) activé sur ces deux checklists ; le tri du groupe "coché" par date de coche (`doneAt`) la plus récente en premier est nouveau à cette occasion, extrait dans `sortChecklistForDisplay()` (exportée) et réutilisé à l'identique par le mini-aperçu de checklist sur la carte Kanban (qui n'utilise pas `renderChecklist`), pour un comportement cohérent partout où une checklist de Tâche/Suivi s'affiche.
+
+Fichiers concernés : `js/views/projects.js`, `js/components/checklist.js`, `js/views/kanban.js`, `js/views/people.js`
+
+Fonctions concernées : rendu de `#detail-tasks` (projects.js), `sortChecklistForDisplay`/`renderChecklist` (checklist.js), `renderCard`/`openTaskDetail` (kanban.js), `openEditFollowUpModal` (people.js)
+
+Dépendances : aucune
+
+Problèmes résolus : besoin produit direct
+
+Risque : faible — tri d'affichage uniquement, aucun champ de données ajouté ni migration nécessaire
+
+Complexité : S
+
+Validation : Non déterminé — pas de test automatisé écrit pour ce correctif ponctuel (vérification par relecture de code + `node --check`, comme les hotfix précédents de cette nature, ex. le hotfix Guide du LOT 11) ; vérification visuelle manuelle par Charles-Henri à faire
+
+Ordre recommandé : traité hors-lot, immédiatement, sur demande explicite
+
+Statut (22/09/2026) : **Terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri.** `sw.js` incrémenté en conséquence (fichiers précachés modifiés : `js/views/projects.js`, `js/components/checklist.js`, `js/views/kanban.js`, `js/views/people.js`, `styles/components.css`).
+
+## [ ] P2 — TODO-039 — Report rapide "+1j/+7j" sur l'échéance et le prochain contrôle d'un Suivi, dans le point et la fiche Personne
+
+*Ajoutée le 22/09/2026 — besoin produit exprimé directement par Charles-Henri, même échange que TODO-038 ci-dessus. Reprend et complète partiellement **TODO-030** (« Contrôle rapide de date sur les champs date des fiches Suivi »), déjà présente dans ce backlog depuis le 21/09/2026 mais jamais implémentée — voir la distinction de périmètre ci-dessous.*
+
+Type : UX
+
+Problème : le report rapide "+1j / +7j / date libre", disponible sur la carte Tâche du Kanban depuis TODO-003, n'existait nulle part sur les dates d'un Suivi (échéance, prochain contrôle) — modifier l'une de ces dates demandait toujours d'ouvrir la fiche complète d'édition du Suivi.
+
+Cause racine : besoin produit (hors audits) — même famille que BESOIN-007/TODO-030
+
+Solution : **périmètre volontairement différent de celui initialement envisagé par TODO-030** (qui ciblait les champs du formulaire de création/édition, `#fu-due`/`#fu-control`) — Charles-Henri a cette fois demandé le contrôle directement "dans le point avec le collaborateur et dans la fiche elle-même", c'est-à-dire sur les LIGNES de Suivi déjà affichées (sans ouvrir la fiche complète), pas sur le formulaire. Ajouté à `js/views/people.js#appendFollowUpRows` — fonction partagée par la fiche Personne, "Préparer mon point" ET la liste transverse "👀 Suivis" (celle-ci en profite donc aussi, en sus des deux emplacements demandés) — reprenant à l'identique le contrôle "+1j/+7j/date libre" du Kanban (mêmes classes CSS `.kanban-card-postpone`/`.kanban-postpone-btn`/`.kanban-postpone-custom`) et son calcul de date, extrait à cette occasion vers `js/services/dateUtils.js#addDaysToIsoDate` (mutualisation que TODO-030 envisageait déjà elle-même sans la trancher). Un Suivi "waiting_on" expose deux contrôles indépendants (Échéance ET Prochain contrôle) ; un Suivi "to_tell" un seul (À dire avant), `dueDate` n'existant pas pour ce Sens.
+
+Fichiers concernés : `js/views/people.js`, `js/services/dateUtils.js`, `js/views/kanban.js` (calcul mutualisé), `styles/components.css`
+
+Fonctions concernées : `appendFollowUpRows`, nouvelle `relevantFollowUpDateFields`, `dateUtils.addDaysToIsoDate`
+
+Dépendances : aucune
+
+Problèmes résolus : BESOIN-007 (partiellement — voir Solution)
+
+Risque : faible — utilise `followUpsApi.updateFollowUp()` existant, y compris sa propre règle de plafond/calage `controlDate`/`dueDate` (inchangée)
+
+Complexité : S/M
+
+Validation : Non déterminé — pas de test automatisé écrit pour ce correctif ponctuel ; vérification visuelle manuelle par Charles-Henri à faire
+
+Ordre recommandé : traité hors-lot, immédiatement, sur demande explicite
+
+Statut (22/09/2026) : **Terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri.** **TODO-030 reste ouverte** : son périmètre d'origine (les champs du formulaire de création/édition `#fu-due`/`#fu-control`) n'a pas été traité par ce TODO-039, qui couvre un besoin réel mais distinct (les lignes de Suivi déjà affichées, sans ouvrir de formulaire). `sw.js` incrémenté en conséquence.
 
 ---
 
