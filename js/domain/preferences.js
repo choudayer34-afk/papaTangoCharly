@@ -144,6 +144,17 @@ function withDefaults(raw) {
     tagsMigratedV1: false,
     disabledTags: [],
     personalObjectivesMigratedV1: false,
+    // LOT 12 (TODO-026, US-026 du 21/09/2026, retour de Charles-Henri : "personnaliser sa barre
+    // de navigation en fonction de ses usages... la personnalisation est strictement
+    // individuelle") — les 4 clés de js/services/navConfig.js#MODULE_CATALOG affichées dans la
+    // barre principale, dans l'ordre choisi. Vide = pas de personnalisation, js/app.js applique
+    // alors navConfig.js#DEFAULT_NAV_MAIN (Accueil/Inbox/Pilotage/Équipe). Clé plate
+    // (`navigationMain`) plutôt que l'objet imbriqué `{navigation:{main:[...]}}` de l'exemple
+    // JSON de la spec, pour rester cohérent avec le reste de ce document (25 préférences, toutes
+    // en clés plates au premier niveau, à l'exception de `focusOverride`) et avec le mécanisme
+    // qu'elle reprend directement, `dashboardOrder` juste au-dessus (même convention : tableau
+    // vide = pas de choix explicite).
+    navigationMain: [],
     ...raw,
   };
 }
@@ -388,6 +399,22 @@ export async function markPostitMigratedV1() {
  *  js/views/dashboard.js applique son propre ordre par défaut (différent web/mobile). */
 export async function setDashboardOrder(order) {
   return storage.update(COLLECTION, DOC_ID, () => ({ dashboardOrder: order || [] }));
+}
+
+/**
+ * Barre de navigation personnalisée (LOT 12, TODO-026 — US-026 du 21/09/2026, "🧭 Personnaliser
+ * la navigation" depuis ⚙️ Personnaliser l'accueil, voir js/views/dashboard.js) — les 4 clés de
+ * js/services/navConfig.js#MODULE_CATALOG affichées dans la barre principale, "☰ Plus" restant
+ * toujours fixe en 5e position (jamais stocké ici, voir ce fichier). Toujours remplacé en
+ * entier, mêmes principe et mécanique exacts que `setDashboardOrder()` juste au-dessus : un
+ * tableau vide signifie "pas de personnalisation", auquel cas js/app.js applique
+ * navConfig.js#DEFAULT_NAV_MAIN. Strictement individuel : un document `preferences` par compte
+ * (voir COLLECTION/DOC_ID en tête de ce fichier), donc sans aucun effet sur les autres personnes
+ * utilisant Pilotage, conformément à la spec ("la personnalisation est strictement
+ * individuelle").
+ */
+export async function setNavigationMain(main) {
+  return storage.update(COLLECTION, DOC_ID, () => ({ navigationMain: main || [] }));
 }
 
 /**
