@@ -42,7 +42,9 @@ import { openRecentDetail } from "../views/dashboard.js";
 import { openKeptItemDetail } from "../views/inbox.js";
 
 // Ordre = celui des chips affichées et des touches Alt+1…Alt+9 qui leur correspondent.
-const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information/Idée", "Objectif"];
+// TODO-021 (LOT 9, 21/09/2026) : "Information/Idée" renommé "Information" (fusion des libellés,
+// voir js/views/inbox.js) — même 9 entrées, mêmes raccourcis Alt+1…Alt+9, rien d'autre ne change.
+const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information", "Objectif"];
 
 function haystack(...parts) {
   return parts.filter(Boolean).join(" ").toLowerCase();
@@ -218,8 +220,11 @@ function filterBundle(bundle, query) {
   for (const item of keptItems) {
     if (matches("Kept", item.id, item.rawContent, notesText(item.notesLog))) {
       results.push({
-        type: "Information/Idée",
-        emoji: item.keptAsType === "idea" ? "💡" : "🧠",
+        // TODO-021 (LOT 9, 21/09/2026) — libellé "Information" unique, fusion "Idée" (voir
+        // js/views/inbox.js) ; `item.keptAsType` peut encore valoir "idea" pour un élément
+        // ancien, sans effet sur l'affichage.
+        type: "Information",
+        emoji: "🧠",
         title: item.rawContent,
         done: item.status === "archived",
         onOpen: () => openKeptItemDetail(item),
