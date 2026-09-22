@@ -290,7 +290,15 @@ export function openCreatePersonModal(prefill = {}) {
  * Simple texte libre par champ (pas de sous-structure), replié par défaut dans un `<details>`
  * comme "🕒 Historique" pour ne pas allonger la fiche par défaut.
  */
-export async function openPersonDetail(person, allFollowUps) {
+// `initialTab` (22/09/2026, bug révélé par le premier passage réel des tests LOT 11 sur GitHub
+// Actions — voir tests/e2e/lot11-objective-unified-model.spec.js) : `reopen()` plus bas
+// rouvrait TOUJOURS cette fiche sur l'onglet "Suivis", quel que soit l'onglet réellement actif
+// au moment de l'action (ex. ajouter un objectif depuis l'onglet "Objectifs" renvoyait ensuite
+// sur "Suivis", cachant l'objectif qu'on venait de créer). Paramètre optionnel, par défaut
+// "followups" pour ne rien changer aux appelants externes (js/components/search.js,
+// js/components/linkedItems.js, js/views/management.js, js/views/workload.js) qui n'ouvrent
+// jamais la fiche sur un autre onglet que le premier.
+export async function openPersonDetail(person, allFollowUps, { initialTab = "followups" } = {}) {
   preferencesApi.recordRecentlyViewed("Person", person.id).catch(() => {});
   // Fusion des deux "Notes" (vague 19, audit de simplification) — voir peopleApi.migrateLegacyNotes.
   person = (await peopleApi.migrateLegacyNotes(person.id)) || person;
@@ -362,13 +370,13 @@ export async function openPersonDetail(person, allFollowUps) {
     <div style="margin-bottom:16px;">${guideLinkHtml("usecase-eadp", "📖 Bien préparer un point ou une EADP")}</div>
 
     <div class="chip-row fiche-tabs" role="tablist">
-      <button type="button" class="chip active" data-tab="followups" role="tab">Suivis</button>
-      <button type="button" class="chip" data-tab="objectives" role="tab" id="fiche-tab-objectives">Objectifs (${objectives.length})</button>
-      <button type="button" class="chip" data-tab="notes" role="tab">Notes &amp; repères</button>
-      <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
+      <button type="button" class="chip${initialTab === "followups" ? " active" : ""}" data-tab="followups" role="tab">Suivis</button>
+      <button type="button" class="chip${initialTab === "objectives" ? " active" : ""}" data-tab="objectives" role="tab" id="fiche-tab-objectives">Objectifs (${objectives.length})</button>
+      <button type="button" class="chip${initialTab === "notes" ? " active" : ""}" data-tab="notes" role="tab">Notes &amp; repères</button>
+      <button type="button" class="chip${initialTab === "activity" ? " active" : ""}" data-tab="activity" role="tab">Activité</button>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="followups">
+    <div class="fiche-tabpanel" data-tabpanel="followups" ${initialTab === "followups" ? "" : "hidden"}>
       <div class="section-title" style="margin-top:0;">🎯 Engagements en cours (${active.length})</div>
       <div class="card" id="active-followups" style="margin-bottom:16px;"></div>
       <div class="section-title">📣 À transmettre (${toTell.length})</div>
@@ -378,7 +386,7 @@ export async function openPersonDetail(person, allFollowUps) {
       <div class="card" id="done-followups" style="margin-bottom:16px;"></div>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="objectives" hidden>
+    <div class="fiche-tabpanel" data-tabpanel="objectives" ${initialTab === "objectives" ? "" : "hidden"}>
       <div class="section-header-row">
         <div class="section-title" style="margin-top:0;">🎯 Objectifs (${objectives.length})</div>
         <button type="button" id="add-objective-btn" class="btn btn-ghost btn-sm">+ Ajouter</button>
@@ -386,7 +394,7 @@ export async function openPersonDetail(person, allFollowUps) {
       <div class="card" id="person-objectives" style="margin-bottom:16px;"></div>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="notes" hidden>
+    <div class="fiche-tabpanel" data-tabpanel="notes" ${initialTab === "notes" ? "" : "hidden"}>
       <div class="section-title" style="margin-top:0;">🗒️ Journal de notes</div>
       <div id="detail-notes" style="margin-bottom:16px;"></div>
       <details>
@@ -408,7 +416,7 @@ export async function openPersonDetail(person, allFollowUps) {
       </details>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="activity" hidden>
+    <div class="fiche-tabpanel" data-tabpanel="activity" ${initialTab === "activity" ? "" : "hidden"}>
       <details>
         <summary class="section-title" style="cursor:pointer;margin-top:0;">🕒 Historique (${personHistory.length})</summary>
         <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
@@ -425,9 +433,13 @@ export async function openPersonDetail(person, allFollowUps) {
   `;
 
   // Bascule d'onglet — même mécanique que la fiche Tâche (voir js/views/kanban.js#openTaskDetail) :
-  // chaque panneau existe en permanence, seul l'attribut `hidden` change.
+  // chaque panneau existe en permanence, seul l'attribut `hidden` change. `activeTab` (22/09/2026,
+  // voir le commentaire sur `initialTab` en tête de fonction) retient l'onglet courant pour que
+  // `reopen()` puisse y revenir plutôt que de systématiquement retomber sur "Suivis".
+  let activeTab = initialTab;
   body.querySelectorAll(".fiche-tabs .chip").forEach((tabBtn) => {
     tabBtn.addEventListener("click", () => {
+      activeTab = tabBtn.dataset.tab;
       body.querySelectorAll(".fiche-tabs .chip").forEach((b) => b.classList.toggle("active", b === tabBtn));
       body.querySelectorAll(".fiche-tabpanel").forEach((panel) => {
         panel.hidden = panel.dataset.tabpanel !== tabBtn.dataset.tab;
@@ -439,8 +451,9 @@ export async function openPersonDetail(person, allFollowUps) {
   // modale imbriquée (créer/modifier/supprimer un suivi), plutôt que de laisser la fiche
   // fermée après l'action (bug connu signalé par Charles-Henri : la création d'un suivi
   // refermait la fiche au lieu d'y rester, contrairement au pattern déjà en place pour les
-  // ressources liées à un projet/une tâche).
-  const reopen = async () => openPersonDetail(person, await followUpsApi.listAll());
+  // ressources liées à un projet/une tâche). Repasse `activeTab` en `initialTab` de la
+  // réouverture (voir plus haut) pour rester sur l'onglet où l'action a été lancée.
+  const reopen = async () => openPersonDetail(person, await followUpsApi.listAll(), { initialTab: activeTab });
 
   const activeEl = body.querySelector("#active-followups");
   renderGroupedFollowUpList(activeEl, activeGroups, {
