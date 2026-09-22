@@ -34,3 +34,23 @@ export function parseLocalDate(dateStr) {
 export function daysFromToday(dateStr) {
   return Math.round((parseLocalDate(dateStr).getTime() - startOfToday()) / 86400000);
 }
+
+/**
+ * Report rapide "+N jours" d'une date "YYYY-MM-DD" — extrait de `js/views/kanban.js#
+ * addDaysToIsoDate` (TODO-003, LOT 2) le 22/09/2026 (retour direct de Charles-Henri : mêmes
+ * boutons "+1 j"/"+7 j" désormais nécessaires sur les dates de Suivi, `js/views/people.js`,
+ * voir TODO-030) plutôt que dupliqué une seconde fois — exactement la mutualisation que
+ * TODO-030 envisageait déjà lui-même sans la trancher ("à l'occasion, envisager de mutualiser
+ * le calcul de date dans un module partagé"). Base de calcul : la date actuelle si elle existe
+ * et n'est pas déjà dépassée, sinon aujourd'hui — reporter une échéance déjà en retard "+1 jour"
+ * doit l'amener à demain, pas la laisser en retard un jour de plus. `parseLocalDate` (minuit
+ * LOCAL, jamais `new Date(dateStr)` seul) pour le parsing, reformatage à partir des composants
+ * locaux (jamais `toISOString()`, qui repasse en UTC) — même précaution que documentée plus haut
+ * dans ce fichier.
+ */
+export function addDaysToIsoDate(currentIsoDate, days) {
+  const base = currentIsoDate && daysFromToday(currentIsoDate) >= 0 ? parseLocalDate(currentIsoDate) : new Date();
+  base.setHours(0, 0, 0, 0);
+  base.setDate(base.getDate() + days);
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+}
