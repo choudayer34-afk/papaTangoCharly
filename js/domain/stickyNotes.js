@@ -51,7 +51,10 @@ export async function createStickyNote(data = {}) {
     width: Number.isFinite(data.width) ? data.width : DEFAULT_WIDTH,
     height: Number.isFinite(data.height) ? data.height : DEFAULT_HEIGHT,
     zIndex: Number.isFinite(data.zIndex) ? data.zIndex : 1,
-    pinned: false,
+    // `pinned` (23/09/2026, retour direct de Charles-Henri : "je dois toujours pouvoir créer un
+    // post-it à la volée qui sera épinglé par défaut") — optionnel, `false` par défaut pour tout
+    // appelant qui ne le précise pas (migration Pense-bête notamment, voir js/views/dashboard.js).
+    pinned: !!data.pinned,
     archived: false,
   });
   return note;
