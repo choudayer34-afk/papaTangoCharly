@@ -127,6 +127,55 @@ le même principe que le reste de ce dossier (émulateur Firebase, jamais la pro
 environnement (registre npm bloqué, comme tout le reste de ce dossier). À reconfirmer au premier
 lancement réel (GitHub Actions).
 
+## LOT 13 (TODO-027) — ajouté le 22/09/2026, à la demande explicite de Charles-Henri
+
+"🧠 Mon bureau" (post-it libres de l'Accueil, remplace le Pense-bête) — voir le commentaire en
+tête de `js/components/bureau.js` et `TODO_TECHNIQUE.md` → LOT 13 pour le détail du besoin et des
+décisions d'implémentation. Trois nouveaux fichiers, sur le même principe que le reste de ce
+dossier (émulateur Firebase, jamais la production) ; `support/harness.html` expose désormais
+aussi `stickyNotesApi`.
+
+- **`unit/lot13-sticky-notes-model.spec.js`** — vérification directe des données
+  (`js/domain/stickyNotes.js`) : valeurs par défaut sûres à la création (couleur/dimensions/
+  position/`pinned`/`archived`), écriture ciblée `setLayout` (glisser et redimensionner
+  n'écrasent jamais l'autre, ni le reste du document — même famille de garantie que
+  `unit/lot4b-targeted-writes.spec.js`), `setType` qui ne perd jamais `content`/`checklist` de
+  l'autre mode, `setColor` qui refuse une couleur inconnue (repli sur `DEFAULT_COLOR`), les 5
+  mutateurs de checklist (`addChecklistItem` renvoie l'élément SEUL, les 4 autres renvoient le
+  tableau COMPLET — le contrat exact que reconstruit `js/components/bureau.js#renderNoteBody`),
+  et `stickyNoteToText` (texte libre vs checklist mise à plat, utilisé pour préremplir les
+  conversions).
+- **`e2e/lot13-bureau-notes.spec.js`** — parcours UI du composant : création (identifiée par
+  `data-id`, robuste face aux post-it déjà présents dans le Bureau du compte de test partagé),
+  texte libre sauvegardé automatiquement et retrouvé après rechargement, bascule texte ↔
+  checklist sans jamais perdre l'autre contenu, menu "⋯" (couleur, épingler, archiver → "🗄️
+  Archivés" → restaurer, suppression définitive), et glisser-déposer/redimensionnement RÉELS
+  simulés via `page.mouse` (Pointer Events, voir le commentaire en tête de
+  `js/components/bureau.js`) avec vérification de la persistance après rechargement.
+- **`e2e/lot13-bureau-conversion.spec.js`** — les 5 conversions du post-it ENTIER (Tâche/
+  Ressource/Décision/Suivi/Information), chacune vérifiant le préremplissage réel du formulaire
+  cible — dont les deux bugs corrigés à l'occasion de ce lot (`js/views/resources.js#res-
+  description`, `js/views/people.js#fu-description`) — et l'archivage (jamais la suppression) du
+  post-it source une fois la fiche cible créée ; et la conversion d'UNE SEULE ligne de checklist,
+  qui vérifie que seule cette ligne disparaît, le reste de la checklist et le post-it restant
+  intacts.
+
+**Hors de portée de ces trois fichiers** (voir `TODO_TECHNIQUE.md` → LOT 13, "Éléments restant à
+valider") : la migration automatique Pense-bête → Bureau (`bureauMigratedV1`) n'est PAS testée
+automatiquement — le compte de test partagé (`fullyParallel: false`, aucune purge de l'émulateur
+entre exécutions, voir plus bas) ne garantit pas que le tout premier rendu de l'Accueil pour ce
+compte n'a pas déjà eu lieu dans un autre fichier de test, ce qui aurait rendu le résultat de ce
+test dépendant de l'ordre d'exécution des fichiers plutôt que du comportement réel de
+l'application ; le rendu visuel réel des couleurs en mode sombre et le glisser/redimensionnement
+au TACTILE (seul le geste souris, `page.mouse`, est exercé) restent également à valider
+manuellement.
+
+**AVERTISSEMENT (22/09/2026)** : les trois fichiers ci-dessus ont été écrits et relus
+manuellement à partir du code réel du LOT 13 tout juste implémenté, mais jamais exécutés dans cet
+environnement (registre npm bloqué, comme tout le reste de ce dossier). À reconfirmer au premier
+lancement réel (GitHub Actions) — en particulier la simulation de glisser/redimensionner via
+`page.mouse`, jamais utilisée ailleurs dans ce dossier avant ce lot.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
