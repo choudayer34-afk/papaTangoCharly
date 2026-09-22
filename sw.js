@@ -331,7 +331,16 @@
 // js/views/dashboard.js (section "Mon bureau" remplace le Pense-bête), js/views/whatsnew.js
 // (nouvelle entrée), styles/components.css (styles des post-it). `CACHE_NAME` incrémenté en
 // conséquence.
-const CACHE_NAME = "pilotage-cache-v74";
+//
+// Correctif du 23/09/2026 (retour direct de Charles-Henri sur LOT 13, même jour) : `js/
+// components/bureau.js` (le rebuild du plan de travail restait suspendu tant que le focus
+// touchait N'IMPORTE quel élément du Bureau, y compris un simple bouton — épingler/couleur/
+// bascule texte-checklist n'apparaissaient qu'après un clic en dehors du post-it ; corrigé pour
+// ne suspendre que sur un VRAI champ de saisie texte ; nouveau post-it créé épinglé par défaut ;
+// section repliable comme les autres rubriques de l'Accueil, `<details>`) et `js/domain/
+// stickyNotes.js` (nouveau paramètre optionnel `pinned` sur `createStickyNote`) précachés
+// modifiés — `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v75";
 const APP_SHELL = [
   "./",
   "./index.html",
