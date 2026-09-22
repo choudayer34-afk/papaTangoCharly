@@ -101,6 +101,13 @@ const WHATS_NEW = [
         howTo: "Bouton ✏️ à côté d'une sous-étape pour la modifier (Entrée pour valider, Échap pour annuler). Boutons ▲/▼ pour la monter ou la descendre parmi les sous-étapes non terminées.",
         gain: "Corriger une coquille ou réorganiser ses priorités sans perdre l'historique de coche d'une sous-étape déjà en place.",
       },
+      {
+        type: "fix",
+        title: "🛠️ Fiche Personne : reste sur l'onglet en cours après une action",
+        text: "Ajouter un objectif (ou toute autre action lancée depuis un onglet de la fiche d'un collaborateur) rouvrait systématiquement la fiche sur l'onglet \"Suivis\", même si l'action avait été lancée depuis un autre onglet (\"Objectifs\" par exemple) — l'élément qu'on venait d'ajouter restait alors caché. La fiche reste désormais sur l'onglet où l'action a été lancée.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Retrouver directement ce qu'on vient d'ajouter, sans avoir à re-cliquer sur l'onglet quitté entre-temps.",
+      },
     ],
   },
   {
