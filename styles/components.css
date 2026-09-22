@@ -951,6 +951,14 @@ tbody.drag-over-group {
 @media (min-width: 1100px) {
   .modal { max-width: 900px; }
 }
+/* Modale "toute largeur" (opt-in, retour de Charles-Henri, 24/09/2026, pour "🧠 Mon bureau —
+   Tout voir" : un plan de travail à post-it positionnés librement profite de tout l'espace
+   horizontal disponible plutôt que du plafond 900px ci-dessus) — voir openModal({ wide: true })
+   dans js/components/modal.js. Sous 640px, `.modal` est déjà en `width: 100%` : rien à changer
+   à ce palier, la règle ne s'applique qu'à partir de là où `.modal` plafonnerait sinon. */
+@media (min-width: 640px) {
+  .modal.modal--wide { max-width: calc(100vw - var(--space-5) * 2); }
+}
 .modal h2 { margin: 0 0 var(--space-4); font-size: var(--font-size-lg); flex: none; }
 .modal .modal-body {
   overflow-y: auto;
@@ -1685,6 +1693,15 @@ tbody.drag-over-group {
   flex-wrap: wrap;
   margin-bottom: 4px;
 }
+/* Conteneur de "🧠 Mon bureau — Tout voir" (retour de Charles-Henri, 24/09/2026) — seule cette
+   modale (`.modal--wide`, voir plus haut) a besoin d'un défilement horizontal : un post-it
+   positionné au-delà de la largeur actuellement disponible (ex. repositionné sur un écran plus
+   large puis rouvert sur un écran plus étroit — la modale prend maintenant toute la largeur de
+   la fenêtre, mais celle-ci reste elle-même variable) doit rester atteignable plutôt que hors
+   champ et invisible. `.bureau-canvas` lui-même s'élargit au besoin (`min-width`, piloté en JS —
+   voir js/components/bureau.js#recalcCanvasSize) ; ce conteneur fournit la scrollbar qui permet
+   de l'atteindre, sans jamais élargir le reste de la modale (titre, bouton "Fermer") avec lui. */
+.bureau-full-canvas-wrap { overflow-x: auto; }
 .bureau-canvas {
   position: relative;
   min-height: 320px;
@@ -1692,8 +1709,10 @@ tbody.drag-over-group {
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-5);
-  /* Hauteur pilotée en JS (js/components/bureau.js#recalcCanvasHeight) selon la position réelle
-     des post-it — s'agrandit automatiquement pour ne jamais couper le post-it le plus bas. */
+  /* Hauteur (et, au besoin, largeur minimale) pilotées en JS
+     (js/components/bureau.js#recalcCanvasSize) selon la position réelle des post-it —
+     s'agrandissent automatiquement pour ne jamais couper le post-it le plus bas ni le plus à
+     droite. */
 }
 .sticky-note {
   position: absolute;
