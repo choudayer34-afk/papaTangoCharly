@@ -33,6 +33,18 @@
 // différées — arbitrage explicite avec Charles-Henri le 25/09/2026 (AskUserQuestion), voir le
 // commentaire détaillé sur `BADGES` ci-dessous et le bilan de LOT G3. Les séries (§5.3) et
 // déblocages (§6) restent hors de ce lot (LOT G5/G7).
+//
+// Portée EXACTE de LOT G4 (voir TODO_GAMIFICATION.md → §11, LOT G4) : les 5 badges MENSUELS du
+// §5.2 (Organisé, Focus, Régulier, Décideur, Livreur) — jours OUVRÉS DISTINCTS d'activité par
+// type dans le mois courant (jamais un total d'actions), bascule au 1ᵉʳ du mois avec archivage de
+// l'obtenu/non-obtenu du mois précédent dans l'historique (jamais la progression partielle, §5.2),
+// aucun rattrapage. Contrairement aux badges permanents (LOT G3), les badges mensuels **ne
+// créditent aucun XP** (aucune colonne XP au tableau du §5.2) — voir `enregistrerJoursMensuels`
+// plus bas. Les séries (§5.3, LOT G5) restent hors de ce lot, mais la notion de "jour ouvré"
+// qu'elles partagent (§2.1) est déjà centralisée ici (`estJourOuvre`) pour être réutilisée telle
+// quelle par LOT G5 plutôt que réimplémentée une seconde fois — risque explicitement identifié
+// par la roadmap pour ce futur lot (§11, LOT G5, "la logique jour ouvré doit être centralisée en
+// un seul endroit").
 
 import * as storage from "../services/storage.js";
 
@@ -56,6 +68,23 @@ function withDefaults(raw) {
     // jamais recalculée après coup — un badge une fois obtenu reste acquis en permanence (§5.1,
     // "les badges permanents ne se réinitialisent jamais").
     badgesObtained: {},
+    // Badges MENSUELS (§5.2, §10 point 2, LOT G4) — état du mois courant : `mois` au format
+    // "YYYY-MM" (local, §2.2 ; `null` tant qu'aucune action n'a encore jamais été enregistrée),
+    // `jours` = un tableau de dates "YYYY-MM-DD" DISTINCTES par badge mensuel (jamais un simple
+    // total d'actions, §5.2), `obtenus` = un booléen par badge mensuel, définitivement vrai dès
+    // que le seuil du mois est atteint (jamais réévalué à la baisse dans le même mois, cumulatif
+    // par nature). Voir `enregistrerJoursMensuels()` plus bas pour la bascule de mois.
+    badgesMensuelsCourant: {
+      mois: null,
+      jours: { organise: [], focus: [], regulier: [], decideur: [], livreur: [] },
+      obtenus: { organise: false, focus: false, regulier: false, decideur: false, livreur: false },
+    },
+    // Historique des badges mensuels des mois précédents (§5.2, §10 point 2) : `{ [mois]:
+    // { [badgeMensuelId]: obtenu (booléen) } }` — uniquement l'obtenu/non-obtenu final de chaque
+    // mois écoulé, JAMAIS la progression partielle (`jours`) de ce mois-là, qui est perdue à la
+    // bascule (comportement voulu, §5.2 : "un badge mensuel non obtenu à la fin du mois disparaît
+    // simplement de la course, pas de rattrapage").
+    badgesMensuelsHistorique: {},
     ...raw,
   };
 }
@@ -68,8 +97,10 @@ export async function getGamificationState() {
 /** Date locale du jour, au format "YYYY-MM-DD" (§2.2 de la roadmap : toujours la date locale de
  *  l'utilisateur, jamais `toISOString()` qui repasse en UTC — même précaution que
  *  js/services/dateUtils.js#addDaysToIsoDate, reprise ici à l'identique plutôt que dupliquée
- *  différemment). Fonction privée : dateUtils.js n'est pas un fichier concerné par LOT G1,
- *  cette clé de journée ne sert qu'au throttle de l'événement "Objectif mis à jour" ci-dessous. */
+ *  différemment). Fonction privée : dateUtils.js n'est pas un fichier concerné par ce moteur.
+ *  Sert au throttle de l'événement "Objectif mis à jour" (LOT G1) ET, depuis LOT G4, de clé de
+ *  jour distinct pour les badges mensuels (`enregistrerJoursMensuels`, ses 7 premiers caractères
+ *  donnant directement le mois au format "YYYY-MM"). */
 function localDateKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -89,6 +120,94 @@ async function awardXpOnce(key, xp) {
     return {
       xpTotal: (current.xpTotal || 0) + xp,
       rewardedKeys: { ...current.rewardedKeys, [key]: true },
+    };
+  });
+}
+
+// --- Badges mensuels (LOT G4, §5.2) — helpers utilisés uniquement par le barème XP ci-dessous
+// (les 10 événements du §3, jamais par les 3 points d'écoute LOT G3 sans XP — Collaboration/
+// Organisation/Management ne sont pas des "actions valorisées (§3)" au sens du badge "Régulier",
+// voir le mapping détaillé sur chaque `recordXxx()` ci-dessous). ------------------------------
+
+/** Seuil (jours ouvrés distincts dans le mois) de chaque badge mensuel — table exacte du §5.2. */
+const SEUILS_BADGES_MENSUELS = { organise: 15, focus: 12, regulier: 18, decideur: 4, livreur: 10 };
+
+/** Jour ouvré (lundi-vendredi), calendrier LOCAL (§2.1 : "le calcul des séries et des badges
+ *  mensuels basés sur des jours ne considère que les jours ouvrés"). Aucun jour férié pris en
+ *  compte (décision actée par la roadmap, à reconsidérer si l'usage réel le justifie — pas une
+ *  action de ce lot). Fonction privée, volontairement centralisée ici en un seul endroit plutôt
+ *  que réimplémentée par famille : réutilisable telle quelle par un futur LOT G5 (séries, §5.3),
+ *  qui partage exactement la même définition de "jour ouvré" — risque explicitement identifié par
+ *  la roadmap pour ce lot à venir (§11, LOT G5).
+ */
+function estJourOuvre(date) {
+  const jour = date.getDay(); // 0 = dimanche, 6 = samedi (calendrier local, jamais UTC)
+  return jour !== 0 && jour !== 6;
+}
+
+/**
+ * Enregistre, pour CHAQUE badge mensuel listé dans `badgeMensuelIds`, que la journée locale du
+ * jour compte comme un jour ouvré distinct d'activité pour ce badge (§5.2) — jamais un total
+ * d'actions : une deuxième action du même type le même jour n'ajoute rien de plus. Ignore
+ * silencieusement les week-ends (§2.1, "samedi et dimanche sont ignorés") : aucune écriture n'a
+ * lieu si l'action se produit un jour non ouvré, exactement comme si elle n'avait pas eu lieu au
+ * sens de ce badge (l'XP de base, lui, reste crédité normalement — cette fonction ne touche
+ * jamais `xpTotal`, voir la note sur l'absence de colonne XP au §5.2).
+ *
+ * Gère aussi la BASCULE DE MOIS (§5.2, "se réinitialisent au 1ᵉʳ de chaque mois") : si le mois
+ * local courant diffère du mois enregistré dans `badgesMensuelsCourant`, l'état `obtenus` du mois
+ * qui se termine est d'abord figé dans `badgesMensuelsHistorique` (uniquement obtenu/non-obtenu,
+ * JAMAIS la progression `jours` de ce mois, perdue par conception — §5.2, "pas de rattrapage"),
+ * puis un nouveau compteur à 0 démarre pour le mois courant AVANT d'enregistrer le jour en cours.
+ * Cette bascule est vérifiée à CHAQUE appel (pas de tâche planifiée séparée) : le premier appel
+ * qui se produit après le changement de mois déclenche la bascule, ce qui suffit puisque
+ * `badgesMensuelsCourant` n'est de toute façon jamais lu/affiché en dehors d'un appel à
+ * `getGamificationState()` déclenché par une action réelle (aucun écran ne dépend de ce lot,
+ * l'affichage arrive avec LOT G8).
+ */
+async function enregistrerJoursMensuels(badgeMensuelIds) {
+  const maintenant = new Date();
+  if (!estJourOuvre(maintenant)) return undefined; // week-end (§2.1) — ignoré, aucune écriture
+  const jour = localDateKey();
+  const mois = jour.slice(0, 7); // "YYYY-MM", même date locale que `jour`
+
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    let courant = current.badgesMensuelsCourant;
+    let historique = current.badgesMensuelsHistorique;
+    let modifie = false;
+
+    if (courant.mois !== mois) {
+      if (courant.mois) {
+        // Bascule réelle (pas le tout premier appel jamais fait) : fige l'obtenu/non-obtenu du
+        // mois qui se termine, jamais sa progression partielle.
+        historique = { ...historique, [courant.mois]: { ...courant.obtenus } };
+      }
+      courant = {
+        mois,
+        jours: { organise: [], focus: [], regulier: [], decideur: [], livreur: [] },
+        obtenus: { organise: false, focus: false, regulier: false, decideur: false, livreur: false },
+      };
+      modifie = true;
+    }
+
+    const jours = { ...courant.jours };
+    const obtenus = { ...courant.obtenus };
+    for (const badgeMensuelId of badgeMensuelIds) {
+      const liste = jours[badgeMensuelId] || [];
+      if (!liste.includes(jour)) {
+        jours[badgeMensuelId] = [...liste, jour];
+        modifie = true;
+        if (jours[badgeMensuelId].length >= SEUILS_BADGES_MENSUELS[badgeMensuelId]) {
+          obtenus[badgeMensuelId] = true;
+        }
+      }
+    }
+
+    if (!modifie) return undefined; // jour déjà compté pour toutes ces familles — rien à écrire
+    return {
+      badgesMensuelsCourant: { mois, jours, obtenus },
+      badgesMensuelsHistorique: historique,
     };
   });
 }
@@ -184,40 +303,51 @@ async function evaluerFamille(familleId, valeurCourante) {
 
 /** Tâche terminée — 10 XP, une fois par Tâche (première transition vers "done" seulement,
  *  voir js/domain/tasks.js#updateTask). LOT G3 : alimente aussi la famille de badges
- *  Productivité (§5.1), sur la base du même registre (voir `compterParPrefixe`). */
+ *  Productivité (§5.1), sur la base du même registre (voir `compterParPrefixe`). LOT G4 :
+ *  alimente les badges mensuels "Focus" (§5.2) et "Régulier" (action valorisée du barème §3). */
 export async function recordTaskCompleted(taskId) {
   await awardXpOnce(`tache-terminee:${taskId}`, 10);
   const state = await getGamificationState();
   await evaluerFamille("productivite", compterParPrefixe(state, "tache-terminee:"));
+  await enregistrerJoursMensuels(["focus", "regulier"]);
 }
 
-/** Suivi terminé — 8 XP, une fois par Suivi (voir js/domain/followups.js#updateFollowUp). */
+/** Suivi terminé — 8 XP, une fois par Suivi (voir js/domain/followups.js#updateFollowUp).
+ *  LOT G4 : alimente les badges mensuels "Livreur" (Suivi terminé OU Projet clôturé, §5.2) et
+ *  "Régulier". Aucune famille de badges permanents (LOT G3) ne correspond à cette action. */
 export async function recordFollowUpCompleted(followUpId) {
-  return awardXpOnce(`suivi-termine:${followUpId}`, 8);
+  await awardXpOnce(`suivi-termine:${followUpId}`, 8);
+  await enregistrerJoursMensuels(["livreur", "regulier"]);
 }
 
 /** Projet clôturé — 40 XP, une fois par Projet (voir js/domain/projects.js#closeProject).
- *  LOT G3 : alimente aussi la famille de badges Delivery (§5.1). */
+ *  LOT G3 : alimente aussi la famille de badges Delivery (§5.1). LOT G4 : alimente les badges
+ *  mensuels "Livreur" (Suivi terminé OU Projet clôturé, §5.2) et "Régulier". */
 export async function recordProjectClosed(projectId) {
   await awardXpOnce(`projet-cloture:${projectId}`, 40);
   const state = await getGamificationState();
   await evaluerFamille("delivery", compterParPrefixe(state, "projet-cloture:"));
+  await enregistrerJoursMensuels(["livreur", "regulier"]);
 }
 
 /** Réunion créée — 5 XP, une fois par Réunion (voir js/domain/meetings.js#createMeeting).
- *  LOT G3 : alimente aussi la famille de badges Réunions (§5.1). */
+ *  LOT G3 : alimente aussi la famille de badges Réunions (§5.1). LOT G4 : aucun badge mensuel
+ *  dédié aux Réunions (§5.2) — alimente uniquement "Régulier" (action valorisée du barème §3). */
 export async function recordMeetingCreated(meetingId) {
   await awardXpOnce(`reunion-creee:${meetingId}`, 5);
   const state = await getGamificationState();
   await evaluerFamille("reunions", compterParPrefixe(state, "reunion-creee:"));
+  await enregistrerJoursMensuels(["regulier"]);
 }
 
 /** Décision créée — 6 XP, une fois par Décision (voir js/domain/decisions.js#createDecision).
- *  LOT G3 : alimente aussi la famille de badges Décisions (§5.1). */
+ *  LOT G3 : alimente aussi la famille de badges Décisions (§5.1). LOT G4 : alimente les badges
+ *  mensuels "Décideur" et "Régulier" (§5.2). */
 export async function recordDecisionCreated(decisionId) {
   await awardXpOnce(`decision-creee:${decisionId}`, 6);
   const state = await getGamificationState();
   await evaluerFamille("decisions", compterParPrefixe(state, "decision-creee:"));
+  await enregistrerJoursMensuels(["decideur", "regulier"]);
 }
 
 /**
@@ -228,45 +358,59 @@ export async function recordDecisionCreated(decisionId) {
  * clé de dédoublonnage inclut la date locale du jour (§2.2) plutôt que d'être fixe pour
  * l'Objectif, ce qui permet au gain de se reproduire le lendemain sans jamais dépasser une fois
  * par jour.
+ *
+ * LOT G4 : alimente uniquement le badge mensuel "Régulier" (§5.2, action valorisée du barème §3)
+ * — aucun badge mensuel dédié à "Objectif mis à jour" lui-même. Contrairement à l'XP (throttlée à
+ * une fois par jour ET par Objectif), le jour ouvré compte pour "Régulier" dès le premier appel
+ * du jour, cohérent avec la définition du badge ("au moins une action valorisée ce jour-là").
  */
 export async function recordObjectiveUpdated(objectiveId) {
-  return awardXpOnce(`objectif-maj:${objectiveId}:${localDateKey()}`, 8);
+  await awardXpOnce(`objectif-maj:${objectiveId}:${localDateKey()}`, 8);
+  await enregistrerJoursMensuels(["regulier"]);
 }
 
 /** Revue EADP ajoutée — 6 XP, une fois par point de suivi ajouté (`entry.id`, généré à chaque
  *  appel — voir js/domain/objectives.js#addEntry). Distincte de `recordObjectiveUpdated`
  *  ci-dessus : ce sont deux lignes différentes du barème (§3), jamais fusionnées.
  *  LOT G3 : alimente aussi la famille de badges Objectifs (§5.1, revues EADP, à ne pas confondre
- *  avec "Objectif mis à jour" ci-dessus qui ne fait partie d'aucune famille de badges). */
+ *  avec "Objectif mis à jour" ci-dessus qui ne fait partie d'aucune famille de badges). LOT G4 :
+ *  aucun badge mensuel dédié aux revues EADP (§5.2) — alimente uniquement "Régulier". */
 export async function recordObjectiveReviewAdded(entryId) {
   await awardXpOnce(`revue-eadp:${entryId}`, 6);
   const state = await getGamificationState();
   await evaluerFamille("objectifs", compterParPrefixe(state, "revue-eadp:"));
+  await enregistrerJoursMensuels(["regulier"]);
 }
 
 /** Inbox qualifiée — 4 XP, une fois par item, quel que soit le type de qualification choisi (y
  *  compris "Archiver", voir §3 et js/domain/inbox.js#qualify). LOT G3 : alimente aussi la
- *  famille de badges Inbox (§5.1). */
+ *  famille de badges Inbox (§5.1). LOT G4 : alimente les badges mensuels "Organisé" et
+ *  "Régulier" (§5.2). */
 export async function recordInboxItemQualified(itemId) {
   await awardXpOnce(`inbox-qualifiee:${itemId}`, 4);
   const state = await getGamificationState();
   await evaluerFamille("inbox", compterParPrefixe(state, "inbox-qualifiee:"));
+  await enregistrerJoursMensuels(["organise", "regulier"]);
 }
 
 /** Ressource créée — 3 XP, une fois par Ressource (voir js/domain/resources.js#createResource).
- *  LOT G3 : alimente aussi la famille de badges Ressources (§5.1). */
+ *  LOT G3 : alimente aussi la famille de badges Ressources (§5.1). LOT G4 : aucun badge mensuel
+ *  dédié aux Ressources (§5.2) — alimente uniquement "Régulier". */
 export async function recordResourceCreated(resourceId) {
   await awardXpOnce(`ressource-creee:${resourceId}`, 3);
   const state = await getGamificationState();
   await evaluerFamille("ressources", compterParPrefixe(state, "ressource-creee:"));
+  await enregistrerJoursMensuels(["regulier"]);
 }
 
 /** Prompt créé — 3 XP, une fois par Prompt (voir js/domain/prompts.js#createPrompt).
- *  LOT G3 : alimente aussi la famille de badges Prompts (§5.1). */
+ *  LOT G3 : alimente aussi la famille de badges Prompts (§5.1). LOT G4 : aucun badge mensuel
+ *  dédié aux Prompts (§5.2) — alimente uniquement "Régulier". */
 export async function recordPromptCreated(promptId) {
   await awardXpOnce(`prompt-cree:${promptId}`, 3);
   const state = await getGamificationState();
   await evaluerFamille("prompts", compterParPrefixe(state, "prompt-cree:"));
+  await enregistrerJoursMensuels(["regulier"]);
 }
 
 // --- Badges permanents (LOT G3, §5.1) — catalogue COMPLET, transcrit tel quel depuis le tableau
