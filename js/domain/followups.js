@@ -187,6 +187,33 @@ export async function removeChecklistItem(id, itemId) {
   return updated.checklist;
 }
 
+// `editChecklistItem`/`reorderChecklist` — même besoin et mêmes choix que
+// js/domain/tasks.js#editChecklistItem/reorderChecklist (voir son commentaire détaillé, et celui
+// en tête de js/components/checklist.js), repris à l'identique pour la checklist d'un Suivi.
+export async function editChecklistItem(id, itemId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { checklist: (current.checklist || []).map((c) => (c.id === itemId ? { ...c, text: trimmed } : c)) };
+  });
+  return updated.checklist;
+}
+
+export async function reorderChecklist(id, orderedIds) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    const list = current.checklist || [];
+    const byId = new Map(list.map((c) => [c.id, c]));
+    const notDoneReordered = orderedIds.map((cid) => byId.get(cid)).filter(Boolean);
+    const covered = new Set(orderedIds);
+    const notDoneUncovered = list.filter((c) => !c.done && !covered.has(c.id));
+    const done = list.filter((c) => c.done);
+    return { checklist: [...notDoneReordered, ...notDoneUncovered, ...done] };
+  });
+  return updated.checklist;
+}
+
 /** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
  *  domain/tasks.js pour le principe complet (additif uniquement). */
 // Convertie le 21/09/2026 (TODO-010, LOT 4B) en écriture ciblée — même raisonnement que
