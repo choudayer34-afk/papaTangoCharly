@@ -940,7 +940,7 @@ Ordre recommandé : LOT 3 (rejoint TODO-005, même thème de visibilité de l'in
 
 Statut (21/09/2026, LOT 3) : **Terminé.** Cadrage demandé à Charles-Henri (exactement le point que ce TODO indiquait lui-même devoir préciser, voir "Solution" ci-dessus) et confirmé le 21/09/2026 : groupe 2 = uniquement les Suivis `direction: "to_tell"` ("je dois transmettre/dire quelque chose à cette personne", `js/domain/followups.js`) dont la `controlDate` — qui revient alors à Charles-Henri lui-même, jamais à la personne suivie — tombe aujourd'hui ; les Suivis `waiting_on` (échéance qui appartient à la personne suivie) en sont exclus quel que soit le type de la personne, conformément à "en excluant les échéances de contrôle des collaborateurs". Implémenté et versionné : nouvelle tuile "📅 Échéances du jour" dans la grille d'indicateurs du Dashboard (`js/views/dashboard.js#renderStats`), comptant les Tâches à échéance aujourd'hui (`isDueToday`, même détection que le Focus du jour) + les Suivis "to_tell" dus aujourd'hui selon le critère ci-dessus ; clic → nouvelle modale `openTodayDueModal` listant les deux groupes séparément, Tâches d'abord puis Suivis "à transmettre" (tri demandé par ce TODO). Ne remplace pas la tuile "📅 Aujourd'hui" retirée le 01/09/2026 au profit du "🎯 Focus du jour" (périmètre différent, voir commentaire dans `renderStats`). Aucun test automatisé prévu par ce TODO ("Validation : Non déterminé").
 
-## [ ] P1 — TODO-023 — Corriger les régressions d'affichage en mode sombre
+## [x] P1 — TODO-023 — Corriger les régressions d'affichage en mode sombre — **Terminé**
 
 *Ajouté le 21/09/2026 — besoin produit (BESOIN-003), voir section 9.*
 
@@ -967,6 +967,16 @@ Complexité : S
 Validation : Non déterminé — vérification visuelle manuelle en mode sombre sur chaque écran concerné
 
 Ordre recommandé : nouveau LOT 10 — priorité élevée proposée vu la gêne d'usage immédiate et le faible coût de correction, malgré son ajout tardif à la roadmap
+
+Statut (22/09/2026, LOT 10) : **Terminé (implémentation) — en attente de la vérification visuelle manuelle prévue par Charles-Henri** ("Validation : Non déterminé — vérification visuelle manuelle en mode sombre"), aucun test automatisé n'existant pour le mode sombre à ce jour. Les trois causes ont été identifiées précisément (aucune n'était dans les fichiers pressentis par ce TODO — voir plus bas) :
+
+1. **Texte noir sur le traitement d'un item Inbox** : `.choice-btn` (`styles/components.css`, boutons "Action"/"Suivi"/"Information"... de la fenêtre "Traiter", `js/views/inbox.js#openQualifyModal`, également utilisée par `js/components/linkedItems.js`) ne fixait aucune couleur de texte. Un `<button>` n'hérite pas de la couleur de son parent (règle du navigateur : `color: buttontext`, un noir/gris foncé indépendant du thème) — contrairement à `.btn`/`.btn-primary`/etc. qui posent chacun leur propre `color`. Invisible en mode clair par coïncidence (noir sur fond clair), illisible en mode sombre (resté noir sur fond assombri). Corrigé en ajoutant `color: var(--color-text)`.
+2. **Toasts à fond blanc et texte blanc** : `.toast` (`styles/components.css`) utilisait `background: var(--color-text)` + `color: var(--color-text-inverse)` — correct par coïncidence en mode clair (`--color-text` alors foncé), mais cassé en mode sombre puisque `--color-text` s'y inverse en clair, donnant une pastille quasi blanche avec du texte blanc dessus. Corrigé avec deux nouveaux jetons dédiés et non affectés par le thème, `--color-toast-bg`/`--color-toast-text` (`styles/tokens.css`), pour que le toast reste la même pastille sombre à texte blanc dans les deux thèmes, comme c'était déjà visuellement le cas en mode clair.
+3. **Calendriers des champs de date illisibles (noirs)** : aucune régression de coloration CSS ici — cause différente. Le navigateur rend les composants natifs (icône et panneau du sélecteur de `<input type="date">`, barres de défilement, etc.) selon la propriété CSS `color-scheme`, absente jusqu'ici de la feuille de tokens. Sans elle, ces éléments natifs restent rendus en clair par défaut quel que soit le thème appliqué par l'app via ses propres jetons. Corrigé en ajoutant `color-scheme` (`styles/tokens.css`), avec la même logique à trois états que le reste des jetons de thème : `light dark` en base (suit l'appareil, cas "system"), `light`/`dark` respectivement dans `:root[data-theme="light"]`/`:root[data-theme="dark"]` (choix explicite, dans les deux sens).
+
+**Fichiers réellement concernés** : uniquement `styles/tokens.css` et `styles/components.css` (CSS pur, aucun changement de comportement) — ni `js/views/inbox.js` ni `js/components/toast.js`, pressentis par ce TODO avant cadrage ("fichier exact à confirmer lors du cadrage"), n'ont eu besoin d'être touchés : les trois causes étaient chacune dans la feuille de styles, jamais dans le HTML ou la logique générés par ces fichiers JS.
+
+**Vérification effectuée** : relecture manuelle des trois correctifs + script de vérification jetable (Playwright/Chromium headless, page HTML isolée chargeant uniquement `tokens.css`/`components.css`) mesurant le ratio de contraste réel obtenu sur `.choice-btn` et `.toast` dans les trois états de thème (système, clair explicite, sombre explicite) : 13,6:1 à 14,9:1 dans les six cas mesurés, largement au-dessus du minimum recommandé de 4,5:1 — et confirmation que `color-scheme` calculé vaut bien `light dark`/`light`/`dark` selon l'état. Script exécuté hors du dépôt, non versionné (vérification ponctuelle, pas un test automatisé permanent — la Validation de ce TODO reste "Non déterminé"). Aucune vérification visuelle réelle sur un appareil, qui reste à la charge de Charles-Henri comme prévu par ce TODO.
 
 ## [ ] P1 — TODO-024 — Suivi structuré des objectifs : indicateurs de réussite et éléments de suivi associés
 
@@ -1535,13 +1545,15 @@ Aucun test automatisé écrit, conformément à la roadmap ("Tests nécessaires 
 
 *Lots 10 à 13 ajoutés le 21/09/2026 — besoins produit exprimés directement par Charles-Henri (BESOIN-001 à BESOIN-005, voir section 9), ne provenant d'aucun des 9 audits sources. Ajoutés au backlog et priorisés à sa demande explicite, mais **non traités dans l'immédiat** : la suite de la roadmap reprend au LOT 1, ces lots restent en attente d'être atteints dans l'ordre ou avancés selon une décision explicite ultérieure.*
 
-### LOT 10 — Corrections d'affichage mode sombre
+### LOT 10 — Corrections d'affichage mode sombre — **Terminé (implémentation) — en attente de vérification manuelle**
 **Objectif** : rendre à nouveau lisibles les écrans signalés en mode sombre.
 **Problèmes concernés** : TODO-023
 **Prérequis** : aucun
 **Modifications principales** : couleur du texte au traitement Inbox, couleur des champs de date natifs, contraste des toasts
 **Tests nécessaires** : Non déterminé — vérification visuelle manuelle en mode sombre
 **Risques** : faible
+
+**Clôture (22/09/2026)** : implémentation terminée, voir le détail exhaustif (causes, fichiers réellement modifiés, vérification effectuée) sous TODO-023 ci-dessus. **En attente de la vérification visuelle manuelle par Charles-Henri sur un appareil réel**, seule Validation prévue par ce TODO — le lot n'est donc pas encore définitivement clos au sens de la roadmap, seulement son implémentation.
 
 ### LOT 11 — Suivi structuré des objectifs et des points de suivi personnes
 **Objectif** : donner aux objectifs une structure exploitable (indicateurs de réussite, éléments de suivi) et qualifier dès la création les éléments créés sur une fiche Personne pour alimenter la préparation des points de suivi.
