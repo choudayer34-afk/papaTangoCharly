@@ -32,14 +32,18 @@ import { openResourceDetail } from "../views/resources.js";
 import * as dateUtils from "../services/dateUtils.js";
 
 // TODO-013 (LOT 6, 21/09/2026) — même principe de "Traiter en lot" que js/views/inbox.js,
-// strictement limité aux 3 qualifications sans formulaire de création (Information/kept,
-// Idée/idea, Archivé/archived). Redéfini ici en local plutôt qu'importé de js/views/inbox.js :
-// ce fichier n'exporte pas sa propre liste, et la garde d'implémentation du TODO-013 demande
-// justement de ne pas construire de mécanisme partagé entre les deux — seules ces 3 lignes de
-// données (pas de logique) sont dupliquées.
+// strictement limité aux qualifications sans formulaire de création (Information/kept,
+// Archivé/archived). Redéfini ici en local plutôt qu'importé de js/views/inbox.js : ce fichier
+// n'exporte pas sa propre liste, et la garde d'implémentation du TODO-013 demande justement de
+// ne pas construire de mécanisme partagé entre les deux — seules ces lignes de données (pas de
+// logique) sont dupliquées.
+//
+// TODO-021 (LOT 9, 21/09/2026) — l'entrée "idea" (💡 Idée, `mapsTo: "kept"`) est retirée ici
+// aussi, en miroir de js/views/inbox.js#QUALIFY_CHOICES : elle produisait déjà exactement le
+// même résultat que "kept" (fusion des libellés "Information"/"Idée", décision produit du
+// 15/09/2026 — voir TODO_TECHNIQUE.md).
 const WR_BULK_CHOICES = [
   { key: "kept", emoji: "🧠", label: "Information" },
-  { key: "idea", emoji: "💡", label: "Idée", mapsTo: "kept" },
   { key: "archived", emoji: "🗑️", label: "Archiver" },
 ];
 
@@ -227,7 +231,7 @@ export async function openWeeklyReview() {
         row.prepend(checkbox);
       } else {
         // Comportement individuel inchangé (§51 : "l'utilisateur traite les éléments un par
-        // un") : clic → ferme la revue, ouvre la qualification complète (9 choix).
+        // un") : clic → ferme la revue, ouvre la qualification complète (8 choix).
         row.style.cursor = "pointer";
         row.addEventListener("click", () => {
           closeModal();
