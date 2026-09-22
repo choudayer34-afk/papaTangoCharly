@@ -37,6 +37,7 @@ import { subscribeOnline } from "./services/onlineStatus.js";
 import * as tasksApi from "./domain/tasks.js";
 import * as followUpsApi from "./domain/followups.js";
 import * as preferencesApi from "./domain/preferences.js";
+import { buildNavItems, subscribeNavChange } from "./services/navConfig.js";
 
 // ROUTES reste la table de dispatch COMPLÈTE — toute route qui y figure fonctionne par hash,
 // que son icône apparaisse ou non dans la barre du bas. Distinct de NAV_ITEMS ci-dessous
@@ -70,13 +71,15 @@ const ROUTES = {
 // seule l'icône du bas devient commune aux 3 (`activeFor`). Même principe pour "Plus", actif
 // aussi bien sur son propre écran que sur Ressources/Prompts/Guide/Nouveautés/Mémoire, qui n'ont
 // plus leur propre icône directe.
-const NAV_ITEMS = [
-  { hash: "#/dashboard", label: "Accueil", icon: "🏠" },
-  { hash: "#/inbox", label: "Inbox", icon: "📥" },
-  { hash: "#/kanban", label: "Pilotage", icon: "📋", activeFor: ["#/kanban", "#/projects", "#/calendar", "#/priorisation"] },
-  { hash: "#/people", label: "Équipe", icon: "👥" },
-  { hash: "#/more", label: "Plus", icon: "☰", activeFor: ["#/more", "#/resources", "#/prompts", "#/guide", "#/whatsnew", "#/memory"] },
-];
+//
+// LOT 12 (TODO-026, US-026 du 21/09/2026) : cette liste n'est plus codée en dur — elle est
+// désormais calculée par `buildNavItems()` (js/services/navConfig.js) à partir de la préférence
+// `navigationMain` (⚙️ Personnaliser l'accueil → "🧭 Personnaliser la navigation", voir
+// js/views/dashboard.js). Sans personnalisation, `buildNavItems()` reproduit EXACTEMENT le
+// tableau ci-dessus tel qu'il existait avant ce lot (même items, même ordre, mêmes `activeFor`).
+// `let` plutôt que `const` : reconstruite par `rebuildNav()` chaque fois que la personnalisation
+// change, sans recharger toute l'application.
+let NAV_ITEMS = buildNavItems();
 
 // Guide/Nouveautés/Mémoire restent HORS de ROUTES : des pages de référence consultées
 // ponctuellement (désormais depuis l'onglet ☰ Plus plutôt que ❓ Aide, voir js/views/more.js et
@@ -186,9 +189,47 @@ function renderRoute() {
   logView(path, known.label).catch(() => {});
 }
 
-function mountApp() {
+// LOT 12 (TODO-026) : lit la préférence `navigationMain` et en déduit les items de la barre du
+// bas — factorisé pour être appelé aussi bien au premier montage (mountApp) qu'à chaque
+// changement de personnalisation en cours de session (rebuildNav, plus bas). Jamais bloquant
+// pour l'ouverture de l'app : une préférence absente ou invalide retombe silencieusement sur la
+// configuration par défaut (voir buildNavItems()).
+async function loadNavItems() {
+  const prefs = await preferencesApi.getPreferences();
+  return buildNavItems(prefs.navigationMain);
+}
+
+// LOT 12 (TODO-026) : reconstruit la barre du bas déjà montée (et ce qui en dépend : pastilles,
+// raccourcis clavier) juste après que ⚙️ Personnaliser l'accueil → "🧭 Personnaliser la
+// navigation" (js/views/dashboard.js) a enregistré un nouveau choix — sans ça, il aurait fallu
+// fermer/rouvrir l'app pour voir sa nouvelle barre, comme avant le correctif du 14/09/2026 sur
+// la mise à jour du service worker (voir plus bas, même principe : ne jamais faire attendre une
+// fermeture/réouverture pour un changement qu'on vient soi-même de valider). Abonné via
+// `subscribeNavChange()` (js/services/navConfig.js) plutôt qu'un import direct de
+// js/views/dashboard.js vers ce fichier, qui créerait un cycle (voir le commentaire d'en-tête de
+// navConfig.js) — `dashboard.js` n'a donc jamais besoin de connaître l'existence de cette
+// fonction, seulement de signaler "ça a changé".
+async function rebuildNav() {
+  if (!appMounted) return; // rien à reconstruire avant connexion/montage de l'app
+  NAV_ITEMS = await loadNavItems();
+  unmountInboxBadge();
+  unmountWhatsNewBadge();
+  teardownGlobalShortcuts();
+  nav?.remove();
+  nav = mountNav();
+  mountInboxBadge(nav);
+  mountWhatsNewBadge(nav);
+  initGlobalShortcuts(NAV_ITEMS.map((item) => item.hash));
+  updateNavActive((location.hash || "#/dashboard").split("?")[0]);
+}
+subscribeNavChange(() => {
+  rebuildNav().catch(() => {});
+});
+
+async function mountApp() {
   if (appMounted) return;
   appMounted = true;
+  NAV_ITEMS = await loadNavItems();
   nav = mountNav();
   mountOfflineBanner();
   mountCaptureFab();
@@ -382,7 +423,7 @@ onAuthChange(async (user) => {
       renderPrepMask(appRoot);
       return;
     }
-    mountApp();
+    await mountApp();
   } else {
     unmountApp();
     if (pendingRestrictedEmail) {
