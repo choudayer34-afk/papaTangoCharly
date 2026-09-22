@@ -1801,6 +1801,73 @@ tbody.drag-over-group {
 .sticky-note--purple { background: #E6DBFB; color: #3A215C; }
 .sticky-note--gray   { background: #E4E4E9; color: #33333B; }
 
+/* ---------- Post-it flottants (LOT 13, complément du 23/09/2026, retour direct de Charles-Henri :
+   "je dois pouvoir [mettre un post-it épinglé] n'importe où dans l'écran même en dehors du
+   bureau [...] il [ne doit pas passer] au dessous de toutes les autres modales") — voir
+   js/components/pinnedNotesOverlay.js. Monté une seule fois pour toute la session, comme
+   .pomodoro-widget plus haut dans ce fichier, mais couvre tout le viewport (chaque carte se
+   positionne ensuite librement à l'intérieur, en coordonnées viewport). ---------- */
+.pinned-notes-overlay {
+  position: fixed;
+  inset: 0;
+  /* Ne capte aucun clic sur les zones vides — seules les cartes elles-mêmes (voir
+     .pinned-float-note ci-dessous, qui reprend `pointer-events: auto`) doivent rester
+     cliquables, jamais le reste de l'écran caché "dessous" cette couche plein viewport. */
+  pointer-events: none;
+  /* Au-dessus de .modal-overlay (50, voir plus haut dans ce fichier) — c'est tout le problème
+     signalé par Charles-Henri : un post-it épinglé doit rester visible même fiche/modale ouverte
+     ailleurs dans l'app. Volontairement EN DESSOUS de .toast (60)/.offline-banner (65)/
+     .completion-burst (70, tous plus bas dans ce fichier) : ces trois-là restent des signaux
+     ponctuels/système, jamais masqués par un post-it. */
+  z-index: 55;
+}
+.pinned-float-note {
+  position: absolute;
+  pointer-events: auto;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  cursor: grab;
+}
+.pinned-float-note:active { cursor: grabbing; }
+.pinned-float-note-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 2px;
+}
+.pinned-float-note-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  padding: 2px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pinned-float-unpin-btn,
+.pinned-float-note .sticky-note-menu-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 6px;
+  color: inherit;
+}
+.pinned-float-note-preview {
+  padding: 0 8px 8px;
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  overflow: hidden;
+  max-height: 4.5em;
+}
+
 .sticky-color-swatch {
   width: 28px;
   height: 28px;
