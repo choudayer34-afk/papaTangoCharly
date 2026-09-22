@@ -21,13 +21,19 @@ let activeClose = null; // la fonction close() propre à la modale actuellement 
  *   styles/components.css) — `title`/`aria-label` gardent le libellé complet accessible même
  *   icône seule. Les autres actions (non `compact`) sont inchangées, texte brut comme avant.
  * @param {boolean} [opts.dismissible=true]
+ * @param {boolean} [opts.wide=false] - prend toute la largeur disponible de la fenêtre plutôt
+ *   que le plafond habituel de `.modal` (900px max, voir styles/components.css) — réservé aux
+ *   contenus qui profitent réellement de plus d'espace horizontal (retour de Charles-Henri,
+ *   24/09/2026, pour "🧠 Mon bureau — Tout voir" : un plan de travail à post-it positionnés
+ *   librement, voir js/components/bureau.js#openFullCanvasModal). Ajoute `.modal--wide`, définie
+ *   dans styles/components.css ; n'affecte aucune autre modale par défaut.
  * @param {Function} [opts.onClose] - appelé une seule fois, quel que soit le chemin de
  *   fermeture (clic en dehors, Échap, ou n'importe quelle action) — utile pour un appelant qui
  *   doit rafraîchir un affichage derrière la modale sans avoir à dupliquer la logique sur
  *   chaque action (voir "✏️ Saisie laissée en cours", js/views/dashboard.js).
  * @returns {{close: Function, bodyEl: HTMLElement}}
  */
-export function openModal({ title, body, actions = [], dismissible = true, onClose }) {
+export function openModal({ title, body, actions = [], dismissible = true, wide = false, onClose }) {
   closeModal(); // une seule modale à la fois
 
   // Piège de focus standard (LOT 8, TODO-016, COMP-UX-001/002) : mémorise l'élément qui avait le
@@ -40,7 +46,7 @@ export function openModal({ title, body, actions = [], dismissible = true, onClo
   overlay.className = "modal-overlay";
 
   const modal = document.createElement("div");
-  modal.className = "modal";
+  modal.className = wide ? "modal modal--wide" : "modal";
   modal.setAttribute("role", "dialog");
   modal.setAttribute("aria-modal", "true");
   modal.setAttribute("tabindex", "-1"); // repli du piège de focus si la modale ne contient aucun élément focusable (cas normalement jamais rencontré, chaque modale ayant au moins un bouton d'action)
