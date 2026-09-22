@@ -33,12 +33,14 @@ import { getDraft, clearDraft } from "../services/draftStore.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderDecisionGrid } from "../components/decisionGrid.js";
 import { getTheme, getEffectiveTheme, setTheme } from "../services/themeStore.js";
-import { renderChecklist } from "../components/checklist.js";
-import { generateId } from "../services/id.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 import * as tagsApi from "../domain/tags.js";
 import * as dateUtils from "../services/dateUtils.js";
 import { MODULE_CATALOG, DEFAULT_NAV_MAIN, notifyNavChanged } from "../services/navConfig.js";
+// LOT 13 (TODO-027, 22/09/2026) — "🧠 Mon bureau", remplace le Pense-bête (voir le commentaire
+// détaillé de HOME_ORDER_LABELS/DASHBOARD_SECTIONS plus bas et js/components/bureau.js).
+import * as stickyNotesApi from "../domain/stickyNotes.js";
+import { mountBureau } from "../components/bureau.js";
 
 // TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
 // (décision produit du 15/09/2026, voir js/views/inbox.js) : un seul libellé affiché désormais,
@@ -52,16 +54,16 @@ const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 // bas). Volontairement séparée de DASHBOARD_SECTIONS ci-dessous : "statGrid" n'est jamais
 // masquable (même règle que toujours) mais reste déplaçable.
 //
-// "postit" n'est PLUS une clé indépendante ici depuis le 14/09/2026 (retour de Charles-Henri :
-// "je l'aurais imaginé un peu plus discret et sur le web [...] sur la gauche de l'écran
-// d'accueil sur la même ligne que les indicateurs") — le Pense-bête vit désormais en permanence
-// à côté du bloc chiffré ("statGrid" pointe vers le conteneur des deux, `#postit-statgrid-row`,
-// voir homeOrderElements et .postit-statgrid-row dans styles/components.css), pas vers le bloc
-// chiffré seul : les deux se déplacent comme une seule unité par rapport aux autres rubriques.
-// Sa visibilité propre (masquer/afficher) reste néanmoins distincte, voir DASHBOARD_SECTIONS et
-// renderPostitSection.
+// "bureau" (LOT 13, TODO-027, 22/09/2026) — remplace "postit" : depuis le 14/09/2026, "postit"
+// n'était plus une clé indépendante ici (le Pense-bête partageait une seule unité déplaçable avec
+// le bloc chiffré, voir `.postit-statgrid-row`, désormais retiré de styles/components.css). "Mon
+// bureau" (js/components/bureau.js) redevient une rubrique à part entière, positionnée par
+// défaut juste après "statGrid" — un post-it peut désormais contenir bien plus qu'un aide-mémoire
+// ponctuel (plusieurs notes, checklists, conversions...), il mérite sa propre place dans l'ordre
+// plutôt que de rester accroché aux indicateurs.
 const HOME_ORDER_LABELS = {
-  statGrid: "🔢 Indicateurs (avec le Pense-bête)",
+  statGrid: "🔢 Indicateurs",
+  bureau: "🧠 Mon bureau",
   needsAttention: "⚠️ Ça a besoin de toi",
   kept: "🧠 Informations & idées",
   projects: "📦 Mes projets",
@@ -71,12 +73,9 @@ const HOME_ORDER_LABELS = {
 const HOME_ORDER_KEYS = Object.keys(HOME_ORDER_LABELS);
 
 /** Ordre PAR DÉFAUT tant que Charles-Henri n'a rien réordonné lui-même à la main (voir
- *  `dashboardOrder` dans js/domain/preferences.js). Le placement du Pense-bête par rapport au
- *  bloc chiffré (à gauche sur web, juste en dessous sur mobile) n'en fait plus partie — c'est
- *  désormais purement du CSS (`.postit-statgrid-row`), plus besoin de recalculer cet ordre
- *  selon la largeur d'écran comme avant le 14/09/2026. */
+ *  `dashboardOrder` dans js/domain/preferences.js). */
 function defaultHomeOrder() {
-  return ["statGrid", "needsAttention", "kept", "projects", "recentlyViewed", "recent"];
+  return ["statGrid", "bureau", "needsAttention", "kept", "projects", "recentlyViewed", "recent"];
 }
 
 // Sections repliables/masquables (piste UX du 31/08/2026, retour de Charles-Henri : "l'accueil
@@ -91,10 +90,11 @@ function defaultHomeOrder() {
 // (voir renderNeedsAttentionSection). "recentlyViewed" ("🔄 Reprendre où j'en étais") devient
 // masquable pour la première fois — elle ne l'était pas avant ce round.
 const DASHBOARD_SECTIONS = [
-  // "postit" en tête (retour de Charles-Henri, 13/09/2026) : contrairement aux quatre autres,
-  // reste affiché en mode Focus (voir applyHomeModeVisibility, qui ne le touche jamais) — d'où
-  // la précision entre parenthèses dans le libellé de la case à cocher.
-  { key: "postit", label: "📌 Pense-bête (aussi visible en mode Focus)" },
+  // "bureau" en tête (LOT 13, TODO-027 — reprend exactement la même exemption que l'ancien
+  // "postit" qu'il remplace) : contrairement aux quatre autres, reste affiché en mode Focus (voir
+  // applyHomeModeVisibility, qui ne le touche jamais) — d'où la précision entre parenthèses dans
+  // le libellé de la case à cocher.
+  { key: "bureau", label: "🧠 Mon bureau (aussi visible en mode Focus)" },
   { key: "needsAttention", label: "⚠️ Ça a besoin de toi" },
   { key: "kept", label: "🧠 Informations & idées" },
   { key: "projects", label: "📦 Mes projets" },
@@ -145,20 +145,13 @@ export function renderDashboard(container) {
            un ordre source fixe et anodin, tout l'ordre visuel passe par ce style, jamais par
            une réécriture du DOM (voir applyHomeOrder() plus bas pour le raisonnement complet). -->
       <div id="home-order-wrapper" style="display:flex;flex-direction:column;">
-        <!-- Pense-bête + indicateurs, un seul bloc réordonnable (retour de Charles-Henri,
-             14/09/2026 : "je l'aurais imaginé un peu plus discret et sur le web [...] sur la
-             gauche de l'écran d'accueil sur la même ligne que les indicateurs") — voir la
-             classe postit-statgrid-row dans styles/components.css : colonne sur mobile
-             (indicateurs d'abord, Pense-bête juste après, comme demandé à l'origine), ligne sur
-             web (Pense-bête à gauche, plus étroit — donc plus discret — pendant que les
-             indicateurs prennent le reste de la largeur). Le Pense-bête n'est donc plus
-             indépendamment réordonnable par rapport aux indicateurs (voir HOME_ORDER_KEYS) :
-             les deux se déplacent désormais comme une seule unité par rapport aux autres
-             rubriques. -->
-        <div id="postit-statgrid-row" class="postit-statgrid-row">
-          <div id="postit-section"></div>
-          <div class="stat-grid" id="stat-grid"></div>
-        </div>
+        <div class="stat-grid" id="stat-grid"></div>
+        <!-- "🧠 Mon bureau" (LOT 13, TODO-027) — remplace le Pense-bête, redevient une rubrique
+             indépendamment réordonnable (voir HOME_ORDER_KEYS/defaultHomeOrder ci-dessus), plus
+             accrochée aux indicateurs comme avant ce lot. Rendu délégué à
+             js/components/bureau.js#mountBureau (position/taille/glisser de chaque post-it) —
+             voir son montage plus bas, juste après la capture des éléments DOM. -->
+        <div id="bureau-section"></div>
         <div id="recent-viewed-section"></div>
         <div id="focus-section"></div>
         <div id="focus-queue-section"></div>
@@ -205,9 +198,21 @@ export function renderDashboard(container) {
   const captureDraftBannerEl = container.querySelector("#capture-draft-banner");
   const reviewReminderEl = container.querySelector("#review-reminder");
   const notifOptInEl = container.querySelector("#notif-optin");
-  const postitRowEl = container.querySelector("#postit-statgrid-row");
-  const postitSection = container.querySelector("#postit-section");
   const statGrid = container.querySelector("#stat-grid");
+  const bureauSection = container.querySelector("#bureau-section");
+  // Masqué tant que les préférences ne sont pas encore chargées (voir applyBureauVisibility(),
+  // appelée une fois `hiddenSections` connu dans le .then() de preferencesApi.getPreferences()
+  // plus bas) — évite un bref éclair "Mon bureau" affiché puis aussitôt masqué si Charles-Henri
+  // l'a désactivé, le temps que Firestore réponde.
+  bureauSection.style.display = "none";
+  // Montage UNIQUE (LOT 13, TODO-027) : contrairement aux autres rubriques (renderXSection(),
+  // simples fonctions rappelées à chaque changement), "Mon bureau" est un composant à état
+  // (glisser/redimensionner en cours, voir js/components/bureau.js) — le reconstruire à chaque
+  // notification Firestore ou à chaque "Enregistrer" de ⚙️ casserait un geste en cours ou ferait
+  // perdre le focus d'un champ en cours de frappe. Une seule instance pour toute la durée de vie
+  // de cet Accueil, mise à jour via `bureauHandle.update(stickyNotes)` (voir l'abonnement
+  // Firestore plus bas) plutôt que reconstruite.
+  const bureauHandle = mountBureau(bureauSection);
   const recentViewedSection = container.querySelector("#recent-viewed-section");
   const focusSection = container.querySelector("#focus-section");
   const focusQueueSection = container.querySelector("#focus-queue-section");
@@ -220,9 +225,8 @@ export function renderDashboard(container) {
   // du système d'ordre manuel (mutuellement exclusives avec needsAttentionSection selon le mode,
   // elles se recalent automatiquement juste avant elle, voir applyHomeOrder()).
   const homeOrderElements = {
-    // "statGrid" déplace désormais le bloc entier Pense-bête + indicateurs (voir
-    // #postit-statgrid-row plus haut) — plus seulement le bloc chiffré seul.
-    statGrid: postitRowEl,
+    statGrid,
+    bureau: bureauSection,
     needsAttention: needsAttentionSection,
     kept: keptSection,
     projects: projectsSection,
@@ -268,12 +272,10 @@ export function renderDashboard(container) {
   let homeMode = "classic";
   let focusExpanded = false;
   let focusQueueIndex = 0;
-  // Pense-bête (retour de Charles-Henri, 13/09/2026) — voir renderPostitSection() plus bas ;
-  // les deux contenus (`postitText`/`postitChecklist`) restent en mémoire séparément, seul
-  // `postitMode` décide lequel est affiché.
-  let postitMode = "text";
-  let postitText = "";
-  let postitChecklist = [];
+  // "🧠 Mon bureau" (LOT 13, TODO-027) — les post-it eux-mêmes vivent dans leur propre collection
+  // Firestore (js/domain/stickyNotes.js), tenue à jour en direct comme tasks/projects/etc.
+  // ci-dessus ; voir l'abonnement stickyNotesApi.subscribe() plus bas et bureauHandle.update().
+  let stickyNotes = [];
   // Ordre explicite des rubriques (même retour, second volet) — vide tant que Charles-Henri n'a
   // rien déplacé lui-même, voir defaultHomeOrder()/applyHomeOrder().
   let dashboardOrder = [];
@@ -303,33 +305,45 @@ export function renderDashboard(container) {
     } else {
       hiddenSections = new Set(prefs.dashboardHidden || []);
     }
-    if (!prefs.postitMigratedV1) {
-      // Bascule one-shot (voir js/domain/preferences.js#markPostitMigratedV1) : le Pense-bête
-      // reste masqué tant que Charles-Henri ne l'active pas lui-même via ⚙️, même pour un
-      // compte qui a déjà personnalisé ses sections masquées auparavant.
-      hiddenSections.add("postit");
+    if (!prefs.bureauMigratedV1) {
+      // Migration one-shot Pense-bête → Bureau (LOT 13, TODO-027 — arbitrage de Charles-Henri,
+      // AskUserQuestion du 22/09/2026 : "Mon bureau remplace le Pense-bête") : l'éventuel contenu
+      // déjà noté devient le PREMIER post-it (jamais perdu), et la visibilité déjà choisie pour
+      // "postit" (masqué ou non dans dashboardHidden) devient celle de "bureau" — un compte qui
+      // avait déjà démasqué son Pense-bête retrouve directement le Bureau visible, plutôt que de
+      // repartir sur le "masqué par défaut" que markPostitMigratedV1() imposait à l'époque.
+      const oldMode = prefs.postitMode || "text";
+      const oldText = prefs.postitText || "";
+      const oldChecklist = prefs.postitChecklist || [];
+      if (oldText.trim() || oldChecklist.length) {
+        stickyNotesApi.createStickyNote({ type: oldMode, content: oldText, checklist: oldChecklist, x: 16, y: 16, zIndex: 1 }).catch(() => {});
+      }
+      if (hiddenSections.has("postit")) {
+        hiddenSections.delete("postit");
+        hiddenSections.add("bureau");
+      }
       preferencesApi.setDashboardHidden([...hiddenSections]).catch(() => {});
-      preferencesApi.markPostitMigratedV1().catch(() => {});
+      preferencesApi.markBureauMigratedV1().catch(() => {});
     }
     focusOverride = prefs.focusOverride || { date: null, addedTaskIds: [] };
     priorityWeights = prefs.priorityWeights || priorisationApi.DEFAULT_WEIGHTS;
     recentlyViewed = prefs.recentlyViewed || [];
     homeMode = prefs.homeMode || "classic";
-    postitMode = prefs.postitMode || "text";
-    postitText = prefs.postitText || "";
-    postitChecklist = prefs.postitChecklist || [];
-    // Filtre défensif "postit" (retour de Charles-Henri, 14/09/2026) : un ordre déjà enregistré
-    // avant ce round pouvait contenir cette clé, retirée depuis de HOME_ORDER_KEYS — sans ça,
-    // elle resterait inerte dans le tableau (applyHomeOrder() l'ignore déjà sans planter, voir
-    // sa garde `if (el)`) mais s'afficherait aussi telle quelle, sans libellé, dans la liste
-    // réordonnable de ⚙️ Personnaliser l'accueil.
+    // Filtre défensif "postit" (hérité d'avant ce lot) : un ordre déjà enregistré pouvait
+    // contenir cette clé, retirée depuis de HOME_ORDER_KEYS — sans ça, elle resterait inerte dans
+    // le tableau (applyHomeOrder() l'ignore déjà sans planter, voir sa garde `if (el)`) mais
+    // s'afficherait aussi telle quelle, sans libellé, dans la liste réordonnable de ⚙️
+    // Personnaliser l'accueil. "bureau" lui-même n'a pas besoin d'un ajout explicite ici : la
+    // garde défensive d'applyHomeOrder() (`HOME_ORDER_KEYS.filter((k) => !base.includes(k))`)
+    // l'ajoute déjà automatiquement en fin de liste pour tout ordre personnalisé antérieur à ce
+    // lot qui ne le connaît pas encore.
     dashboardOrder = (prefs.dashboardOrder || []).filter((k) => k !== "postit");
     navigationMain = prefs.navigationMain || [];
     renderReviewReminder(prefs.lastWeeklyReviewAt);
     notifOptIn = prefs.notifOptIn;
     renderNotifOptIn(notifOptIn);
     renderStats();
-    renderPostitSection();
+    applyBureauVisibility();
     renderRecentlyViewedSection();
     renderFocusSection();
     renderNeedsAttentionSection();
@@ -340,6 +354,15 @@ export function renderDashboard(container) {
     applyHomeModeVisibility();
     applyHomeOrder();
   });
+
+  /** Affichage/masquage de "Mon bureau" via ⚙️ Personnaliser l'accueil (voir DASHBOARD_SECTIONS
+   *  ci-dessus) — bascule seulement la visibilité du conteneur déjà monté une fois pour toutes
+   *  (bureauHandle, voir plus haut) : jamais de vidage/reconstruction comme `sectionEl.innerHTML
+   *  = ""` sur les autres rubriques, qui casserait le composant à état de js/components/bureau.js
+   *  (geste de glisser en cours, champ en cours de frappe...). */
+  function applyBureauVisibility() {
+    bureauSection.style.display = hiddenSections.has("bureau") ? "none" : "";
+  }
 
   /**
    * "✏️ Saisie laissée en cours" (piste TDAH du 02/09/2026, retour de Charles-Henri — ses
@@ -838,9 +861,10 @@ export function renderDashboard(container) {
     projectsSection.hidden = secondaryHidden;
     recentViewedSection.hidden = secondaryHidden;
     recentSection.hidden = secondaryHidden;
-    // Le Pense-bête n'est JAMAIS masqué par le mode Focus (retour de Charles-Henri : "il doit
-    // être présent en focus ou en normal") — sa seule visibilité conditionnelle est la case à
-    // cocher ⚙️ (voir renderPostitSection), déjà gérée là-bas ; rien à faire ici.
+    // "Mon bureau" n'est JAMAIS masqué par le mode Focus (même exemption que le Pense-bête avant
+    // ce lot, retour de Charles-Henri : "il doit être présent en focus ou en normal") — sa seule
+    // visibilité conditionnelle est la case à cocher ⚙️ (voir applyBureauVisibility()), déjà
+    // gérée là-bas ; rien à faire ici.
   }
 
   /**
@@ -956,7 +980,7 @@ export function renderDashboard(container) {
       ).join("")}
       <div class="field" style="margin-top:20px;">
         <label style="display:block;margin-bottom:6px;">Ordre des rubriques</label>
-        <p class="item-meta" style="margin:0 0 8px;">Le Pense-bête reste toujours à côté des indicateurs (dans la marge à gauche sur grand écran, en ligne à gauche sur écran plus étroit, juste en dessous sur mobile) — déplace les autres rubriques ci-dessous si tu préfères un ordre fixe, à toi, identique partout.</p>
+        <p class="item-meta" style="margin:0 0 8px;">Déplace les rubriques ci-dessous dans l'ordre qui te convient.</p>
         <div id="home-order-list"></div>
         <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre par défaut</button>
       </div>
@@ -1073,7 +1097,7 @@ export function renderDashboard(container) {
               await preferencesApi.setDashboardOrder(currentOrder);
             }
             closeModal();
-            renderPostitSection();
+            applyBureauVisibility();
             renderNeedsAttentionSection();
             renderFocusQueueSection();
             renderKeptSection();
@@ -1406,133 +1430,8 @@ export function renderDashboard(container) {
     });
   }
 
-  /**
-   * "📌 Pense-bête" (retour de Charles-Henri, 13/09/2026 : "une espèce de post-it avec
-   * checklist ou en mode écrit de ce que j'ai en tête pour la journée sans que ce soit une
-   * tâche. Genre acheter un billet d'avion, voir Michel aujourd'hui, etc.") — délibérément SANS
-   * modale : à la différence de "🎯 Mes objectifs" ci-dessus, l'esprit post-it veut qu'on note
-   * et raye directement sur l'Accueil, pas dans un aller-retour de fenêtre. Deux modes, jamais
-   * combinés, chacun avec son propre contenu conservé en mémoire (js/domain/preferences.js) —
-   * `renderChecklist` est le même composant que partout ailleurs dans l'app (js/components/
-   * checklist.js), pour un pense-bête à sous-étapes qui se comporte exactement comme les autres.
-   *
-   * Avertissement explicite affiché en permanence (retour de Charles-Henri lui-même : "ça peut
-   * devenir un fourre-tout") — jamais un simple texte d'aide qu'on ne voit qu'une fois
-   * (js/components/hint.js) : le risque existe à chaque instant, pas seulement à la découverte.
-   */
-  function renderPostitSection() {
-    const hidden = hiddenSections.has("postit");
-    // Classe portée par le conteneur PARTAGÉ avec le bloc chiffré (retour de Charles-Henri,
-    // 14/09/2026) — sans elle, la colonne réservée au Pense-bête (`.postit-statgrid-row
-    // #postit-section`, styles/components.css) resterait large et vide sur web dès qu'il est
-    // masqué, au lieu de laisser toute la place aux indicateurs.
-    postitRowEl?.classList.toggle("postit-hidden", hidden);
-    if (hidden) {
-      postitSection.innerHTML = "";
-      return;
-    }
-    // Habillage volontairement discret (retour de Charles-Henri, 14/09/2026 : "je l'aurais
-    // imaginé un peu plus discret") — plus de fond teinté ni de marge propre à la carte (le
-    // conteneur partagé s'en charge désormais), titre en simple texte gras plutôt que le style
-    // "section-title" majuscule/espacé habituel, avertissement raccourci. Voir `.postit-card`
-    // dans styles/components.css pour le liseré (aminci) qui reste l'unique signal visuel fort.
-    postitSection.innerHTML = `
-      <div class="card postit-card">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-          <div style="font-weight:600;font-size:var(--font-size-sm);">📌 Pense-bête</div>
-          <div class="chip-row" id="postit-mode-row" style="margin-bottom:0;">
-            <button type="button" class="chip${postitMode === "text" ? " active" : ""}" data-mode="text">📝 Texte</button>
-            <button type="button" class="chip${postitMode === "checklist" ? " active" : ""}" data-mode="checklist">☑️ Checklist</button>
-          </div>
-        </div>
-        <p class="item-meta" style="margin:8px 0 10px;">Pas une tâche à piloter. ⚠️ Ça peut vite devenir un fourre-tout : pense à le vider.</p>
-        <div id="postit-body"></div>
-      </div>
-    `;
-    postitSection.querySelectorAll("#postit-mode-row .chip").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (btn.dataset.mode === postitMode) return;
-        postitMode = btn.dataset.mode;
-        await preferencesApi.setPostitMode(postitMode);
-        renderPostitSection();
-      });
-    });
-    const bodyEl = postitSection.querySelector("#postit-body");
-    if (postitMode === "checklist") {
-      renderChecklist(bodyEl, postitChecklist, {
-        emptyLabel: "Rien de noté pour l'instant.",
-        // Retour de Charles-Henri, 14/09/2026 : "dès qu'on coche qqch, l'élément coché doit se
-        // positionner en bas de la liste [...] un bouton pour supprimer d'un coup tout ce qui est
-        // coché" — options réservées au Pense-bête (voir js/components/checklist.js), la
-        // checklist d'une Tâche/d'un Suivi n'en a jamais fait la demande et garde son
-        // comportement d'origine.
-        sortDoneToBottom: true,
-        onAdd: async (text) => {
-          postitChecklist = [...postitChecklist, { id: generateId(), text, done: false, doneAt: null }];
-          await preferencesApi.setPostitChecklist(postitChecklist);
-          return postitChecklist;
-        },
-        onToggle: async (itemId, done) => {
-          postitChecklist = postitChecklist.map((it) =>
-            it.id === itemId ? { ...it, done, doneAt: done ? Date.now() : null } : it
-          );
-          await preferencesApi.setPostitChecklist(postitChecklist);
-          return postitChecklist;
-        },
-        onRemove: async (itemId) => {
-          postitChecklist = postitChecklist.filter((it) => it.id !== itemId);
-          await preferencesApi.setPostitChecklist(postitChecklist);
-          return postitChecklist;
-        },
-        onClearDone: async () => {
-          postitChecklist = postitChecklist.filter((it) => !it.done);
-          await preferencesApi.setPostitChecklist(postitChecklist);
-          return postitChecklist;
-        },
-        // Retour direct de Charles-Henri (22/09/2026) : "si je me suis trompé dans le nom d'une
-        // sous étape [...] je ne peux pas le modifier ni ordonner les sous étapes non terminées"
-        // — voir le commentaire en tête de js/components/checklist.js. Même mécanique que les
-        // autres callbacks ci-dessus (tableau tenu à jour ici même, pas de fonction domaine
-        // dédiée : le Pense-bête n'est pas un document identifié en base, juste une préférence).
-        onEdit: async (itemId, text) => {
-          postitChecklist = postitChecklist.map((it) => (it.id === itemId ? { ...it, text } : it));
-          await preferencesApi.setPostitChecklist(postitChecklist);
-          return postitChecklist;
-        },
-        onReorder: async (orderedIds) => {
-          const byId = new Map(postitChecklist.map((it) => [it.id, it]));
-          const notDoneReordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
-          const covered = new Set(orderedIds);
-          const notDoneUncovered = postitChecklist.filter((it) => !it.done && !covered.has(it.id));
-          const done = postitChecklist.filter((it) => it.done);
-          postitChecklist = [...notDoneReordered, ...notDoneUncovered, ...done];
-          await preferencesApi.setPostitChecklist(postitChecklist);
-          return postitChecklist;
-        },
-      });
-    } else {
-      bodyEl.innerHTML = `<div class="field" style="margin-bottom:0;"><textarea id="postit-textarea" placeholder="Ex. Acheter un billet d'avion, voir Michel aujourd'hui..." style="min-height:64px;">${escapeHtml(postitText)}</textarea></div>`;
-      const textarea = bodyEl.querySelector("#postit-textarea");
-      // Sauvegarde automatique (retour à la ligne ou clic ailleurs) — pas de bouton
-      // "Enregistrer" pour un post-it, ça doit rester aussi léger qu'un vrai bout de papier ;
-      // un léger débounce pendant la frappe évite un aller-réseau à chaque caractère, complété
-      // par une sauvegarde immédiate à la perte de focus pour ne jamais perdre la dernière
-      // frappe si on quitte l'Accueil tout de suite après.
-      let saveTimer = null;
-      textarea.addEventListener("input", () => {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(async () => {
-          postitText = textarea.value;
-          await preferencesApi.setPostitText(postitText);
-        }, 600);
-      });
-      textarea.addEventListener("blur", async () => {
-        clearTimeout(saveTimer);
-        postitText = textarea.value;
-        await preferencesApi.setPostitText(postitText);
-      });
-    }
-  }
+  // "📌 Pense-bête" retiré (LOT 13, TODO-027, 22/09/2026) — remplacé par "🧠 Mon bureau", voir
+  // mountBureau()/applyBureauVisibility() plus haut et js/components/bureau.js.
 
   /** Liste cliquable réutilisée par chaque carte chiffrée (retour de Charles-Henri : les
    *  cartes >0 doivent pouvoir s'ouvrir pour voir le détail) — un même petit gabarit pour les
@@ -2201,6 +2100,13 @@ export function renderDashboard(container) {
     renderProjectsSection();
     renderRecentSection();
   });
+  // "🧠 Mon bureau" (LOT 13, TODO-027) — pousse chaque nouvel état vers le composant déjà monté
+  // (bureauHandle, voir plus haut) plutôt que de reconstruire une section à chaque notification,
+  // contrairement à toutes les autres subscriptions ci-dessus.
+  const unsubStickyNotes = stickyNotesApi.subscribe((items) => {
+    stickyNotes = items;
+    bureauHandle.update(stickyNotes);
+  });
 
   return function cleanup() {
     document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
@@ -2215,6 +2121,7 @@ export function renderDashboard(container) {
     unsubPeople();
     unsubFollowUps();
     unsubTags();
+    unsubStickyNotes();
   };
 }
 
