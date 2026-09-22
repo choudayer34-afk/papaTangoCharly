@@ -158,6 +158,42 @@ export async function removeChecklistItem(id, itemId) {
   return updated.checklist;
 }
 
+// `editChecklistItem`/`reorderChecklist` (22/09/2026, retour direct de Charles-Henri : "si je me
+// suis trompé dans le nom d'une sous étape, je suis aujourd'hui obligé de supprimer et de le
+// réécrire. je ne peux pas le modifier ni ordonner les sous étapes non terminées") — voir le
+// commentaire en tête de js/components/checklist.js pour le détail du besoin et des choix UI.
+export async function editChecklistItem(id, itemId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { checklist: (current.checklist || []).map((c) => (c.id === itemId ? { ...c, text: trimmed } : c)) };
+  });
+  return updated.checklist;
+}
+
+/**
+ * `orderedIds` : les identifiants des éléments NON cochés dans le nouvel ordre voulu (jamais les
+ * éléments cochés, reclassés automatiquement par date de coche — voir le composant). Reconstitue
+ * le tableau complet en respectant cet ordre pour les non-cochés, puis en conservant les cochés à
+ * la suite dans leur ordre de stockage actuel (sans conséquence sur leur affichage, déjà retrié
+ * par `sortChecklistForDisplay`). Défensif : un id non coché non couvert par `orderedIds` (désync
+ * improbable UI/serveur) est ajouté à la fin plutôt que perdu.
+ */
+export async function reorderChecklist(id, orderedIds) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    const list = current.checklist || [];
+    const byId = new Map(list.map((c) => [c.id, c]));
+    const notDoneReordered = orderedIds.map((cid) => byId.get(cid)).filter(Boolean);
+    const covered = new Set(orderedIds);
+    const notDoneUncovered = list.filter((c) => !c.done && !covered.has(c.id));
+    const done = list.filter((c) => c.done);
+    return { checklist: [...notDoneReordered, ...notDoneUncovered, ...done] };
+  });
+  return updated.checklist;
+}
+
 /**
  * "⏳ En attente de..." (retour de Charles-Henri, 02/09/2026) : une information libre affichée
  * bien en évidence sur la carte Kanban tant qu'une Tâche est "En attente"/"À suivre" — ce
