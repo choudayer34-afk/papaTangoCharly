@@ -5,6 +5,7 @@
 
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "resources";
 
@@ -60,6 +61,10 @@ export async function createResource(data) {
     notesLog: [], // journal de notes horodaté, voir addNote() plus bas
   });
   await storage.logHistory("Resource", resource.id, "created", { title: resource.title });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Ressource créée", 3 XP, une seule fois
+  // par Ressource — voir le commentaire détaillé de js/domain/tasks.js#updateTask pour le
+  // raisonnement complet (système accessoire, jamais bloquant).
+  gamification.recordResourceCreated(resource.id).catch((err) => console.error("[gamification] Échec du crédit XP (Ressource créée) :", err));
   return resource;
 }
 
