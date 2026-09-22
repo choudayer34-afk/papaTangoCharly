@@ -406,6 +406,15 @@ a { color: inherit; }
 }
 .followup-quick-btn:hover { color: var(--color-primary); }
 
+/* Report rapide "+1j / +7j / date libre" sur l'échéance/le prochain contrôle d'un Suivi
+   (TODO-030, retour direct de Charles-Henri, 22/09/2026 : "comme sur le kanban") —
+   js/views/people.js#appendFollowUpRows. `.followup-date-row` regroupe libellé + valeur +
+   bouton 📅 sur une ligne ; le panneau déplié en dessous réutilise TEL QUEL les classes du
+   report rapide de la carte Kanban (`.kanban-card-postpone`/`.kanban-postpone-btn`/
+   `.kanban-postpone-custom`, styles/components.css) — même geste, même code visuel, pas de
+   nouvelle famille de composant pour la même interaction. */
+.followup-date-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: 2px; }
+
 /* ---------- Kanban ---------- */
 .kanban-board {
   display: flex;
