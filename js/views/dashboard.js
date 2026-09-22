@@ -19,7 +19,7 @@ import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
-import { openEditFollowUpModal, openObjectiveDetail } from "./people.js";
+import { openEditFollowUpModal, openObjectiveDetail, renderObjectiveDetailsFieldset, groupObjectivesByPeriod } from "./people.js";
 import { openProjectDetail, attachProjectQuickCreate } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -1123,23 +1123,36 @@ export function renderDashboard(container) {
     } else {
       const list = document.createElement("div");
       list.className = "card";
-      for (const o of mine) {
-        const project = o.projectId ? allProjects.find((p) => p.id === o.projectId) : null;
-        const row = document.createElement("div");
-        row.className = "item-row";
-        row.style.cursor = "pointer";
-        row.innerHTML = `
-          <div class="item-main">
-            <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
-            <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
-            ${tagsLineHtml("Objective", o.id)}
-          </div>
-        `;
-        row.addEventListener("click", () => {
-          closeModal();
-          openObjectiveDetail(o, null, { onDone: reopen });
-        });
-        list.appendChild(row);
+      // Regroupement par campagne/période (LOT 11, TODO-024) — même mécanique que
+      // js/views/people.js#renderObjectivesList : un titre de groupe seulement si "Mes
+      // objectifs" contient plusieurs périodes distinctes, sinon affichage à plat comme avant.
+      const groups = groupObjectivesByPeriod(mine);
+      const showGroupTitles = groups.length > 1;
+      for (const group of groups) {
+        if (showGroupTitles) {
+          const label = document.createElement("div");
+          label.className = "prep-group-label";
+          label.textContent = group.period || "Sans période";
+          list.appendChild(label);
+        }
+        for (const o of group.items) {
+          const project = o.projectId ? allProjects.find((p) => p.id === o.projectId) : null;
+          const row = document.createElement("div");
+          row.className = "item-row";
+          row.style.cursor = "pointer";
+          row.innerHTML = `
+            <div class="item-main">
+              <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+              <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
+              ${tagsLineHtml("Objective", o.id)}
+            </div>
+          `;
+          row.addEventListener("click", () => {
+            closeModal();
+            openObjectiveDetail(o, null, { onDone: reopen });
+          });
+          list.appendChild(row);
+        }
       }
       listEl.appendChild(list);
     }
@@ -1175,8 +1188,15 @@ export function renderDashboard(container) {
             .join("")}
         </select>
       </div>
+      <div id="my-obj-details-fieldset"></div>
     `;
     attachProjectQuickCreate(body.querySelector("#my-obj-project"));
+    // Même bloc "Détails" repliable que pour un objectif de collaborateur (LOT 11, TODO-024,
+    // js/views/people.js#openCreateObjectiveModal/#renderObjectiveDetailsFieldset) — un seul
+    // modèle d'objectif, jamais deux formulaires distincts (voir le commentaire en tête de
+    // openMyObjectivesModal ci-dessus). Reste optionnel : un objectif personnel simple n'a pas à
+    // ouvrir ce bloc.
+    const details = renderObjectiveDetailsFieldset(body.querySelector("#my-obj-details-fieldset"));
     const { bodyEl, close } = openModal({
       title: "Nouvel objectif",
       body,
@@ -1190,7 +1210,7 @@ export function renderDashboard(container) {
             const title = bodyEl.querySelector("#my-obj-title").value.trim();
             if (!title) return;
             const projectId = bodyEl.querySelector("#my-obj-project").value || null;
-            await objectivesApi.createObjective({ personId: null, title, projectId });
+            await objectivesApi.createObjective({ personId: null, title, projectId, ...details.read() });
             close();
             showToast("Objectif ajouté");
             onDone?.();
