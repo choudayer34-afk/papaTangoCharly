@@ -311,7 +311,16 @@
 // tests/e2e/lot11-objective-indicators-entries.spec.js) corrigés au passage — voir le détail
 // sous LOT 11 dans TODO_TECHNIQUE.md ; ces fichiers de test ne sont pas précachés, aucun impact
 // sur le numéro de version.
-const CACHE_NAME = "pilotage-cache-v72";
+// (22/09/2026, v73) : LOT 12, TODO-026 (US-026 du 21/09/2026, retour de Charles-Henri) — barre de
+// navigation personnalisable par utilisateur ("🧭 Personnaliser la navigation", accessible depuis
+// ⚙️ Personnaliser l'accueil, voir js/views/dashboard.js). Nouveau fichier précaché
+// js/services/navConfig.js (catalogue des modules + construction de la barre du bas, partagé par
+// js/app.js et js/views/dashboard.js sans dépendance circulaire entre les deux). Fichiers
+// précachés modifiés : js/app.js (barre du bas calculée dynamiquement au lieu d'une liste codée
+// en dur), js/domain/preferences.js (nouvelle préférence `navigationMain`), js/views/dashboard.js
+// (nouvel écran de personnalisation), js/views/whatsnew.js (nouvelle entrée). `CACHE_NAME`
+// incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v73";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -340,6 +349,7 @@ const APP_SHELL = [
   "./js/services/themeStore.js",
   "./js/services/dateUtils.js",
   "./js/services/onlineStatus.js",
+  "./js/services/navConfig.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
