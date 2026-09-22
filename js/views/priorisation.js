@@ -38,7 +38,12 @@ export function renderPriorisation(container) {
     <div class="topbar">
       <div>
         <h1>Priorisation</h1>
-        <div class="subtitle">Pas juste l'échéance : urgence, impact et blocage croisés pour dire pourquoi</div>
+        <!-- USE-UX-020 (LOT 9) : redondance Priorisation/Kanban tranchée le 15/09/2026 (onglet
+             séparé conservé, graphique + réglage des poids justifient l'écran) — seule
+             amélioration résiduelle retenue par l'audit, "non prioritaire" : un sous-titre
+             rappelant ce que cet onglet apporte au-delà du Focus du jour déjà visible sur le
+             Dashboard, pour que son rôle soit clair sans avoir à l'ouvrir. -->
+        <div class="subtitle">Pas juste l'échéance : urgence, impact et blocage croisés pour dire pourquoi — réglez les poids et voyez la matrice complète, au-delà du Focus du jour du Dashboard</div>
       </div>
     </div>
     <div class="view">
@@ -92,6 +97,14 @@ export function renderPriorisation(container) {
   let latestProjects = [];
   let activeHat = "all";
   let weights = priorisationApi.DEFAULT_WEIGHTS;
+  // Pagination du classement complet (LOT 9, TODO-018, COMP-UX-004) — jusqu'ici, toute la liste
+  // s'affichait en un bloc, sans limite. `PAGE_SIZE` premiers éléments affichés par défaut, le
+  // reste derrière un bouton "+ Afficher X de plus" (voir renderList ci-dessous). Réinitialisée
+  // à chaque changement de filtre casquette (renderHatFilter ci-dessous) plutôt que conservée
+  // indéfiniment, pour ne jamais laisser un très long classement déjà déplié réapparaître
+  // silencieusement déplié après avoir changé de filtre.
+  const PAGE_SIZE = 20;
+  let visibleCount = PAGE_SIZE;
 
   function renderHatFilter() {
     casquettesApi.renderHatChipRow(
@@ -99,6 +112,7 @@ export function renderPriorisation(container) {
       activeHat,
       async (hatId) => {
         activeHat = hatId;
+        visibleCount = PAGE_SIZE; // nouveau filtre = on repart du haut de la pagination
         renderHatFilter();
         renderAll();
         await preferencesApi.setCasquette(hatId);
@@ -221,7 +235,11 @@ export function renderPriorisation(container) {
       return;
     }
     listEl.innerHTML = "";
-    ranked.forEach((r, idx) => {
+    // Pagination (LOT 9, TODO-018, COMP-UX-004) — voir PAGE_SIZE/visibleCount ci-dessus. Le rang
+    // affiché (`idx + 1`) reste correct sur la portion visible : on tronque toujours depuis le
+    // début du classement déjà trié, jamais un sous-ensemble arbitraire.
+    const visible = ranked.slice(0, visibleCount);
+    visible.forEach((r, idx) => {
       const { task, project, score, why } = r;
       const row = document.createElement("div");
       row.className = "item-row";
@@ -241,6 +259,18 @@ export function renderPriorisation(container) {
       row.addEventListener("click", () => openTaskDetail(task, latestProjects.filter((p) => !projectsApi.isArchived(p))));
       listEl.appendChild(row);
     });
+    if (ranked.length > visible.length) {
+      const remaining = ranked.length - visible.length;
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "btn btn-ghost btn-block";
+      moreBtn.textContent = `+ Afficher ${remaining} de plus`;
+      moreBtn.addEventListener("click", () => {
+        visibleCount = ranked.length; // tout afficher d'un coup, plutôt qu'un nouveau seuil à deviner
+        renderList(ranked);
+      });
+      listEl.appendChild(moreBtn);
+    }
   }
 
   function openWeightsModal() {
@@ -260,14 +290,44 @@ export function renderPriorisation(container) {
         )
         .join("")}
     `;
+    // Aperçu du classement pendant le glissement du curseur (LOT 9, TODO-018, COMP-UX-003) —
+    // jusqu'ici, le classement complet ne se recalculait qu'après avoir cliqué "Enregistrer" ET
+    // refermé la modale, sans aucun aperçu de l'effet du réglage en cours. Relit les 3 curseurs à
+    // chaque `input` (pas seulement celui qu'on bouge, les 3 sont normalisés ensemble par
+    // `rankTasks`) et rappelle `renderList()` — déjà utilisée par la vue elle-même, donc aucune
+    // logique de rendu dupliquée — avec ces poids provisoires, jamais encore enregistrés. La
+    // matrice et la légende, elles, ne sont volontairement pas rafraîchies ici (recalcul plus
+    // coûteux, redessine un SVG) : seul "le classement" au sens strict demandé par la Solution
+    // bénéficie de l'aperçu en direct.
+    function previewWeights() {
+      return {
+        urgence: Number(body.querySelector("#weight-urgence").value),
+        impact: Number(body.querySelector("#weight-impact").value),
+        blocage: Number(body.querySelector("#weight-blocage").value),
+      };
+    }
+    function showPreview() {
+      renderList(priorisationApi.rankTasks(filteredTasks(), latestProjects, previewWeights()));
+    }
     for (const key of ["urgence", "impact", "blocage"]) {
       body.querySelector(`#weight-${key}`).addEventListener("input", (e) => {
         body.querySelector(`#weight-${key}-value`).textContent = e.target.value;
+        showPreview();
       });
     }
     const { close } = openModal({
       title: "⚙️ Régler les poids de la priorisation",
       body,
+      // `onClose` (appelé une seule fois quel que soit le chemin de fermeture, voir modal.js) :
+      // si la modale se ferme SANS avoir cliqué "Enregistrer" (Annuler, clic en dehors, Échap),
+      // le classement affiché en arrière-plan est resté sur l'aperçu du dernier réglage de
+      // curseur, jamais enregistré — `renderAll()` le recalcule avec les VRAIS poids toujours en
+      // vigueur (`weights`, inchangé dans ce cas) pour ne pas laisser un aperçu abandonné affiché
+      // comme s'il avait été retenu. Si "Enregistrer" a été cliqué, `weights` a déjà été mis à
+      // jour avant l'appel à `close()` ci-dessous, donc ce même `renderAll()` recalcule alors
+      // avec les poids réellement enregistrés — un seul chemin de rafraîchissement pour les deux
+      // cas, plutôt que dupliqué sur chaque action.
+      onClose: () => renderAll(),
       actions: [
         {
           label: "Réinitialiser",
@@ -278,6 +338,7 @@ export function renderPriorisation(container) {
               body.querySelector(`#weight-${key}`).value = priorisationApi.DEFAULT_WEIGHTS[key];
               body.querySelector(`#weight-${key}-value`).textContent = priorisationApi.DEFAULT_WEIGHTS[key];
             }
+            showPreview();
           },
         },
         { label: "Annuler", variant: "ghost" },
@@ -286,14 +347,9 @@ export function renderPriorisation(container) {
           variant: "primary",
           closesModal: false,
           onClick: async () => {
-            weights = {
-              urgence: Number(body.querySelector("#weight-urgence").value),
-              impact: Number(body.querySelector("#weight-impact").value),
-              blocage: Number(body.querySelector("#weight-blocage").value),
-            };
+            weights = previewWeights();
             await preferencesApi.setPriorityWeights(weights);
             close();
-            renderAll();
             showToast("Poids de priorisation mis à jour");
           },
         },
