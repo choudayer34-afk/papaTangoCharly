@@ -178,6 +178,10 @@ export function mountBureau(container) {
    */
   function openFullCanvasModal() {
     const body = document.createElement("div");
+    // `.bureau-full-canvas-wrap` (styles/components.css, retour de Charles-Henri, 24/09/2026) :
+    // fournit la scrollbar horizontale nécessaire si le canevas devient plus large que la
+    // fenêtre — voir recalcCanvasSize() plus bas.
+    body.className = "bureau-full-canvas-wrap";
     body.innerHTML = `<div class="bureau-canvas" id="bureau-full-canvas"></div>`;
     fullCanvasEl = body.querySelector("#bureau-full-canvas");
     attachFocusTracking(body);
@@ -185,6 +189,11 @@ export function mountBureau(container) {
     openModal({
       title: "🧠 Mon bureau — Tout voir",
       body,
+      // `wide: true` (retour de Charles-Henri, 24/09/2026 : "Tout voir doit prendre toute la
+      // largeur de la fenêtre disponible") — voir js/components/modal.js#openModal et
+      // `.modal--wide` dans styles/components.css. Un plan de travail à post-it positionnés
+      // librement profite réellement de plus d'espace que le plafond 900px des autres modales.
+      wide: true,
       actions: [{ label: "Fermer", variant: "ghost" }],
       // La modale se ferme — `fullCanvasEl` redevient `null` : plus rien à mettre à jour tant
       // qu'elle n'est pas rouverte (voir renderFullCanvas() plus bas, qui ne fait rien sinon).
@@ -214,17 +223,32 @@ export function mountBureau(container) {
     for (const note of visible) {
       fullCanvasEl.appendChild(buildNoteEl(note));
     }
-    recalcCanvasHeight();
+    recalcCanvasSize();
   }
 
-  function recalcCanvasHeight() {
+  /** Renommée recalcCanvasSize (ex recalcCanvasHeight) le 24/09/2026 : gère désormais aussi la
+   *  largeur, pas seulement la hauteur. Retour de Charles-Henri le même jour : "Tout voir" doit
+   *  prendre toute la largeur de la fenêtre disponible, et un post-it qui se retrouverait "en
+   *  dehors" doit rester atteignable via une scrollbar plutôt que hors champ. La largeur d'un
+   *  post-it est déjà bornée à `fullCanvasEl.clientWidth` AU MOMENT du glisser/redimensionnement
+   *  (voir plus bas) — mais cette largeur peut changer ENTRE deux ouvertures de la modale (fenêtre
+   *  redimensionnée, ou position écrite depuis un écran plus large et relue ici sur un écran plus
+   *  étroit) : sans ce filet, un tel post-it resterait positionné hors du canevas visible, sans
+   *  aucun moyen de l'atteindre. `min-width` élargit alors le canevas au-delà de la largeur
+   *  naturellement disponible ; `.bureau-full-canvas-wrap` (styles/components.css) expose la
+   *  scrollbar horizontale correspondante. */
+  function recalcCanvasSize() {
     if (!fullCanvasEl) return;
     let maxBottom = 0;
+    let maxRight = 0;
     fullCanvasEl.querySelectorAll(".sticky-note").forEach((el) => {
       const bottom = el.offsetTop + el.offsetHeight;
       if (bottom > maxBottom) maxBottom = bottom;
+      const right = el.offsetLeft + el.offsetWidth;
+      if (right > maxRight) maxRight = right;
     });
     fullCanvasEl.style.height = Math.max(320, maxBottom + 24) + "px";
+    fullCanvasEl.style.minWidth = maxRight > 0 ? maxRight + 24 + "px" : "";
   }
 
   /**
@@ -335,7 +359,7 @@ export function mountBureau(container) {
         finalY = Math.max(0, startTop + dy);
         el.style.left = `${finalX}px`;
         el.style.top = `${finalY}px`;
-        recalcCanvasHeight();
+        recalcCanvasSize();
       }
       function onUp() {
         headerEl.removeEventListener("pointermove", onMove);
@@ -351,7 +375,7 @@ export function mountBureau(container) {
 
   /** Poignée bas-droite — même mécanique Pointer Events que le glisser ci-dessus, largeur bornée
    *  à ne jamais faire déborder le post-it du plan de travail, hauteur libre (le plan de travail
-   *  s'agrandit automatiquement, voir recalcCanvasHeight()). */
+   *  s'agrandit automatiquement, voir recalcCanvasSize()). */
   function attachResize(el, note, handleEl) {
     handleEl.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -374,7 +398,7 @@ export function mountBureau(container) {
         finalHeight = Math.max(stickyNotesApi.MIN_HEIGHT, startHeight + dy);
         el.style.width = `${finalWidth}px`;
         el.style.height = `${finalHeight}px`;
-        recalcCanvasHeight();
+        recalcCanvasSize();
       }
       function onUp() {
         handleEl.removeEventListener("pointermove", onMove);
