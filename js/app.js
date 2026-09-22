@@ -25,6 +25,10 @@ import { mountInboxBadge, unmountInboxBadge } from "./components/inboxBadge.js";
 import { mountWhatsNewBadge, unmountWhatsNewBadge } from "./components/whatsNewBadge.js";
 import { mountGlobalSearch } from "./components/search.js";
 import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodoroWidget.js";
+// Widgets flottants "📌 post-it épinglés" (LOT 13, complément du 23/09/2026) — même principe que
+// le mini-minuteur Pomodoro ci-dessus : montés une seule fois pour toute la session, visibles
+// quel que soit l'écran ouvert. Voir js/components/pinnedNotesOverlay.js.
+import { mountPinnedNotesOverlay, unmountPinnedNotesOverlay } from "./components/pinnedNotesOverlay.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
 import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
 import { logView, logLogin } from "./services/usageTracking.js";
@@ -246,6 +250,7 @@ async function mountApp() {
   // js/components/whatsNewBadge.js.
   mountWhatsNewBadge(nav);
   mountPomodoroWidget();
+  mountPinnedNotesOverlay();
   // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
   // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
   // shortcuts.js. Depuis la vague 24 (barre du bas réduite à 5 icônes), Alt+1…Alt+5 pointent
@@ -377,6 +382,7 @@ function unmountApp() {
   unmountInboxBadge();
   unmountWhatsNewBadge();
   unmountPomodoroWidget();
+  unmountPinnedNotesOverlay();
   teardownGlobalShortcuts();
   window.removeEventListener("hashchange", renderRoute);
 }
