@@ -41,6 +41,10 @@
     // même principe que les ajouts précédents, aucun changement à ce fichier lui-même au-delà de
     // l'ajout d'objectivesApi.
     import * as objectivesApi from "/js/domain/objectives.js";
+    // Ajouté en LOT 13 (TODO-027, "🧠 Mon bureau" — post-it libres) : même principe que les
+    // ajouts précédents, aucun changement à ce fichier lui-même au-delà de l'ajout de
+    // stickyNotesApi (tests/unit/lot13-sticky-notes-model.spec.js).
+    import * as stickyNotesApi from "/js/domain/stickyNotes.js";
 
     window.__pilotageTestApi = {
       firebaseApi,
@@ -55,6 +59,7 @@
       decisionsApi,
       resourcesApi,
       objectivesApi,
+      stickyNotesApi,
     };
     window.__pilotageTestApiReady = true;
   </script>
