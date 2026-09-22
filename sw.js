@@ -246,7 +246,12 @@
 // deux précachés, modifiés pour corriger les 3 régressions d'affichage en mode sombre
 // (BESOIN-003) — voir TODO_TECHNIQUE.md. `js/views/whatsnew.js`, également précaché, modifié
 // pour la nouvelle entrée correspondante. `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v66";
+// (22/09/2026, v67) : nouveau signalement de Charles-Henri, "des éléments dans le guide sont
+// illisibles" en mode sombre (`js/views/guide.js`) — même famille de bug que TODO-023/LOT 10,
+// voir le commentaire détaillé dans styles/tokens.css (nouveaux jetons --color-warning-light/
+// --color-danger-light). `styles/tokens.css` et `js/views/guide.js`, tous deux précachés,
+// modifiés. `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v67";
 const APP_SHELL = [
   "./",
   "./index.html",
