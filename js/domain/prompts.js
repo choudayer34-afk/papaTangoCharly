@@ -14,6 +14,7 @@
 // rattachement à une Tâche a été demandé.
 
 import * as storage from "../services/storage.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "prompts";
 
@@ -25,6 +26,10 @@ export async function createPrompt(data) {
     taskIds: data.taskIds || [],
   });
   await storage.logHistory("Prompt", prompt.id, "created", { title: prompt.title });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Prompt créé", 3 XP, une seule fois par
+  // Prompt — voir le commentaire détaillé de js/domain/tasks.js#updateTask pour le raisonnement
+  // complet (système accessoire, jamais bloquant).
+  gamification.recordPromptCreated(prompt.id).catch((err) => console.error("[gamification] Échec du crédit XP (Prompt créé) :", err));
   return prompt;
 }
 
