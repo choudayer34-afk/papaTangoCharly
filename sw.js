@@ -230,7 +230,18 @@
 // (ou vider les données du site) puis recharger complètement une fois ce fichier redéployé — un
 // simple rechargement peut ne pas suffire si le Service Worker actif reste bloqué en attente de
 // contrôle.
-const CACHE_NAME = "pilotage-cache-v64";
+//
+// (22/09/2026, v65) : `js/views/people.js` a dû être corrigé À NOUVEAU juste après ce bump v64,
+// pour un bug distinct (sans rapport avec le cache) — des backticks utilisés par erreur à
+// l'intérieur d'un commentaire HTML, lui-même à l'intérieur du template literal JS de
+// `renderPeople()`, refermaient prématurément ce template literal et faisaient interpréter
+// `.fiche-tabs` comme du code JS (`ReferenceError: tabs is not defined`, LOT 9/TODO-020). Ce
+// fichier étant précaché, cette nouvelle modification déclenche elle-même la règle et
+// `CACHE_NAME` est donc incrémenté une seconde fois, que le v64 ait déjà été déployé ou non par
+// Charles-Henri — un v64 encore non déployé est simplement remplacé par ce v65 qui inclut déjà
+// le correctif ; un v64 déjà déployé (donc avec le bug people.js) est corrigé par ce nouveau
+// cache. Aucun autre fichier précaché n'a changé depuis le commentaire ci-dessus.
+const CACHE_NAME = "pilotage-cache-v65";
 const APP_SHELL = [
   "./",
   "./index.html",
