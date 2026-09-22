@@ -39,7 +39,10 @@ import { renderTagsEditor } from "../components/tagsEditor.js";
 import * as tagsApi from "../domain/tags.js";
 import * as dateUtils from "../services/dateUtils.js";
 
-const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
+// TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
+// (décision produit du 15/09/2026, voir js/views/inbox.js) : un seul libellé affiché désormais,
+// quelle que soit la valeur historique de `keptAsType` — le champ technique n'est pas migré.
+const KEPT_TYPE_LABEL = "🧠 Information";
 const RECENT_MAX_AGE_MS = 15 * 24 * 60 * 60 * 1000;
 
 // Accueil personnalisable (retour de Charles-Henri, 13/09/2026 : "pouvoir positionner,
@@ -273,6 +276,11 @@ export function renderDashboard(container) {
   // Ordre explicite des rubriques (même retour, second volet) — vide tant que Charles-Henri n'a
   // rien déplacé lui-même, voir defaultHomeOrder()/applyHomeOrder().
   let dashboardOrder = [];
+  // Mémorisé ici (LOT 9, TODO-019) pour que openDashboardSettingsModal (le contrôle de
+  // préférences "↺ Redemander mon choix", voir plus bas) connaisse le choix actuel sans devoir
+  // relire les préférences à chaque ouverture — tenu à jour par renderNotifOptIn() et par les
+  // deux boutons du bandeau lui-même.
+  let notifOptIn = null;
 
   // Lecture locale (localStorage), synchrone — pas besoin d'attendre les préférences
   // Firestore pour afficher ce bandeau, qui doit apparaître le plus tôt possible.
@@ -312,7 +320,8 @@ export function renderDashboard(container) {
     // réordonnable de ⚙️ Personnaliser l'accueil.
     dashboardOrder = (prefs.dashboardOrder || []).filter((k) => k !== "postit");
     renderReviewReminder(prefs.lastWeeklyReviewAt);
-    renderNotifOptIn(prefs.notifOptIn);
+    notifOptIn = prefs.notifOptIn;
+    renderNotifOptIn(notifOptIn);
     renderStats();
     renderPostitSection();
     renderRecentlyViewedSection();
@@ -373,14 +382,22 @@ export function renderDashboard(container) {
    * uniquement app ouverte, sans infrastructure serveur). Proposé une seule fois : une fois
    * `notifOptIn` tranché (true ou false), ce bandeau ne réapparaît jamais.
    */
-  function renderNotifOptIn(notifOptIn) {
+  function renderNotifOptIn(value) {
+    notifOptIn = value;
     if (notifOptIn !== null || typeof Notification === "undefined") {
       notifOptInEl.innerHTML = "";
       return;
     }
     notifOptInEl.innerHTML = `
-      <div class="review-banner">
+      <div class="review-banner" style="flex-direction:column;align-items:stretch;gap:8px;">
         <span>🔔 Être alerté dès l'ouverture de l'app s'il y a du retard ou des tâches en pause ?</span>
+        <!-- Limite documentée (LOT 9, TODO-019, COMP-UX-009/010) : cette alerte ne peut
+             techniquement fonctionner que si l'app est déjà ouverte au moment où le retard
+             survient — il n'existe aucune infrastructure de notification push côté serveur pour
+             réveiller l'app fermée. Jusqu'ici cette limite n'était expliquée nulle part, risquant
+             de faire croire à une alerte "au démarrage du téléphone" plutôt qu'"à l'ouverture de
+             l'app", ce qu'elle n'a jamais été. -->
+        <span class="item-meta" style="font-style:italic;">Ne fonctionne que pendant que l'app est déjà ouverte — aucune alerte n'est envoyée si l'app est fermée, faute d'infrastructure de notification côté serveur.</span>
         <div style="display:flex;gap:8px;">
           <button type="button" id="notif-optin-yes" class="btn btn-primary btn-sm">Activer</button>
           <button type="button" id="notif-optin-no" class="btn btn-secondary btn-sm">Non merci</button>
@@ -389,11 +406,13 @@ export function renderDashboard(container) {
     `;
     notifOptInEl.querySelector("#notif-optin-yes").addEventListener("click", async () => {
       const permission = await Notification.requestPermission();
-      await preferencesApi.setNotifOptIn(permission === "granted");
+      notifOptIn = permission === "granted";
+      await preferencesApi.setNotifOptIn(notifOptIn);
       notifOptInEl.innerHTML = "";
       showToast(permission === "granted" ? "Alerte activée" : "Autorisation refusée par le navigateur");
     });
     notifOptInEl.querySelector("#notif-optin-no").addEventListener("click", async () => {
+      notifOptIn = false;
       await preferencesApi.setNotifOptIn(false);
       notifOptInEl.innerHTML = "";
     });
@@ -935,6 +954,24 @@ export function renderDashboard(container) {
         <div id="home-order-list"></div>
         <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre par défaut</button>
       </div>
+      ${
+        // Contrôle de préférences pour réactiver l'opt-in (LOT 9, TODO-019, COMP-UX-010) —
+        // jusqu'ici, une fois "Activer"/"Non merci" cliqué une fois sur le bandeau de l'Accueil,
+        // aucun écran ne permettait de revenir sur ce choix (ni pour l'activer après coup, ni
+        // pour changer d'avis). Absent du tout si le navigateur ne supporte pas l'API
+        // Notification, comme le bandeau lui-même. Action immédiate (pas soumise au bouton
+        // "Enregistrer" de cette modale, qui ne gouverne que la mise en page de l'Accueil) : un
+        // clic ramène `notifOptIn` à `null`, exactement l'état "jamais répondu" qui fait
+        // réapparaître le bandeau sur l'Accueil.
+        typeof Notification === "undefined"
+          ? ""
+          : `
+      <div class="field" style="margin-top:20px;">
+        <label style="display:block;margin-bottom:6px;">🔔 Alerte de retard au démarrage</label>
+        <p class="item-meta" id="notif-optin-status" style="margin:0 0 8px;"></p>
+        <button type="button" id="notif-optin-reactivate-btn" class="btn btn-ghost btn-sm">↺ Redemander mon choix</button>
+      </div>`
+      }
     `;
     body.querySelectorAll("#home-mode-row .chip").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -975,6 +1012,18 @@ export function renderDashboard(container) {
       resetRequested = true;
       renderOrderList();
     });
+
+    const notifStatusEl = body.querySelector("#notif-optin-status");
+    if (notifStatusEl) {
+      notifStatusEl.textContent =
+        notifOptIn === true ? "Activée." : notifOptIn === false ? "Désactivée." : "Jamais proposée pour l'instant.";
+      body.querySelector("#notif-optin-reactivate-btn").addEventListener("click", async () => {
+        await preferencesApi.setNotifOptIn(null);
+        renderNotifOptIn(null); // fait réapparaître le bandeau sur l'Accueil, en dessous de cette modale
+        notifStatusEl.textContent = "Jamais proposée pour l'instant.";
+        showToast("Le choix sera redemandé sur l'Accueil");
+      });
+    }
 
     openModal({
       title: "⚙️ Personnaliser l'accueil",
@@ -1689,7 +1738,7 @@ export function renderDashboard(container) {
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(item.rawContent)}</div>
-          <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}</div>
+          <div class="item-meta">${KEPT_TYPE_LABEL} · ${formatDate(item.createdAt)}</div>
           ${tagsLineHtml("Kept", item.id)}
         </div>
       `;
