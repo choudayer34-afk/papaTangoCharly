@@ -2005,7 +2005,7 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
  * chaque suivi créé (ex. `reopen()` sur la fiche Personne) ; la relance "Encore un suivi ?"
  * vient s'ajouter par-dessus, pas à la place.
  */
-export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", defaultDueDate = "", defaultControlDate = "", onCreated, onCancel } = {}) {
+export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", defaultDueDate = "", defaultControlDate = "", defaultDescription = "", onCreated, onCancel } = {}) {
   const [projects, people, existingFollowUps] = await Promise.all([
     projectsApi.listAll(),
     person ? Promise.resolve(null) : peopleApi.listAll(),
@@ -2088,7 +2088,10 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
     </div>
     <div class="field">
       <label for="fu-description">Description (optionnel)</label>
-      <textarea id="fu-description" placeholder="Contexte libre, pas encore d'échéance à retenir ici"></textarea>
+      <!-- BUG corrigé (LOT 13, TODO-027, 22/09/2026) : defaultDescription n'existait pas encore
+           comme paramètre (contrairement à defaultTitle/defaultDueDate ci-dessus) — premier
+           appelant à en avoir besoin, voir js/components/bureau.js "Transformer en Suivi". -->
+      <textarea id="fu-description" placeholder="Contexte libre, pas encore d'échéance à retenir ici">${escapeHtml(defaultDescription)}</textarea>
     </div>
     <div class="field">
       <label>Élément notable ? (préparation EADP, optionnel)</label>
