@@ -6,6 +6,7 @@ import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
 import { buildSteps } from "./templates.js";
 import * as dateUtils from "../services/dateUtils.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "tasks";
 
@@ -344,6 +345,14 @@ export async function updateTask(id, patch) {
   });
   if (statusChanged) {
     await storage.logHistory("Task", id, "status_changed", { from: previousStatus, to: patch.status });
+    // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Tâche terminée", 10 XP, une seule fois
+    // par Tâche (le registre "déjà récompensé" de gamification.js empêche tout second crédit
+    // si la tâche est rouverte puis re-terminée). Système accessoire (§1) : une panne ici ne
+    // doit jamais empêcher la mise à jour de la tâche elle-même, déjà effectuée ci-dessus —
+    // erreur uniquement journalisée, jamais propagée à l'appelant.
+    if (patch.status === "done") {
+      gamification.recordTaskCompleted(id).catch((err) => console.error("[gamification] Échec du crédit XP (Tâche terminée) :", err));
+    }
   } else {
     await storage.logHistory("Task", id, "updated", { patch });
   }
