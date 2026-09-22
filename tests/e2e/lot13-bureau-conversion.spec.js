@@ -26,6 +26,14 @@
 // AVERTISSEMENT (22/09/2026) : écrit et relu manuellement à partir du code réel, mais jamais
 // exécuté dans l'environnement où il a été rédigé (registre npm bloqué, voir tests/README.md).
 // À reconfirmer au premier lancement réel.
+//
+// MISE À JOUR du 23/09/2026 (complément du même jour, retour direct de Charles-Henri : "je dois
+// pouvoir [épingler] n'importe où dans l'écran [...] au-dessus des autres modales") : un nouveau
+// post-it est désormais créé ÉPINGLÉ par défaut et apparaît donc d'abord comme widget flottant
+// (`.pinned-float-note`) — son contenu (`.sticky-note`) ne se manipule que dans le plan de travail
+// complet ouvert via "🔍 Tout voir" (`#bureau-full-canvas`), plus jamais directement sur l'Accueil
+// (`#bureau-canvas` n'existe plus en dehors de cette modale). Même adaptation que
+// tests/e2e/lot13-bureau-notes.spec.js — voir son commentaire pour le détail.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -40,17 +48,25 @@ async function loginAndGoToDashboard(page) {
   await page.fill("#login-password", E2E_TEST_USER.password);
   await page.click("#login-email-submit");
   await dismissFirstRunModals(page);
-  await expect(page.locator("#bureau-canvas")).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
+}
+
+async function openFullCanvas(page) {
+  await page.click("#bureau-see-all-btn");
+  await expect(page.locator("#bureau-full-canvas")).toBeVisible({ timeout: 10_000 });
 }
 
 async function createNoteAndLocate(page) {
-  const idsBefore = await page.locator(".sticky-note").evaluateAll((els) => els.map((e) => e.dataset.id));
+  const idsBefore = await page.locator(".pinned-float-note").evaluateAll((els) => els.map((e) => e.dataset.id));
   await page.click("#bureau-new-note-btn");
-  await expect(page.locator(".sticky-note")).toHaveCount(idsBefore.length + 1, { timeout: 10_000 });
-  const idsAfter = await page.locator(".sticky-note").evaluateAll((els) => els.map((e) => e.dataset.id));
+  await expect(page.locator(".pinned-float-note")).toHaveCount(idsBefore.length + 1, { timeout: 10_000 });
+  const idsAfter = await page.locator(".pinned-float-note").evaluateAll((els) => els.map((e) => e.dataset.id));
   const newId = idsAfter.find((id) => !idsBefore.includes(id));
   expect(newId).toBeTruthy();
-  return { id: newId, el: page.locator(`.sticky-note[data-id="${newId}"]`) };
+  await openFullCanvas(page);
+  const el = page.locator(`.sticky-note[data-id="${newId}"]`);
+  await expect(el).toBeVisible({ timeout: 10_000 });
+  return { id: newId, el };
 }
 
 /** Supprime DÉFINITIVEMENT un post-it déjà archivé (nettoyage de fin de test), identifié par son
@@ -167,7 +183,7 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await page.getByRole("button", { name: "Créer" }).click();
     await expect(page.getByText("Personne ajoutée")).toBeVisible({ timeout: 10_000 });
     await page.goto("/index.html#/dashboard");
-    await expect(page.locator("#bureau-canvas")).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
 
     const note = await createNoteAndLocate(page);
     await note.el.locator(".sticky-note-title-input").fill(title);
