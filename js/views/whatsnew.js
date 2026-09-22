@@ -45,6 +45,27 @@ const WHATS_NEW = [
         howTo: "Rien à faire, c'est automatique.",
         gain: "Traiter l'Inbox, lire les confirmations et choisir une date restent parfaitement lisibles en mode sombre.",
       },
+      {
+        type: "fix",
+        title: "🌙 Guide : deux encarts illisibles corrigés en mode sombre",
+        text: "Dans le Guide, l'encart \"👀 Suivi\" de la page \"Tâche ou Suivi ?\" et l'encart \"Ce que l'app ne fait pas\" de plusieurs pages s'affichaient en texte sombre sur fond sombre. Ils s'affichent désormais normalement, sans rien changer à leur apparence en mode clair.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Le Guide reste parfaitement lisible en mode sombre.",
+      },
+      {
+        type: "add",
+        title: "🎯 Objectifs enrichis : indicateurs, points de suivi détaillés, campagne/période",
+        text: "\"Mes objectifs\" (Accueil) et les objectifs EADP d'un collaborateur (fiche Personne) utilisent désormais le même modèle enrichi : un bloc \"Détails\" optionnel (catégorie, type individuel/collectif, campagne/période, fréquence de revue, SMART, plan d'actions, points d'attention), des indicateurs de réussite (cible, mode de mesure, source de preuve, statut À démarrer/En cours/Atteint), et des points de suivi qui gardent le contexte d'un point à l'autre (statut au moment du point, ce qui est prévu avant le prochain, et un lien optionnel vers une fiche existante en guise de preuve). Rien de tout ça n'est obligatoire : un objectif simple (titre, éventuellement un projet) fonctionne exactement comme avant.",
+        howTo: "Ouvre un objectif (Accueil → 🎯 Mes objectifs, ou fiche Personne → onglet Objectifs) : le bloc \"Détails\" et les boutons \"+ Indicateur\"/\"+ Ajouter un suivi\" apparaissent dans sa fiche. Quand plusieurs campagnes/périodes coexistent, elles sont regroupées avec un titre dans la liste.",
+        gain: "Un seul endroit pour suivre un objectif dans la durée — plus besoin de rechercher dans les notes ce qui avait été mesuré ou décidé au point précédent.",
+      },
+      {
+        type: "add",
+        title: "☑️ Nouveau réglage \"Remonter au prochain point\" sur un Suivi",
+        text: "À la création d'un Suivi depuis une fiche Personne, une case \"Remonter au prochain point\" (cochée par défaut) permet de décider, indépendamment du Sens du Suivi (waiting_on/à transmettre), s'il doit apparaître dans le prochain \"Point\"/EADP. Reprend exactement ce que faisait déjà l'écran de masquage privé (🙈 Avant de partager), désormais accessible dès la création.",
+        howTo: "Fiche Personne → + Suivi → décoche \"Remonter au prochain point\" si ce Suivi ne doit pas apparaître au prochain point. Modifiable ensuite via 🙈 Avant de partager, comme avant.",
+        gain: "Décider une bonne fois pour toutes, dès la création, sans repasser par l'écran de masquage juste après.",
+      },
     ],
   },
   {
