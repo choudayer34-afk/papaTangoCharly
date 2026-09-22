@@ -29,6 +29,25 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "22 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "🛠️ Écran Équipe : erreur corrigée qui empêchait l'écran de s'afficher",
+        text: "Une erreur technique introduite par la précédente mise à jour (réutilisation du même style visuel pour les sous-onglets de l'écran Équipe) pouvait empêcher cet écran de s'afficher correctement. Corrigée.",
+        howTo: "Rien à faire, c'est automatique. Si l'écran restait bloqué malgré cette mise à jour, un rechargement complet de l'app suffit.",
+        gain: "L'écran Équipe s'affiche de nouveau normalement, dans tous les cas.",
+      },
+      {
+        type: "fix",
+        title: "🌙 Trois affichages illisibles corrigés en mode sombre",
+        text: "En mode sombre : le texte des choix proposés pour traiter un élément de l'Inbox (\"Action\", \"Suivi\", \"Information\"...) s'affichait en noir sur fond sombre ; les petites notifications temporaires en bas d'écran (ex. \"Enregistré dans l'Inbox\") s'affichaient en blanc sur fond blanc ; le calendrier natif des champs de date (échéance, date de contrôle...) s'affichait en noir sur fond noir. Les trois s'affichent désormais normalement.",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Traiter l'Inbox, lire les confirmations et choisir une date restent parfaitement lisibles en mode sombre.",
+      },
+    ],
+  },
+  {
     date: "21 septembre 2026",
     items: [
       {
