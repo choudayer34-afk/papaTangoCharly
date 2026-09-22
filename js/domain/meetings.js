@@ -8,6 +8,7 @@
 import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
 import { buildSteps } from "./templates.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "meetings";
 
@@ -34,6 +35,10 @@ export async function createMeeting(data) {
     notesLog: [], // journal de notes horodaté, voir addNote() plus bas — distinct du champ `notes` (contexte libre non daté)
   });
   await storage.logHistory("Meeting", meeting.id, "created", { title: meeting.title });
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Réunion créée", 5 XP, une seule fois par
+  // Réunion — voir le commentaire détaillé de js/domain/tasks.js#updateTask pour le
+  // raisonnement complet (système accessoire, jamais bloquant).
+  gamification.recordMeetingCreated(meeting.id).catch((err) => console.error("[gamification] Échec du crédit XP (Réunion créée) :", err));
   return meeting;
 }
 
