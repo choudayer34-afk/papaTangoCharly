@@ -15,6 +15,7 @@ import { renderMore } from "./views/more.js";
 import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
+import { renderGamificationGallery } from "./views/gamification.js";
 import { renderLogin, renderRestricted, renderAuthError } from "./views/login.js";
 import { renderPrepMask } from "./views/prepMask.js";
 import { openModal } from "./components/modal.js";
@@ -95,6 +96,11 @@ const HIDDEN_ROUTES = {
   "#/guide": { render: renderGuide, label: "Guide" },
   "#/whatsnew": { render: renderWhatsNew, label: "Nouveautés" },
   "#/memory": { render: renderMemoryTraining, label: "Mémoire" },
+  // Galerie des badges (LOT G6, TODO_GAMIFICATION.md §7) — même principe que les 3 pages
+  // ci-dessus : une page de consultation/collection, pas un écran de travail, donc HORS de
+  // ROUTES/NAV_ITEMS (pas d'icône dans la barre du bas). Accessible depuis ☰ Plus, voir
+  // js/views/more.js.
+  "#/gamification-galerie": { render: renderGamificationGallery, label: "Galerie des badges" },
 };
 
 const appRoot = document.getElementById("app");
