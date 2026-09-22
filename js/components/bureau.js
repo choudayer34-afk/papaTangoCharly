@@ -103,34 +103,50 @@ export function mountBureau(container) {
     maybeFlush();
   }
 
+  // Rubrique repliable comme les autres (retour de Charles-Henri, 23/09/2026 : "je voudrais que
+  // la zone Bureau soit [...] pliable/dépliable") — même convention que
+  // js/views/dashboard.js#renderKeptSection et les autres rubriques de l'Accueil (`<details
+  // open>`/`<summary>`, ouverte par défaut, un clic sur le titre replie/déplie). État de
+  // repli/dépli volontairement NON mémorisé d'une session à l'autre, comme pour ces mêmes
+  // rubriques — seule sa POSITION (`dashboardOrder`) et sa visibilité (`dashboardHidden`) sont
+  // des préférences persistées (voir js/views/dashboard.js#DASHBOARD_SECTIONS/HOME_ORDER_LABELS,
+  // où "bureau" est déjà déplaçable/masquable exactement comme les autres rubriques).
   container.innerHTML = `
-    <div class="bureau-header">
-      <div class="section-title" style="margin:0;">🧠 Mon bureau</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" id="bureau-archived-btn" class="btn btn-ghost btn-sm">🗄️ Archivés</button>
-        <button type="button" id="bureau-new-note-btn" class="btn btn-secondary btn-sm">+ Nouveau post-it</button>
+    <details open>
+      <summary class="section-title" style="cursor:pointer;margin:0;">🧠 Mon bureau</summary>
+      <div class="bureau-header" style="margin-top:8px;">
+        <p class="item-meta" style="margin:0;flex:1 1 auto;min-width:200px;">Pas des tâches à piloter — un espace pour noter vite pendant une réunion, organiser visuellement, puis transformer en Tâche, Suivi, Ressource, Décision ou Information quand c'est prêt.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" id="bureau-archived-btn" class="btn btn-ghost btn-sm">🗄️ Archivés</button>
+          <button type="button" id="bureau-new-note-btn" class="btn btn-secondary btn-sm">+ Nouveau post-it</button>
+        </div>
       </div>
-    </div>
-    <p class="item-meta" style="margin:4px 0 10px;">Pas des tâches à piloter — un espace pour noter vite pendant une réunion, organiser visuellement, puis transformer en Tâche, Suivi, Ressource, Décision ou Information quand c'est prêt.</p>
-    <div class="bureau-canvas" id="bureau-canvas"></div>
+      <div class="bureau-canvas" id="bureau-canvas"></div>
+    </details>
   `;
   const canvasEl = container.querySelector("#bureau-canvas");
   const archivedBtn = container.querySelector("#bureau-archived-btn");
   const newNoteBtn = container.querySelector("#bureau-new-note-btn");
 
-  // Délégué au conteneur entier (`focusin`/`focusout` remontent, contrairement à `focus`/`blur`) —
-  // couvre le titre ET le texte libre de N'IMPORTE quel post-it sans poser un écouteur par champ.
-  // Le petit délai avant de vérifier `document.activeElement` laisse le temps au focus de se
-  // reposer sur un AUTRE champ du Bureau (ex. Tab entre deux post-it) sans considérer ce court
-  // passage par "aucun focus" comme une vraie sortie — un rebuild déclenché pile à ce moment-là
-  // ferait perdre le focus que l'utilisateur est justement en train de redonner ailleurs dans le
-  // Bureau.
-  container.addEventListener("focusin", () => {
-    focusedInside = true;
+  // BUG corrigé (23/09/2026, retour direct de Charles-Henri : "quand je clique pour changer le
+  // type checklist/description, ou la couleur, ça ne le prend en compte que quand je clique en
+  // dehors du post-it") : la version précédente suspendait le rebuild dès qu'un focus ATTEIGNAIT
+  // n'importe quel élément du Bureau — y compris un simple bouton (bascule texte/checklist, "⋯").
+  // Or un clic sur un `<button>` le rend focusé (comportement standard de Chrome), et le piège de
+  // focus des modales (js/components/modal.js#openModal, "rendre le focus à l'élément qui l'avait
+  // avant l'ouverture") RAMÈNE explicitement le focus sur ce même bouton "⋯" à la fermeture du
+  // menu — donc après un changement de couleur/épingle/archive (fait via une modale), le focus se
+  // retrouvait de nouveau "dans" le Bureau au moment précis où la notification Firestore
+  // arrivait, suspendant indéfiniment le rebuild jusqu'à ce qu'un clic extérieur fasse perdre ce
+  // focus. Seuls le TITRE et le texte libre (et l'ajout/l'édition d'une ligne de checklist)
+  // contiennent une vraie frappe en cours qu'un rebuild détruirait — `isEditableFocusTarget` ne
+  // suspend plus que pour ces champs-là, jamais pour un bouton.
+  container.addEventListener("focusin", (e) => {
+    focusedInside = isEditableFocusTarget(e.target);
   });
   container.addEventListener("focusout", () => {
     setTimeout(() => {
-      focusedInside = container.contains(document.activeElement);
+      focusedInside = container.contains(document.activeElement) && isEditableFocusTarget(document.activeElement);
       maybeFlush();
     }, 50);
   });
@@ -143,7 +159,11 @@ export function mountBureau(container) {
       // exactement sur le précédent, sans imposer de vraie disposition automatique (le besoin
       // reste "position libre", géré ensuite par le glisser).
       const offset = (currentNotes.filter((n) => !n.archived).length % 6) * 24;
-      await stickyNotesApi.createStickyNote({ x: 16 + offset, y: 16 + offset, zIndex: maxZ + 1 });
+      // `pinned: true` (23/09/2026, retour direct de Charles-Henri : "je dois toujours pouvoir
+      // créer un post-it à la volée qui sera épinglé par défaut") — une capture rapide reste donc
+      // visible en priorité (z-index plancher, voir PIN_BOOST/effectiveZ plus bas) tant qu'on ne
+      // l'a pas explicitement désépinglée depuis son menu "⋯".
+      await stickyNotesApi.createStickyNote({ x: 16 + offset, y: 16 + offset, zIndex: maxZ + 1, pinned: true });
     })
   );
   archivedBtn.addEventListener("click", () => openArchivedNotesModal());
@@ -602,4 +622,13 @@ function escapeHtml(str) {
 
 function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
+}
+
+/** Vrai uniquement pour un champ de VRAIE saisie texte (titre, texte libre, ajout/édition d'une
+ *  ligne de checklist — tous des `<input type="text">`/`<textarea>`) — jamais pour un bouton, une
+ *  case à cocher ou tout autre élément focusable qui ne contient aucune frappe en cours à
+ *  protéger. Voir le commentaire du 23/09/2026 sur focusin/focusout dans mountBureau(). */
+function isEditableFocusTarget(el) {
+  if (!(el instanceof HTMLElement)) return false;
+  return el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type === "text");
 }
