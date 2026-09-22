@@ -303,10 +303,33 @@ export function mountBureau(container) {
       stickyNotesApi.setTitle(note.id, titleInput.value);
     });
 
+    // CORRECTIF (CI du 25/09/2026, deux passages réels du workflow GitHub Actions —
+    // lot13-bureau-conversion.spec.js:232 et lot13-bureau-notes.spec.js:128, tous deux déjà
+    // atténués une première fois par un `page.waitForTimeout(500)` toujours insuffisant en
+    // pratique) : ce bouton ne faisait QUE lancer l'écriture Firestore (`setType`), sans mettre
+    // à jour `note.type` ni réafficher le corps du post-it localement — contrairement à
+    // `js/components/stickyNoteShared.js#openStickyNoteEditor`, qui applique déjà ce même
+    // changement de mode de façon optimiste. Le passage en mode "checklist" restait donc
+    // ENTIÈREMENT suspendu à l'aller-retour Firestore (qui émet deux snapshots — optimiste local
+    // puis confirmé serveur, voir le commentaire détaillé dans les deux fichiers de test
+    // ci-dessus) : `renderFullCanvas` reconstruit tout le DOM du "Tout voir" à CHAQUE snapshot,
+    // sans diffing, et rien ne suspendait ce rebuild tant que le focus n'était pas encore posé
+    // dans le nouveau champ `#checklist-new-text` — fenêtre de course pendant laquelle une frappe
+    // pouvait démarrer sur un input reconstruit puis détaché en plein milieu. Corrigé en alignant
+    // ce bouton sur le même principe déjà appliqué à `note.checklist` (voir le commentaire de
+    // renderNoteBody ci-dessus, "réaffichage immédiat, sans attendre le prochain aller-retour
+    // Firestore") : `note.type` est mis à jour et le corps réaffiché IMMÉDIATEMENT, avant même
+    // que l'écriture Firestore ne parte — le focus se pose alors dans le nouveau champ AVANT que
+    // les deux snapshots (qui finiront de toute façon par reconfirmer la même valeur) n'arrivent,
+    // et le mécanisme de suspension de rendu (`shouldSuspend`/`focusedInside`, déjà en place plus
+    // haut dans ce fichier) les met en attente normalement le temps de la frappe.
     el.querySelectorAll(".sticky-note-mode-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         if (btn.dataset.mode === note.type) return;
-        stickyNotesApi.setType(note.id, btn.dataset.mode);
+        note.type = btn.dataset.mode;
+        stickyNotesApi.setType(note.id, note.type);
+        el.querySelectorAll(".sticky-note-mode-btn").forEach((b) => b.classList.toggle("active", b === btn));
+        renderNoteBody(bodyEl, note, { onLineConvertClose: () => openFullCanvasModal() });
       });
     });
 
