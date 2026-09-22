@@ -203,7 +203,7 @@ export function renderGuide(container) {
         <div>Vit dans le Kanban (« Pilotage »), avec un statut, une échéance, éventuellement rattachée à un projet.</div>
         <div class="item-meta" style="margin-top:8px;font-style:italic;">Ex. « Rédiger la spec de l'écran de saisie », « Répondre au mail RH avant vendredi ».</div>
       </div>
-      <div class="card" style="background:var(--color-warning-bg);">
+      <div class="card" style="background:var(--color-warning-light);">
         <div class="item-title" style="margin-bottom:4px;">👀 Suivi — ça concerne une autre personne</div>
         <div>Soit tu attends quelque chose d'elle (« waiting_on »), soit tu dois lui transmettre quelque chose (« à transmettre »). Vit sur sa fiche dans Équipe, pas dans le Kanban.</div>
         <div class="item-meta" style="margin-top:8px;font-style:italic;">Ex. « J'attends la maquette de Julien (marketing) pour le 12 », « Dire à Sarah qu'on décale le go-live ».</div>
@@ -465,7 +465,7 @@ function usecase(title, situation, steps, gain, caveat, id) {
       ${steps.map((s) => `<li style="margin-bottom:6px;">${s}</li>`).join("")}
     </ol>
     <div style="display:inline-block;background:var(--color-success-bg);color:var(--color-success);padding:4px 12px;border-radius:var(--radius-pill);font-size:var(--font-size-sm);">Gain : ${gain}</div>
-    ${caveat ? `<div style="margin-top:10px;padding:10px 14px;background:var(--color-danger-bg);border-radius:var(--radius-sm);font-size:var(--font-size-sm);"><strong style="color:var(--color-danger);">Ce que l'app ne fait pas :</strong> ${caveat}</div>` : ""}
+    ${caveat ? `<div style="margin-top:10px;padding:10px 14px;background:var(--color-danger-light);border-radius:var(--radius-sm);font-size:var(--font-size-sm);"><strong style="color:var(--color-danger);">Ce que l'app ne fait pas :</strong> ${caveat}</div>` : ""}
   `;
   return div;
 }
