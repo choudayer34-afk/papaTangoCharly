@@ -251,7 +251,16 @@
 // voir le commentaire détaillé dans styles/tokens.css (nouveaux jetons --color-warning-light/
 // --color-danger-light). `styles/tokens.css` et `js/views/guide.js`, tous deux précachés,
 // modifiés. `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v67";
+//
+// (22/09/2026, v68, LOT 11/TODO-024/TODO-025) : modèle Objectif unifié (personnel/EADP),
+// indicateurs structurés, points de suivi enrichis (contexte, référence optionnelle vers une
+// fiche existante) et case "Remonter au prochain point" indépendante du Sens d'un Suivi — voir
+// le commentaire en tête de js/domain/objectives.js pour l'arbitrage complet de Charles-Henri.
+// Fichiers précachés modifiés : js/domain/objectives.js, js/domain/followups.js,
+// js/components/linkedItems.js, js/views/people.js, js/views/dashboard.js, js/views/whatsnew.js
+// (nouvelle entrée, qui inclut au passage le rattrapage de l'entrée manquante pour le hotfix
+// Guide du v67). `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v68";
 const APP_SHELL = [
   "./",
   "./index.html",
