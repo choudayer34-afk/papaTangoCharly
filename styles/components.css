@@ -1666,60 +1666,150 @@ tbody.drag-over-group {
 }
 .review-banner button { flex: none; }
 
-/* ---------- Pense-bête + indicateurs, un seul bloc (retour de Charles-Henri, 14/09/2026 :
-   "je l'aurais imaginé un peu plus discret et sur le web [...] sur la gauche de l'écran
-   d'accueil sur la même ligne que les indicateurs") ----------
-   Colonne sur mobile (indicateurs d'abord, Pense-bête juste après — l'ordre d'origine demandé
-   dès la vague précédente), ligne sur web (Pense-bête à gauche, étroit — donc discret —, les
-   indicateurs prenant le reste). `order` plutôt que l'ordre du DOM pour piloter les deux
-   arrangements avec un seul balisage, même technique que le reste du système de rubriques
-   réordonnables de l'Accueil (voir applyHomeOrder() dans js/views/dashboard.js). */
-.postit-statgrid-row {
+/* ---------- "🧠 Mon bureau" — post-it libres (LOT 13, TODO-027, 22/09/2026) ----------
+   Remplace le "📌 Pense-bête" unique et son bloc combiné .postit-statgrid-row (retiré ici) —
+   voir js/components/bureau.js et js/domain/stickyNotes.js. .stat-grid retrouve son style
+   d'origine, seul (règle "Dashboard stat tiles" plus haut dans ce fichier), plus besoin d'aucune
+   règle dédiée à sa cohabitation avec le Pense-bête.
+
+   Couleurs de post-it volontairement FIXES, jamais redéfinies dans le bloc mode sombre ni dans
+   :root[data-theme] (voir styles/tokens.css) : un post-it doit rester identifiable par sa couleur
+   propre dans les deux thèmes, chaque couleur posant son propre texte "encre" foncé associé —
+   même prudence que le correctif TODO-023 (fond teinté fixe + texte hérité qui devient illisible
+   en mode sombre), évitée ici par construction plutôt que corrigée après coup. */
+.bureau-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.bureau-canvas {
+  position: relative;
+  min-height: 320px;
+  background: var(--color-surface-alt);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+  /* Hauteur pilotée en JS (js/components/bureau.js#recalcCanvasHeight) selon la position réelle
+     des post-it — s'agrandit automatiquement pour ne jamais couper le post-it le plus bas. */
+}
+.sticky-note {
+  position: absolute;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-5);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
 }
-.postit-statgrid-row #stat-grid { order: 1; margin-bottom: 0; }
-.postit-statgrid-row #postit-section { order: 2; }
-@media (min-width: 640px) {
-  .postit-statgrid-row { flex-direction: row; align-items: flex-start; }
-  .postit-statgrid-row #postit-section { order: 1; flex: 0 0 260px; max-width: 260px; }
-  .postit-statgrid-row #stat-grid { order: 2; flex: 1 1 auto; min-width: 0; }
+.sticky-note-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 6px 2px;
+  cursor: grab;
+  flex: 0 0 auto;
 }
-/* Sur les très grands écrans, `#app` (max-width 760px, voir styles/components.css) laisse une
-   marge inoccupée de part et d'autre du contenu (retour de Charles-Henri, 14/09/2026, capture
-   d'écran avec une flèche : le Pense-bête doit se nicher dans cette marge à gauche plutôt que de
-   grignoter la largeur des indicateurs — "les indicateurs reprennent leur place"). À partir d'un
-   seuil laissant assez de place pour l'y loger (marge ≥ ~260px + espacement de chaque côté, donc
-   768 + 2*(260+16) ≈ 1320px de fenêtre), le Pense-bête sort du flux (`position: absolute`) et se
-   positionne dans cette marge ; les indicateurs, seuls dans la rangée flex, retrouvent alors toute
-   la largeur de `#app`, exactement comme avant que le Pense-bête ne partage la ligne. En dessous
-   de ce seuil (fenêtre plus étroite, y compris la plupart des ordinateurs portables), le
-   Pense-bête reste en ligne à gauche des indicateurs comme ci-dessus — il n'y a alors pas assez
-   de marge pour l'y loger sans déborder de l'écran. */
-@media (min-width: 1320px) {
-  .postit-statgrid-row { position: relative; }
-  .postit-statgrid-row #postit-section {
-    position: absolute;
-    top: 0;
-    right: calc(100% + var(--space-4));
-    width: 260px;
-  }
+.sticky-note-header:active { cursor: grabbing; }
+.sticky-note-pin { flex: 0 0 auto; }
+.sticky-note-title-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  padding: 2px 4px;
+  color: inherit;
 }
-/* Masqué via ⚙️ Personnaliser l'accueil (js/views/dashboard.js#renderPostitSection) — sans ce
-   `display:none`, la colonne réservée au Pense-bête resterait vide mais large sur web au lieu
-   de laisser toute la place aux indicateurs. */
-.postit-statgrid-row.postit-hidden #postit-section { display: none; }
+.sticky-note-title-input:focus-visible {
+  outline: 1px solid rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+}
+.sticky-note-menu-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  color: inherit;
+}
+.sticky-note-mode-row {
+  display: flex;
+  gap: 4px;
+  padding: 0 6px 4px;
+  flex: 0 0 auto;
+}
+.sticky-note-mode-btn {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: inherit;
+}
+.sticky-note-mode-btn.active { background: rgba(255, 255, 255, 0.8); font-weight: 600; }
+.sticky-note-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+.sticky-note-textarea {
+  width: 100%;
+  height: 100%;
+  min-height: 60px;
+  border: none;
+  background: transparent;
+  resize: none;
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  color: inherit;
+}
+.sticky-note-textarea:focus-visible { outline: none; }
+.sticky-note-resize-handle {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+}
+.sticky-note-resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.5;
+}
 
-/* Habillage volontairement discret (retour de Charles-Henri, 14/09/2026 : "je l'aurais imaginé
-   un peu plus discret") — un simple liseré fin, sans fond teinté ni ombre, pour rester un repère
-   identifiable au premier coup d'œil (📌 + liseré) sans dominer visuellement la ligne des
-   indicateurs à côté de laquelle il vit maintenant. */
-.postit-card {
-  border-left: 3px solid var(--color-warning);
-  box-shadow: none;
+/* Couleurs fixes — voir le commentaire en tête de bloc. Réutilisées telles quelles pour les
+   pastilles de couleur du menu "⋯" (js/components/bureau.js#openNoteMenu, `.sticky-color-swatch`
+   ci-dessous), un seul endroit qui définit chaque couleur. */
+.sticky-note--yellow { background: #FFF3B0; color: #4A3D0A; }
+.sticky-note--blue   { background: #CFE3FB; color: #17335C; }
+.sticky-note--green  { background: #D6F5DE; color: #1B4D2C; }
+.sticky-note--pink   { background: #FBD9E6; color: #5C1B34; }
+.sticky-note--purple { background: #E6DBFB; color: #3A215C; }
+.sticky-note--gray   { background: #E4E4E9; color: #33333B; }
+
+.sticky-color-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
 }
+.sticky-color-swatch.active { border-color: var(--color-primary); }
 
 /* ---------- Aide à la demande (js/components/infoTip.js) ---------- */
 .info-tip {
