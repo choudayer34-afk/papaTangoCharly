@@ -12,11 +12,15 @@
 // js/domain/stickyNotes.js ici évite de faire remonter une dizaine de callbacks jusqu'à
 // dashboard.js sans aucun bénéfice de réutilisation.
 //
-// Cycle d'imports avec js/views/dashboard.js (dashboard.js monte ce composant, ce composant
+// Le menu "⋯" (couleur/épingle/archive/suppression/transformation), l'édition rapide et la
+// conversion vivent désormais dans js/components/stickyNoteShared.js (extraction du 23/09/2026,
+// voir son commentaire en tête) — ce fichier partage ce menu avec js/components/
+// pinnedNotesOverlay.js (widgets flottants), qui en a besoin sans jamais afficher le plan de
+// travail complet.
+//
+// Cycle d'imports avec js/views/dashboard.js (dashboard.js monte ce composant, stickyNoteShared.js
 // importe openCreateDecisionModal depuis dashboard.js) : même principe qu'un cycle déjà existant
-// et déjà en production entre js/views/dashboard.js et js/views/inbox.js (dashboard.js importe
-// openQualifyChoice/openKeptItemDetail depuis inbox.js, qui importe lui-même
-// openCreateMeetingModal/openCreateDecisionModal depuis dashboard.js) — sûr tant qu'aucune des
+// et déjà en production entre js/views/dashboard.js et js/views/inbox.js — sûr tant qu'aucune des
 // deux parties n'utilise le lien importé à l'évaluation du module (seulement plus tard, à
 // l'intérieur d'un gestionnaire d'événement), ce qui est le cas ici comme là-bas.
 //
@@ -28,43 +32,19 @@
 //
 // Écarts assumés avec la spec transmise (implémentation, pas de décision produit — à documenter
 // dans le rapport de fin de lot, aucun n'a semblé mériter d'interrompre le lot pour redemander) :
-//  - "Épingler [...] reste toujours visible en premier" : sur un plan libre (x/y quelconques), il
-//    n'existe pas de "première place" naturelle comme dans une liste — un post-it épinglé reçoit
-//    un z-index plancher toujours au-dessus de tous les post-it non épinglés (jamais recouvert),
-//    seule lecture qui garde un sens dans une disposition libre.
-//  - "Bouton flottant + Nouveau post-it" devient un bouton normal ancré en haut de la section
-//    "Mon bureau" (jamais `position: fixed`) : aucun bouton flottant par-dessus le contenu
-//    n'existe ailleurs dans l'app (qui reste une simple page qui défile, bandeau de navigation du
-//    bas mis à part), un vrai flottant risquerait de chevaucher ce bandeau ou une modale ouverte.
+//  - "Épingler [...] reste toujours visible en premier" : dans le plan de travail "Tout voir"
+//    (positions libres x/y), un post-it épinglé reçoit un z-index plancher toujours au-dessus de
+//    tous les post-it non épinglés (jamais recouvert) — voir PIN_BOOST plus bas. Sur l'ensemble de
+//    l'app, "visible en premier" est désormais satisfait plus largement par les widgets flottants
+//    (js/components/pinnedNotesOverlay.js, complément du 23/09/2026), toujours au-dessus de tout.
 //  - Positionnement libre identique sur toutes les tailles d'écran (pas de repli "liste empilée"
 //    sur mobile, non demandé explicitement) — la position/taille restent bornées à la largeur du
 //    conteneur au moment du geste, la hauteur du plan de travail s'agrandit automatiquement pour
 //    toujours laisser la place au post-it le plus bas.
 import * as stickyNotesApi from "../domain/stickyNotes.js";
-import * as inboxApi from "../domain/inbox.js";
-import * as peopleApi from "../domain/people.js";
-import { openCreateTaskModal } from "../views/kanban.js";
-import { openCreateResourceModal } from "../views/resources.js";
-import { openCreateFollowUpModal } from "../views/people.js";
-import { openCreateDecisionModal } from "../views/dashboard.js";
-import { openKeptItemDetail } from "../views/inbox.js";
-import { renderChecklist } from "./checklist.js";
+import { openStickyNoteMenu, renderNoteBody, escapeHtml, escapeAttr } from "./stickyNoteShared.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "./modal.js";
 import { showToast } from "./toast.js";
-
-const COLOR_LABELS = { yellow: "Jaune", blue: "Bleu", green: "Vert", pink: "Rose", purple: "Violet", gray: "Gris" };
-
-// Choix de conversion (post-it entier ET ligne de checklist, voir plus bas) — même famille que
-// js/views/inbox.js#QUALIFY_CHOICES, réduite aux 5 issues pertinentes ici (un post-it n'est
-// jamais "archivé sans suite" par ce menu : l'action "🗄️ Archiver" existe déjà séparément, voir
-// openNoteMenu ci-dessous, et "Réunion"/"Projet" ne font pas partie du besoin transmis).
-const CONVERT_CHOICES = [
-  { key: "task", emoji: "✅", label: "Tâche" },
-  { key: "followup", emoji: "👀", label: "Suivi" },
-  { key: "resource", emoji: "📎", label: "Ressource" },
-  { key: "decision", emoji: "🗳️", label: "Décision" },
-  { key: "kept", emoji: "🧠", label: "Information" },
-];
 
 /**
  * Monte la section "Mon bureau" dans `container` (vide au départ, voir js/views/dashboard.js).
@@ -76,8 +56,8 @@ const CONVERT_CHOICES = [
  */
 export function mountBureau(container) {
   let currentNotes = [];
-  // Suspend le rebuild complet du plan de travail (voir renderAll() plus bas) pendant qu'un
-  // geste est en cours (glisser/redimensionner) OU qu'un champ du Bureau a le focus (titre, texte
+  // Suspend le rebuild du plan de travail complet (voir renderFullCanvas() plus bas) pendant
+  // qu'un geste est en cours (glisser/redimensionner) OU qu'un champ a le focus (titre, texte
   // libre) — un rebuild en plein milieu détruirait l'élément en cours de manipulation ou de
   // frappe (perte du focus, du curseur, voire de l'écouteur `pointermove` actif). Une mise à jour
   // reçue pendant ce temps (un autre post-it modifié ailleurs, ou depuis un autre appareil) est
@@ -85,6 +65,10 @@ export function mountBureau(container) {
   let dragging = false;
   let focusedInside = false;
   let pendingNotes = null;
+  // Plan de travail complet : n'existe plus en permanence dans l'Accueil, seulement pendant que la
+  // modale "🧠 Mon bureau — Tout voir" est ouverte (voir openFullCanvasModal() plus bas). `null`
+  // tant qu'elle est fermée — `renderFullCanvas()` ne fait alors rien.
+  let fullCanvasEl = null;
 
   function shouldSuspend() {
     return dragging || focusedInside;
@@ -93,7 +77,7 @@ export function mountBureau(container) {
     if (shouldSuspend() || !pendingNotes) return;
     const notes = pendingNotes;
     pendingNotes = null;
-    renderAll(notes);
+    applyNotes(notes);
   }
   function beginDrag() {
     dragging = true;
@@ -103,31 +87,9 @@ export function mountBureau(container) {
     maybeFlush();
   }
 
-  // Rubrique repliable comme les autres (retour de Charles-Henri, 23/09/2026 : "je voudrais que
-  // la zone Bureau soit [...] pliable/dépliable") — même convention que
-  // js/views/dashboard.js#renderKeptSection et les autres rubriques de l'Accueil (`<details
-  // open>`/`<summary>`, ouverte par défaut, un clic sur le titre replie/déplie). État de
-  // repli/dépli volontairement NON mémorisé d'une session à l'autre, comme pour ces mêmes
-  // rubriques — seule sa POSITION (`dashboardOrder`) et sa visibilité (`dashboardHidden`) sont
-  // des préférences persistées (voir js/views/dashboard.js#DASHBOARD_SECTIONS/HOME_ORDER_LABELS,
-  // où "bureau" est déjà déplaçable/masquable exactement comme les autres rubriques).
-  container.innerHTML = `
-    <details open>
-      <summary class="section-title" style="cursor:pointer;margin:0;">🧠 Mon bureau</summary>
-      <div class="bureau-header" style="margin-top:8px;">
-        <p class="item-meta" style="margin:0;flex:1 1 auto;min-width:200px;">Pas des tâches à piloter — un espace pour noter vite pendant une réunion, organiser visuellement, puis transformer en Tâche, Suivi, Ressource, Décision ou Information quand c'est prêt.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" id="bureau-archived-btn" class="btn btn-ghost btn-sm">🗄️ Archivés</button>
-          <button type="button" id="bureau-new-note-btn" class="btn btn-secondary btn-sm">+ Nouveau post-it</button>
-        </div>
-      </div>
-      <div class="bureau-canvas" id="bureau-canvas"></div>
-    </details>
-  `;
-  const canvasEl = container.querySelector("#bureau-canvas");
-  const archivedBtn = container.querySelector("#bureau-archived-btn");
-  const newNoteBtn = container.querySelector("#bureau-new-note-btn");
-
+  // Suit le focus À L'INTÉRIEUR de `scopeEl` (`focusin`/`focusout` remontent, contrairement à
+  // `focus`/`blur`) pour ne suspendre le rebuild que pendant une VRAIE frappe en cours (titre,
+  // texte libre, ligne de checklist — voir isEditableFocusTarget) — jamais pour un simple bouton.
   // BUG corrigé (23/09/2026, retour direct de Charles-Henri : "quand je clique pour changer le
   // type checklist/description, ou la couleur, ça ne le prend en compte que quand je clique en
   // dehors du post-it") : la version précédente suspendait le rebuild dès qu'un focus ATTEIGNAIT
@@ -135,21 +97,62 @@ export function mountBureau(container) {
   // Or un clic sur un `<button>` le rend focusé (comportement standard de Chrome), et le piège de
   // focus des modales (js/components/modal.js#openModal, "rendre le focus à l'élément qui l'avait
   // avant l'ouverture") RAMÈNE explicitement le focus sur ce même bouton "⋯" à la fermeture du
-  // menu — donc après un changement de couleur/épingle/archive (fait via une modale), le focus se
-  // retrouvait de nouveau "dans" le Bureau au moment précis où la notification Firestore
-  // arrivait, suspendant indéfiniment le rebuild jusqu'à ce qu'un clic extérieur fasse perdre ce
-  // focus. Seuls le TITRE et le texte libre (et l'ajout/l'édition d'une ligne de checklist)
-  // contiennent une vraie frappe en cours qu'un rebuild détruirait — `isEditableFocusTarget` ne
-  // suspend plus que pour ces champs-là, jamais pour un bouton.
-  container.addEventListener("focusin", (e) => {
-    focusedInside = isEditableFocusTarget(e.target);
-  });
-  container.addEventListener("focusout", () => {
-    setTimeout(() => {
-      focusedInside = container.contains(document.activeElement) && isEditableFocusTarget(document.activeElement);
-      maybeFlush();
-    }, 50);
-  });
+  // menu — donc après un changement de couleur/épingle/archive, le focus se retrouvait de nouveau
+  // "dans" le Bureau au moment précis où la notification Firestore arrivait, suspendant
+  // indéfiniment le rebuild jusqu'à ce qu'un clic extérieur fasse perdre ce focus.
+  //
+  // Posé sur `container` (couvre "+ Nouveau post-it"/"Archivés"/"Tout voir", aucun champ éditable)
+  // ET, dynamiquement, sur le corps de la modale "Tout voir" tant qu'elle est ouverte (seul
+  // endroit où vivent les vrais champs de saisie de ce composant) — voir openFullCanvasModal().
+  function attachFocusTracking(scopeEl) {
+    scopeEl.addEventListener("focusin", (e) => {
+      focusedInside = isEditableFocusTarget(e.target);
+    });
+    scopeEl.addEventListener("focusout", () => {
+      setTimeout(() => {
+        focusedInside = isEditableFocusTarget(document.activeElement);
+        maybeFlush();
+      }, 50);
+    });
+  }
+
+  // Retour direct de Charles-Henri (23/09/2026) :
+  //  - "la zone Bureau soit [...] pliable/dépliable" — `<details open>`/`<summary>`, même
+  //    convention que js/views/dashboard.js#renderKeptSection et les autres rubriques de
+  //    l'Accueil. État de repli/dépli volontairement NON mémorisé d'une session à l'autre, comme
+  //    pour ces mêmes rubriques — seule sa POSITION (`dashboardOrder`) et sa visibilité
+  //    (`dashboardHidden`) sont des préférences persistées (déjà en place,
+  //    js/views/dashboard.js#DASHBOARD_SECTIONS/HOME_ORDER_LABELS).
+  //  - "un écran [...] avec l'ensemble des post-it et leur position enregistrée" via "Tout voir"
+  //    — la manipulation complète (position libre, glisser-déposer, redimensionnement) reste
+  //    réservée à la modale "🔍 Tout voir" (voir openFullCanvasModal() plus bas).
+  //  - "voir [les épinglés] en priorité, n'importe où dans l'écran, au-dessus des autres modales"
+  //    — ARBITRAGE REVU quelques minutes après la première livraison de ce même jour (retour
+  //    direct de Charles-Henri) : la liste compacte des épinglés directement dans cette section
+  //    (première version) ne suffisait pas, un post-it épinglé devait pouvoir sortir du cadre du
+  //    Bureau et rester visible même par-dessus une autre modale ouverte ailleurs dans l'app. Cette
+  //    section n'affiche donc plus la liste des épinglés (devenue redondante) : ils vivent
+  //    désormais comme des widgets flottants (js/components/pinnedNotesOverlay.js, monté une seule
+  //    fois pour toute la session comme le mini-minuteur Pomodoro), visibles quel que soit l'écran
+  //    ouvert. Cette section garde seulement le point d'entrée (créer/archivés/tout voir).
+  container.innerHTML = `
+    <details open>
+      <summary class="section-title" style="cursor:pointer;margin:0;">🧠 Mon bureau</summary>
+      <div class="bureau-header" style="margin-top:8px;">
+        <p class="item-meta" style="margin:0;flex:1 1 auto;min-width:200px;">Les post-it épinglés flottent directement sur ton écran, au-dessus de tout, où que tu sois dans l'app. "🔍 Tout voir" ouvre le plan de travail complet (position, glisser-déposer, redimensionnement).</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" id="bureau-archived-btn" class="btn btn-ghost btn-sm">🗄️ Archivés</button>
+          <button type="button" id="bureau-see-all-btn" class="btn btn-ghost btn-sm">🔍 Tout voir</button>
+          <button type="button" id="bureau-new-note-btn" class="btn btn-secondary btn-sm">+ Nouveau post-it</button>
+        </div>
+      </div>
+    </details>
+  `;
+  const archivedBtn = container.querySelector("#bureau-archived-btn");
+  const seeAllBtn = container.querySelector("#bureau-see-all-btn");
+  const newNoteBtn = container.querySelector("#bureau-new-note-btn");
+
+  attachFocusTracking(container);
 
   newNoteBtn.addEventListener(
     "click",
@@ -157,46 +160,78 @@ export function mountBureau(container) {
       const maxZ = currentNotes.reduce((max, n) => Math.max(max, n.zIndex || 0), 0);
       // Décalage en cascade (retour visuel simple) — évite que chaque nouveau post-it s'empile
       // exactement sur le précédent, sans imposer de vraie disposition automatique (le besoin
-      // reste "position libre", géré ensuite par le glisser).
+      // reste "position libre", géré ensuite par le glisser, dans "🔍 Tout voir").
       const offset = (currentNotes.filter((n) => !n.archived).length % 6) * 24;
-      // `pinned: true` (23/09/2026, retour direct de Charles-Henri : "je dois toujours pouvoir
-      // créer un post-it à la volée qui sera épinglé par défaut") — une capture rapide reste donc
-      // visible en priorité (z-index plancher, voir PIN_BOOST/effectiveZ plus bas) tant qu'on ne
-      // l'a pas explicitement désépinglée depuis son menu "⋯".
+      // `pinned: true` (retour direct de Charles-Henri : "je dois toujours pouvoir créer un
+      // post-it à la volée qui sera épinglé par défaut") — une capture rapide apparaît donc
+      // immédiatement comme widget flottant (js/components/pinnedNotesOverlay.js), sans avoir
+      // besoin d'ouvrir "🔍 Tout voir" ni de l'épingler soi-même après coup.
       await stickyNotesApi.createStickyNote({ x: 16 + offset, y: 16 + offset, zIndex: maxZ + 1, pinned: true });
     })
   );
   archivedBtn.addEventListener("click", () => openArchivedNotesModal());
+  seeAllBtn.addEventListener("click", () => openFullCanvasModal());
 
-  function renderAll(notes) {
+  /**
+   * "🔍 Tout voir" — modale reprenant l'ancien comportement plein du Bureau (tous les post-it non
+   * archivés, position/taille libres, glisser-déposer, redimensionnement, menus, conversions).
+   */
+  function openFullCanvasModal() {
+    const body = document.createElement("div");
+    body.innerHTML = `<div class="bureau-canvas" id="bureau-full-canvas"></div>`;
+    fullCanvasEl = body.querySelector("#bureau-full-canvas");
+    attachFocusTracking(body);
+    renderFullCanvas(currentNotes);
+    openModal({
+      title: "🧠 Mon bureau — Tout voir",
+      body,
+      actions: [{ label: "Fermer", variant: "ghost" }],
+      // La modale se ferme — `fullCanvasEl` redevient `null` : plus rien à mettre à jour tant
+      // qu'elle n'est pas rouverte (voir renderFullCanvas() plus bas, qui ne fait rien sinon).
+      onClose: () => {
+        fullCanvasEl = null;
+      },
+    });
+  }
+
+  /** Applique un nouvel état (notes) — met à jour le compteur d'archivés et le plan de travail
+   *  complet (seulement si la modale "Tout voir" est ouverte, voir renderFullCanvas()). */
+  function applyNotes(notes) {
     currentNotes = notes;
     const visible = notes.filter((n) => !n.archived);
     const archivedCount = notes.length - visible.length;
     archivedBtn.textContent = archivedCount ? `🗄️ Archivés (${archivedCount})` : "🗄️ Archivés";
-    canvasEl.innerHTML = "";
+    renderFullCanvas(notes);
+  }
+
+  /** Plan de travail COMPLET (tous les post-it non archivés, pas seulement les épinglés) — ne
+   *  fait rien tant que la modale "🔍 Tout voir" n'est pas ouverte (`fullCanvasEl` alors `null`,
+   *  voir openFullCanvasModal()). */
+  function renderFullCanvas(notes) {
+    if (!fullCanvasEl) return;
+    const visible = notes.filter((n) => !n.archived);
+    fullCanvasEl.innerHTML = "";
     for (const note of visible) {
-      canvasEl.appendChild(buildNoteEl(note));
+      fullCanvasEl.appendChild(buildNoteEl(note));
     }
     recalcCanvasHeight();
   }
 
   function recalcCanvasHeight() {
+    if (!fullCanvasEl) return;
     let maxBottom = 0;
-    canvasEl.querySelectorAll(".sticky-note").forEach((el) => {
+    fullCanvasEl.querySelectorAll(".sticky-note").forEach((el) => {
       const bottom = el.offsetTop + el.offsetHeight;
       if (bottom > maxBottom) maxBottom = bottom;
     });
-    canvasEl.style.height = Math.max(320, maxBottom + 24) + "px";
+    fullCanvasEl.style.height = Math.max(320, maxBottom + 24) + "px";
   }
 
   /**
-   * Un post-it épinglé garde toujours un z-index supérieur à tout post-it non épinglé — voir le
-   * commentaire "Écarts assumés" en tête de fichier. `PIN_BOOST` est arbitrairement plus grand
-   * que le nombre de post-it qu'un usage réel pourra jamais créer — une constante finie, pas une
-   * garantie mathématique absolue : elle suppose qu'aucun post-it n'atteindra jamais 100 000
-   * glissers/redimensionnements cumulés sur un même compte (`zIndex` n'avance que de 1 par
-   * geste, voir attachDrag/attachResize plus bas), une hypothèse jugée raisonnable pour un usage
-   * personnel plutôt qu'une vraie borne infranchissable.
+   * Un post-it épinglé garde toujours un z-index supérieur à tout post-it non épinglé DANS LE PLAN
+   * DE TRAVAIL (voir le commentaire "Écarts assumés" en tête de fichier). `PIN_BOOST` est
+   * arbitrairement plus grand que le nombre de post-it qu'un usage réel pourra jamais créer — une
+   * constante finie, pas une garantie mathématique absolue.
    */
   const PIN_BOOST = 100000;
   function effectiveZ(note) {
@@ -251,67 +286,25 @@ export function mountBureau(container) {
       });
     });
 
-    menuBtn.addEventListener("click", () => openNoteMenu(note));
+    // `onClose: openFullCanvasModal` — CORRECTIF (23/09/2026, repéré en écrivant les tests de ce
+    // complément) : `openModal()` ne garde jamais qu'UNE modale à la fois (voir son commentaire,
+    // "closeModal(); // une seule modale à la fois") — ouvrir ce menu alors que "Tout voir" est
+    // déjà affiché referme donc "Tout voir" AVANT d'afficher le menu. Sans ce rappel, refermer le
+    // menu (couleur/épingle/archive) renvoyait silencieusement sur l'Accueil au lieu de laisser
+    // Charles-Henri continuer sur son plan de travail. Un effet de bord accepté : après une
+    // conversion ou une suppression (qui ouvrent ELLES-MÊMES une autre modale par-dessus), "Tout
+    // voir" se rouvre puis se referme aussitôt — un très bref réaffichage, sans conséquence
+    // fonctionnelle, jugé préférable à dupliquer cette logique pour distinguer chaque cas.
+    menuBtn.addEventListener("click", () => openStickyNoteMenu(note, { onClose: () => openFullCanvasModal() }));
 
-    renderNoteBody(bodyEl, note);
+    // Même correctif que ci-dessus, pour le menu "⋯" D'UNE LIGNE de checklist (conversion d'une
+    // seule ligne) — voir js/components/stickyNoteShared.js#openLineConvertModal.
+    renderNoteBody(bodyEl, note, { onLineConvertClose: () => openFullCanvasModal() });
 
     attachDrag(el, note, headerEl);
     attachResize(el, note, resizeHandle);
 
     return el;
-  }
-
-  /**
-   * `note.checklist` est mutée localement à chaque callback (même pattern que
-   * js/views/kanban.js#openTaskDetail pour `task.checklist`) : `addChecklistItem` ne renvoie que
-   * l'élément ajouté seul (écriture ciblée, voir js/domain/stickyNotes.js), les quatre autres
-   * renvoient le tableau complet — reconstruit ici pour que `renderChecklist` puisse réafficher
-   * IMMÉDIATEMENT le nouvel état, sans attendre le prochain aller-retour Firestore (qui finira de
-   * toute façon par recréer cet élément avec la donnée serveur, via `update(notes)` plus haut).
-   */
-  function renderNoteBody(bodyEl, note) {
-    if (note.type === "checklist") {
-      renderChecklist(bodyEl, note.checklist || [], {
-        emptyLabel: "Rien de noté pour l'instant.",
-        sortDoneToBottom: true,
-        onAdd: async (text) => {
-          const item = await stickyNotesApi.addChecklistItem(note.id, text);
-          note.checklist = item ? [...(note.checklist || []), item] : note.checklist;
-          return note.checklist;
-        },
-        onToggle: async (itemId, done) => {
-          note.checklist = await stickyNotesApi.toggleChecklistItem(note.id, itemId, done);
-          return note.checklist;
-        },
-        onRemove: async (itemId) => {
-          note.checklist = await stickyNotesApi.removeChecklistItem(note.id, itemId);
-          return note.checklist;
-        },
-        onEdit: async (itemId, text) => {
-          note.checklist = (await stickyNotesApi.editChecklistItem(note.id, itemId, text)) || note.checklist;
-          return note.checklist;
-        },
-        onReorder: async (orderedIds) => {
-          note.checklist = await stickyNotesApi.reorderChecklist(note.id, orderedIds);
-          return note.checklist;
-        },
-        // "Conversion d'une seule ligne (Checklist)" (spec transmise, §"Conversion intelligente")
-        // — voir le commentaire d'onLineMenu dans js/components/checklist.js.
-        onLineMenu: (item) => openLineConvertModal(note, item),
-      });
-    } else {
-      bodyEl.innerHTML = `<textarea class="sticky-note-textarea" placeholder="Écris ici...">${escapeHtml(note.content)}</textarea>`;
-      const textarea = bodyEl.querySelector(".sticky-note-textarea");
-      let contentSaveTimer = null;
-      textarea.addEventListener("input", () => {
-        clearTimeout(contentSaveTimer);
-        contentSaveTimer = setTimeout(() => stickyNotesApi.setContent(note.id, textarea.value), 500);
-      });
-      textarea.addEventListener("blur", () => {
-        clearTimeout(contentSaveTimer);
-        stickyNotesApi.setContent(note.id, textarea.value);
-      });
-    }
   }
 
   /** Glisser par l'en-tête — Pointer Events (souris/tactile/stylet unifiés), voir le commentaire
@@ -325,7 +318,7 @@ export function mountBureau(container) {
       const startY = e.clientY;
       const startLeft = note.x;
       const startTop = note.y;
-      const canvasWidth = canvasEl.clientWidth || note.width;
+      const canvasWidth = fullCanvasEl.clientWidth || note.width;
       const maxZ = currentNotes.reduce((max, n) => Math.max(max, n.zIndex || 0), 0);
       const nextZ = maxZ + 1;
       el.style.zIndex = String(nextZ + (note.pinned ? PIN_BOOST : 0));
@@ -367,7 +360,7 @@ export function mountBureau(container) {
       const startY = e.clientY;
       const startWidth = note.width;
       const startHeight = note.height;
-      const canvasWidth = canvasEl.clientWidth || note.width;
+      const canvasWidth = fullCanvasEl.clientWidth || note.width;
       let finalWidth = startWidth;
       let finalHeight = startHeight;
       beginDrag();
@@ -393,161 +386,6 @@ export function mountBureau(container) {
       handleEl.addEventListener("pointerup", onUp);
       handleEl.addEventListener("pointercancel", onUp);
     });
-  }
-
-  /** Menu "⋯" d'un post-it — Épingler/Désépingler, couleur, Archiver, Supprimer, puis
-   *  "Transformer en" (post-it ENTIER, voir CONVERT_CHOICES). */
-  function openNoteMenu(note) {
-    const body = document.createElement("div");
-    body.innerHTML = `
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-        <button type="button" id="note-menu-pin" class="btn btn-secondary btn-sm">${note.pinned ? "📌 Désépingler" : "📌 Épingler"}</button>
-        <button type="button" id="note-menu-archive" class="btn btn-secondary btn-sm">🗄️ Archiver</button>
-        <button type="button" id="note-menu-delete" class="btn btn-danger btn-sm">🗑️ Supprimer</button>
-      </div>
-      <div class="section-title" style="margin-top:0;">🎨 Couleur</div>
-      <div class="chip-row" id="note-menu-colors" style="margin-bottom:16px;">
-        ${stickyNotesApi.COLORS.map(
-          (c) =>
-            `<button type="button" class="chip sticky-color-swatch sticky-note--${c}${c === note.color ? " active" : ""}" data-color="${c}" aria-label="${COLOR_LABELS[c]}" title="${COLOR_LABELS[c]}"></button>`
-        ).join("")}
-      </div>
-      <div class="section-title">🔀 Transformer en</div>
-      <div class="choice-grid" id="note-menu-convert"></div>
-    `;
-    body.querySelector("#note-menu-pin").addEventListener("click", async () => {
-      await stickyNotesApi.togglePin(note.id, !note.pinned);
-      closeModal();
-    });
-    body.querySelector("#note-menu-archive").addEventListener("click", async () => {
-      await stickyNotesApi.setArchived(note.id, true);
-      closeModal();
-      showToast("Post-it archivé");
-    });
-    body.querySelector("#note-menu-delete").addEventListener("click", () => {
-      closeModal();
-      confirmDelete({
-        title: "Supprimer ce post-it ?",
-        message: `« ${note.title || "Post-it sans titre"} » sera définitivement supprimé.`,
-        onConfirm: async () => {
-          await stickyNotesApi.removeStickyNote(note.id);
-          showToast("Post-it supprimé");
-        },
-      });
-    });
-    body.querySelectorAll("#note-menu-colors .sticky-color-swatch").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        await stickyNotesApi.setColor(note.id, btn.dataset.color);
-        closeModal();
-      });
-    });
-    body.querySelector("#note-menu-convert").appendChild(
-      buildConvertChoiceGrid((key) => {
-        closeModal();
-        convertWholeNote(note, key);
-      })
-    );
-    openModal({ title: note.title || "📝 Post-it", body, actions: [{ label: "Fermer", variant: "ghost" }] });
-  }
-
-  function buildConvertChoiceGrid(onChoose) {
-    const grid = document.createElement("div");
-    grid.className = "choice-grid";
-    for (const choice of CONVERT_CHOICES) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "choice-btn";
-      btn.innerHTML = `<span class="emoji">${choice.emoji}</span> ${choice.label}`;
-      btn.addEventListener("click", () => onChoose(choice.key));
-      grid.appendChild(btn);
-    }
-    return grid;
-  }
-
-  /**
-   * Conversion du post-it ENTIER (spec : "Conversion du post-it entier — depuis le menu ⋯ du
-   * post-it") — préremplit le formulaire cible avec le titre du post-it et son contenu (texte
-   * libre, ou chaque ligne de la checklist mise à plat, voir stickyNotesApi.stickyNoteToText).
-   * Décision d'implémentation (à documenter, pas bloquante) : le post-it source est ARCHIVÉ (pas
-   * supprimé) une fois la fiche cible créée — jamais perdu, retrouvable dans "🗄️ Post-it
-   * archivés" si besoin, cohérent avec Règle 3 de l'app ("ne jamais perdre une capture").
-   */
-  async function convertWholeNote(note, key) {
-    const title = note.title || "Post-it";
-    const text = stickyNotesApi.stickyNoteToText(note);
-    const afterCreate = () => stickyNotesApi.setArchived(note.id, true);
-    if (key === "task") {
-      openCreateTaskModal({ title, description: text, createdToast: "Tâche créée", onCreated: afterCreate });
-    } else if (key === "followup") {
-      const people = await peopleApi.listAll();
-      if (!people.length) {
-        showToast("Ajoute d'abord une personne dans l'onglet Équipe pour créer un suivi");
-        return;
-      }
-      openCreateFollowUpModal({ defaultTitle: title, defaultDescription: text, onCreated: afterCreate });
-    } else if (key === "resource") {
-      openCreateResourceModal({ title, description: text, onCreated: afterCreate });
-    } else if (key === "decision") {
-      // Écart assumé (déjà repéré au cadrage de ce lot, pas de champ "description" générique côté
-      // Décision) : le contenu du post-it part dans "Contexte", "Ce qui a été décidé" reste vide
-      // — Charles-Henri le complète lui-même, une vraie décision ne se déduit pas d'une note.
-      openCreateDecisionModal({ title, context: text, onCreated: afterCreate });
-    } else if (key === "kept") {
-      await convertToInformation(title, text, afterCreate);
-    }
-  }
-
-  /**
-   * Conversion d'une SEULE ligne de checklist (spec : "Conversion d'une seule ligne (Checklist)")
-   * — seule cette ligne alimente le formulaire, le reste de la checklist n'est jamais touché tant
-   * que la fiche n'est pas créée ; une fois créée, SEULE cette ligne est retirée (jamais tout le
-   * post-it), conformément à la spec ("le reste de la checklist reste intact").
-   */
-  function openLineConvertModal(note, item) {
-    const body = document.createElement("div");
-    body.appendChild(
-      buildConvertChoiceGrid((key) => {
-        closeModal();
-        convertLine(note, item, key);
-      })
-    );
-    openModal({ title: "Créer depuis cette ligne", body, actions: [{ label: "Annuler", variant: "ghost" }] });
-  }
-
-  async function convertLine(note, item, key) {
-    const text = item.text;
-    const afterCreate = () => stickyNotesApi.removeChecklistItem(note.id, item.id);
-    if (key === "task") {
-      openCreateTaskModal({ title: text, createdToast: "Tâche créée", onCreated: afterCreate });
-    } else if (key === "followup") {
-      const people = await peopleApi.listAll();
-      if (!people.length) {
-        showToast("Ajoute d'abord une personne dans l'onglet Équipe pour créer un suivi");
-        return;
-      }
-      openCreateFollowUpModal({ defaultTitle: text, onCreated: afterCreate });
-    } else if (key === "resource") {
-      openCreateResourceModal({ title: text, onCreated: afterCreate });
-    } else if (key === "decision") {
-      openCreateDecisionModal({ title: text, onCreated: afterCreate });
-    } else if (key === "kept") {
-      await convertToInformation(text, "", afterCreate);
-    }
-  }
-
-  /**
-   * "Information" n'a jamais de formulaire de création dédié nulle part dans l'app (une
-   * Information/Idée est structurellement un InboxItem qualifié "kept", voir
-   * js/domain/inbox.js#qualify) — même chemin que js/views/inbox.js#handleChoice pour ce même
-   * choix : capture directe puis qualification immédiate, la fiche complète s'ouvre ensuite
-   * plutôt qu'un simple toast, pour rester cohérent avec le reste de l'app.
-   */
-  async function convertToInformation(title, text, afterCreate) {
-    const content = text && text.trim() ? text : title;
-    const item = await inboxApi.capture(content, "post-it");
-    await inboxApi.qualify(item.id, "kept");
-    await afterCreate();
-    openKeptItemDetail({ ...item, status: "kept", keptAsType: "kept" });
   }
 
   function openArchivedNotesModal() {
@@ -608,20 +446,10 @@ export function mountBureau(container) {
       pendingNotes = notes;
       return;
     }
-    renderAll(notes);
+    applyNotes(notes);
   }
 
   return { update };
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str || "";
-  return div.innerHTML;
-}
-
-function escapeAttr(str) {
-  return escapeHtml(str).replace(/"/g, "&quot;");
 }
 
 /** Vrai uniquement pour un champ de VRAIE saisie texte (titre, texte libre, ajout/édition d'une
