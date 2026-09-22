@@ -45,6 +45,13 @@
     // ajouts précédents, aucun changement à ce fichier lui-même au-delà de l'ajout de
     // stickyNotesApi (tests/unit/lot13-sticky-notes-model.spec.js).
     import * as stickyNotesApi from "/js/domain/stickyNotes.js";
+    // Ajoutés pour LOT G1 (TODO_GAMIFICATION.md, moteur XP, 24/09/2026 — roadmap indépendante de
+    // TODO_TECHNIQUE.md) : promptsApi n'était pas encore exposé ici (nécessaire pour tester
+    // l'événement "Prompt créé", §3) ; gamificationApi permet de lire l'état XP directement
+    // (getGamificationState()) sans passer par un écran, qui n'existe pas encore (LOT G6/G8).
+    // Aucun changement à ces deux fichiers eux-mêmes au-delà de leur ajout ici.
+    import * as promptsApi from "/js/domain/prompts.js";
+    import * as gamificationApi from "/js/domain/gamification.js";
 
     window.__pilotageTestApi = {
       firebaseApi,
@@ -60,6 +67,8 @@
       resourcesApi,
       objectivesApi,
       stickyNotesApi,
+      promptsApi,
+      gamificationApi,
     };
     window.__pilotageTestApiReady = true;
   </script>
