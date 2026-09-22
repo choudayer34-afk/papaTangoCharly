@@ -121,11 +121,20 @@ export function renderResources(container) {
     listEl.appendChild(buildList(items));
   }
 
+  // Pagination (LOT 9, TODO-018, COMP-UX-015) — jusqu'ici, toute liste de ressources s'affichait
+  // en un bloc, sans limite. `PAGE_SIZE` premiers éléments affichés par défaut, le reste derrière
+  // un bouton "+ Afficher X de plus" qui ajoute directement les lignes restantes à cette même
+  // carte (pas de nouvel appel à render() ni d'état à mémoriser entre deux rendus : rouvrir une
+  // recherche/un filtre reconstruit une carte fraîche, donc repart naturellement repliée).
+  // Appliqué indépendamment à chaque carte construite par cet appel (une par type en vue "Par
+  // type", une seule en vue "Récentes"/"Non classées") plutôt qu'au total toutes cartes
+  // confondues.
+  const RESOURCES_PAGE_SIZE = 20;
   function buildList(items) {
     const card = document.createElement("div");
     card.className = "card";
     card.style.marginBottom = "12px";
-    for (const r of items) {
+    function appendRow(r) {
       const info = resourcesApi.typeInfo(r.type);
       const row = document.createElement("div");
       row.className = "item-row";
@@ -139,6 +148,19 @@ export function renderResources(container) {
       `;
       row.addEventListener("click", () => openResourceDetail(r, projects, tasks));
       card.appendChild(row);
+    }
+    items.slice(0, RESOURCES_PAGE_SIZE).forEach(appendRow);
+    if (items.length > RESOURCES_PAGE_SIZE) {
+      const remaining = items.slice(RESOURCES_PAGE_SIZE);
+      const moreBtn = document.createElement("button");
+      moreBtn.type = "button";
+      moreBtn.className = "btn btn-ghost btn-block";
+      moreBtn.textContent = `+ Afficher ${remaining.length} de plus`;
+      moreBtn.addEventListener("click", () => {
+        moreBtn.remove();
+        remaining.forEach(appendRow);
+      });
+      card.appendChild(moreBtn);
     }
     return card;
   }
