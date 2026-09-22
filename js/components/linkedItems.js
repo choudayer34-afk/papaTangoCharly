@@ -180,7 +180,14 @@ export function resolveRef(bundle, ref) {
 // différent (chercher/lister TOUTES les fiches existantes pour en choisir une à lier), pour
 // lequel charger l'ensemble reste inévitable — seul `renderLinkedSection`, qui résout des
 // références déjà connues une par une, tire parti d'une lecture ciblée.
-async function resolveRefDirect(ref) {
+//
+// Exportée depuis LOT 11 (TODO-024) : js/views/people.js#openObjectiveDetail s'en sert pour
+// afficher la référence optionnelle `{type, id}` qu'un point de suivi d'Objectif peut porter
+// (`entries[].ref`, voir js/domain/objectives.js#addEntry) — une simple donnée de lecture, PAS
+// un lien (`js/domain/links.js` n'est pas concerné, voir le commentaire en tête d'objectives.js
+// pour l'arbitrage complet). Réutilisation telle quelle, aucun changement de comportement pour
+// `renderLinkedSection`, seule autre appelante jusqu'ici.
+export async function resolveRefDirect(ref) {
   switch (ref.type) {
     case "Task": {
       const t = await tasksApi.getTask(ref.id);
@@ -436,6 +443,88 @@ export function openLinkPickerModal(ref, currentLabel, { onLinked, onCancel } = 
 
   openModal({
     title: "🔗 Lier une fiche",
+    body,
+    actions: [{ label: "Annuler", variant: "ghost", onClick: () => onCancel?.() }],
+  });
+  setTimeout(() => inputEl.focus(), 30);
+}
+
+/**
+ * Choisir UNE fiche existante parmi un sous-ensemble de types, sans créer de lien — ajoutée
+ * pour LOT 11 (TODO-024, point 7) : la référence facultative "preuve/contexte" d'un point de
+ * suivi d'Objectif (`entries[].ref`, js/domain/objectives.js#addEntry) est une simple donnée
+ * portée par le suivi lui-même, jamais un lien au sens de `js/domain/links.js` — voir le
+ * commentaire en tête de ce fichier de domaine pour l'arbitrage complet ("Pas de nouvelle
+ * architecture de liens"). Reprend la même recherche/le même rendu que `openLinkPickerModal`
+ * ci-dessus (même `fetchBundle()`/`allRefs()`/`resolveRef()`), seul le geste final diffère :
+ * `onPick(ref)` reçoit `{type, id}` au lieu d'un appel à `linksApi.createLink`.
+ * `types` restreint les candidats (ex. ["FollowUp","Meeting","Decision","Kept","Resource",
+ * "Project"] — la liste exacte que Charles-Henri a énumérée pour ce cas d'usage).
+ */
+export function pickRef({ types, excludeRef, title = "Choisir une fiche", onPick, onCancel } = {}) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <input id="ref-picker-input" type="text" placeholder="Chercher une fiche..." />
+    </div>
+    <div id="ref-picker-results"></div>
+  `;
+  const resultsEl = body.querySelector("#ref-picker-results");
+  const inputEl = body.querySelector("#ref-picker-input");
+
+  let bundle = null;
+  let candidates = [];
+
+  function render(query) {
+    if (!bundle) {
+      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Chargement...</div>`;
+      return;
+    }
+    const q = query.trim().toLowerCase();
+    const filtered = candidates.filter(({ resolved }) => !q || resolved.title.toLowerCase().includes(q));
+
+    if (!filtered.length) {
+      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">${q ? "Rien ne correspond." : "Aucune fiche disponible."}</div>`;
+      return;
+    }
+    resultsEl.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "card";
+    for (const { ref: r, resolved } of filtered.slice(0, 60)) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `<div class="item-main"><div class="item-title">${resolved.emoji} ${escapeHtml(resolved.title)}</div></div>`;
+      row.addEventListener(
+        "click",
+        guardClick(row, async () => {
+          closeModal();
+          onPick?.(r);
+        })
+      );
+      card.appendChild(row);
+    }
+    resultsEl.appendChild(card);
+  }
+
+  render("");
+  fetchBundle().then((b) => {
+    bundle = b;
+    candidates = allRefs(b)
+      .filter((r) => (!types || types.includes(r.type)) && !(excludeRef && r.type === excludeRef.type && r.id === excludeRef.id))
+      .map((r) => ({ ref: r, resolved: resolveRef(b, r) }))
+      .filter(({ resolved }) => resolved);
+    render(inputEl.value);
+  });
+
+  let refSearchDebounce = null;
+  inputEl.addEventListener("input", () => {
+    clearTimeout(refSearchDebounce);
+    refSearchDebounce = setTimeout(() => render(inputEl.value), 150);
+  });
+
+  openModal({
+    title,
     body,
     actions: [{ label: "Annuler", variant: "ghost", onClick: () => onCancel?.() }],
   });
