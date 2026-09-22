@@ -139,6 +139,19 @@ test.describe.serial("LOT 13 — Mon bureau (post-it libres de l'Accueil)", () =
     await expect(noteEl.locator('.sticky-note-mode-btn[data-mode="checklist"]')).toHaveClass(/active/);
     await expect(noteEl.locator(".sticky-note-textarea")).toHaveCount(0); // le mode checklist remplace l'affichage du texte
 
+    // CI du 24/09/2026 (nouveau passage réel du workflow GitHub Actions, sur le code du
+    // complément post-it flottants du 23/09/2026, voir TODO_TECHNIQUE.md) :
+    // ce test échouait par intermittence ici, avec la trace montrant "element was detached from
+    // the DOM, retrying" pendant le fill() suivant, puis l'élément retrouvé mais durablement
+    // "hidden" pour Playwright. Cause : le changement de mode ci-dessus déclenche une écriture
+    // Firestore, qui émet DEUX snapshots (optimiste local puis confirmé serveur — comportement
+    // Firestore standard) ; renderFullCanvas (js/components/bureau.js) reconstruit tout le DOM du
+    // "Tout voir" à CHAQUE snapshot, sans diffing. Si la frappe suivante démarre entre ces deux
+    // snapshots, l'input est reconstruit en plein milieu de l'action. On attend donc ici que les
+    // deux snapshots soient passés avant de continuer (même précaution que page.reload() plus haut
+    // dans ce fichier).
+    await page.waitForTimeout(500);
+
     // Ajout d'une ligne via le composant checklist générique (js/components/checklist.js) —
     // même champ que Tâche/Suivi (`#checklist-new-text`/`#checklist-add-btn` : des ids RÉPÉTÉS
     // une fois par post-it Checklist affiché, chaque instance du composant les pose dans son
