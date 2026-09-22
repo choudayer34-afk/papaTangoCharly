@@ -85,6 +85,48 @@ exportée et l'API `Notification` du navigateur ne se prête qu'à un test de bo
 accordée, contenu du message) — hors de portée d'un test unitaire via `harness.html`. Seule la
 logique de détection sous-jacente (`isControlDue`) est testée directement.
 
+## LOT 11 (TODO-024, TODO-025) — ajouté le 22/09/2026
+
+Modèle Objectif unifié (personnel/EADP), indicateurs structurés, points de suivi enrichis, et
+"Remonter au prochain point" indépendant du Sens d'un Suivi — voir le commentaire en tête de
+`js/domain/objectives.js` pour l'arbitrage complet de Charles-Henri. Cinq nouveaux fichiers, sur
+le même principe que le reste de ce dossier (émulateur Firebase, jamais la production) ;
+`support/harness.html` expose désormais aussi `objectivesApi`.
+
+- **`unit/lot11-objectives-model.spec.js`** — vérification directe des données (sans passer par
+  l'UI, plus robuste pour ces garanties) : même structure de document pour un objectif personnel
+  (`personId: null`) et un objectif EADP, absence de régression pour un objectif minimal (aucun
+  champ "Détails" renseigné), indicateurs (création multiple, modification de statut, suppression
+  SANS cascade sur les points de suivi déjà enregistrés qui les référençaient), points de suivi
+  (ajout, historique conservé, référence `{type,id}` optionnelle, valeurs par défaut sûres face à
+  un statut invalide), et TODO-025 (`hiddenFromPrep` indépendant de `direction`, `DIRECTIONS`
+  toujours limité à `["waiting_on","to_tell"]` — pas de nouvelle valeur "personnel").
+- **`e2e/lot11-objective-unified-model.spec.js`** — parcours UI : création d'un objectif
+  personnel simple (pas de titre de groupe de campagne pour une seule période, non-régression de
+  l'affichage à plat), création avec le bloc "Détails" (catégorie, campagne/période, SMART) et
+  relecture à la réouverture, coexistence de deux campagnes/périodes distinctes sans écrasement
+  (titres de groupe, tri par récence), et création d'un objectif EADP depuis la fiche Personne
+  avec les mêmes champs enrichis que l'objectif personnel (même fiche de détail, aucun second
+  modèle).
+- **`e2e/lot11-objective-indicators-entries.spec.js`** — indicateurs (création multiple,
+  modification de statut, suppression avec conservation du suivi déjà enregistré qui le
+  référençait) et ajout d'un suivi lié à un indicateur (contexte affiché sans redemander
+  cible/mesure, statut de l'indicateur synchronisé depuis le suivi, référence vers une fiche
+  existante — ici un Projet — conservée à travers le picker `linkedItemsApi.pickRef` sans perte
+  des champs déjà saisis).
+- **`e2e/lot11-followup-remonte-prep.spec.js`** — case "Remonter au prochain point" cochée par
+  défaut à la création d'un Suivi, indépendante du Sens (`waiting_on`/`to_tell`), décochable pour
+  les deux Sens sans jamais modifier `direction` elle-même. L'effet réel sur "Préparer mon point"
+  (`hiddenFromPrep`, `js/views/people.js#computePrepSections`) est vérifié au niveau des données
+  par le test unitaire ci-dessus plutôt qu'en naviguant la fenêtre de masquage privée
+  (`window.open`, `js/views/people.js#openPrepMaskThenPrep`) — trop fragile à piloter depuis
+  Playwright pour ce que ça apporterait de plus.
+
+**AVERTISSEMENT (22/09/2026)** : les cinq fichiers ci-dessus ont été écrits et relus manuellement
+à partir du code réel du LOT 11 tout juste implémenté, mais jamais exécutés dans cet
+environnement (registre npm bloqué, comme tout le reste de ce dossier). À reconfirmer au premier
+lancement réel (GitHub Actions).
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
