@@ -14,8 +14,18 @@
 //
 // Modèle de données (repris tel quel de la spec transmise par Charles-Henri) :
 //   StickyNote { id, title, type ("text"|"checklist"), color, content, checklist[], x, y, width,
-//                height, zIndex, pinned, archived, createdAt, updatedAt }
+//                height, zIndex, pinned, archived, createdAt, updatedAt, floatX, floatY }
 //   ChecklistItem { id, text, done, doneAt }
+//
+// `floatX`/`floatY` (complément du 23/09/2026, retour direct de Charles-Henri le même jour que la
+// livraison initiale : "je dois pouvoir [mettre un post-it épinglé] n'importe où dans l'écran
+// même en dehors du bureau [...] il ne doit pas passer en dessous des autres modales") — position
+// à L'ÉCRAN (coordonnées viewport), TOTALEMENT INDÉPENDANTE de `x`/`y` (position dans le plan de
+// travail "Tout voir", coordonnées relatives à `#bureau-full-canvas`, voir js/components/
+// bureau.js) : un même post-it épinglé a donc deux positions qui ne se mélangent jamais. Absents
+// (`undefined`) tant que le post-it flottant n'a jamais été glissé — voir js/components/
+// pinnedNotesOverlay.js#fallbackPosition, qui calcule une position de repli côté client sans
+// jamais l'écrire en base tant qu'aucun glisser n'a eu lieu.
 // Écart assumé avec la spec (à documenter dans le rapport de fin de lot) : le champ `checked` du
 // modèle ChecklistItem de la spec devient `done`/`doneAt` ici, pour rester au même format que
 // TOUTES les autres checklists de l'app (js/domain/tasks.js, js/domain/followups.js, l'ancien
@@ -88,6 +98,19 @@ export async function setLayout(id, { x, y, width, height, zIndex }) {
   if (Number.isFinite(width)) fields.width = width;
   if (Number.isFinite(height)) fields.height = height;
   if (Number.isFinite(zIndex)) fields.zIndex = zIndex;
+  return storage.setFields(COLLECTION, id, fields);
+}
+
+/**
+ * Position du post-it FLOTTANT (widget "toujours visible", js/components/pinnedNotesOverlay.js) —
+ * jamais confondue avec `setLayout` ci-dessus, qui pilote le plan de travail "Tout voir". Même
+ * principe d'écriture qu'un glisser dans le plan de travail : la position suit le pointeur en
+ * direct côté client, l'écriture Firestore n'a lieu qu'au relâchement.
+ */
+export async function setFloatPosition(id, { x, y }) {
+  const fields = {};
+  if (Number.isFinite(x)) fields.floatX = x;
+  if (Number.isFinite(y)) fields.floatY = y;
   return storage.setFields(COLLECTION, id, fields);
 }
 
