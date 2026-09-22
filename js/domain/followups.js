@@ -137,6 +137,15 @@ export async function createFollowUp(data) {
     // changement de comportement pour eux.
     notesLog: data.notesLog || [], // journal de notes horodaté, voir addNote() plus bas
     checklist: data.checklist || [], // sous-étapes courtes libres, même principe que Task.checklist (js/domain/tasks.js)
+    // LOT 11 (TODO-025, 22/09/2026) — `hiddenFromPrep` acceptait déjà une valeur initiale
+    // implicitement (`storage.put` pose tout champ présent dans l'objet), mais aucun appelant
+    // n'en passait une jusqu'ici : le champ ne prenait sa première valeur qu'après coup, via
+    // l'écran de masquage privé (js/views/prepMask.js#updateFollowUp). Explicité ici pour que
+    // js/views/people.js#openCreateFollowUpModal puisse la décider dès la création — décision
+    // INDÉPENDANTE de `direction` (arbitrage explicite de Charles-Henri, pas de valeur déduite
+    // de l'une à partir de l'autre). `false` par défaut si absent : un Suivi remonte
+    // normalement au prochain point, comme avant ce lot pour tout Suivi jamais masqué.
+    hiddenFromPrep: !!data.hiddenFromPrep,
   });
   await storage.logHistory("FollowUp", followUp.id, "created", { title: followUp.title });
   return followUp;
