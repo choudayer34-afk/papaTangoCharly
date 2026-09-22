@@ -35,6 +35,12 @@ const ITEMS = [
   { hash: "#/resources", emoji: "📎", title: "Ressources", subtitle: "Bibliothèque de liens et documents, sans duplication", group: "Bibliothèques" },
   { hash: "#/prompts", emoji: "🤖", title: "Prompts", subtitle: "Bibliothèque de prompts IA, copiables en un clic", group: "Bibliothèques" },
   { hash: "#/memory", emoji: "🧠", title: "Mémoire & TDAH", subtitle: "Pause mémoire : jeu des paires, respiration, séquence, Pomodoro", group: "Pause" },
+  // Galerie des badges (LOT G6, TODO_GAMIFICATION.md §7) — premier écran de la roadmap
+  // gamification (js/domain/gamification.js), placée hors de ROUTES/NAV_ITEMS comme les 3
+  // lignes "Aide" ci-dessus (voir js/app.js#HIDDEN_ROUTES) : un nouveau groupe dédié plutôt que
+  // de la glisser dans un groupe existant, la gamification n'étant ni de l'aide, ni une
+  // bibliothèque, ni une pause.
+  { hash: "#/gamification-galerie", emoji: "🏅", title: "Galerie des badges", subtitle: "Tes badges obtenus, verrouillés et leur progression", group: "Gamification" },
 ];
 
 function escapeHtml(str) {
