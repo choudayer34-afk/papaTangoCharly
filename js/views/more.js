@@ -22,12 +22,19 @@
 import * as preferencesApi from "../domain/preferences.js";
 import { WHATS_NEW_TOTAL_COUNT } from "./whatsnew.js";
 
+// USE-UX-022 (LOT 9, "Plus" (☰) sans lien thématique lisible") : les 5 lignes étaient une liste
+// plate, sans logique visible entre elles (retour de l'audit : on ne devine pas pourquoi Guide
+// et Ressources sont à la suite l'un de l'autre). Regroupement par intention retenu tel quel par
+// l'audit — "Aide" (Guide+Nouveautés), "Bibliothèques" (Ressources+Prompts), "Pause" (Mémoire) —
+// via `group`, affiché avec `.section-title` (même style que les sous-sections d'une fiche
+// Projet/Personne, voir js/views/projects.js et js/views/people.js). Aucune route ni aucun
+// libellé/sous-titre de ligne ne change : seul l'agencement visuel évolue.
 const ITEMS = [
-  { hash: "#/resources", emoji: "📎", title: "Ressources", subtitle: "Bibliothèque de liens et documents, sans duplication" },
-  { hash: "#/prompts", emoji: "🤖", title: "Prompts", subtitle: "Bibliothèque de prompts IA, copiables en un clic" },
-  { hash: "#/guide", emoji: "📖", title: "Guide", subtitle: "Le mode d'emploi complet, casquette par casquette — hors ligne" },
-  { hash: "#/whatsnew", emoji: "🆕", title: "Nouveautés", subtitle: "Ce qui a été ajouté à l'app, du plus récent au plus ancien" },
-  { hash: "#/memory", emoji: "🧠", title: "Mémoire & TDAH", subtitle: "Pause mémoire : jeu des paires, respiration, séquence, Pomodoro" },
+  { hash: "#/guide", emoji: "📖", title: "Guide", subtitle: "Le mode d'emploi complet, casquette par casquette — hors ligne", group: "Aide" },
+  { hash: "#/whatsnew", emoji: "🆕", title: "Nouveautés", subtitle: "Ce qui a été ajouté à l'app, du plus récent au plus ancien", group: "Aide" },
+  { hash: "#/resources", emoji: "📎", title: "Ressources", subtitle: "Bibliothèque de liens et documents, sans duplication", group: "Bibliothèques" },
+  { hash: "#/prompts", emoji: "🤖", title: "Prompts", subtitle: "Bibliothèque de prompts IA, copiables en un clic", group: "Bibliothèques" },
+  { hash: "#/memory", emoji: "🧠", title: "Mémoire & TDAH", subtitle: "Pause mémoire : jeu des paires, respiration, séquence, Pomodoro", group: "Pause" },
 ];
 
 function escapeHtml(str) {
@@ -48,17 +55,23 @@ export function renderMore(container) {
   `;
 
   const listEl = container.querySelector("#more-list");
-  listEl.innerHTML = ITEMS.map(
-    (item, i) => `
-    <a class="item-row" href="${item.hash}" style="text-decoration:none;color:inherit;${i === ITEMS.length - 1 ? "border-bottom:none;" : ""}">
+  listEl.innerHTML = ITEMS.map((item, i) => {
+    const isFirstOfGroup = i === 0 || ITEMS[i - 1].group !== item.group;
+    const isLastRow = i === ITEMS.length - 1;
+    const heading = isFirstOfGroup
+      ? `<div class="section-title"${i === 0 ? ' style="margin-top:0;"' : ""}>${escapeHtml(item.group)}</div>`
+      : "";
+    return `
+    ${heading}
+    <a class="item-row" href="${item.hash}" style="text-decoration:none;color:inherit;${isLastRow ? "border-bottom:none;" : ""}">
       <div style="font-size:1.4rem;line-height:1;">${item.emoji}</div>
       <div class="item-main">
         <div class="item-title">${escapeHtml(item.title)}${item.hash === "#/whatsnew" ? '<span id="more-whatsnew-flag"></span>' : ""}</div>
         <div class="item-meta">${escapeHtml(item.subtitle)}</div>
       </div>
     </a>
-  `
-  ).join("");
+  `;
+  }).join("");
 
   preferencesApi.getPreferences().then((prefs) => {
     const unseen = WHATS_NEW_TOTAL_COUNT - (prefs.seenWhatsNewCount || 0);
