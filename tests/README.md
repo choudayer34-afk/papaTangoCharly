@@ -207,6 +207,54 @@ ligne de `#obj-indicators` ET une ligne de `#obj-entries`, qui affiche aussi le 
 l'indicateur concerné par le suivi qu'elle décrit). Corrigés en scopant les deux locators à
 `#obj-indicators` — défaut du TEST, aucun changement applicatif.
 
+**Complément du 23/09/2026 (même jour, second retour direct de Charles-Henri sur LOT 13) : "je
+dois pouvoir [mettre un post-it épinglé] n'importe où dans l'écran même en dehors du bureau [...]
+il [ne doit pas passer] au dessous de toutes les autres modales"** — un post-it épinglé n'est plus
+une carte dans la section "Mon bureau" de l'Accueil (la liste compacte livrée quelques minutes plus
+tôt ce même jour, voir `TODO_TECHNIQUE.md` → LOT 13, est devenue redondante) mais un widget flottant
+(`position: fixed`, `js/components/pinnedNotesOverlay.js`) visible sur TOUT écran de l'app, monté
+une seule fois pour toute la session comme le mini-minuteur Pomodoro. Le menu "⋯" et l'édition de
+contenu, communs au plan de travail "Tout voir" et à ce nouveau widget, ont été extraits dans
+`js/components/stickyNoteShared.js`.
+
+- **`e2e/lot13-pinned-float-notes.spec.js`** (nouveau) — couvre spécifiquement le widget flottant :
+  un nouveau post-it (épinglé par défaut) apparaît immédiatement comme widget flottant ; un simple
+  clic (sans glisser, seuil `CLICK_THRESHOLD`) ouvre l'édition rapide (titre + texte/checklist)
+  sans passer par "Tout voir" ; le widget RESTE VISIBLE ET CLIQUABLE au-dessus d'une autre modale
+  ouverte ailleurs (`z-index` 55 > 50, testé en cliquant réellement le bouton dédié de désépinglage
+  PENDANT qu'une autre modale reste affichée — un recouvrement aurait fait échouer ce clic Playwright,
+  pas seulement une vérification de présence dans le DOM) ; le bouton dédié 📌 désépingle sans passer
+  par le menu "⋯" (AskUserQuestion du 23/09/2026, "un bouton sur le post-it") ; le glisser reposi-
+  tionne en direct et persiste après rechargement (`floatX`/`floatY`, indépendants de `x`/`y` du
+  plan de travail).
+- **`unit/lot13-sticky-notes-model.spec.js`** (complété) — nouveau test `setFloatPosition` :
+  écriture ciblée de `floatX`/`floatY` sans jamais toucher `x`/`y` (les deux positions ne se
+  mélangent jamais).
+- **`e2e/lot13-bureau-notes.spec.js`/`e2e/lot13-bureau-conversion.spec.js`** (adaptés) — un nouveau
+  post-it étant créé épinglé par défaut, il apparaît d'abord comme widget flottant ; son contenu ne
+  se manipule plus que dans "🔍 Tout voir" (`#bureau-full-canvas`), qui n'existe plus en permanence
+  sur l'Accueil (`#bureau-canvas` retiré). `createNoteAndLocate` identifie donc désormais le
+  nouveau post-it via `.pinned-float-note` (diff des `data-id`, même principe qu'avant) PUIS ouvre
+  "Tout voir" pour la suite de l'interaction ; chaque `page.reload()` rouvre "Tout voir" (fermé par
+  le rechargement, jamais restauré automatiquement) avant de continuer. Le test "Menu ⋯" a aussi
+  été ajusté : un post-it étant déjà épinglé à la création, il vérifie désépingler PUIS réépingler
+  plutôt qu'épingler simplement.
+- **BUG corrigé au passage, repéré en écrivant `e2e/lot13-pinned-float-notes.spec.js`** :
+  `js/components/modal.js#openModal` ne garde jamais qu'UNE modale à la fois (`closeModal()` en
+  toute première ligne) — ouvrir le menu "⋯" d'un post-it (ou le menu d'une ligne de checklist)
+  PENDANT que "Tout voir" est affichée refermait donc silencieusement "Tout voir" avant d'afficher
+  ce menu, renvoyant Charles-Henri sur l'Accueil une fois le menu refermé au lieu de le laisser sur
+  son plan de travail. Corrigé en rouvrant "Tout voir" via `onClose` sur ces deux menus
+  (`js/components/bureau.js`) — jamais testé en pratique avant ce complément (les tests
+  précédemment couverts ne rouvraient jamais "Tout voir" après une action de menu dans le même
+  test), donc non listé comme correction dans l'entrée du 23/09/2026 ci-dessus.
+
+**AVERTISSEMENT (23/09/2026)** : comme le reste de ce dossier, ce complément n'a jamais été exécuté
+dans l'environnement où il a été rédigé (registre npm bloqué). À reconfirmer au premier lancement
+réel — en particulier le test de superposition au-dessus d'une modale (`e2e/lot13-pinned-float-
+notes.spec.js`, 2ᵉ test), qui repose sur l'échec d'actionabilité Playwright en cas de recouvrement
+plutôt que sur une simple vérification de présence.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
