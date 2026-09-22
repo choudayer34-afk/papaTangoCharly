@@ -1320,6 +1320,26 @@ export function renderDashboard(container) {
           await preferencesApi.setPostitChecklist(postitChecklist);
           return postitChecklist;
         },
+        // Retour direct de Charles-Henri (22/09/2026) : "si je me suis trompé dans le nom d'une
+        // sous étape [...] je ne peux pas le modifier ni ordonner les sous étapes non terminées"
+        // — voir le commentaire en tête de js/components/checklist.js. Même mécanique que les
+        // autres callbacks ci-dessus (tableau tenu à jour ici même, pas de fonction domaine
+        // dédiée : le Pense-bête n'est pas un document identifié en base, juste une préférence).
+        onEdit: async (itemId, text) => {
+          postitChecklist = postitChecklist.map((it) => (it.id === itemId ? { ...it, text } : it));
+          await preferencesApi.setPostitChecklist(postitChecklist);
+          return postitChecklist;
+        },
+        onReorder: async (orderedIds) => {
+          const byId = new Map(postitChecklist.map((it) => [it.id, it]));
+          const notDoneReordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+          const covered = new Set(orderedIds);
+          const notDoneUncovered = postitChecklist.filter((it) => !it.done && !covered.has(it.id));
+          const done = postitChecklist.filter((it) => it.done);
+          postitChecklist = [...notDoneReordered, ...notDoneUncovered, ...done];
+          await preferencesApi.setPostitChecklist(postitChecklist);
+          return postitChecklist;
+        },
       });
     } else {
       bodyEl.innerHTML = `<div class="field" style="margin-bottom:0;"><textarea id="postit-textarea" placeholder="Ex. Acheter un billet d'avion, voir Michel aujourd'hui..." style="min-height:64px;">${escapeHtml(postitText)}</textarea></div>`;
