@@ -271,7 +271,26 @@
 // js/components/checklist.js, js/views/kanban.js, js/views/people.js, js/services/dateUtils.js,
 // styles/components.css, js/views/whatsnew.js (nouvelles entrées). `CACHE_NAME` incrémenté en
 // conséquence.
-const CACHE_NAME = "pilotage-cache-v69";
+//
+// (22/09/2026, v70) : deux besoins encore traités en parenthèse pendant la vérification du LOT 11
+// (voir TODO_TECHNIQUE.md, TODO-040) —
+//  1. Correction d'un bug du LOT 11 lui-même (retour direct de Charles-Henri : un indicateur
+//     ajouté à un Objectif ne s'affichait pas tant que la fiche n'était pas entièrement refermée
+//     puis rouverte) — `js/views/people.js#openObjectiveDetail` rouvrait sa propre fiche avec
+//     l'objet JS reçu en paramètre, jamais remis à jour après les écritures imbriquées
+//     (indicateur/suivi/lien) ; introduction de `reopenSelf` (relit l'Objectif en base avant de
+//     rouvrir), même principe que `reopenProject` dans js/views/projects.js.
+//  2. Mode import d'un objectif depuis un texte généré par IA (retour direct de Charles-Henri :
+//     "c'est pénible de saisir tout [...] il faudrait un mode import") — nouvelle fonction pure
+//     `js/domain/objectives.js#parseObjectiveImportText`, collée au format de sortie imposé par
+//     le prompt IA de Charles-Henri, et nouvelle modale partagée
+//     `js/views/people.js#openImportObjectiveTextModal` (préremplissage à la création dans
+//     `openCreateObjectiveModal` et `js/views/dashboard.js#openCreatePersonalObjectiveModal`,
+//     import d'indicateurs sur un objectif déjà existant dans `openObjectiveDetail`).
+// Fichiers précachés modifiés : js/domain/objectives.js, js/views/people.js,
+// js/views/dashboard.js, js/views/whatsnew.js (nouvelles entrées). `CACHE_NAME` incrémenté en
+// conséquence.
+const CACHE_NAME = "pilotage-cache-v70";
 const APP_SHELL = [
   "./",
   "./index.html",
