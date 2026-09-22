@@ -66,6 +66,20 @@ const WHATS_NEW = [
         howTo: "Fiche Personne → + Suivi → décoche \"Remonter au prochain point\" si ce Suivi ne doit pas apparaître au prochain point. Modifiable ensuite via 🙈 Avant de partager, comme avant.",
         gain: "Décider une bonne fois pour toutes, dès la création, sans repasser par l'écran de masquage juste après.",
       },
+      {
+        type: "add",
+        title: "🗂️ Tâches d'un projet : triées par statut et échéance, étapes cochées reléguées en bas",
+        text: "Dans la fiche d'un Projet, l'onglet Contenu affiche maintenant l'échéance de chaque tâche, et les classe : ce qui n'est pas terminé d'abord (échéance la plus proche en premier, sans échéance ensuite), puis les tâches terminées à part, des plus récemment closes aux plus anciennes. Par ailleurs, sur une checklist de Tâche ou de Suivi, cocher un élément le fait descendre sous les éléments restants, les éléments cochés se classant entre eux du plus récemment coché au plus ancien (comme c'était déjà le cas sur le Pense-bête).",
+        howTo: "Rien à faire, c'est automatique.",
+        gain: "Voir d'un coup d'œil ce qui reste à traiter en priorité dans un projet, sans que les tâches et étapes déjà terminées n'encombrent la lecture.",
+      },
+      {
+        type: "add",
+        title: "📅 Report rapide \"+1j/+7j\" sur les dates d'un Suivi",
+        text: "Dans \"Préparer mon point\" et dans la fiche Personne, l'échéance et le prochain contrôle d'un Suivi ont désormais leur propre bouton 📅 pour les reporter de 1 ou 7 jours (ou choisir une date libre), directement depuis la ligne — comme le bouton équivalent déjà présent sur les cartes du Kanban. Plus besoin d'ouvrir la fiche complète pour un simple report.",
+        howTo: "Clique sur le 📅 à côté d'une échéance ou d'un prochain contrôle, puis \"+1 j\", \"+7 j\" ou choisis une date.",
+        gain: "Reporter une date en un clic, sans quitter l'écran de préparation ou la fiche Personne.",
+      },
     ],
   },
   {
