@@ -1,1406 +1,261 @@
-// Kanban — vue principale de pilotage opérationnel (§24, §25). Drag & drop obligatoire ;
-// déplacer une carte change son statut, rien de plus.
-//
-// Vue "📊 Tableau" (02/09/2026, retour de Charles-Henri — "basculer de la vue trello à la vue
-// monday") : une seconde façon d'afficher le MÊME flux de Tâches déjà filtré (casquette,
-// projet, échéance) — jamais un second jeu de données. Regroupable par Statut ou Projet,
-// triable par colonne, colonnes réordonnables par glisser-déposer, cellules éditables en
-// ligne (Statut/Projet/Échéance/Titre) sans ouvrir la fiche complète, et une ligne
-// "+ Ajouter une tâche" par groupe. Voir `renderTableView` plus bas et
-// `js/services/pilotageViewStore.js` pour la persistance (localStorage, propre à l'appareil).
+// Vue Équipe — §31 (liste) et §32 (fiche collaborateur simplifiée).
 
-import * as tasksApi from "../domain/tasks.js";
+import * as peopleApi from "../domain/people.js";
+import * as followUpsApi from "../domain/followups.js";
 import * as projectsApi from "../domain/projects.js";
-import * as resourcesApi from "../domain/resources.js";
-import * as promptsApi from "../domain/prompts.js";
 import * as historyApi from "../domain/history.js";
+import * as objectivesApi from "../domain/objectives.js";
 import * as preferencesApi from "../domain/preferences.js";
-import * as casquettesApi from "../domain/casquettes.js";
-import * as pilotageView from "../services/pilotageViewStore.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
-import { validateRequiredFields, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
 import { showHintOnce } from "../components/hint.js";
-import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
-import { attachProjectQuickCreate, openProjectDetail } from "./projects.js";
-import { openChangeTypeModal } from "../components/changeType.js";
-import { openCreatePromptModal, renderPromptList, openPromptPickerModal } from "./prompts.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
-import { renderCanevas } from "../components/canevas.js";
 import { renderNotesBlock } from "../components/notesBlock.js";
-import { renderChecklist, sortChecklistForDisplay } from "../components/checklist.js";
+import { renderChecklist } from "../components/checklist.js";
 import { buildMeetingTitle, copyMeetingTitle, launchMeetingFromEntity } from "../components/meetingLauncher.js";
+import { renderManagerSection } from "./management.js";
+import { renderWorkloadSection } from "./workload.js";
+import { renderFollowUpsOverview } from "./followupsOverview.js";
+import { attachProjectQuickCreate } from "./projects.js";
+import * as workloadApi from "../domain/workload.js";
 import { renderInfoTip } from "../components/infoTip.js";
+import { renderShortcutAssignButton } from "../services/shortcuts.js";
+import { renderMaskChecklist } from "./prepMask.js";
+import { openChangeTypeModal } from "../components/changeType.js";
 import { copyEntityLink } from "../components/copyLink.js";
-import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
-import { openDuplicateTaskModal } from "../components/duplicateTask.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
-import * as tagsApi from "../domain/tags.js";
+import { guideLinkHtml } from "./guide.js";
 import * as dateUtils from "../services/dateUtils.js";
 
-// Fenêtres d'échéance pour le filtre (retour de Charles-Henri) — "en retard" est distinct de
-// "≤7/15 jours" plutôt qu'inclus dedans : ce sont deux questions différentes ("qu'est-ce qui
-// approche ?" vs "qu'est-ce qui est déjà dépassé ?").
-const DUE_WINDOWS = [
-  { key: "all", label: "Toutes les échéances" },
-  { key: "7", label: "≤ 7 jours" },
-  { key: "15", label: "≤ 15 jours" },
-  { key: "late", label: "🔴 En retard" },
-  { key: "none", label: "🗓️ Sans échéance" },
-];
-
-// Regroupement par échéance en vue Tableau (retour de Charles-Henri, 07/09/2026 : "je dois
-// pouvoir regrouper par échéance En retard / Aujourd'hui / Dans la semaine / Dans le mois /
-// Plus tard / Sans date") — toujours les 6 groupes, même vides, comme le regroupement par
-// Statut (jamais un sous-ensemble façon regroupement par Projet) : ce sont des catégories
-// fixes, voir "0 en retard" a sa propre valeur informative. "Semaine"/"mois" sont des fenêtres
-// glissantes de 7/30 jours (mêmes seuils que le filtre Échéance ≤7/≤15 jours plus haut), pas
-// des semaines/mois calendaires. Le glisser-déposer entre groupes reste désactivé pour ce
-// regroupement (voir renderTableView plus bas) : contrairement à Statut/Projet, il n'y a pas de
-// valeur cible évidente à assigner à une tâche déposée dans "Dans la semaine" ou "Plus tard".
-const DUE_BUCKETS = [
-  { key: "late", label: "🔴 En retard" },
-  { key: "today", label: "Aujourd'hui" },
-  { key: "week", label: "Dans la semaine" },
-  { key: "month", label: "Dans le mois" },
-  { key: "later", label: "Plus tard" },
-  { key: "none", label: "Sans date" },
-];
-
-function dueDateBucketKey(task) {
-  if (!task.dueDate) return "none";
-  const days = daysFromToday(task.dueDate);
-  if (days < 0) return "late";
-  if (days === 0) return "today";
-  if (days <= 7) return "week";
-  if (days <= 30) return "month";
-  return "later";
+/** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
+ *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
+ *  trié par `updatedAt` que renvoie le storage, pour ne pas faire sauter un suivi en tête de
+ *  liste juste parce qu'on vient de le modifier. */
+/** Tri alphabétique pour les listes déroulantes "Projet" des formulaires de Suivi (retour de
+ *  Charles-Henri, vague 21) — distinct du tri d'affichage de l'onglet Projets lui-même
+ *  (avancement / manuel, voir preferencesApi.projectSort), qui reste inchangé. */
+function sortProjectsByName(projects) {
+  return [...projects].sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
-export function renderKanban(container) {
-  // Plein écran en mode web (retour de Charles-Henri : éviter le scroll horizontal) — la
-  // classe n'affecte que #app pendant que Pilotage est affiché, retirée au démontage de la
-  // vue (voir cleanup) pour ne jamais fuiter sur les autres onglets.
-  container.classList.add("app-wide");
+function sortByCreatedDesc(list) {
+  return [...list].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
 
+/**
+ * Vue Équipe + Management fusionnés en un seul onglet (retour de Charles-Henri, 02/09/2026 :
+ * "traiter les onglets comme des filtres d'un même flux" — Management était déjà une simple
+ * recomposition des mêmes Personnes/Suivis qu'Équipe, donc la fusion la plus naturelle parmi
+ * les onglets). Le filtre "👥 Tous" / "👔 Mon manager" bascule entre la liste habituelle et le
+ * tableau de bord manager (`renderManagerSection`, js/views/management.js) — rien n'a
+ * disparu, juste regroupé sous un seul onglet plutôt que deux.
+ */
+export function renderPeople(container) {
   container.innerHTML = `
     <div class="topbar">
       <div>
-        <h1>Tâches</h1>
-        <div class="subtitle">Glisse une carte, ou utilise ‹ › pour changer son statut</div>
+        <h1>Équipe</h1>
+        <div class="subtitle" id="people-subtitle">—</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span id="people-status-info"></span>
+        <button id="new-person-btn" class="btn btn-primary btn-sm">+ Personne</button>
       </div>
     </div>
     <div class="view">
-      <div id="pilotage-subnav"></div>
-      <!-- Recherche texte (retour de Charles-Henri, 14/09/2026 : "je dois pouvoir filtrer en
-           recherchant sur titre ou description") — un champ toujours visible plutôt que rangé
-           dans le menu Filtrer et trier (contrairement à Casquette/Projet/Échéance ci-dessous,
-           une recherche se tape au clavier, elle ne se coche pas ; la cacher derrière un clic
-           supplémentaire aurait ralenti l'usage courant). Même placement et même intitulé que
-           sur Ressources/Prompts (voir ces deux vues), pour rester cohérent d'un onglet à
-           l'autre. S'applique aux deux vues, Trello ET Tableau, puisque les deux lisent le même
-           applyFilters plus bas dans ce fichier. -->
-      <div class="field">
-        <input id="kanban-search" type="text" placeholder="🔎 Rechercher (titre, description)..." />
+      <!-- Rail façon "Réglages iPhone" (COMP-UX-021 / USE-UX-021, LOT 9 : "Management invisible,
+           traité comme un filtre caché" — même remède que pilotageSubNav.js : réutilisation de
+           la classe fiche-tabs sur une rangée qui n'était jusqu'ici qu'une classe chip-row
+           ordinaire, pour que "👔 Mon manager" (et les 3 autres modes) se lisent comme de vrais
+           sous-onglets de l'écran Équipe plutôt que comme un filtre secondaire. Aucun changement
+           de comportement : mêmes 4 modes, même logique de bascule ci-dessous. -->
+      <div class="chip-row fiche-tabs" id="people-mode-toggle" role="tablist">
+        <button type="button" class="chip" data-mode="all" role="tab">👥 Tous</button>
+        <button type="button" class="chip" data-mode="manager" role="tab">👔 Mon manager</button>
+        <button type="button" class="chip" data-mode="load" role="tab">⚖️ Charge</button>
+        <button type="button" class="chip" data-mode="followups" role="tab">👀 Suivis</button>
       </div>
-      <!-- Une seule rangée "type de vue + Filtrer & trier" (audit du 07/09/2026, retour de
-           Charles-Henri : "on s'y perd un peu [...] le type de visualisation, les filtres" —
-           Trello/Tableau se confondaient visuellement avec les filtres alors que ce sont deux
-           familles différentes). Échéance, "Masquer terminées" et "Regrouper par" (visible
-           seulement en vue Tableau) ont rejoint Casquette/Projet dans le même menu déplié —
-           avant cette vague, échéance et "Masquer terminées" étaient deux rangées de chips
-           TOUJOURS affichées séparément de "🔧 Filtrer", et "Regrouper par" une 3e rangée à
-           part en mode Tableau. AUCUN id n'a été renommé (kanban-hat-filter,
-           kanban-project-filter, kanban-group-by...) : tout le câblage plus bas continue de
-           cibler les mêmes éléments, seul leur emplacement dans le DOM change. -->
-      <div class="chip-row" id="kanban-filters" style="flex-wrap:wrap;">
-        <!-- "+ Tâche" (LOT 1, TODO-007 — UX-001/AUDIT_USAGE_EFFICACITE.md : "aucun point
-             d'entrée de création de tâche depuis l'écran Pilotage", contrairement au Projet, qui
-             a déjà son "+ Projet" au même endroit de sa propre vue, voir js/views/projects.js).
-             Ouvre le même formulaire que partout ailleurs (openCreateTaskModal), sans projet
-             préassigné — la tâche créée apparaît automatiquement via l'abonnement temps réel
-             tasksApi.subscribe() ci-dessous, pas besoin d'un rafraîchissement manuel. -->
-        <button id="new-task-btn" class="btn btn-primary btn-sm">+ Tâche</button>
-        <button type="button" class="chip" data-view="trello">🗂️ Trello</button>
-        <button type="button" class="chip" data-view="table">📊 Tableau</button>
-        <span id="kanban-status-info"></span>
-        <details class="filter-popover" id="kanban-filter-popover">
-          <summary class="chip">🔧 Filtrer &amp; trier<span class="filter-popover-badge" id="kanban-filter-badge" hidden></span></summary>
-          <div class="filter-popover-panel">
-            <div class="filter-popover-group">
-              <div class="filter-popover-label" style="display:flex;align-items:center;gap:6px;">Casquette<span id="kanban-hat-info"></span></div>
-              <div class="chip-row" id="kanban-hat-filter"></div>
-            </div>
-            <div class="filter-popover-group">
-              <div class="filter-popover-label">Projet</div>
-              <select id="kanban-project-filter"></select>
-            </div>
-            <div class="filter-popover-group">
-              <div class="filter-popover-label">Échéance</div>
-              <div class="chip-row" id="kanban-due-filter" style="flex-wrap:wrap;margin-bottom:0;"></div>
-            </div>
-            <div class="filter-popover-group">
-              <div class="chip-row" style="margin-bottom:0;flex-wrap:wrap;">
-                <button type="button" class="chip" id="kanban-hide-done">🙈 Masquer terminées</button>
-                <button type="button" class="chip" id="kanban-stalled-only">⏸️ Stagnantes</button>
-              </div>
-            </div>
-            <div class="filter-popover-group" id="kanban-groupby-group" style="display:none;">
-              <div class="filter-popover-label">Regrouper par (vue Tableau)</div>
-              <select id="kanban-group-by">
-                <option value="status">Statut</option>
-                <option value="project">Projet</option>
-                <option value="dueDate">Échéance</option>
-                <option value="none">Aucun</option>
-              </select>
-            </div>
-          </div>
-        </details>
-      </div>
-      <div class="kanban-board" id="kanban-board"></div>
-      <div id="kanban-table" style="display:none;"></div>
+      <div id="people-list"></div>
     </div>
   `;
 
-  renderPilotageSubNav(container.querySelector("#pilotage-subnav"), "#/kanban");
-  showHintOnce(
-    container.querySelector(".view"),
-    "kanban-intro-v1",
-    "Ici, seulement <strong>tes</strong> tâches — pas de collaborateur à choisir, tout ce qui s'y trouve est déjà à toi. Ce qu'un collaborateur doit faire, c'est un Suivi sur sa fiche (onglet Équipe). Le filtre par casquette est le même qu'à l'Accueil."
-  );
-  renderInfoTip(container.querySelector("#kanban-hat-info"), casquettesApi.HAT_INFO_HTML);
-  renderInfoTip(container.querySelector("#kanban-status-info"), tasksApi.STATUS_INFO_HTML);
-  container.querySelector("#new-task-btn").addEventListener("click", () => openCreateTaskModal());
+  const listEl = container.querySelector("#people-list");
+  const subtitleEl = container.querySelector("#people-subtitle");
+  const modeToggleEl = container.querySelector("#people-mode-toggle");
+  container.querySelector("#new-person-btn").addEventListener("click", openCreatePersonModal);
+  renderInfoTip(container.querySelector("#people-status-info"), followUpsApi.STATUS_INFO_HTML);
 
-  const board = container.querySelector("#kanban-board");
-  const tableEl = container.querySelector("#kanban-table");
-  const hatFilterEl = container.querySelector("#kanban-hat-filter");
-  const filtersEl = container.querySelector("#kanban-filters");
-  const filterPopoverEl = container.querySelector("#kanban-filter-popover");
-  const filterBadgeEl = container.querySelector("#kanban-filter-badge");
-  const projectFilterEl = container.querySelector("#kanban-project-filter");
-  const dueFilterEl = container.querySelector("#kanban-due-filter");
-  const searchEl = container.querySelector("#kanban-search");
-  // Trello/Tableau vivent maintenant dans la même rangée que "🔧 Filtrer & trier" plutôt que
-  // dans leur propre `#kanban-view-toggle` (audit du 07/09/2026) — `filtersEl` sert donc les
-  // deux rôles, le sélecteur `[data-view]` ci-dessous ne matchant de toute façon que ces deux
-  // boutons-là.
-  const viewToggleEl = filtersEl;
-  const groupByGroupEl = container.querySelector("#kanban-groupby-group");
-  const groupByEl = container.querySelector("#kanban-group-by");
-  // Sélection multiple de la vue Tableau (retour de Charles-Henri, 13/09/2026 : "qu'on puisse
-  // sélectionner plusieurs tâches et [...] modifier des éléments en masse") — vit ici plutôt que
-  // dans renderTableView() elle-même, qui est entièrement redessinée à chaque changement
-  // (tri, glisser-déposer de colonne, édition en ligne...) : sans ça, la sélection serait perdue
-  // à chaque redessin. Un objet (et non un Set brut) pour le passer par référence à
-  // renderTableView/renderBulkToolbar, qui le lisent et le modifient directement.
-  const bulkSelection = { ids: new Set() };
-  let latestTasks = [];
-  let latestProjects = [];
-  let filterWindow = "all";
-  let filterProjectId = "all";
-  let activeHat = "all";
-  let hideDone = false;
-  // "⏸️ Stagnantes" (retour de Charles-Henri, 07/09/2026 : "un filtre pour identifier [...] ce
-  // qui n'avance pas depuis un certain temps") — même critère et même seuil que le bloc "⏸️ En
-  // pause depuis X j" de l'Accueil (tasksApi.isStalled, 5 jours sans mise à jour sur un statut
-  // actif), pour ne jamais avoir deux définitions de "stagnant" dans l'app. Filtre indépendant
-  // de "Sans échéance" (ajouté à DUE_WINDOWS ci-dessus) : une tâche peut être stagnante ET avoir
-  // une échéance, ou sans échéance ET avancer normalement — deux questions différentes, donc
-  // deux filtres cumulables plutôt qu'un seul bouton fusionné.
-  let stalledOnly = false;
-  // Recherche texte titre/description (retour de Charles-Henri, 14/09/2026) — jamais persistée
-  // d'une visite à l'autre, même traitement que les autres filtres de cette vue.
-  let searchQuery = "";
+  let people = [];
+  let followUps = [];
+  let projects = [];
+  let mode = "all";
 
-  // Vue Trello/Tableau (02/09/2026) : préférence propre à l'appareil (localStorage), pas
-  // besoin d'attendre les préférences Firestore pour l'afficher — contrairement à la
-  // casquette, ce n'est qu'un choix d'affichage local, jamais une donnée à synchroniser.
-  let viewMode = pilotageView.getViewState().mode;
-  updateViewToggle();
-  groupByEl.value = pilotageView.getViewState().table.groupBy;
-  viewToggleEl.querySelectorAll("[data-view]").forEach((chip) => {
+  function updateModeToggle() {
+    modeToggleEl.querySelectorAll("[data-mode]").forEach((chip) => chip.classList.toggle("active", chip.dataset.mode === mode));
+  }
+  modeToggleEl.querySelectorAll("[data-mode]").forEach((chip) => {
     chip.addEventListener("click", () => {
-      viewMode = chip.dataset.view;
-      pilotageView.setMode(viewMode);
-      updateViewToggle();
-      renderBoard();
+      mode = chip.dataset.mode;
+      updateModeToggle();
+      render();
     });
   });
-  groupByEl.addEventListener("change", () => {
-    pilotageView.setTableConfig({ groupBy: groupByEl.value });
-    renderBoard();
-  });
+  updateModeToggle();
 
-  function updateViewToggle() {
-    viewToggleEl.querySelectorAll("[data-view]").forEach((chip) => chip.classList.toggle("active", chip.dataset.view === viewMode));
-    // "Regrouper par" n'a de sens qu'en vue Tableau — masqué dans le menu "Filtrer & trier"
-    // sinon (même logique qu'avant cette vague, seul l'emplacement a changé).
-    groupByGroupEl.style.display = viewMode === "table" ? "" : "none";
-    board.style.display = viewMode === "table" ? "none" : "";
-    tableEl.style.display = viewMode === "table" ? "" : "none";
-  }
-
-  // Pilotage ne montre que des Tâches, qui ne peuvent jamais être "Équipe" ni "Manager" (voir
-  // taskHat() dans casquettes.js) — restreindre les chips affichées évite un board vide et
-  // confus au clic sur ces deux-là (retour de Charles-Henri, 02/09/2026).
-  const PILOTAGE_HATS = ["toi", "projets", "cse"];
-
-  preferencesApi.getPreferences().then((prefs) => {
-    // La préférence de casquette est partagée avec l'Accueil (qui, lui, montre aussi des
-    // Suivis et peut légitimement être sur "Équipe"/"Manager") — si Pilotage en hérite une
-    // valeur qu'il ne peut pas afficher comme chip, revenir à "Toutes" plutôt que de filtrer
-    // silencieusement sur une casquette invisible.
-    const casquette = prefs.casquette || "all";
-    activeHat = casquette === "all" || PILOTAGE_HATS.includes(casquette) ? casquette : "all";
-    renderHatFilter();
-    updateFilterBadge();
-    renderBoard();
-  });
-
-  function renderHatFilter() {
-    casquettesApi.renderHatChipRow(
-      hatFilterEl,
-      activeHat,
-      async (hatId) => {
-        activeHat = hatId;
-        renderHatFilter();
-        updateFilterBadge();
-        renderBoard();
-        await preferencesApi.setCasquette(hatId);
-      },
-      PILOTAGE_HATS
-    );
-  }
-
-  // "🔧 Filtrer & trier" (audit de simplification du 02/09/2026, étendu le 07/09/2026 :
-  // casquette + projet + échéance + "masquer terminées" + regrouper-par, cinq façons de
-  // restreindre/organiser la même liste, dans un même menu plutôt que plusieurs rangées de
-  // chips en permanence à l'écran) — un badge sur le bouton donne l'état d'un coup d'œil sans
-  // avoir à ouvrir le menu, pour ne jamais laisser un filtre actif oublié invisible. Échéance et
-  // "Masquer terminées" comptent désormais dans ce badge : avant cette vague ils vivaient hors
-  // du menu, toujours visibles, donc jamais "oubliables" au même sens — une fois dans le menu,
-  // ils doivent l'être pour la même raison que Casquette/Projet.
-  function updateFilterBadge() {
-    const count =
-      (activeHat !== "all" ? 1 : 0) +
-      (filterProjectId !== "all" ? 1 : 0) +
-      (filterWindow !== "all" ? 1 : 0) +
-      (hideDone ? 1 : 0) +
-      (stalledOnly ? 1 : 0);
-    filterBadgeEl.textContent = count ? String(count) : "";
-    filterBadgeEl.hidden = count === 0;
-  }
-  function closeFilterPopoverOnOutsideClick(e) {
-    if (filterPopoverEl.open && !filterPopoverEl.contains(e.target)) filterPopoverEl.open = false;
-  }
-  document.addEventListener("click", closeFilterPopoverOnOutsideClick);
-
-  dueFilterEl.innerHTML = DUE_WINDOWS.map(
-    (w) => `<button type="button" class="chip${w.key === "all" ? " active" : ""}" data-window="${w.key}">${w.label}</button>`
-  ).join("");
-  dueFilterEl.querySelectorAll("[data-window]").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      filterWindow = chip.dataset.window;
-      dueFilterEl.querySelectorAll("[data-window]").forEach((c) => c.classList.toggle("active", c === chip));
-      updateFilterBadge();
-      renderBoard();
-    });
-  });
-  // "Masquer terminées" (retour de Charles-Henri, 02/09/2026) : filtre en plus des autres,
-  // jamais persisté d'une visite à l'autre (même traitement que filterWindow/filterProjectId
-  // ci-dessus) — s'applique aussi bien au Trello (la colonne "Terminé" se vide) qu'au Tableau.
-  container.querySelector("#kanban-hide-done").addEventListener("click", (e) => {
-    hideDone = !hideDone;
-    e.currentTarget.classList.toggle("active", hideDone);
-    updateFilterBadge();
-    renderBoard();
-  });
-  container.querySelector("#kanban-stalled-only").addEventListener("click", (e) => {
-    stalledOnly = !stalledOnly;
-    e.currentTarget.classList.toggle("active", stalledOnly);
-    updateFilterBadge();
-    renderBoard();
-  });
-  projectFilterEl.addEventListener("change", () => {
-    filterProjectId = projectFilterEl.value;
-    updateFilterBadge();
-    renderBoard();
-  });
-  // BUG corrigé (15/09/2026, audit performance) : la recherche n'avait aucun anti-rebond —
-  // chaque frappe reconstruisait tout le board (filtrage + tri + toutes les cartes). Même délai
-  // que la recherche globale (js/components/search.js), voir aussi resources.js/prompts.js/
-  // inbox.js/people.js/guide.js/linkedItems.js, même correctif.
-  let searchDebounce = null;
-  searchEl.addEventListener("input", () => {
-    clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(() => {
-      searchQuery = searchEl.value.trim().toLowerCase();
-      renderBoard();
-    }, 150);
-  });
-
-  function applyFilters(tasks) {
-    const projectsById = new Map(latestProjects.map((p) => [p.id, p]));
-    // Un projet fermé sort des outils de pilotage avec tout ce qui lui est rattaché (retour de
-    // Charles-Henri, 02/09/2026) — voir projectsApi.closeProject(). Reste consultable via le
-    // filtre "Fermés" de l'onglet Projets ou la recherche globale, jamais ici.
-    let list = tasks.filter((t) => !t.projectId || !projectsApi.isArchived(projectsById.get(t.projectId)));
-    if (activeHat !== "all") {
-      list = list.filter((t) => casquettesApi.taskHat(t, projectsById) === activeHat);
+  function render() {
+    if (mode === "manager") {
+      const managers = people.filter((p) => p.type === "manager");
+      subtitleEl.textContent = managers.length
+        ? `${managers.length} manager${managers.length > 1 ? "s" : ""}`
+        : "Pas encore de manager renseigné";
+      renderManagerSection(listEl, people, followUps);
+      return;
     }
-    if (filterProjectId !== "all") list = list.filter((t) => t.projectId === filterProjectId);
-    if (filterWindow === "late") list = list.filter((t) => tasksApi.isLate(t));
-    else if (filterWindow === "7" || filterWindow === "15") {
-      const horizon = Number(filterWindow);
-      list = list.filter((t) => t.dueDate && daysFromToday(t.dueDate) >= 0 && daysFromToday(t.dueDate) <= horizon);
-    } else if (filterWindow === "none") list = list.filter((t) => !t.dueDate);
-    if (hideDone) list = list.filter((t) => t.status !== "done");
-    if (stalledOnly) list = list.filter((t) => tasksApi.isStalled(t));
-    if (searchQuery) {
-      list = list.filter((t) => `${t.title} ${t.description || ""}`.toLowerCase().includes(searchQuery));
+
+    // "⚖️ Charge" (vague 34, retour de Charles-Henri : assistant de répartition de charge) —
+    // même principe que "👔 Mon manager" ci-dessus, un 3e mode du même chip-row plutôt qu'un
+    // onglet séparé (voir js/views/workload.js).
+    if (mode === "load") {
+      const collaborateurs = people.filter((p) => p.type !== "manager");
+      subtitleEl.textContent = collaborateurs.length
+        ? `${collaborateurs.length} collaborateur${collaborateurs.length > 1 ? "s" : ""}`
+        : "Pas encore de collaborateur renseigné";
+      renderWorkloadSection(listEl, people, followUps);
+      return;
     }
-    return list;
-  }
 
-  /** Tri par défaut : échéance la plus proche en premier, sans échéance à la fin (retour de
-   *  Charles-Henri) — ne change jamais l'ordre des colonnes elles-mêmes, seulement l'ordre
-   *  des cartes à l'intérieur de chacune. */
-  function sortByDueDate(tasks) {
-    return [...tasks].sort((a, b) => {
-      if (!a.dueDate && !b.dueDate) return 0;
-      if (!a.dueDate) return 1;
-      if (!b.dueDate) return -1;
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    });
-  }
+    // "👀 Suivis" (retour de Charles-Henri, 13/09/2026 : "disposer d'une vue pour voir les
+    // suivis ou choses à dire", précisé ensuite : une vue TRANSVERSE tous projets/personnes
+    // confondus) — même principe que "⚖️ Charge" juste au-dessus, un 4e mode du même chip-row.
+    if (mode === "followups") {
+      const active = followUps.filter((f) => f.status !== "done");
+      subtitleEl.textContent = active.length
+        ? `${active.length} suivi(s) en cours`
+        : "Rien en cours — tout est réglé";
+      renderFollowUpsOverview(listEl, people, followUps, projects);
+      return;
+    }
 
-  function render(tasks, projects) {
-    // `projects` est déjà filtré aux projets actifs par renderBoard() — un projet fermé ne doit
-    // même pas apparaître comme choix de filtre ici.
-    projectFilterEl.innerHTML =
-      `<option value="all">Tous les projets</option>` +
-      projects.map((p) => `<option value="${p.id}" ${p.id === filterProjectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
+    subtitleEl.textContent = people.length ? `${people.length} personne(s)` : "Personne pour l'instant";
 
-    const filtered = applyFilters(tasks);
+    if (!people.length) {
+      listEl.innerHTML = `
+        <div class="empty-state">
+          <span class="emoji">👥</span>
+          Ajoute les personnes que tu suis avec le bouton « + Personne ».
+        </div>`;
+      return;
+    }
 
-    board.innerHTML = "";
-    for (const status of tasksApi.STATUSES) {
-      const column = document.createElement("div");
-      column.className = "kanban-column";
-      column.dataset.status = status;
+    listEl.innerHTML = "";
+    const card = document.createElement("div");
+    card.className = "card";
+    // Ordre manuel (retour de Charles-Henri, vague 20 : "je veux aussi pouvoir réordonner les
+    // personnes au sein de mon équipe") — même mécanisme que l'onglet Projets (js/domain/
+    // people.js#sortPeople/reorderPeople, calqué sur projectsApi.sortProjects/reorderProjects) :
+    // toute la ligne est glissable (comme une carte Projet), pas besoin d'une poignée dédiée,
+    // rien d'éditable en ligne ici qui pourrait entrer en conflit avec le glisser-déposer.
+    const orderedPeople = peopleApi.sortPeople(people);
+    const orderedIds = orderedPeople.map((p) => p.id);
+    for (const person of orderedPeople) {
+      const own = followUps.filter((f) => f.personId === person.id);
+      const waiting = own.filter((f) => f.status === "waiting").length;
+      const relaunched = own.filter((f) => f.status === "relaunched").length;
+      const late = own.filter(followUpsApi.isControlDue).length;
 
-      const columnTasks = sortByDueDate(filtered.filter((t) => t.status === status));
-
-      const header = document.createElement("div");
-      header.className = "kanban-column-header";
-      header.innerHTML = `<span>${tasksApi.STATUS_LABELS[status]}</span>`;
-      const count = document.createElement("span");
-      count.className = "count";
-      count.textContent = columnTasks.length;
-      header.appendChild(count);
-      column.appendChild(header);
-
-      // Les cartes vivent dans leur propre zone de scroll (retour de Charles-Henri : "les
-      // titres de colonnes disparaissent au scroll") — l'en-tête reste toujours visible
-      // puisqu'il est en dehors de cette zone, pas besoin de position sticky ni de calcul de
-      // décalage par rapport à la barre du haut.
-      const cardsWrap = document.createElement("div");
-      cardsWrap.className = "kanban-column-cards";
-      for (const task of columnTasks) {
-        cardsWrap.appendChild(renderCard(task, projects));
-      }
-      column.appendChild(cardsWrap);
-
-      column.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        column.classList.add("drag-over");
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "grab";
+      row.draggable = true;
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">⠿ ${person.type === "manager" ? "👔" : "👤"} ${escapeHtml(person.name)}</div>
+          <div class="item-meta">
+            ${waiting} en attente · ${relaunched} relancé(s)
+            ${late ? ` · <span style="color:var(--color-danger);font-weight:600;">${late} à relancer</span>` : ""}
+          </div>
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        // Un glisser-déposer qui se termine peut déclencher un click parasite juste après —
+        // même garde-fou que l'onglet Projets (js/views/projects.js).
+        if (row.dataset.justDragged) return;
+        openPersonDetail(person, followUps);
       });
-      column.addEventListener("dragleave", () => column.classList.remove("drag-over"));
-      column.addEventListener("drop", async (e) => {
-        e.preventDefault();
-        column.classList.remove("drag-over");
-        const taskId = e.dataTransfer.getData("text/task-id");
-        if (!taskId) return;
-        const dragged = latestTasks.find((t) => t.id === taskId);
-        const prevStatus = dragged ? dragged.status : null;
-        await tasksApi.setStatus(taskId, status);
-        celebrateIfJustDone(prevStatus, status);
+      row.addEventListener("dragstart", (e) => {
+        e.dataTransfer.setData("text/person-id", person.id);
       });
-
-      board.appendChild(column);
+      row.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        row.classList.add("drag-over");
+      });
+      row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+      row.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        row.classList.remove("drag-over");
+        const draggedId = e.dataTransfer.getData("text/person-id");
+        if (!draggedId || draggedId === person.id) return;
+        const ids = [...orderedIds];
+        const from = ids.indexOf(draggedId);
+        const to = ids.indexOf(person.id);
+        if (from < 0 || to < 0) return;
+        ids.splice(to, 0, ids.splice(from, 1)[0]);
+        row.dataset.justDragged = "1";
+        await peopleApi.reorderPeople(ids);
+        setTimeout(() => delete row.dataset.justDragged, 300);
+      });
+      card.appendChild(row);
     }
+    listEl.appendChild(card);
   }
 
-  function renderBoard() {
-    updateViewToggle();
-    const activeProjects = latestProjects.filter((p) => !projectsApi.isArchived(p));
-    if (viewMode === "table") {
-      renderTableView(tableEl, applyFilters(latestTasks), activeProjects, renderBoard, bulkSelection);
-    } else {
-      render(latestTasks, activeProjects);
-    }
-  }
-
-  // Vérifié pendant l'audit (15/09/2026) : la vue Kanban retrie bien les tâches par échéance
-  // (render()), MAIS la vue Tableau (renderTableView#sortRows) retombe sur l'ordre reçu tel
-  // quel quand aucune colonne de tri n'est active (`if (!sortColumn) return rows;`) — retirer le
-  // tri par défaut ici changerait silencieusement cet ordre d'affichage. `storage.js#subscribe`
-  // accepte désormais `{ sort: false }` (voir son commentaire) pour un futur appelant qui peut
-  // prouver ne jamais en dépendre, mais aucun des 6 appelants de tasksApi.subscribe() ne l'est de
-  // façon sûre sans audit un par un — laissé au comportement par défaut (trié) partout.
-  const unsubTasks = tasksApi.subscribe((tasks) => {
-    latestTasks = tasks;
-    renderBoard();
+  const unsubPeople = peopleApi.subscribe((items) => {
+    people = items;
+    render();
   });
-  const unsubProjects = projectsApi.subscribe((projects) => {
-    latestProjects = projects;
-    renderBoard();
+  const unsubFollowUps = followUpsApi.subscribe((items) => {
+    followUps = items;
+    render();
+  });
+  // Uniquement pour résoudre le nom de projet affiché par "👀 Suivis" (voir
+  // js/views/followupsOverview.js) — jamais utilisé par les 3 autres modes.
+  const unsubProjects = projectsApi.subscribe((items) => {
+    projects = items;
+    render();
   });
 
   return function cleanup() {
-    container.classList.remove("app-wide");
-    document.removeEventListener("click", closeFilterPopoverOnOutsideClick);
-    unsubTasks();
+    unsubPeople();
+    unsubFollowUps();
     unsubProjects();
   };
 }
 
-// BUG corrigé (15/09/2026, audit "anomalies silencieuses" : unification du calcul de dates) —
-// copie exacte de celle de js/views/dashboard.js, même correctif — voir js/services/dateUtils.js.
-const daysFromToday = dateUtils.daysFromToday;
-
-// TODO-003 (LOT 2) : report rapide d'échéance "+N jours" — calcul déplacé vers
-// `js/services/dateUtils.js#addDaysToIsoDate` le 22/09/2026 (retour direct de Charles-Henri :
-// même contrôle nécessaire sur les dates de Suivi, `js/views/people.js`, voir TODO-030) plutôt
-// que dupliqué une seconde fois là-bas — la mutualisation que ce TODO envisageait déjà lui-même.
-// Repris ici tel quel, aucun changement de comportement.
-const addDaysToIsoDate = dateUtils.addDaysToIsoDate;
-
-/**
- * Petit retour positif à la clôture d'une tâche (retour de Charles-Henri, 01/09/2026 — piste
- * TDAH : un signal immédiat et visible que quelque chose vient réellement d'être terminé,
- * plutôt qu'un chiffre qui change silencieusement dans un coin). Un seul endroit pour les 3
- * chemins qui peuvent amener une tâche à "done" (glisser-déposer, boutons ‹ ›, fiche détail) :
- * ne se déclenche que sur une vraie *transition* vers "done", jamais si la tâche y était déjà.
- */
-function celebrateIfJustDone(prevStatus, newStatus) {
-  if (newStatus !== "done" || prevStatus === "done") return false;
-  showToast("🎉 Terminé !");
-  triggerCompletionAnimation();
-  return true;
-}
-
-function triggerCompletionAnimation() {
-  document.querySelectorAll(".completion-burst").forEach((el) => el.remove());
-  const burst = document.createElement("div");
-  burst.className = "completion-burst";
-  burst.textContent = "🎉";
-  document.body.appendChild(burst);
-  setTimeout(() => burst.remove(), 900);
-}
-
-const TABLE_COLUMN_LABELS = { type: "Type", status: "Statut", project: "Projet", dueDate: "Échéance", notes: "Notes", description: "Description" };
-
-/**
- * Vue "📊 Tableau" façon Monday (02/09/2026). `tasks` est déjà filtré (casquette, projet,
- * échéance — même pipeline que la vue Trello, voir `applyFilters` dans `renderKanban`) : cette
- * fonction ne fait que le regrouper/trier/afficher, jamais une seconde source de vérité.
- * `onChange` redessine tout depuis `renderBoard()` après chaque action (tri, glisser-déposer
- * de colonne, édition en ligne, ajout rapide) — toujours relire `pilotageView.getViewState()`
- * plutôt que de garder une copie locale, pour ne jamais désynchroniser l'affichage du réglage
- * réellement enregistré.
- */
-function renderTableView(container, tasks, projects, onChange, selection) {
-  const { groupBy, sortColumn, sortDir, columnOrder } = pilotageView.getViewState().table;
-
-  // Statut/Projet redevient inutile comme colonne quand c'est déjà lui qui structure les
-  // groupes (même logique que Monday : la colonne de regroupement disparaît, remplacée par
-  // les en-têtes de section).
-  const visibleColumns = columnOrder.filter(
-    (c) => !(groupBy === "status" && c === "status") && !(groupBy === "project" && c === "project") && !(groupBy === "dueDate" && c === "dueDate")
-  );
-
-  function cellSortValue(task, col) {
-    if (col === "type") return task.type === "communication" ? 1 : 0;
-    if (col === "status") return tasksApi.STATUSES.indexOf(task.status);
-    if (col === "project") {
-      const p = projects.find((pr) => pr.id === task.projectId);
-      return p ? p.name.toLowerCase() : null;
-    }
-    if (col === "dueDate") return task.dueDate ? new Date(task.dueDate).getTime() : null;
-    if (col === "description") return (task.description || "").toLowerCase() || null;
-    if (col === "notes") {
-      const log = task.notesLog || [];
-      return log.length ? log[log.length - 1].createdAt : null;
-    }
-    return null;
-  }
-
-  function sortRows(rows) {
-    if (!sortColumn) return rows;
-    const sorted = [...rows].sort((a, b) => {
-      const va = cellSortValue(a, sortColumn);
-      const vb = cellSortValue(b, sortColumn);
-      let cmp;
-      if (va == null && vb == null) cmp = 0;
-      else if (va == null) cmp = 1;
-      else if (vb == null) cmp = -1;
-      else if (typeof va === "string") cmp = va.localeCompare(vb);
-      else cmp = va - vb;
-      return sortDir === "desc" ? -cmp : cmp;
-    });
-    return sorted;
-  }
-
-  let groups;
-  if (groupBy === "status") {
-    groups = tasksApi.STATUSES.map((s) => ({ key: s, label: tasksApi.STATUS_LABELS[s], items: sortRows(tasks.filter((t) => t.status === s)) }));
-  } else if (groupBy === "project") {
-    const byKey = new Map();
-    const order = [];
-    for (const t of tasks) {
-      const key = t.projectId || "__none__";
-      if (!byKey.has(key)) {
-        byKey.set(key, []);
-        order.push(key);
-      }
-      byKey.get(key).push(t);
-    }
-    groups = order.map((key) => {
-      const project = key === "__none__" ? null : projects.find((p) => p.id === key);
-      return { key, label: project ? project.name : "Sans projet", items: sortRows(byKey.get(key)) };
-    });
-  } else if (groupBy === "dueDate") {
-    groups = DUE_BUCKETS.map((b) => ({ key: b.key, label: b.label, items: sortRows(tasks.filter((t) => dueDateBucketKey(t) === b.key)) }));
-  } else {
-    groups = [{ key: "__all__", label: null, items: sortRows(tasks) }];
-  }
-
-  container.innerHTML = "";
-  if (!tasks.length) {
-    container.innerHTML = `<div class="empty-state"><span class="emoji">📊</span>Rien à afficher avec ces filtres.</div>`;
-    return;
-  }
-
-  container.appendChild(renderBulkToolbar(tasks, projects, selection, onChange));
-
-  for (const group of groups) {
-    const section = document.createElement("div");
-    section.className = "pilotage-table-group";
-    if (group.label !== null) {
-      const header = document.createElement("div");
-      header.className = "pilotage-table-group-header";
-      header.innerHTML = `<span>${escapeHtml(group.label)}</span><span class="count">${group.items.length}</span>`;
-      section.appendChild(header);
-    }
-
-    const wrap = document.createElement("div");
-    wrap.className = "pilotage-table-wrap";
-    const table = document.createElement("table");
-    table.className = "pilotage-table";
-    table.appendChild(renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange, group.items, selection));
-    const tbody = document.createElement("tbody");
-    for (const task of group.items) {
-      tbody.appendChild(renderTableRow(task, projects, visibleColumns, onChange, groupBy, selection));
-    }
-    tbody.appendChild(renderQuickAddRow(visibleColumns, group, groupBy));
-    table.appendChild(tbody);
-    wrap.appendChild(table);
-
-    // Glisser une ligne vers un autre groupe pour changer sa valeur (retour de Charles-Henri,
-    // 02/09/2026 : "basculer par glisser une tâche ailleurs", façon Monday) — n'a de sens que
-    // quand un regroupement structure les lignes (Statut/Projet) ; en "Aucun", il n'y a qu'un
-    // seul groupe, glisser une ligne dedans ne changerait jamais rien. Volontairement exclu
-    // aussi pour "Échéance" (retour de Charles-Henri, 07/09/2026, question posée avant d'agir) :
-    // contrairement à Statut/Projet, il n'y a pas de valeur cible évidente à assigner à une
-    // tâche déposée dans "Dans la semaine" ou "Plus tard" — ce regroupement sert à visualiser,
-    // pas à agir.
-    if (groupBy !== "none" && groupBy !== "dueDate") {
-      tbody.addEventListener("dragover", (e) => {
-        if (!e.dataTransfer.types.includes("text/pilotage-row-task")) return;
-        e.preventDefault();
-        tbody.classList.add("drag-over-group");
-      });
-      tbody.addEventListener("dragleave", () => tbody.classList.remove("drag-over-group"));
-      tbody.addEventListener("drop", async (e) => {
-        const taskId = e.dataTransfer.getData("text/pilotage-row-task");
-        if (!taskId) return;
-        e.preventDefault();
-        tbody.classList.remove("drag-over-group");
-        const dragged = tasks.find((t) => t.id === taskId);
-        if (!dragged) return;
-        if (groupBy === "status" && dragged.status !== group.key) {
-          const prevStatus = dragged.status;
-          await tasksApi.setStatus(taskId, group.key);
-          celebrateIfJustDone(prevStatus, group.key);
-          onChange();
-        } else if (groupBy === "project") {
-          const targetProjectId = group.key === "__none__" ? null : group.key;
-          if (targetProjectId !== dragged.projectId) {
-            await tasksApi.updateTask(taskId, { projectId: targetProjectId });
-            onChange();
-          }
-        }
-      });
-    }
-
-    section.appendChild(wrap);
-    container.appendChild(section);
-  }
-}
-
-/**
- * Barre d'actions en masse (retour de Charles-Henri, 13/09/2026 : "qu'on puisse sélectionner
- * plusieurs tâches et [...] modifier des éléments en masse sur un statut, une échéance, un
- * projet, un critère de clôture, un blocage, une ressource ajoutée ou supprimée, un prompt, ou
- * ajouter des notes en masse") — cachée dès que rien n'est sélectionné, jamais un espace vide
- * réservé en permanence. `tasks` est la liste actuellement affichée (déjà filtrée) : sert à la
- * fois à purger de la sélection toute tâche qui ne correspond plus aux filtres actifs (jamais de
- * sélection fantôme) et à résoudre les tâches réellement sélectionnées pour la modale.
- */
-function renderBulkToolbar(tasks, projects, selection, onChange) {
-  const visibleIds = new Set(tasks.map((t) => t.id));
-  for (const id of [...selection.ids]) {
-    if (!visibleIds.has(id)) selection.ids.delete(id);
-  }
-
-  const bar = document.createElement("div");
-  bar.className = "pilotage-bulk-toolbar";
-  bar.hidden = selection.ids.size === 0;
-  bar.innerHTML = `
-    <span class="pilotage-bulk-toolbar-count">${selection.ids.size} tâche${selection.ids.size > 1 ? "s" : ""} sélectionnée${selection.ids.size > 1 ? "s" : ""}</span>
-    <button type="button" id="bulk-edit-btn" class="btn btn-secondary btn-sm">✏️ Modifier en masse</button>
-    <button type="button" id="bulk-clear-btn" class="btn btn-ghost btn-sm">Tout désélectionner</button>
-  `;
-  bar.querySelector("#bulk-edit-btn")?.addEventListener("click", () => {
-    const selectedTasks = tasks.filter((t) => selection.ids.has(t.id));
-    if (!selectedTasks.length) return;
-    openBulkEditModal(selectedTasks, projects, () => {
-      selection.ids.clear();
-      onChange();
-    });
-  });
-  bar.querySelector("#bulk-clear-btn")?.addEventListener("click", () => {
-    selection.ids.clear();
-    onChange();
-  });
-  return bar;
-}
-
-function renderTableHead(visibleColumns, sortColumn, sortDir, columnOrder, onChange, groupItems, selection) {
-  const thead = document.createElement("thead");
-  const tr = document.createElement("tr");
-
-  const thTitle = document.createElement("th");
-  thTitle.className = "pilotage-table-th-pinned";
-  const groupIds = groupItems.map((t) => t.id);
-  const allSelected = groupIds.length > 0 && groupIds.every((id) => selection.ids.has(id));
-  const someSelected = !allSelected && groupIds.some((id) => selection.ids.has(id));
-  const selectAllCheckbox = document.createElement("input");
-  selectAllCheckbox.type = "checkbox";
-  selectAllCheckbox.className = "pilotage-table-checkbox";
-  selectAllCheckbox.checked = allSelected;
-  selectAllCheckbox.indeterminate = someSelected;
-  selectAllCheckbox.title = "Sélectionner tout ce groupe";
-  selectAllCheckbox.addEventListener("click", (e) => e.stopPropagation()); // ne pas déclencher le tri de la colonne
-  selectAllCheckbox.addEventListener("change", () => {
-    if (selectAllCheckbox.checked) groupIds.forEach((id) => selection.ids.add(id));
-    else groupIds.forEach((id) => selection.ids.delete(id));
-    onChange();
-  });
-  thTitle.appendChild(selectAllCheckbox);
-  thTitle.appendChild(document.createTextNode("Titre"));
-  tr.appendChild(thTitle);
-
-  for (const col of visibleColumns) {
-    const th = document.createElement("th");
-    th.draggable = true;
-    th.dataset.col = col;
-    const arrow = sortColumn === col ? (sortDir === "asc" ? " ▲" : " ▼") : "";
-    th.textContent = TABLE_COLUMN_LABELS[col] + arrow;
-    th.addEventListener("click", () => {
-      const current = pilotageView.getViewState().table;
-      const nextDir = current.sortColumn === col && current.sortDir === "asc" ? "desc" : "asc";
-      pilotageView.setTableConfig({ sortColumn: col, sortDir: nextDir });
-      onChange();
-    });
-    th.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/pilotage-column", col);
-    });
-    th.addEventListener("dragover", (e) => e.preventDefault());
-    th.addEventListener("drop", (e) => {
-      e.preventDefault();
-      const draggedCol = e.dataTransfer.getData("text/pilotage-column");
-      if (!draggedCol || draggedCol === col) return;
-      const order = [...columnOrder];
-      const from = order.indexOf(draggedCol);
-      const to = order.indexOf(col);
-      if (from === -1 || to === -1) return;
-      order.splice(from, 1);
-      order.splice(to, 0, draggedCol);
-      pilotageView.setTableConfig({ columnOrder: order });
-      onChange();
-    });
-    tr.appendChild(th);
-  }
-  thead.appendChild(tr);
-  return thead;
-}
-
-function renderTableRow(task, projects, visibleColumns, onChange, groupBy, selection) {
-  const tr = document.createElement("tr");
-  tr.className = "pilotage-table-row";
-  tr.classList.toggle("selected", selection.ids.has(task.id));
-
-  const tdTitle = document.createElement("td");
-  tdTitle.className = "pilotage-table-td-pinned";
-
-  const selectCheckbox = document.createElement("input");
-  selectCheckbox.type = "checkbox";
-  selectCheckbox.className = "pilotage-table-checkbox";
-  selectCheckbox.checked = selection.ids.has(task.id);
-  selectCheckbox.addEventListener("change", () => {
-    if (selectCheckbox.checked) selection.ids.add(task.id);
-    else selection.ids.delete(task.id);
-    onChange();
-  });
-  tdTitle.appendChild(selectCheckbox);
-
-  // Poignée de glisser-déposer (retour de Charles-Henri, 02/09/2026 : "basculer par glisser
-  // une tâche ailleurs") — un élément dédié plutôt que toute la ligne, pour ne jamais gêner la
-  // sélection/l'édition de texte dans les champs de la ligne (titre, notes...). N'a de sens que
-  // si un regroupement structure les lignes (voir la logique de drop dans renderTableView).
-  // Absente en regroupement "Échéance" (retour de Charles-Henri, 07/09/2026) : ces groupes sont
-  // des fenêtres de date calculées, pas une cible de dépose sensée (aucune date-cible par
-  // groupe) — la poignée resterait visible sans jamais rien pouvoir faire, ce qui serait
-  // trompeur. Voir aussi le gate équivalent sur les écouteurs de drop dans renderTableView.
-  if (groupBy !== "none" && groupBy !== "dueDate") {
-    const handle = document.createElement("span");
-    handle.className = "pilotage-table-drag-handle";
-    handle.textContent = "⠿";
-    handle.title = "Glisser vers un autre groupe";
-    handle.draggable = true;
-    handle.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/pilotage-row-task", task.id);
-    });
-    tdTitle.appendChild(handle);
-  }
-
-  const titleInput = document.createElement("input");
-  titleInput.type = "text";
-  titleInput.value = task.title;
-  titleInput.className = "pilotage-table-title-input";
-  titleInput.addEventListener("change", async () => {
-    const value = titleInput.value.trim();
-    if (value && value !== task.title) await tasksApi.updateTask(task.id, { title: value });
-  });
-  tdTitle.appendChild(titleInput);
-  const openBtn = document.createElement("button");
-  openBtn.type = "button";
-  openBtn.className = "pilotage-table-open-btn";
-  openBtn.textContent = "↗";
-  openBtn.title = "Ouvrir la fiche complète";
-  openBtn.addEventListener("click", () => openTaskDetail(task, projects));
-  tdTitle.appendChild(openBtn);
-  tr.appendChild(tdTitle);
-
-  for (const col of visibleColumns) {
-    const td = document.createElement("td");
-    if (col === "type") {
-      td.className = "pilotage-table-td-type";
-      td.textContent = task.type === "communication" ? "📣" : "📝";
-      td.title = task.type === "communication" ? "Communication" : "Action";
-    } else if (col === "status") {
-      const select = document.createElement("select");
-      select.innerHTML = tasksApi.STATUSES.map((s) => `<option value="${s}" ${s === task.status ? "selected" : ""}>${tasksApi.STATUS_LABELS[s]}</option>`).join("");
-      select.addEventListener("change", async () => {
-        const prevStatus = task.status;
-        await tasksApi.setStatus(task.id, select.value);
-        celebrateIfJustDone(prevStatus, select.value);
-        onChange();
-      });
-      td.appendChild(select);
-    } else if (col === "project") {
-      const select = document.createElement("select");
-      select.innerHTML =
-        `<option value="">— Aucun —</option>` +
-        projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("");
-      attachProjectQuickCreate(select);
-      select.addEventListener("change", async () => {
-        if (select.value === "__create__") return; // géré par attachProjectQuickCreate lui-même
-        await tasksApi.updateTask(task.id, { projectId: select.value || null });
-        onChange();
-      });
-      td.appendChild(select);
-    } else if (col === "dueDate") {
-      const input = document.createElement("input");
-      input.type = "date";
-      input.value = task.dueDate || "";
-      input.addEventListener("change", async () => {
-        await tasksApi.updateTask(task.id, { dueDate: input.value || null });
-        onChange();
-      });
-      td.appendChild(input);
-    } else if (col === "description") {
-      // Lecture seule + clic pour ouvrir la fiche complète (retour de Charles-Henri, 02/09/2026 :
-      // "afficher aussi la description") — jamais éditée en ligne dans la cellule, un texte
-      // potentiellement long se prête mal à ça (contrairement au Titre, toujours court).
-      td.className = "pilotage-table-td-description";
-      const text = (task.description || "").trim();
-      td.textContent = text ? truncateText(text, 60) : "—";
-      if (text) td.title = text;
-      td.addEventListener("click", () => openTaskDetail(task, projects));
-    } else if (col === "notes") {
-      renderNotesCell(td, task, onChange);
-    }
-    tr.appendChild(td);
-  }
-  return tr;
-}
-
-function truncateText(text, max) {
-  return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
-}
-
-/**
- * Colonne "Notes" du Tableau (retour de Charles-Henri, 02/09/2026 : "une colonne pour Notes
- * avec la dernière note, je peux en ajouter et ça complète") — réutilise le même journal
- * horodaté que le reste de l'app (`tasksApi.addNote`, `js/components/notesBlock.js`),
- * additif uniquement, jamais d'édition ni de suppression d'une note existante depuis ici.
- */
-function renderNotesCell(td, task, onChange) {
-  td.className = "pilotage-table-td-notes";
-  const log = task.notesLog || [];
-  const last = log[log.length - 1];
-
-  const preview = document.createElement("span");
-  preview.className = "pilotage-table-notes-preview";
-  if (last) {
-    preview.textContent = truncateText(last.text, 36);
-    preview.title = `${last.text}\n${formatDate(new Date(last.createdAt).toISOString())}`;
-  } else {
-    preview.textContent = "—";
-  }
-  td.appendChild(preview);
-
-  const addBtn = document.createElement("button");
-  addBtn.type = "button";
-  addBtn.className = "pilotage-table-notes-add-btn";
-  addBtn.textContent = "+";
-  addBtn.title = "Ajouter une note";
-  td.appendChild(addBtn);
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "pilotage-table-notes-input";
-  input.placeholder = "Nouvelle note, puis Entrée";
-  input.style.display = "none";
-  td.appendChild(input);
-
-  addBtn.addEventListener("click", () => {
-    const showing = input.style.display !== "none";
-    input.style.display = showing ? "none" : "inline-block";
-    if (!showing) input.focus();
-  });
-  input.addEventListener("keydown", async (e) => {
-    if (e.key !== "Enter") return;
-    const text = input.value.trim();
-    if (!text) return;
-    input.disabled = true;
-    await tasksApi.addNote(task.id, text);
-    onChange();
-  });
-}
-
-/** Une ligne "+ Ajouter" par groupe (retour de Charles-Henri : "ajouter les éléments dans les
- *  colonnes" / "ajouter un nouvel élément simplement dans le tableau") — préremplit le champ
- *  qui structure le groupe (Statut ou Projet) pour ne jamais créer une tâche qui disparaîtrait
- *  aussitôt du groupe où elle vient d'être ajoutée. */
-function renderQuickAddRow(visibleColumns, group, groupBy) {
-  const tr = document.createElement("tr");
-  tr.className = "pilotage-table-quickadd-row";
-
-  const tdTitle = document.createElement("td");
-  tdTitle.className = "pilotage-table-td-pinned";
-  const input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = "+ Ajouter une tâche";
-  input.className = "pilotage-table-quickadd-input";
-  input.addEventListener("keydown", async (e) => {
-    if (e.key !== "Enter") return;
-    const title = input.value.trim();
-    if (!title) return;
-    const patch = { title };
-    if (groupBy === "status") patch.status = group.key;
-    if (groupBy === "project") patch.projectId = group.key === "__none__" ? null : group.key;
-    input.disabled = true;
-    await tasksApi.createTask(patch);
-    input.value = "";
-    input.disabled = false;
-    input.focus();
-  });
-  tdTitle.appendChild(input);
-  tr.appendChild(tdTitle);
-
-  for (const col of visibleColumns) {
-    tr.appendChild(document.createElement("td"));
-  }
-  return tr;
-}
-
-/**
- * Édition en masse (retour de Charles-Henri, 13/09/2026 : "qu'on puisse modifier des éléments
- * en masse sur un statut, une échéance, un projet, un critère de clôture, un blocage, une
- * ressource ajoutée ou supprimée, un prompt, ou ajouter des notes en masse"). Chaque champ est
- * désactivé par défaut, derrière sa propre case à cocher "Modifier ce champ" — jamais un champ
- * appliqué "au cas où" : sans ça, laisser par exemple l'échéance vide écraserait silencieusement
- * l'échéance déjà en place sur chaque tâche sélectionnée, ce qui irait à l'encontre de la rigueur
- * que tout le reste de l'app protège (jamais de perte silencieuse). Ressource/Prompt réutilisent
- * leurs fonctions `linkToTask` respectives (déjà many-to-many, voir js/domain/resources.js et
- * js/domain/prompts.js) plutôt que la collection `links` générique — même mécanique que la fiche
- * détail d'une tâche (§ "📎 Ressources"/"🤖 Prompts").
- */
-async function openBulkEditModal(tasks, projects, onDone) {
-  const [resources, prompts, allTags, prefs] = await Promise.all([
-    resourcesApi.listAll(),
-    promptsApi.listAll(),
-    tagsApi.listAll(),
-    preferencesApi.getPreferences(),
-  ]);
-  // Datalist d'autocomplétion (retour de Charles-Henri, 13/09/2026 : "il faut que ce soit le cas
-  // partout") — mêmes tags visibles que sur une fiche individuelle (js/components/tagsEditor.js),
-  // les tags désactivés en administration exclus (voir js/components/adminPanel.js).
-  const bulkTagDatalistId = "bulk-tag-options";
-  const bulkTagOptionsHtml = tagsApi
-    .visibleTagNames(allTags, prefs.disabledTags)
-    .map((t) => `<option value="${escapeHtml(t)}"></option>`)
-    .join("");
-
-  // Ressource/Prompt en autocomplétion + tri alphabétique, sur le même principe que le champ Tag
-  // juste en dessous (retour de Charles-Henri, 14/09/2026 : "j'ai une liste déroulante à
-  // rallonge, il faut une liste qui marche en autocomplétion [...] triée par ordre alphabétique.
-  // pour les tags [ça marche déjà comme ça]") — un `<select>` classique listait les ressources/
-  // prompts dans leur ordre de création, jamais trié, et devenait interminable dès que la
-  // bibliothèque grandissait. Remplacé par un champ texte + `<datalist>`, comme Tag ; la
-  // résolution texte saisi → id se fait plus bas via `resourceIdByTitle`/`promptIdByTitle`
-  // (comparaison insensible à la casse), au moment d'appliquer.
-  const sortedResources = [...resources].sort((a, b) => a.title.localeCompare(b.title, "fr"));
-  const sortedPrompts = [...prompts].sort((a, b) => a.title.localeCompare(b.title, "fr"));
-  const resourceIdByTitle = new Map(sortedResources.map((r) => [r.title.trim().toLowerCase(), r.id]));
-  const promptIdByTitle = new Map(sortedPrompts.map((p) => [p.title.trim().toLowerCase(), p.id]));
-  const bulkResourceDatalistId = "bulk-resource-options";
-  const bulkPromptDatalistId = "bulk-prompt-options";
-  const bulkResourceOptionsHtml = sortedResources.map((r) => `<option value="${escapeHtml(r.title)}"></option>`).join("");
-  const bulkPromptOptionsHtml = sortedPrompts.map((p) => `<option value="${escapeHtml(p.title)}"></option>`).join("");
-
-  // Projet trié par ordre alphabétique (retour de Charles-Henri : "les projets doivent aussi
-  // être triés par ordre alphabétique mais pas en autocomplétion [...] je dois tout voir au
-  // début") — reste un `<select>` classique (jamais un champ autocomplété : cliquer dessus
-  // affiche d'emblée tous les projets, sans avoir à taper). `projects` reçu ici est déjà limité
-  // aux projets non fermés par `renderBoard()` (`activeProjects`), donc rien à filtrer de plus
-  // ici — seul le tri manquait.
-  const sortedProjects = [...projects].sort((a, b) => a.name.localeCompare(b.name, "fr"));
-
-  // BUG corrigé (retour de Charles-Henri, 14/09/2026, capture d'écran : "une scrollbar
-  // horizontale inutile [...] la liste (ajouter/retirer) qui est très large et la sélection de
-  // l'élément est toute petite") — sur les trois champs Ressource/Prompt/Tag plus bas, chaque
-  // select ou input vit dans un .field (voir toggleRow ci-dessous), et le style global .field
-  // select / .field input (styles/components.css) leur donne width: 100% par défaut. Pour le
-  // select "Ajouter/Retirer" posé en flex: none, ce width: 100% hérité devenait sa base flex
-  // (flex-basis: auto reprend le width déclaré) : il réclamait donc 100% de la largeur de la
-  // rangée à lui seul, ne laissant presque rien au select de valeur juste à côté (flex: 1) —
-  // d'où la scrollbar horizontale (la rangée débordait de la modale) et le select de valeur
-  // écrasé à quelques pixels. Corrigé plus bas en fixant width: auto sur le select
-  // "Ajouter/Retirer" (sa base flex redevient son contenu réel, un texte court) et min-width: 0
-  // sur le champ de valeur (un flex item garde sinon sa largeur de contenu comme largeur
-  // plancher, l'empêchant de rétrécir en dessous).
-  function toggleRow(id, label, controlHtml) {
-    return `
-      <div class="field" style="display:flex;align-items:center;gap:8px;">
-        <input id="${id}-on" type="checkbox" style="width:auto;" />
-        <label for="${id}-on" style="margin:0;flex:1;">${label}</label>
-      </div>
-      <div class="field" id="${id}-control" style="display:none;">${controlHtml}</div>
-    `;
-  }
-
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="item-meta" style="margin-bottom:16px;">${tasks.length} tâche${tasks.length > 1 ? "s" : ""} sélectionnée${tasks.length > 1 ? "s" : ""} — seuls les champs cochés ci-dessous seront modifiés.</div>
-
-    ${toggleRow(
-      "bulk-status",
-      "Statut",
-      `<select id="bulk-status">${tasksApi.STATUSES.map((s) => `<option value="${s}">${tasksApi.STATUS_LABELS[s]}</option>`).join("")}</select>`
-    )}
-    ${toggleRow("bulk-due", "Échéance", `<input id="bulk-due" type="date" />`)}
-    ${toggleRow(
-      "bulk-project",
-      "Projet",
-      `<select id="bulk-project"><option value="">— Aucun —</option>${sortedProjects.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}</select>`
-    )}
-    ${toggleRow("bulk-criteria", "Critère de clôture", `<textarea id="bulk-criteria" placeholder="Qu'est-ce qui définit que c'est terminé ?"></textarea>`)}
-    ${toggleRow(
-      "bulk-blocked",
-      "Blocage",
-      `<select id="bulk-blocked"><option value="true">🔴 Bloquée</option><option value="false">Débloquée</option></select>`
-    )}
-    ${toggleRow(
-      "bulk-resource",
-      "Ressource",
-      `<div style="display:flex;gap:8px;">
-        <select id="bulk-resource-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-resource-value" type="text" placeholder="Titre de la ressource" list="${bulkResourceDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <datalist id="${bulkResourceDatalistId}">${bulkResourceOptionsHtml}</datalist>
-      </div>`
-    )}
-    ${toggleRow(
-      "bulk-prompt",
-      "Prompt",
-      `<div style="display:flex;gap:8px;">
-        <select id="bulk-prompt-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-prompt-value" type="text" placeholder="Titre du prompt" list="${bulkPromptDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <datalist id="${bulkPromptDatalistId}">${bulkPromptOptionsHtml}</datalist>
-      </div>`
-    )}
-    ${toggleRow(
-      "bulk-tags",
-      "Tag",
-      `<div style="display:flex;gap:8px;">
-        <select id="bulk-tags-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-tags-value" type="text" placeholder="Nom du tag (sans #)" list="${bulkTagDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <datalist id="${bulkTagDatalistId}">${bulkTagOptionsHtml}</datalist>
-      </div>`
-    )}
-    ${toggleRow("bulk-notes", "Ajouter une note (à toutes)", `<textarea id="bulk-notes" placeholder="Cette note s'ajoute au journal de chaque tâche, sans rien remplacer"></textarea>`)}
-  `;
-
-  // Chaque case à cocher affiche/masque son propre contrôle — jamais les deux à la fois, pour
-  // que "coché" et "un contrôle est visible" restent toujours la même chose à l'œil.
-  for (const id of ["bulk-status", "bulk-due", "bulk-project", "bulk-criteria", "bulk-blocked", "bulk-resource", "bulk-prompt", "bulk-tags", "bulk-notes"]) {
-    const checkbox = body.querySelector(`#${id}-on`);
-    const control = body.querySelector(`#${id}-control`);
-    checkbox.addEventListener("change", () => {
-      control.style.display = checkbox.checked ? "" : "none";
-    });
-  }
-
-  if (!resources.length) {
-    body.querySelector("#bulk-resource-on").disabled = true;
-    body.querySelector("#bulk-resource-on").nextElementSibling.textContent += " (aucune ressource pour l'instant)";
-  }
-  if (!prompts.length) {
-    body.querySelector("#bulk-prompt-on").disabled = true;
-    body.querySelector("#bulk-prompt-on").nextElementSibling.textContent += " (aucun prompt pour l'instant)";
-  }
-
-  const { bodyEl, close } = openModal({
-    title: `✏️ Modifier ${tasks.length} tâche${tasks.length > 1 ? "s" : ""} en masse`,
-    body,
-    // Pas besoin de dismissible:false ici — le garde-fou déjà en place dans modal.js désactive
-    // automatiquement le clic en dehors dès qu'un champ modifiable est présent (ce qui est
-    // toujours le cas ici), tout en gardant Échap et le bouton "Annuler" disponibles, comme
-    // partout ailleurs dans l'app (voir le correctif du 13/09 sur 🔧 Administration).
-    actions: [
-      { label: "Annuler", variant: "ghost" },
-      {
-        label: "Appliquer",
-        variant: "primary",
-        closesModal: false,
-        onClick: async () => {
-          const on = (id) => bodyEl.querySelector(`#${id}-on`).checked;
-
-          const patch = {};
-          if (on("bulk-status")) patch.status = bodyEl.querySelector("#bulk-status").value;
-          if (on("bulk-due")) patch.dueDate = bodyEl.querySelector("#bulk-due").value || null;
-          if (on("bulk-project")) patch.projectId = bodyEl.querySelector("#bulk-project").value || null;
-          if (on("bulk-criteria")) patch.successCriteria = bodyEl.querySelector("#bulk-criteria").value;
-          if (on("bulk-blocked")) patch.isBlocked = bodyEl.querySelector("#bulk-blocked").value === "true";
-
-          const noteText = on("bulk-notes") ? bodyEl.querySelector("#bulk-notes").value.trim() : "";
-
-          // Ressource/Prompt saisis en texte libre (autocomplétion) plutôt que choisis dans un
-          // `<select>` — il faut donc résoudre le titre tapé vers son id avant de pouvoir agir
-          // (retour de Charles-Henri, 14/09/2026). Un champ coché mais laissé vide n'est pas une
-          // erreur (rien à appliquer pour ce champ, comme une note vide) ; un champ coché avec un
-          // texte qui ne correspond à AUCUN titre connu, en revanche, bloque tout l'envoi plutôt
-          // que d'ignorer silencieusement une intention clairement exprimée ("jamais de perte
-          // silencieuse", même principe que partout ailleurs dans l'app).
-          let resourceChange = null;
-          if (on("bulk-resource")) {
-            const typed = bodyEl.querySelector("#bulk-resource-value").value.trim();
-            if (typed) {
-              const id = resourceIdByTitle.get(typed.toLowerCase());
-              if (!id) {
-                showToast(`Ressource introuvable : « ${typed} » — choisis un titre proposé par l'autocomplétion.`);
-                return;
-              }
-              resourceChange = { id, add: bodyEl.querySelector("#bulk-resource-mode").value === "add" };
-            }
-          }
-          let promptChange = null;
-          if (on("bulk-prompt")) {
-            const typed = bodyEl.querySelector("#bulk-prompt-value").value.trim();
-            if (typed) {
-              const id = promptIdByTitle.get(typed.toLowerCase());
-              if (!id) {
-                showToast(`Prompt introuvable : « ${typed} » — choisis un titre proposé par l'autocomplétion.`);
-                return;
-              }
-              promptChange = { id, add: bodyEl.querySelector("#bulk-prompt-mode").value === "add" };
-            }
-          }
-          // Ajouter/Retirer, jamais un remplacement (retour de Charles-Henri : "il faudrait voir
-          // si ça ajoute à l'existant ou remplace") — même mécanique qu'une Ressource/un Prompt
-          // juste au-dessus : les tags déjà posés sur une tâche ne sont jamais écrasés par ce
-          // champ, seul le tag choisi ici est ajouté (ou retiré) sur chaque tâche sélectionnée.
-          const tagChange = on("bulk-tags")
-            ? { value: bodyEl.querySelector("#bulk-tags-value").value.trim(), add: bodyEl.querySelector("#bulk-tags-mode").value === "add" }
-            : null;
-
-          if (!Object.keys(patch).length && !noteText && !resourceChange && !promptChange && !tagChange?.value) {
-            showToast("Aucun champ coché — rien à appliquer");
-            return;
-          }
-
-          for (const task of tasks) {
-            if (Object.keys(patch).length) {
-              const prevStatus = task.status;
-              await tasksApi.updateTask(task.id, patch);
-              if (patch.status) celebrateIfJustDone(prevStatus, patch.status);
-            }
-            if (noteText) await tasksApi.addNote(task.id, noteText);
-            if (resourceChange?.id) await resourcesApi.linkToTask(resourceChange.id, task.id, resourceChange.add);
-            if (promptChange?.id) await promptsApi.linkToTask(promptChange.id, task.id, promptChange.add);
-            if (tagChange?.value) {
-              if (tagChange.add) await tagsApi.addTag("Task", task.id, tagChange.value);
-              else await tagsApi.removeTagByName("Task", task.id, tagChange.value);
-            }
-          }
-
-          close();
-          showToast(`${tasks.length} tâche${tasks.length > 1 ? "s" : ""} modifiée${tasks.length > 1 ? "s" : ""}`);
-          onDone();
-        },
-      },
-    ],
-  });
-}
-
-/**
- * Le glisser-déposer entre colonnes est peu fiable au doigt sur mobile, surtout dès que la
- * cible n'est pas visible sans scroller horizontalement (§ergonomie signalée par
- * Charles-Henri). Les boutons ‹ › offrent un chemin qui ne dépend jamais du scroll ni du
- * drag : changer de statut reste possible même quand une seule colonne tient à l'écran.
- */
-// Cartes dont la checklist est actuellement dépliée (retour de Charles-Henri, 02/09/2026 :
-// "afficher les sous-étapes en dessous, en décalé, mode réduit/déplier"). Au niveau du module
-// (pas de renderKanban) pour survivre aux redessins complets du board déclenchés par toute
-// mutation de tâche (storage.subscribe) — replié par défaut, comme l'historique des fiches.
-const expandedChecklists = new Set();
-
-// TODO-003 (LOT 2, 21/09/2026) : cartes dont le menu de report rapide d'échéance ("📅") est
-// actuellement déplié. Même principe que expandedChecklists ci-dessus (état au niveau du
-// module, replié par défaut) — un panneau DÉPLIÉ EN LIGNE (jamais une popover positionnée en
-// absolu) puisque .kanban-column-cards défile en overflow-y:auto : une popover absolue aurait
-// pu être coupée net par ce scroll dès qu'une carte est proche du bas de sa colonne (même classe
-// de bug que celle déjà rencontrée et corrigée sur #kanban-filters, voir styles/components.css).
-const expandedDateMenus = new Set();
-
-function renderCard(task, projects) {
-  const card = document.createElement("div");
-  card.className = "kanban-card";
-  card.draggable = true;
-  card.addEventListener("dragstart", (e) => {
-    e.dataTransfer.setData("text/task-id", task.id);
-  });
-  card.addEventListener("click", () => openTaskDetail(task, projects));
-
-  const project = projects.find((p) => p.id === task.projectId);
-  const late = tasksApi.isLate(task);
-  const statusIndex = tasksApi.STATUSES.indexOf(task.status);
-  const prevStatus = statusIndex > 0 ? tasksApi.STATUSES[statusIndex - 1] : null;
-  const nextStatus = statusIndex < tasksApi.STATUSES.length - 1 ? tasksApi.STATUSES[statusIndex + 1] : null;
-  const checklist = task.checklist || [];
-  const checklistDone = checklist.filter((c) => c.done).length;
-  const hasChecklist = checklist.length > 0;
-  const isExpanded = expandedChecklists.has(task.id);
-  const isDateMenuExpanded = expandedDateMenus.has(task.id);
-  // "⏳ En attente de..." (retour de Charles-Henri, 02/09/2026) : n'a de sens que sur ces deux
-  // statuts (voir tasksApi.updateTask, qui l'efface automatiquement en sortant) — jamais
-  // affiché ailleurs, pour ne pas laisser un champ vide et sans objet sur une tâche "à faire".
-  const showWaiting = task.status === "waiting" || task.status === "follow_up";
-
-  card.innerHTML = `
-    <div class="kanban-card-title">${task.isBlocked ? "🔴 " : ""}${escapeHtml(task.title)}</div>
-    <div class="kanban-card-meta">
-      ${project ? `<span>📦 ${escapeHtml(project.name)}</span>` : ""}
-      ${task.dueDate ? `<span class="${late ? "badge badge-late" : ""}">📅 ${formatDate(task.dueDate)}</span>` : ""}
-      ${hasChecklist ? `<button type="button" class="kanban-checklist-toggle" data-checklist-toggle>${isExpanded ? "▾" : "▸"} ☑️ ${checklistDone}/${checklist.length}</button>` : ""}
-    </div>
-    ${showWaiting ? `
-      <div class="kanban-card-waiting">
-        <label>⏳ En attente de</label>
-        <input type="text" class="kanban-waiting-input" placeholder="Qui, ou quoi ?" value="${escapeAttr(task.waitingOn || "")}" />
-      </div>
-    ` : ""}
-    <div class="kanban-card-move">
-      <button type="button" class="kanban-move-btn" data-dir="prev" aria-label="Statut précédent" ${prevStatus ? "" : "disabled"}>‹</button>
-      <span class="kanban-move-label">${tasksApi.STATUS_LABELS[task.status]}</span>
-      <button type="button" class="kanban-move-btn" data-dir="next" aria-label="Statut suivant" ${nextStatus ? "" : "disabled"}>›</button>
-      <button type="button" class="kanban-move-btn" data-postpone-toggle aria-label="Reporter l'échéance" title="Reporter l'échéance">📅</button>
-    </div>
-    <div class="kanban-card-postpone" data-postpone-body style="display:${isDateMenuExpanded ? "flex" : "none"};">
-      <button type="button" class="kanban-postpone-btn" data-postpone-offset="1">+1 j</button>
-      <button type="button" class="kanban-postpone-btn" data-postpone-offset="7">+7 j</button>
-      <label class="kanban-postpone-custom">
-        <span>Date libre</span>
-        <input type="date" data-postpone-custom value="${task.dueDate || ""}" aria-label="Échéance — date libre" />
-      </label>
-    </div>
-    ${hasChecklist ? `
-      <div class="kanban-card-checklist" data-checklist-body style="display:${isExpanded ? "block" : "none"};">
-        ${sortChecklistForDisplay(checklist).map((c) => `
-          <label class="kanban-checklist-item">
-            <input type="checkbox" data-checklist-id="${c.id}" ${c.done ? "checked" : ""} />
-            <span class="${c.done ? "done" : ""}">${escapeHtml(c.text)}</span>
-          </label>
-        `).join("")}
-      </div>
-    ` : ""}
-  `;
-
-  card.querySelector('[data-dir="prev"]').addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (prevStatus) tasksApi.setStatus(task.id, prevStatus);
-  });
-  card.querySelector('[data-dir="next"]').addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (nextStatus) {
-      tasksApi.setStatus(task.id, nextStatus);
-      celebrateIfJustDone(task.status, nextStatus);
-    }
-  });
-
-  // TODO-003 (LOT 2) : report rapide d'échéance — "+1j / +7j / date libre", symétrique aux
-  // boutons ‹ › ci-dessus. Panneau déplié en ligne (jamais une popover positionnée en absolu —
-  // voir le commentaire sur expandedDateMenus plus haut dans ce fichier).
-  const postponeToggle = card.querySelector("[data-postpone-toggle]");
-  const postponeBody = card.querySelector("[data-postpone-body]");
-  postponeToggle.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const expand = !expandedDateMenus.has(task.id);
-    if (expand) expandedDateMenus.add(task.id);
-    else expandedDateMenus.delete(task.id);
-    postponeBody.style.display = expand ? "flex" : "none";
-  });
-  card.querySelectorAll("[data-postpone-offset]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const newDate = addDaysToIsoDate(task.dueDate, Number(btn.dataset.postponeOffset));
-      tasksApi.updateTask(task.id, { dueDate: newDate });
-      expandedDateMenus.delete(task.id);
-      showToast(`Échéance reportée au ${formatDate(newDate)}`);
-    });
-  });
-  const postponeCustomInput = card.querySelector("[data-postpone-custom]");
-  postponeCustomInput.addEventListener("click", (e) => e.stopPropagation());
-  postponeCustomInput.addEventListener("change", () => {
-    const newDate = postponeCustomInput.value || null;
-    tasksApi.updateTask(task.id, { dueDate: newDate });
-    expandedDateMenus.delete(task.id);
-    showToast(newDate ? `Échéance reportée au ${formatDate(newDate)}` : "Échéance supprimée");
-  });
-
-  if (hasChecklist) {
-    const toggleBtn = card.querySelector("[data-checklist-toggle]");
-    const body = card.querySelector("[data-checklist-body]");
-    toggleBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const expanded = !expandedChecklists.has(task.id);
-      if (expanded) expandedChecklists.add(task.id);
-      else expandedChecklists.delete(task.id);
-      body.style.display = expanded ? "block" : "none";
-      toggleBtn.textContent = `${expanded ? "▾" : "▸"} ☑️ ${checklistDone}/${checklist.length}`;
-    });
-    card.querySelectorAll("[data-checklist-id]").forEach((input) => {
-      input.addEventListener("click", (e) => e.stopPropagation());
-      input.addEventListener("change", () => {
-        tasksApi.toggleChecklistItem(task.id, input.dataset.checklistId, input.checked);
-      });
-    });
-  }
-
-  if (showWaiting) {
-    const waitingInput = card.querySelector(".kanban-waiting-input");
-    waitingInput.addEventListener("click", (e) => e.stopPropagation());
-    waitingInput.addEventListener("change", () => {
-      tasksApi.setWaitingNote(task.id, waitingInput.value);
-    });
-  }
-
-  return card;
-}
-
-/**
- * Création autonome d'une tâche, hors du parcours Inbox → qualification — utilisée par le
- * "fil conducteur" (components/linkedItems.js) pour "créer à la volée" une tâche liée à une
- * autre fiche, et par la fiche Projet ("+ Ajouter"). Même pattern prefill/onCreated/onCancel
- * que openCreateProjectModal et openCreateResourceModal.
- *
- * `prefill.createFn` (vague 19, unification des formulaires de création, audit de
- * simplification) : par défaut la tâche est créée directement via `tasksApi.createTask()`,
- * mais l'Inbox (js/views/inbox.js) a besoin que la création passe par
- * `inboxApi.qualify(item.id, "task", ...)` pour ne jamais perdre le lien vers la capture
- * d'origine (Règle 3) ni le rattachement `sourceInboxItemId` — `createFn`, quand fourni, reçoit
- * exactement le même objet de champs et doit renvoyer la tâche créée, pour que ce formulaire
- * n'existe qu'à un seul endroit tout en gardant ce comportement spécifique à l'Inbox.
- */
-export async function openCreateTaskModal(prefill = {}) {
-  const projects = await projectsApi.listAll();
+/** `prefill.type` préselectionne Collaborateur/Manager — utilisé par le filtre "👔 Mon manager"
+ *  d'Équipe (`renderManagerSection`, js/views/management.js) pour "+ Ajouter mon manager"
+ *  sans changer de filtre. */
+export function openCreatePersonModal(prefill = {}) {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <label for="new-task-title">Titre</label>
-      <input id="new-task-title" type="text" placeholder="Ex. Préparer la réunion du 27" value="${escapeAttr(prefill.title || "")}" />
+      <label for="person-name">Nom</label>
+      <input id="person-name" type="text" placeholder="Ex. Clément" />
     </div>
     <div class="field">
-      <label for="new-task-description">Description (optionnel)</label>
-      <textarea id="new-task-description" placeholder="Le détail — ce que le titre seul ne suffit pas à dire">${escapeHtml(prefill.description || "")}</textarea>
-    </div>
-    <div class="field">
-      <label for="new-task-due">Échéance (optionnel)</label>
-      <input id="new-task-due" type="date" value="${prefill.dueDate || ""}" />
-    </div>
-    <div class="field">
-      <label for="new-task-project">Projet (optionnel)</label>
-      <select id="new-task-project">
-        <option value="">— Aucun —</option>
-        ${projects.map((p) => `<option value="${p.id}" ${p.id === prefill.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      <label for="person-type">Type</label>
+      <select id="person-type">
+        <option value="collaborateur" ${prefill.type !== "manager" ? "selected" : ""}>👤 Collaborateur</option>
+        <option value="manager" ${prefill.type === "manager" ? "selected" : ""}>👔 Manager</option>
       </select>
     </div>
+    <div class="field">
+      <label for="person-role">Rôle (optionnel)</label>
+      <input id="person-role" type="text" />
+    </div>
   `;
-  // Case "📣 C'est une communication" retirée d'ici (LOT 1, TODO-007 — UX-010 : décision validée
-  // par Charles-Henri le 15/09/2026, "réglage avancé exposé sans expliquer sa conséquence" au
-  // moment même de la création). Le choix du canevas de communication se fait désormais après
-  // coup, depuis la fiche détail — voir openTaskDetail ci-dessous, bouton "📣 Activer le canevas
-  // de communication" et tasksApi.enableCommunicationCanevas().
-  clearFieldErrorOnInput(body, ["#new-task-title"]);
-  attachProjectQuickCreate(body.querySelector("#new-task-project"), {
-    reopen: (newProjectId) => {
-      openCreateTaskModal({
-        ...prefill,
-        title: body.querySelector("#new-task-title").value,
-        description: body.querySelector("#new-task-description").value,
-        dueDate: body.querySelector("#new-task-due").value,
-        projectId: newProjectId !== null ? newProjectId : body.querySelector("#new-task-project").value || null,
-      });
-    },
-  });
   const { bodyEl, close } = openModal({
-    title: "Nouvelle tâche",
+    title: "Nouvelle personne",
     body,
     actions: [
       { label: "Annuler", variant: "ghost", onClick: () => prefill.onCancel?.() },
@@ -1409,189 +264,154 @@ export async function openCreateTaskModal(prefill = {}) {
         variant: "primary",
         closesModal: false,
         onClick: async () => {
-          // Retour visuel explicite sur champ obligatoire vide (LOT 1, TODO-006 — UX-002 :
-          // remplace l'ancien `if (!title) return;` muet, qui laissait la modale identique sans
-          // aucun signe que le clic avait échoué).
-          if (!validateRequiredFields(bodyEl, [{ selector: "#new-task-title", label: "Le titre" }])) return;
-          const title = bodyEl.querySelector("#new-task-title").value.trim();
-          const payload = {
-            title,
-            description: bodyEl.querySelector("#new-task-description").value.trim(),
-            dueDate: bodyEl.querySelector("#new-task-due").value || null,
-            projectId: bodyEl.querySelector("#new-task-project").value || null,
-          };
-          const task = prefill.createFn ? await prefill.createFn(payload) : await tasksApi.createTask(payload);
+          const name = bodyEl.querySelector("#person-name").value.trim();
+          if (!name) return;
+          const person = await peopleApi.createPerson({
+            name,
+            type: bodyEl.querySelector("#person-type").value,
+            role: bodyEl.querySelector("#person-role").value.trim(),
+          });
           close();
-          showToast(prefill.createdToast || "Tâche créée");
-          prefill.onCreated?.(task);
+          showToast("Personne ajoutée");
+          prefill.onCreated?.(person);
         },
       },
     ],
   });
-  // Autofocus manquant corrigé (LOT 8, TODO-016) : ce formulaire de création n'avait, contrairement
-  // au reste de l'app (capture, recherche, prompts...), aucun focus posé sur son premier champ à
-  // l'ouverture — même pattern (`setTimeout(..., 30)`, le temps que le champ soit bien inséré dans
-  // le DOM) que les autres formulaires de création de l'app.
-  setTimeout(() => bodyEl.querySelector("#new-task-title")?.focus(), 30);
 }
 
 /**
- * `onClose` (optionnel) : quand la fiche tâche est ouverte depuis une autre fiche (ex. la
- * fiche projet, en cliquant sur une tâche du bloc "Tâches") plutôt que depuis une vue de
- * premier niveau (Kanban, Calendrier...), fermer/enregistrer/supprimer doit rouvrir la fiche
- * d'origine plutôt que de révéler l'écran du dessous — même principe que le "reopen" déjà
- * utilisé pour les créations depuis la fiche projet (§ round D).
+ * "🧭 Repères managériaux" (retour de Charles-Henri, vague 21) : trois notes libres et non
+ * datées, distinctes du Journal de notes (horodaté, un événement à la fois) et de `notes`
+ * (contexte général déjà migré vers le Journal, voir migrateLegacyNotes) — ce que Charles-Henri
+ * a besoin de RETROUVER sur une personne sans avoir à relire tout le journal : ce qu'elle
+ * attend de lui en 1:1 (`expectationsInOneToOne`), ce qu'elle attend de lui comme manager en
+ * général (`expectationsAsManager`), et des observations de personnalité (`personalConsideration`).
+ * Simple texte libre par champ (pas de sous-structure), replié par défaut dans un `<details>`
+ * comme "🕒 Historique" pour ne pas allonger la fiche par défaut.
  */
-export async function openTaskDetail(task, projects, { onClose } = {}) {
-  preferencesApi.recordRecentlyViewed("Task", task.id).catch(() => {});
-  // BUG corrigé (15/09/2026, audit performance) : rechargeait l'historique ENTIER de l'app
-  // (`historyApi.listAll()`) à chaque ouverture d'une carte pour n'en garder que les quelques
-  // entrées de cette tâche — `listForEntity` filtre désormais côté Firestore.
-  const [allResources, allPrompts, allHistory] = await Promise.all([resourcesApi.listAll(), promptsApi.listAll(), historyApi.listForEntity("Task", task.id)]);
-  const linkedResources = allResources.filter((r) => (r.taskIds || []).includes(task.id));
-  const unlinkedResources = allResources.filter((r) => !(r.taskIds || []).includes(task.id));
-  // "🤖 Prompts" (retour de Charles-Henri, 07/09/2026 : "dans une tâche j'aimerai pouvoir lier
-  // un prompt") — même mécanique que les Ressources juste au-dessus (taskIds sur Prompt plutôt
-  // que dans le fil "🔗 Lié"), voir js/domain/prompts.js.
-  const linkedPrompts = allPrompts.filter((p) => (p.taskIds || []).includes(task.id));
-  const unlinkedPrompts = allPrompts.filter((p) => !(p.taskIds || []).includes(task.id));
-  const taskHistory = allHistory
-    .filter((h) => h.entityType === "Task" && h.entityId === task.id)
+export async function openPersonDetail(person, allFollowUps) {
+  preferencesApi.recordRecentlyViewed("Person", person.id).catch(() => {});
+  // Fusion des deux "Notes" (vague 19, audit de simplification) — voir peopleApi.migrateLegacyNotes.
+  person = (await peopleApi.migrateLegacyNotes(person.id)) || person;
+  const own = sortByCreatedDesc(allFollowUps.filter((f) => f.personId === person.id));
+  const done = own.filter((f) => f.status === "done");
+
+  // BUG corrigé (15/09/2026, audit performance) : rechargeait l'historique ENTIER de l'app pour
+  // n'en garder que celui de cette personne et de ses Suivis — voir js/domain/history.js#
+  // listForEntities.
+  const [allHistory, allObjectives, allProjects] = await Promise.all([
+    historyApi.listForEntities([{ entityType: "Person", entityId: person.id }, ...own.map((f) => ({ entityType: "FollowUp", entityId: f.id }))]),
+    objectivesApi.listAll(),
+    projectsApi.listAll(),
+  ]);
+  const objectives = allObjectives.filter((o) => o.personId === person.id);
+
+  // Engagements en attente organisés par projet puis par date la plus proche (retour de
+  // Charles-Henri, 06/09/2026 : "organisé par projet ou par date d'échéance") — même principe
+  // et mêmes fonctions déjà éprouvées côté "🎯 À aborder" de la préparation de point
+  // (`soonestDate`/`groupByProject`/`renderGroupedFollowUpList`, voir `computePrepSections`) :
+  // trié par date la plus proche d'abord, puis regroupé par projet en conservant cet ordre à
+  // l'intérieur de chaque groupe (donc du plus urgent au moins urgent, groupe par groupe).
+  const active = [...own.filter((f) => f.status !== "done" && f.direction !== "to_tell")].sort(
+    (a, b) => soonestDate(a) - soonestDate(b)
+  );
+  const toTell = [...own.filter((f) => f.status !== "done" && f.direction === "to_tell")].sort(
+    (a, b) => soonestDate(a) - soonestDate(b)
+  );
+  const activeGroups = groupByProject(active, allProjects);
+  const toTellGroups = groupByProject(toTell, allProjects);
+
+  // §38 "Où en est Clément ?" : l'historique d'une personne, c'est le sien plus celui de
+  // tous ses suivis — même principe que l'agrégation faite côté fiche Projet (§46).
+  const trackedKeys = new Set([`Person:${person.id}`, ...own.map((f) => `FollowUp:${f.id}`)]);
+  const personHistory = allHistory
+    .filter((h) => trackedKeys.has(`${h.entityType}:${h.entityId}`))
     .sort((a, b) => a.date - b.date);
 
-  // Titre de réunion composé (retour de Charles-Henri, 01/09/2026, voir
-  // js/components/meetingLauncher.js) : Catégorie du projet - Projet - Titre de la tâche —
-  // une Tâche n'a jamais de personne assignée (voir le Guide, "Tâche ou Suivi ?"), donc ce
-  // 4e segment reste toujours vide ici.
-  const taskProject = projects.find((p) => p.id === task.projectId) || null;
-  const meetingTitle = buildMeetingTitle({
-    category: taskProject?.category || "",
-    projectName: taskProject?.name || "",
-    itemTitle: task.title,
-  });
-
-  // Fiche à onglets (vague 24, retour de Charles-Henri : "je trouve que dans les fiches c'est
-  // un peu fourre-tout", précisé ensuite élément par élément — voir
-  // claude/vague-24-declins-fiches-navigation.md, section 7, pour la table complète). En-tête
-  // toujours visible (Titre/Statut/Échéance), puis 3 onglets : Détails (Description/Critère de
-  // clôture/Projet/Bloqué/Canevas), Sous-étapes (la checklist) et Activité (Réunion, Ressources,
-  // Outlook, Notes, Historique, Lié — Charles-Henri a choisi d'y regrouper aussi Réunion et
-  // Lié, qui perdent donc leur statut "toujours déplié" qu'ils avaient depuis l'audit du
-  // 02/09/2026). AUCUN champ, bouton ou id n'a été retiré ni renommé par rapport à la version
-  // précédente — seul l'emplacement visuel change, pour que tout le câblage plus bas
-  // (querySelector par id) continue de fonctionner à l'identique.
+  // Fiche à onglets (vague 25, retour de Charles-Henri : "idem dans la fiche du collaborateur
+  // j'aimerai une organisation piste A" — voir claude/vague-25-onglets-fiches-controle-suivi.md,
+  // section 4, pour l'inventaire complet et le découpage validé). En-tête toujours visible
+  // (Nom, Type, Rôle, raccourci clavier, et les boutons Préparer mon point/EADP — gardés hors
+  // onglets car ils lancent un autre écran plutôt que d'afficher du contenu de la fiche), puis
+  // 4 onglets : Suivis (Engagements en cours/À transmettre/+ Suivi/Réalisé), Objectifs, Notes &
+  // repères (Journal de notes/Repères managériaux) et Activité (Historique/Lié). AUCUN champ,
+  // bouton ou id n'est retiré ni renommé par rapport à la version précédente.
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <label for="detail-title">Titre</label>
-      <input id="detail-title" type="text" value="${escapeAttr(task.title)}" />
+      <label for="person-detail-name">Nom</label>
+      <input id="person-detail-name" type="text" value="${escapeAttr(person.name)}" />
     </div>
     <div class="field">
-      <label for="detail-status">Statut</label>
-      <select id="detail-status">
-        ${tasksApi.STATUSES.map((s) => `<option value="${s}" ${s === task.status ? "selected" : ""}>${tasksApi.STATUS_LABELS[s]}</option>`).join("")}
+      <label for="person-detail-type">Type</label>
+      <select id="person-detail-type">
+        <option value="collaborateur" ${person.type !== "manager" ? "selected" : ""}>👤 Collaborateur</option>
+        <option value="manager" ${person.type === "manager" ? "selected" : ""}>👔 Manager</option>
       </select>
     </div>
     <div class="field">
-      <label for="detail-due">Échéance</label>
-      <input id="detail-due" type="date" value="${task.dueDate || ""}" />
+      <label for="person-detail-role">Rôle</label>
+      <input id="person-detail-role" type="text" value="${escapeAttr(person.role || "")}" />
     </div>
+    <div id="person-shortcut" style="margin-bottom:12px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px;">
+      <button id="prep-btn" class="btn btn-secondary btn-block">🗒️ Préparer mon point</button>
+      <button id="eadp-btn" class="btn btn-secondary btn-block">📋 Préparer l'EADP</button>
+    </div>
+    <div style="margin-bottom:16px;">${guideLinkHtml("usecase-eadp", "📖 Bien préparer un point ou une EADP")}</div>
 
     <div class="chip-row fiche-tabs" role="tablist">
-      <button type="button" class="chip active" data-tab="details" role="tab">Détails</button>
-      <button type="button" class="chip" data-tab="steps" role="tab" id="fiche-tab-steps">Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</button>
+      <button type="button" class="chip active" data-tab="followups" role="tab">Suivis</button>
+      <button type="button" class="chip" data-tab="objectives" role="tab" id="fiche-tab-objectives">Objectifs (${objectives.length})</button>
+      <button type="button" class="chip" data-tab="notes" role="tab">Notes &amp; repères</button>
       <button type="button" class="chip" data-tab="activity" role="tab">Activité</button>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="details">
-      <div class="field">
-        <label for="detail-description">Description</label>
-        <textarea id="detail-description" placeholder="Le détail — ce que le titre seul ne suffit pas à dire">${escapeHtml(task.description || "")}</textarea>
-      </div>
-      <div class="field">
-        <label for="detail-criteria">Critère de clôture</label>
-        <textarea id="detail-criteria" placeholder="Comment saurai-je que c'est réellement terminé ?">${escapeHtml(task.successCriteria || "")}</textarea>
-      </div>
-      <div class="field">
-        <label for="detail-project" id="detail-project-label">Projet</label>
-        <select id="detail-project">
-          <option value="">— Aucun —</option>
-          ${projects.map((p) => `<option value="${p.id}" ${p.id === task.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
-        </select>
-      </div>
-      <div class="field" style="display:flex;align-items:center;gap:8px;">
-        <input id="detail-blocked" type="checkbox" style="width:auto;" ${task.isBlocked ? "checked" : ""} />
-        <label for="detail-blocked" style="margin:0;">🔴 Bloqué</label>
-      </div>
-      <!-- Réglage avancé "Communication" (LOT 1, TODO-007 — UX-010), déplacé ici depuis le
-           formulaire de création : à sens unique, comme l'était la case à cocher qu'il remplace
-           (aucun chemin ne désactivait un canevas déjà actif). -->
-      ${task.type !== "communication" ? `
-      <div class="field">
-        <button type="button" id="detail-enable-communication" class="btn btn-secondary btn-sm">📣 Activer le canevas de communication</button>
-      </div>
-      ` : ""}
-      <div id="detail-canevas"></div>
+    <div class="fiche-tabpanel" data-tabpanel="followups">
+      <div class="section-title" style="margin-top:0;">🎯 Engagements en cours (${active.length})</div>
+      <div class="card" id="active-followups" style="margin-bottom:16px;"></div>
+      <div class="section-title">📣 À transmettre (${toTell.length})</div>
+      <div class="card" id="to-tell-followups" style="margin-bottom:16px;"></div>
+      <button id="add-followup-btn" class="btn btn-secondary btn-sm btn-block" style="margin-bottom:16px;">+ Suivi</button>
+      <div class="section-title">🟢 Réalisé (${done.length})</div>
+      <div class="card" id="done-followups" style="margin-bottom:16px;"></div>
     </div>
 
-    <div class="fiche-tabpanel" data-tabpanel="steps" hidden>
-      <div class="section-title" id="checklist-title" style="margin-top:0;">☑️ Sous-étapes (${(task.checklist || []).filter((c) => c.done).length}/${(task.checklist || []).length})</div>
-      <div id="detail-checklist" style="margin-bottom:16px;"></div>
+    <div class="fiche-tabpanel" data-tabpanel="objectives" hidden>
+      <div class="section-header-row">
+        <div class="section-title" style="margin-top:0;">🎯 Objectifs (${objectives.length})</div>
+        <button type="button" id="add-objective-btn" class="btn btn-ghost btn-sm">+ Ajouter</button>
+      </div>
+      <div class="card" id="person-objectives" style="margin-bottom:16px;"></div>
+    </div>
+
+    <div class="fiche-tabpanel" data-tabpanel="notes" hidden>
+      <div class="section-title" style="margin-top:0;">🗒️ Journal de notes</div>
+      <div id="detail-notes" style="margin-bottom:16px;"></div>
+      <details>
+        <summary class="section-title" style="cursor:pointer;">🧭 Repères managériaux</summary>
+        <div style="margin-top:8px;margin-bottom:16px;">
+          <div class="field">
+            <label for="person-o2o">Attente des O2O — ce que ${escapeHtml(person.name)} attend de moi en 1:1</label>
+            <textarea id="person-o2o" placeholder="Boulot ou perso, pas forcément récurrent, ce qui va bien / moins bien...">${escapeHtml(person.expectationsInOneToOne || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="person-manager-expect">Attente manager — ce que ${escapeHtml(person.name)} attend de moi en tant que manager</label>
+            <textarea id="person-manager-expect" placeholder="Feedback, direction, orientation, attentes vis-à-vis de son propre travail...">${escapeHtml(person.expectationsAsManager || "")}</textarea>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label for="person-consideration">Considération personnelle</label>
+            <textarea id="person-consideration" placeholder="Personnalité, forces, axes d'amélioration...">${escapeHtml(person.personalConsideration || "")}</textarea>
+          </div>
+        </div>
+      </details>
     </div>
 
     <div class="fiche-tabpanel" data-tabpanel="activity" hidden>
-      <!-- "🗓️ Réunion" et "📅 Réunions Outlook associées" fusionnés en un seul bloc (retour de
-           Charles-Henri, 06/09/2026 : "il y a la rubrique réunion et réunion Outlook associée
-           c'est un peu redondant") — un seul "🗓️ Réunions" : l'outil de composition/création
-           (.ics) toujours visible en haut, la liste de celles déjà associées repliée par défaut
-           en dessous, comme un sous-bloc du même sujet plutôt que deux rubriques concurrentes.
-           Aucun id/champ renommé (meeting-title-preview, copy-meeting-title-btn,
-           create-meeting-btn, detail-outlook, outlook-title, outlook-date, add-outlook-btn) —
-           seul l'habillage visuel change, tout le câblage plus bas continue de fonctionner. -->
-      <div class="section-title" style="margin-top:0;">🗓️ Réunions</div>
-      <div class="field" style="margin-bottom:8px;">
-        <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-        <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
-        <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
-      </div>
-      <!-- Ressources / Réunions déjà associées / Notes : blocs secondaires repliés par défaut
-           (audit de simplification du 02/09/2026 — "trop de blocs ouverts en permanence sur une
-           fiche déjà longue") ; le compte dans le résumé garde l'information visible sans avoir
-           à déplier. -->
-      <details class="fiche-section">
-        <summary class="section-title" style="cursor:pointer;">📅 Déjà associées (${(task.outlookMeetings || []).length})</summary>
-        <div class="card" id="detail-outlook" style="margin-top:8px;margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-          <input id="outlook-title" type="text" placeholder="Titre de la réunion Outlook" style="flex:2;min-width:140px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-          <input id="outlook-date" type="date" style="flex:1;min-width:120px;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-          <button id="add-outlook-btn" type="button" class="btn btn-secondary btn-sm">+ Associer</button>
-        </div>
-      </details>
-      <details class="fiche-section">
-        <summary class="section-title" style="cursor:pointer;">📎 Ressources (${linkedResources.length})</summary>
-        <div class="card" id="detail-resources" style="margin-top:8px;margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;margin-bottom:16px;">
-          <button id="link-resource-btn" class="btn btn-secondary btn-sm">🔗 Lier existante</button>
-          <button id="new-resource-btn-inline" class="btn btn-secondary btn-sm">+ Nouvelle ressource</button>
-        </div>
-      </details>
-      <details class="fiche-section">
-        <summary class="section-title" style="cursor:pointer;">🤖 Prompts (${linkedPrompts.length})</summary>
-        <div class="card" id="detail-prompts" style="margin-top:8px;margin-bottom:8px;"></div>
-        <div style="display:flex;gap:8px;margin-bottom:16px;">
-          <button id="link-prompt-btn" class="btn btn-secondary btn-sm">🔗 Lier existant</button>
-          <button id="new-prompt-btn-inline" class="btn btn-secondary btn-sm">+ Nouveau prompt</button>
-        </div>
-      </details>
-      <details class="fiche-section">
-        <summary class="section-title" style="cursor:pointer;">🗒️ Notes (${(task.notesLog || []).length})</summary>
-        <div id="detail-notes" style="margin-top:8px;margin-bottom:16px;"></div>
-      </details>
-      <details class="fiche-section">
-        <summary class="section-title" style="cursor:pointer;">🕒 Historique (${taskHistory.length})</summary>
-        <div class="card" id="detail-history" style="margin-top:8px;margin-bottom:16px;"></div>
+      <details>
+        <summary class="section-title" style="cursor:pointer;margin-top:0;">🕒 Historique (${personHistory.length})</summary>
+        <div class="card" id="person-history" style="margin-top:8px;margin-bottom:16px;"></div>
       </details>
       <div class="section-title">🏷️ Tags</div>
       <div id="detail-tags" style="margin-bottom:16px;"></div>
@@ -1604,92 +424,8 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     </div>
   `;
 
-  clearFieldErrorOnInput(body, ["#detail-title"]);
-  attachProjectQuickCreate(body.querySelector("#detail-project"), {
-    // Contrairement à un simple formulaire de création, cette fiche modifie une Tâche déjà
-    // existante : plutôt que de perdre silencieusement Titre/Description/Critère/Échéance/
-    // Statut/Bloqué en attente de sauvegarde, on les enregistre déjà (mêmes champs que le
-    // bouton "💾 Enregistrer" plus bas) avant de rouvrir la fiche avec le nouveau projet
-    // présélectionné — ou l'ancien, si la création est annulée.
-    reopen: async (newProjectId) => {
-      const patch = {
-        title: body.querySelector("#detail-title").value.trim() || task.title,
-        description: body.querySelector("#detail-description").value,
-        successCriteria: body.querySelector("#detail-criteria").value,
-        dueDate: body.querySelector("#detail-due").value || null,
-        status: body.querySelector("#detail-status").value,
-        isBlocked: body.querySelector("#detail-blocked").checked,
-        projectId: newProjectId !== null ? newProjectId : body.querySelector("#detail-project").value || null,
-      };
-      const updated = await tasksApi.updateTask(task.id, patch);
-      openTaskDetail(updated, projects, { onClose });
-    },
-  });
-
-  // "📣 Activer le canevas de communication" (LOT 1, TODO-007 — UX-010) : même principe que le
-  // rattachement quick-create juste au-dessus — enregistre d'abord les champs déjà modifiés dans
-  // cette fiche (mêmes champs que "💾 Enregistrer"), pour ne rien perdre en rouvrant la fiche une
-  // fois le canevas activé.
-  body.querySelector("#detail-enable-communication")?.addEventListener("click", async () => {
-    const patch = {
-      title: body.querySelector("#detail-title").value.trim() || task.title,
-      description: body.querySelector("#detail-description").value,
-      successCriteria: body.querySelector("#detail-criteria").value,
-      dueDate: body.querySelector("#detail-due").value || null,
-      status: body.querySelector("#detail-status").value,
-      isBlocked: body.querySelector("#detail-blocked").checked,
-      projectId: body.querySelector("#detail-project").value || null,
-    };
-    await tasksApi.updateTask(task.id, patch);
-    const updated = await tasksApi.enableCommunicationCanevas(task.id);
-    openTaskDetail(updated, projects, { onClose });
-  });
-
-  // "Remonter au projet depuis la Tâche" (retour de Charles-Henri, 13/09/2026 : "quand je suis
-  // sur une tâche je dois pouvoir remonter sur le projet en cliquant par exemple sur le titre
-  // 'Projet' avant la liste déroulante") — le libellé du champ Projet devient un lien quand un
-  // projet EST sélectionné (rien à ouvrir sinon). Se lit sur le `<select>` au moment du clic,
-  // pas sur `taskProject` figé à l'ouverture de la fiche, pour rester cohérent avec un
-  // changement de projet fait dans cette même fiche sans avoir encore cliqué "Enregistrer".
-  // Mêmes champs persistés que "💾 Enregistrer" avant de quitter (même raisonnement que le
-  // rattachement quick-create juste au-dessus) : remonter au projet n'est pas un changement de
-  // nature de l'élément comme "Changer de type"/"Dupliquer"/"Supprimer", qui eux referment sans
-  // sauvegarder — perdre une saisie en cours juste pour consulter le projet parent surprendrait.
-  const projectLabel = body.querySelector("#detail-project-label");
-  const projectSelect = body.querySelector("#detail-project");
-  function refreshProjectLabelLink() {
-    const hasProject = !!projectSelect.value;
-    projectLabel.classList.toggle("field-label-link", hasProject);
-    projectLabel.title = hasProject ? "Ouvrir la fiche du projet" : "";
-  }
-  refreshProjectLabelLink();
-  projectSelect.addEventListener("change", refreshProjectLabelLink);
-  projectLabel.addEventListener("click", async () => {
-    const currentProjectId = projectSelect.value || null;
-    const targetProject = projects.find((p) => p.id === currentProjectId);
-    if (!targetProject) return;
-    const title = bodyEl.querySelector("#detail-title").value.trim() || task.title;
-    await tasksApi.updateTask(task.id, {
-      title,
-      description: bodyEl.querySelector("#detail-description").value,
-      successCriteria: bodyEl.querySelector("#detail-criteria").value,
-      dueDate: bodyEl.querySelector("#detail-due").value || null,
-      status: bodyEl.querySelector("#detail-status").value,
-      isBlocked: bodyEl.querySelector("#detail-blocked").checked,
-      projectId: currentProjectId,
-    });
-    close();
-    const projectTasks = (await tasksApi.listAll()).filter((t) => t.projectId === targetProject.id);
-    openProjectDetail(targetProject, projectTasks);
-  });
-
-  // Bascule d'onglet : ni framework ni removal du DOM — chaque panneau existe en permanence,
-  // seul l'attribut `hidden` change (voir styles/components.css : `.fiche-tabpanel` ne pose
-  // volontairement AUCUN `display` à elle seule, pour ne jamais rejouer le bug déjà rencontré
-  // vague 23 où une règle CSS d'origine auteur l'emportait sur `[hidden]` — voir
-  // claude/vague-23-lien-partage-pastille-inbox.md). Tout le câblage ci-dessous (checklist,
-  // ressources, notes...) continue de cibler ses ids normalement, qu'un panneau soit affiché ou
-  // non, puisque le DOM n'est jamais retiré.
+  // Bascule d'onglet — même mécanique que la fiche Tâche (voir js/views/kanban.js#openTaskDetail) :
+  // chaque panneau existe en permanence, seul l'attribut `hidden` change.
   body.querySelectorAll(".fiche-tabs .chip").forEach((tabBtn) => {
     tabBtn.addEventListener("click", () => {
       body.querySelectorAll(".fiche-tabs .chip").forEach((b) => b.classList.toggle("active", b === tabBtn));
@@ -1699,41 +435,1917 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     });
   });
 
-  renderCanevas(body.querySelector("#detail-canevas"), task.steps, async (stepKey, done) => {
-    await tasksApi.toggleStep(task.id, stepKey, done);
+  // Rouvre la fiche avec des données fraîches — utilisé par toute action menée depuis une
+  // modale imbriquée (créer/modifier/supprimer un suivi), plutôt que de laisser la fiche
+  // fermée après l'action (bug connu signalé par Charles-Henri : la création d'un suivi
+  // refermait la fiche au lieu d'y rester, contrairement au pattern déjà en place pour les
+  // ressources liées à un projet/une tâche).
+  const reopen = async () => openPersonDetail(person, await followUpsApi.listAll());
+
+  const activeEl = body.querySelector("#active-followups");
+  renderGroupedFollowUpList(activeEl, activeGroups, {
+    onOpen: (f) => {
+      closeModal();
+      openEditFollowUpModal(f, { onDone: reopen });
+    },
   });
-  const checklistTitleEl = body.querySelector("#checklist-title");
-  // Compte visible directement dans le libellé de l'onglet (retour de Charles-Henri,
-  // 06/09/2026 : "qu'on voie nombre d'étape effectué / nombre d'étape total directement dans
-  // le titre de l'onglet") — même texte que le titre de section à l'intérieur du panneau,
-  // les deux se mettent à jour ensemble à chaque changement de la checklist.
-  const fichTabStepsEl = body.querySelector("#fiche-tab-steps");
-  function updateChecklistTitle() {
-    const list = task.checklist || [];
-    const count = `${list.filter((c) => c.done).length}/${list.length}`;
-    checklistTitleEl.textContent = `☑️ Sous-étapes (${count})`;
-    fichTabStepsEl.textContent = `Sous-étapes (${count})`;
-  }
-  renderChecklist(body.querySelector("#detail-checklist"), task.checklist || [], {
+  const toTellEl = body.querySelector("#to-tell-followups");
+  renderGroupedFollowUpList(toTellEl, toTellGroups, {
+    onOpen: (f) => {
+      closeModal();
+      openEditFollowUpModal(f, { onDone: reopen });
+    },
+  });
+  const doneEl = body.querySelector("#done-followups");
+  renderFollowUpList(doneEl, done, {
+    onOpen: (f) => {
+      closeModal();
+      openEditFollowUpModal(f, { onDone: reopen });
+    },
+  });
+  renderHistoryTimeline(body.querySelector("#person-history"), personHistory);
+  renderNotesBlock(body.querySelector("#detail-notes"), person.notesLog || [], {
     onAdd: async (text) => {
-      // TODO-010 (LOT 4B) : tasksApi.addChecklistItem() renvoie désormais l'élément ajouté seul
-      // (écriture ciblée, plus de relecture du tableau complet) — reconstruit ici à partir de la
-      // copie locale déjà tenue à jour par cette fiche.
-      const item = await tasksApi.addChecklistItem(task.id, text);
-      const updated = item ? [...(task.checklist || []), item] : task.checklist;
-      task.checklist = updated;
+      const updated = await peopleApi.addNote(person.id, text);
+      person.notesLog = updated;
+      return updated;
+    },
+  });
+
+  const linkRef = { type: "Person", id: person.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), "Person", person.id);
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
+  body.querySelector("#link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(linkRef, person.name, {
+      onLinked: () => reopen(),
+      onCancel: () => reopen(),
+    });
+  });
+  body.querySelector("#create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(linkRef, person.name, {
+      onLinked: () => reopen(),
+      onCancel: () => reopen(),
+    });
+  });
+
+  body.querySelector("#add-followup-btn").addEventListener("click", () => {
+    closeModal();
+    openCreateFollowUpModal({ person, onCreated: () => reopen(), onCancel: () => reopen() });
+  });
+  body.querySelector("#prep-btn").addEventListener("click", () => {
+    closeModal();
+    openPrepMaskThenPrep(person, { onDone: reopen });
+  });
+  body.querySelector("#eadp-btn").addEventListener("click", () => {
+    closeModal();
+    openPrepareEadpModal(person, { onDone: reopen });
+  });
+  // Raccourci clavier personnalisé (retour de Charles-Henri, vague 20) — voir
+  // js/services/shortcuts.js#renderShortcutAssignButton.
+  renderShortcutAssignButton(body.querySelector("#person-shortcut"), { type: "Person", id: person.id, label: person.name });
+
+  const objectivesEl = body.querySelector("#person-objectives");
+  renderObjectivesList(objectivesEl, objectives, person, reopen, allProjects);
+  body.querySelector("#add-objective-btn").addEventListener("click", () => {
+    closeModal();
+    openCreateObjectiveModal(person, { onDone: reopen });
+  });
+
+  const { bodyEl, close } = openModal({
+    title: (person.type === "manager" ? "👔 " : "👤 ") + person.name,
+    body,
+    actions: [
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true },
+      {
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
+        icon: "🔗",
+        label: "Copier le lien",
+        variant: "secondary",
+        compact: true,
+        closesModal: false,
+        onClick: () => copyEntityLink("#/people", "Person", person.id),
+      },
+      {
+        icon: "🗑️",
+        label: "Supprimer",
+        variant: "danger",
+        compact: true,
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          // Impact réel avant confirmation (LOT 1, TODO-007 — UX-001/DATA-003) : `own` (Suivis)
+          // et `objectives` (Objectifs liés à cette personne) sont déjà calculés plus haut dans
+          // cette même fonction, pas de requête supplémentaire. `removePerson` ne cascade
+          // toujours pas (politique assumée, voir js/domain/people.js) : ces entités perdent
+          // seulement leur lien, elles ne sont pas supprimées avec la personne.
+          const impactParts = [
+            own.length ? `${own.length} suivi${own.length > 1 ? "s" : ""}` : null,
+            objectives.length ? `${objectives.length} objectif${objectives.length > 1 ? "s" : ""}` : null,
+          ].filter(Boolean);
+          const impactSentence = impactParts.length
+            ? ` ${new Intl.ListFormat("fr", { type: "conjunction" }).format(impactParts)} qui lui étaient rattaché(e)s ne seront pas supprimé(e)s — ils perdent simplement leur lien vers cette personne.`
+            : " Rien n'y est rattaché aujourd'hui.";
+          confirmDelete({
+            title: "Supprimer cette personne ?",
+            message: `« ${person.name} » sera définitivement supprimée.${impactSentence}`,
+            onConfirm: async () => {
+              await peopleApi.removePerson(person.id);
+              showToast("Personne supprimée");
+            },
+            onCancel: () => reopen(),
+          });
+        },
+      },
+      {
+        icon: "💾",
+        label: "Enregistrer",
+        variant: "primary",
+        compact: true,
+        closesModal: false,
+        onClick: async () => {
+          const name = bodyEl.querySelector("#person-detail-name").value.trim();
+          if (!name) return;
+          await peopleApi.updatePerson(person.id, {
+            name,
+            type: bodyEl.querySelector("#person-detail-type").value,
+            role: bodyEl.querySelector("#person-detail-role").value.trim(),
+            expectationsInOneToOne: bodyEl.querySelector("#person-o2o").value.trim(),
+            expectationsAsManager: bodyEl.querySelector("#person-manager-expect").value.trim(),
+            personalConsideration: bodyEl.querySelector("#person-consideration").value.trim(),
+          });
+          close();
+          showToast("Personne mise à jour");
+        },
+      },
+    ],
+  });
+}
+
+/** Date la plus proche entre échéance et contrôle (retour de Charles-Henri, vague 21 : "que les
+ *  éléments se trient par date d'échéance ou date de contrôle plus petite") — un suivi "à
+ *  transmettre" n'a pas de dueDate, un suivi ordinaire a les deux parfois (dueDate = échéance
+ *  de la personne, controlDate = quand je vérifie, souvent plus tôt) : on veut la plus urgente
+ *  des deux, jamais une seule au détriment de l'autre. Sans aucune date, trié en dernier. */
+function soonestDate(f) {
+  const times = [f.controlDate, f.dueDate].filter(Boolean).map((d) => new Date(d).getTime());
+  return times.length ? Math.min(...times) : Infinity;
+}
+
+/**
+ * "Suivi managérial" : préparer un point collaborateur en un coup d'œil, sans avoir à
+ * relire manuellement chaque engagement — ce que Charles-Henri fait avant chaque 1:1.
+ * Purement une lecture recomposée des mêmes suivis déjà présents sur la fiche (retard de
+ * contrôle en premier, puis le reste par date de contrôle/échéance, puis les derniers
+ * terminés) : aucune nouvelle donnée, aucun nouveau champ sur le Suivi lui-même.
+ *
+ * "🎯 À aborder" est en plus regroupé par projet (fil rouge par sujet plutôt que des lignes
+ * isolées — retour de Charles-Henri du 02/09/2026 : "les deux", projet ET date). Le
+ * regroupement est volontairement limité à cette seule section : c'est précisément celle
+ * visée par sa question, et "🔴 En retard" / "📣 À transmettre" restent des listes courtes où
+ * un fil rouge par projet ajouterait plus de bruit que de lisibilité.
+ *
+ * `coveredIds` (retour de Charles-Henri, vague 21 : "je dois identifier lors de la préparation
+ * du point que je suis passé sur le sujet quand on les passe un à un") — un `Set` d'ids tenu le
+ * temps d'UNE préparation de point, jamais persisté : rouvrir "🗒️ Point avec..." plus tard (une
+ * autre fois, un autre jour) repart d'une ardoise vierge, seul le passage "en direct" au sein
+ * d'une même session de préparation compte. Un sujet se marque "vu" soit en cochant la case
+ * dédiée sur sa ligne (sans l'ouvrir), soit automatiquement en l'ouvrant (`openFromPrep`) — dans
+ * les deux cas la modale se reconstruit toujours avec des données FRAÎCHES (`followUpsApi.
+ * listAll()` relu à chaque appel plutôt que de réutiliser un tableau `own` capturé une fois pour
+ * toutes) : c'est ce qui corrige le bug remonté par Charles-Henri ("quand je modifie un sujet,
+ * ça ne se met pas à jour sur la modale 'Point avec...' tant que je ne ressors pas").
+ */
+/**
+ * Calcule les 4 sections d'un point (retard, à transmettre, à aborder groupé par projet,
+ * terminé récemment) — factorisé hors de `openPrepModal` (vague 22 sexies) pour être partagé
+ * avec la fenêtre de masquage privée `js/views/prepMask.js#renderPrepMask`, qui doit afficher
+ * EXACTEMENT les mêmes sections/le même tri que l'écran finalement partagé, sinon cocher
+ * "masquer" sur un sujet ne correspondrait à rien de visible dans le point réel.
+ *
+ * `includeHidden` (retour de Charles-Henri : "je puisse cocher ce que je ne veux pas remonter
+ * [...] en mode privé") : `false` (défaut, utilisé par `openPrepModal`, l'écran qu'il partage)
+ * exclut les Suivis marqués `hiddenFromPrep` — `true` (utilisé par la fenêtre de masquage) les
+ * inclut tous, pour pouvoir aussi bien les masquer que les redémasquer.
+ */
+export function computePrepSections(person, allFollowUps, projects, { includeHidden = false } = {}) {
+  const own = allFollowUps.filter((f) => f.personId === person.id && (includeHidden || !f.hiddenFromPrep));
+
+  const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => soonestDate(a) - soonestDate(b));
+  const overdue = active.filter(followUpsApi.isControlDue);
+  const notOverdue = active.filter((f) => !followUpsApi.isControlDue(f));
+  const upcoming = notOverdue.filter((f) => f.direction !== "to_tell");
+  const toTell = notOverdue.filter((f) => f.direction === "to_tell");
+  const recentlyDone = [...own.filter((f) => f.status === "done")]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 5);
+  // `upcoming` est déjà trié par date la plus proche croissante (cf. `active` ci-dessus) : le
+  // regroupement par projet hérite donc de cet ordre à l'intérieur de chaque groupe, et les
+  // groupes eux-mêmes s'enchaînent dans l'ordre d'apparition de leur premier sujet — donc du
+  // plus urgent au moins urgent, y compris pour les sujets sans projet.
+  const upcomingGroups = groupByProject(upcoming, projects);
+
+  return { overdue, toTell, upcoming, upcomingGroups, recentlyDone };
+}
+
+/**
+ * Étape de masquage privée AVANT "Préparer mon point" (retour de Charles-Henri, vague 22
+ * sexies) : *"il faut qu'avant je puisse cocher ce que je ne veux pas remonter dans cet écran
+ * en mode privé et que cette modale soit déportée et déplaçable seule sur un autre écran."*
+ *
+ * Une vraie modale (js/components/modal.js) vit à l'intérieur de CETTE fenêtre — elle ne
+ * peut donc jamais être déplacée sur un second écran indépendamment du reste. Seule une vraie
+ * fenêtre de navigateur, ouverte via `window.open()`, peut être glissée par l'OS sur un autre
+ * écran pendant que celle-ci reste affichée (et partagée en visio) sur le premier.
+ *
+ * BUG corrigé (retour de Charles-Henri, vague 22 octies : "ça marche pas sur iphone en mode
+ * signet sur écran d'accueil") : une PWA iOS lancée depuis l'écran d'accueil (mode "standalone",
+ * `navigator.standalone === true`, propriété exclusive à iOS Safari) n'a structurellement qu'un
+ * seul écran ET qu'une seule fenêtre — WebKit y bloque `window.open()` ou, pire, quitte l'app
+ * installée pour rouvrir l'URL dans Safari, cassant complètement l'expérience "app" au lieu de
+ * simplement échouer proprement. Comme il n'existe de toute façon aucun second écran à viser
+ * dans ce contexte, la fenêtre séparée n'a plus aucun sens : on affiche alors EXACTEMENT la même
+ * checklist de masquage (`renderMaskChecklist`, factorisée avec `js/views/prepMask.js` pour ne
+ * jamais diverger) dans une modale in-app classique — le masquage reste disponible partout,
+ * seule la présentation "fenêtre à part, déplaçable" est spécifique à un poste avec plusieurs
+ * écrans, là où elle a un sens.
+ *
+ * BUG corrigé (retour de Charles-Henri, vague 39, 08/09/2026 : "sur PC en mode installé, la
+ * fenêtre reste bloquée sur le texte d'intro sans jamais afficher la checklist ; sur PC web, ça
+ * finit par s'afficher mais après ~20 secondes"). Racine du problème : la fenêtre séparée
+ * naviguait vers la route dédiée `#/prep-mask`, ce qui rechargeait l'app ENTIÈRE dans cette
+ * nouvelle fenêtre — donc une SECONDE instance de Firebase/Firestore avec sa propre
+ * persistance IndexedDB (voir js/services/firebase.js#persistentMultipleTabManager), en
+ * concurrence avec celle déjà active dans la fenêtre principale. Deux clients Firestore du même
+ * compte doivent négocier entre eux lequel détient le "bail" IndexedDB principal avant de
+ * pouvoir lire quoi que ce soit — une négociation qui prenait ~20 s sur un onglet de navigateur
+ * classique, et qui semblait ne jamais aboutir dans une fenêtre d'app installée (partitionnement
+ * différent selon les versions de Chrome/Edge pour les fenêtres d'app autonomes).
+ *
+ * Corrigé en ouvrant une fenêtre VIERGE (`window.open("", ...)`, pas d'URL, donc aucun
+ * rechargement de l'app ni second client Firestore) et en y construisant directement le DOM
+ * depuis CETTE fenêtre, avec les feuilles de style copiées et le même `renderMaskChecklist` —
+ * la checklist tourne alors sur le client Firestore déjà actif et déjà "primaire" de la fenêtre
+ * principale, sans négociation d'aucune sorte. La route `#/prep-mask` (js/views/prepMask.js#
+ * renderPrepMask) n'est donc plus utilisée par ce chemin ; elle reste en place sans dommage,
+ * simplement inerte, au cas où une ancienne fenêtre garderait ce lien en mémoire.
+ *
+ * Le "Point avec X" (openPrepModal, l'écran effectivement partagé) ne s'ouvre qu'une fois cette
+ * fenêtre refermée (poll sur `win.closed`) — inutile d'échanger des messages entre les deux
+ * fenêtres : le masquage se persiste au fil de l'eau (`followUpsApi.updateFollowUp(...,
+ * { hiddenFromPrep })`), donc `openPrepModal`, en relisant les données fraîches, applique déjà
+ * le bon filtre dès qu'il s'ouvre à son tour.
+ */
+function openPrepMaskThenPrep(person, { onDone } = {}) {
+  if (window.navigator.standalone === true) {
+    openPrepMaskModal(person, { onDone });
+    return;
+  }
+  const win = window.open("", "prepMask-" + person.id, "width=480,height=760,menubar=no,toolbar=no,location=no,status=no");
+  if (!win) {
+    // Popup bloquée par le navigateur (ou tout autre contexte où window.open ne renvoie
+    // simplement rien d'utilisable) : on retombe sur la même modale in-app plutôt que de priver
+    // Charles-Henri du masquage — seule la présentation "fenêtre à part" n'est pas possible ici.
+    openPrepMaskModal(person, { onDone });
+    return;
+  }
+  win.document.title = `Masquer — Point avec ${person.name}`;
+  // Copie les feuilles de style de la fenêtre principale (deux seulement, voir index.html) —
+  // `link.href` (propriété résolue) plutôt que l'attribut brut, pour rester correct quel que
+  // soit le chemin de déploiement, la fenêtre neuve n'ayant pas la même URL de base.
+  document.querySelectorAll('link[rel="stylesheet"]').forEach((link) => {
+    const clone = win.document.createElement("link");
+    clone.rel = "stylesheet";
+    clone.href = link.href;
+    win.document.head.appendChild(clone);
+  });
+  const wrapper = win.document.createElement("div");
+  wrapper.className = "view";
+  wrapper.style.cssText = "max-width:520px;margin:0 auto;padding:20px;";
+  wrapper.innerHTML = `
+    <h1 style="margin-top:0;">🙈 Avant de partager</h1>
+    <p class="item-meta" style="margin-bottom:20px;">
+      Cette fenêtre est privée — garde-la sur ton écran, ou déplace-la sur un second si tu en as
+      un. Ferme-la quand tu es prêt : le point s'ouvrira automatiquement dans l'autre fenêtre.
+    </p>
+    <div id="mask-checklist"></div>
+  `;
+  win.document.body.appendChild(wrapper);
+  renderMaskChecklist(wrapper.querySelector("#mask-checklist"), person, {
+    closeLabel: "✅ Terminé — fermer cette fenêtre",
+    onClose: () => win.close(),
+  });
+  win.focus();
+  const poll = setInterval(() => {
+    if (win.closed) {
+      clearInterval(poll);
+      openPrepModal(person, { onDone });
+    }
+  }, 400);
+}
+
+/**
+ * Repli in-app de la fenêtre de masquage (voir commentaire ci-dessus) — même checklist, dans
+ * une modale classique plutôt qu'une fenêtre séparée. `onClose` de `openModal` (déclenché une
+ * seule fois quel que soit le chemin de fermeture — bouton, Échap, clic en dehors, voir
+ * js/components/modal.js) ouvre le point ensuite : fermer cette modale de N'IMPORTE QUELLE
+ * façon a le même effet que fermer la fenêtre séparée sur un poste avec plusieurs écrans.
+ */
+function openPrepMaskModal(person, { onDone } = {}) {
+  const body = document.createElement("div");
+  const { bodyEl, close } = openModal({
+    title: "🙈 Avant de partager",
+    body,
+    actions: [],
+    onClose: () => openPrepModal(person, { onDone }),
+  });
+  renderMaskChecklist(bodyEl, person, { closeLabel: "✅ Voir le point", onClose: () => close() });
+}
+
+async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
+  const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
+  const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects);
+  // Tous les sujets de la personne, sans exception (retour de Charles-Henri, vague 41,
+  // 09/09/2026 : "pouvoir faire une recherche lors d'un point [...] sur l'ensemble des sujets
+  // d'une personne") — contrairement aux 4 sections ci-dessus (curatées : "En retard"/"À
+  // transmettre"/"À aborder"/5 derniers "Terminé"), la recherche porte sur TOUT, y compris les
+  // sujets terminés au-delà des 5 plus récents et les sujets masqués du point partagé
+  // (`hiddenFromPrep` — recherche privée pour soi, pas d'enjeu à les exclure ici).
+  const ownAll = allFollowUps.filter((f) => f.personId === person.id).sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+
+  const remaining = [...overdue, ...toTell, ...upcoming].filter((f) => !coveredIds.has(f.id)).length;
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field" style="margin-bottom:12px;">
+      <input id="prep-search" type="text" placeholder="🔎 Chercher dans tous les sujets de ${escapeAttr(person.name)}..." />
+    </div>
+    <div class="item-meta" style="margin-bottom:12px;" id="prep-remaining">☑️ ${remaining === 0 ? "Tous les sujets ont été vus." : `${remaining} sujet(s) restant(s) à passer.`}</div>
+    <div id="prep-sections">
+      <div class="section-title" style="margin-top:0;">🔴 En retard de contrôle (${overdue.length})</div>
+      <div class="card" id="prep-overdue" style="margin-bottom:16px;"></div>
+      <div class="section-title">📣 À transmettre (${toTell.length})</div>
+      <div class="card" id="prep-to-tell" style="margin-bottom:16px;"></div>
+      <div class="section-title">🎯 À aborder (${upcoming.length})</div>
+      <div class="card" id="prep-upcoming" style="margin-bottom:16px;"></div>
+      <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
+      <div class="card" id="prep-done" style="margin-bottom:8px;"></div>
+    </div>
+    <div id="prep-search-results" hidden>
+      <div class="section-title" style="margin-top:0;">🔎 Résultats</div>
+      <div class="card" id="prep-search-list" style="margin-bottom:8px;"></div>
+    </div>
+  `;
+
+  const openFromPrep = (f) => {
+    coveredIds.add(f.id);
+    closeModal();
+    openEditFollowUpModal(f, { onDone: () => openPrepModal(person, { onDone, coveredIds }) });
+  };
+  renderFollowUpList(body.querySelector("#prep-overdue"), overdue, { onOpen: openFromPrep, coveredIds });
+  renderFollowUpList(body.querySelector("#prep-to-tell"), toTell, { onOpen: openFromPrep, coveredIds });
+  renderGroupedFollowUpList(body.querySelector("#prep-upcoming"), upcomingGroups, { onOpen: openFromPrep, coveredIds });
+  renderFollowUpList(body.querySelector("#prep-done"), recentlyDone, { onOpen: openFromPrep });
+
+  const sectionsEl = body.querySelector("#prep-sections");
+  const remainingEl = body.querySelector("#prep-remaining");
+  const resultsWrap = body.querySelector("#prep-search-results");
+  const resultsList = body.querySelector("#prep-search-list");
+  // BUG corrigé (15/09/2026, audit performance) : aucun anti-rebond sur cette recherche — chaque
+  // frappe reconstruisait toute la liste. Voir js/views/kanban.js, même correctif.
+  let prepSearchDebounce = null;
+  body.querySelector("#prep-search").addEventListener("input", (e) => {
+    const value = e.target.value;
+    clearTimeout(prepSearchDebounce);
+    prepSearchDebounce = setTimeout(() => {
+      const needle = value.trim().toLowerCase();
+      if (!needle) {
+        sectionsEl.hidden = false;
+        remainingEl.hidden = false;
+        resultsWrap.hidden = true;
+        return;
+      }
+      sectionsEl.hidden = true;
+      remainingEl.hidden = true;
+      resultsWrap.hidden = false;
+      const matches = ownAll.filter(
+        (f) => f.title.toLowerCase().includes(needle) || (f.description || "").toLowerCase().includes(needle)
+      );
+      renderFollowUpList(resultsList, matches, { onOpen: openFromPrep });
+    }, 150);
+  });
+
+  openModal({
+    title: `🗒️ Point avec ${person.name}`,
+    body,
+    actions: [
+      {
+        // "un sujet peut apparaître pendant le point" (retour de Charles-Henri, vague 38) : un
+        // sujet créé ici suit exactement le même chemin qu'un Suivi créé n'importe où ailleurs
+        // (`openCreateFollowUpModal`, même formulaire, même regroupement par projet au retour) —
+        // aucune saisie parallèle à maintenir. Il est marqué "vu" (`coveredIds`) dès sa création :
+        // il vient d'être discuté en direct, inutile de repasser dessus ensuite dans la même
+        // séance. Note : si plusieurs sujets sont ajoutés à la suite via "+ Encore un suivi"
+        // (voir promptAnotherFollowUp), seul le DERNIER de la série est marqué vu automatiquement
+        // — les précédents apparaissent bien à la reprise (relus depuis le stockage) mais pas
+        // encore cochés ; à cocher à la main si besoin.
+        icon: "➕",
+        label: "Sujet apparu",
+        variant: "secondary",
+        compact: true,
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          openCreateFollowUpModal({
+            person,
+            onCreated: (created) => {
+              if (created) coveredIds.add(created.id);
+              openPrepModal(person, { onDone, coveredIds });
+            },
+            onCancel: () => openPrepModal(person, { onDone, coveredIds }),
+          });
+        },
+      },
+      { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
+    ],
+  });
+}
+
+/** Regroupe une liste de suivis par projet lié, en conservant l'ordre d'apparition (voir
+ *  commentaire dans `openPrepModal`). Les suivis sans `projectId` sont réunis dans un groupe
+ *  "Sans projet" plutôt qu'isolés un par un. */
+function groupByProject(items, projects) {
+  const groups = [];
+  const indexByKey = new Map();
+  for (const f of items) {
+    const key = f.projectId || "__none__";
+    let index = indexByKey.get(key);
+    if (index === undefined) {
+      const project = f.projectId ? projects.find((p) => p.id === f.projectId) : null;
+      index = groups.length;
+      indexByKey.set(key, index);
+      groups.push({ label: project ? project.name : "Sans projet", items: [] });
+    }
+    groups[index].items.push(f);
+  }
+  return groups;
+}
+
+/**
+ * `coveredIds` (optionnel — uniquement fourni par `openPrepModal`, vague 21) : quand présent,
+ * chaque ligne gagne une case "vu" indépendante du statut du Suivi lui-même (cocher ne modifie
+ * rien côté données, seulement l'affichage de cette session de préparation — voir commentaire
+ * sur `openPrepModal`). `onCoveredChange` permet au regroupement par projet de rafraîchir le
+ * compteur "x/y vus" de son étiquette après une case cochée sans tout redessiner.
+ */
+// TODO-030 (retour direct de Charles-Henri, 22/09/2026 : "je dois sur échéances et prochain
+// contrôle pouvoir disposer d'un bouton pour ajouter directement +1 jours ou +7 jours comme sur
+// le kanban [...] dans le point avec le collaborateur et dans la fiche elle-même") — reprend tel
+// quel le contrôle "+1j / +7j / date libre" du Kanban (js/views/kanban.js#renderCard, classes
+// CSS `.kanban-card-postpone`/`.kanban-postpone-btn`/`.kanban-postpone-custom` réutilisées à
+// l'identique) et le calcul `dateUtils.addDaysToIsoDate` désormais partagé (voir son commentaire
+// dans js/services/dateUtils.js). Posé ici, dans `appendFollowUpRows`, plutôt que sur le
+// formulaire de création/édition (`#fu-due`/`#fu-control`, périmètre initialement envisagé par
+// TODO-030) : c'est cette fonction, partagée par la liste "👀 Suivis", la fiche Personne ET
+// "Préparer mon point" (voir son commentaire ci-dessous), qui couvre exactement les deux
+// endroits demandés ("dans le point avec le collaborateur et dans la fiche elle-même") sans
+// avoir à ouvrir la fiche complète d'édition — le formulaire de création/édition n'a pas été
+// touché.
+//
+// Champs concernés par ligne, selon le Sens (`direction`) du Suivi — jamais les deux mêmes
+// champs pour les deux Sens, `dueDate` restant toujours `null` pour un "to_tell" (voir
+// `js/domain/followups.js#createFollowUp`) :
+//  - `waiting_on` : "Échéance" (`dueDate`, appartient à la personne suivie) ET "Prochain
+//    contrôle" (`controlDate`, quand JE dois vérifier/relancer — même libellé que
+//    `js/views/people.js#openEditFollowUpModal`), l'un et l'autre indépendamment réglables.
+//  - `to_tell` : seule "À dire avant" (`controlDate` — même libellé qu'avant ce patch) a un sens,
+//    `dueDate` n'existe pas pour ce Sens.
+//
+// `followUpsApi.updateFollowUp` applique déjà sa propre règle de plafond/calage
+// `controlDate`/`dueDate` (voir son commentaire dans js/domain/followups.js) exactement comme le
+// ferait une sauvegarde du formulaire d'édition — le document complet renvoyé par cet appel est
+// donc utilisé pour rafraîchir les DEUX valeurs affichées après un report d'échéance, au cas où
+// `controlDate` aurait elle-même été recalculée en silence par cette règle.
+function relevantFollowUpDateFields(f) {
+  return f.direction === "to_tell"
+    ? [{ field: "controlDate", label: "À dire avant" }]
+    : [
+        { field: "dueDate", label: "Échéance" },
+        { field: "controlDate", label: "Prochain contrôle" },
+      ];
+}
+
+function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredChange) {
+  for (const f of followUps) {
+    const isToTell = f.direction === "to_tell";
+    const isCovered = !!coveredIds?.has(f.id);
+    const row = document.createElement("div");
+    row.className = "item-row" + (isCovered ? " item-row-covered" : "");
+    row.style.cursor = "pointer";
+    const dateFields = relevantFollowUpDateFields(f);
+    const notableIcon = f.notable === "positive" ? "👍 " : f.notable === "negative" ? "👎 " : "";
+    row.innerHTML = `
+      ${coveredIds ? `<label class="covered-check" title="Marquer comme vu pendant ce point"><input type="checkbox" ${isCovered ? "checked" : ""} aria-label="Vu pendant ce point" /></label>` : ""}
+      <div class="item-main">
+        <div class="item-title">${notableIcon}${isToTell ? "📣 " : ""}${escapeHtml(f.title)}${f.category ? ` <span class="item-meta">· ${followUpsApi.CATEGORY_LABELS[f.category]}</span>` : ""}</div>
+        <div class="item-meta">Ajouté le ${formatDate(f.createdAt)}</div>
+        ${dateFields.map(({ field, label }) => `
+          <div class="followup-date-row" data-date-field="${field}">
+            <span class="item-meta">${label} : <span data-date-value>${f[field] ? formatDate(f[field]) : "—"}</span></span>
+            <button type="button" class="followup-quick-btn" data-date-toggle title="Reporter" aria-label="Reporter — ${label}">📅</button>
+            <div class="kanban-card-postpone" data-date-panel style="display:none;">
+              <button type="button" class="kanban-postpone-btn" data-date-offset="1">+1 j</button>
+              <button type="button" class="kanban-postpone-btn" data-date-offset="7">+7 j</button>
+              <label class="kanban-postpone-custom">
+                <span>Date libre</span>
+                <input type="date" data-date-custom value="${f[field] || ""}" aria-label="${label} — date libre" />
+              </label>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+      <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
+      ${f.status !== "done" ? `
+        <div class="followup-quick-actions">
+          <button type="button" class="followup-quick-btn" data-quick-relance title="Relancer" aria-label="Relancer">🔁</button>
+          <button type="button" class="followup-quick-btn" data-quick-done title="Marquer réglé" aria-label="Marquer réglé">✅</button>
+        </div>
+      ` : ""}
+    `;
+    row.querySelectorAll("[data-date-field]").forEach((dateRow) => {
+      const field = dateRow.dataset.dateField;
+      const toggleBtn = dateRow.querySelector("[data-date-toggle]");
+      const panel = dateRow.querySelector("[data-date-panel]");
+      const customInput = dateRow.querySelector("[data-date-custom]");
+      // Même précaution que .covered-check/.followup-quick-actions ci-dessous : ne jamais
+      // laisser un clic sur ce contrôle ouvrir aussi la fiche complète du Suivi.
+      dateRow.addEventListener("click", (e) => e.stopPropagation());
+      toggleBtn.addEventListener("click", () => {
+        panel.style.display = panel.style.display === "none" ? "flex" : "none";
+      });
+      function applyNewDate(newDate) {
+        followUpsApi.updateFollowUp(f.id, { [field]: newDate }).then((updated) => {
+          f.dueDate = updated.dueDate;
+          f.controlDate = updated.controlDate;
+          for (const { field: otherField } of dateFields) {
+            const otherValueEl = row.querySelector(`[data-date-field="${otherField}"] [data-date-value]`);
+            if (otherValueEl) otherValueEl.textContent = f[otherField] ? formatDate(f[otherField]) : "—";
+            const otherCustomInput = row.querySelector(`[data-date-field="${otherField}"] [data-date-custom]`);
+            if (otherCustomInput) otherCustomInput.value = f[otherField] || "";
+          }
+          panel.style.display = "none";
+          showToast(newDate ? `Date reportée au ${formatDate(newDate)}` : "Date supprimée");
+        });
+      }
+      dateRow.querySelectorAll("[data-date-offset]").forEach((btn) => {
+        btn.addEventListener("click", () => applyNewDate(dateUtils.addDaysToIsoDate(f[field], Number(btn.dataset.dateOffset))));
+      });
+      customInput.addEventListener("change", () => applyNewDate(customInput.value || null));
+    });
+    if (coveredIds) {
+      const checkWrap = row.querySelector(".covered-check");
+      // Empêche la case de déclencher aussi l'ouverture de la fiche (clic qui bulle vers `row`).
+      checkWrap.addEventListener("click", (e) => e.stopPropagation());
+      checkWrap.querySelector("input").addEventListener("change", (e) => {
+        if (e.target.checked) coveredIds.add(f.id);
+        else coveredIds.delete(f.id);
+        row.classList.toggle("item-row-covered", e.target.checked);
+        onCoveredChange?.();
+      });
+    }
+    // TODO-004 (LOT 2, 21/09/2026) : action rapide "🔁 Relancer / ✅ Réglé" à 1 clic, sans ouvrir
+    // la fiche complète — même principe que .covered-check ci-dessus (stopPropagation pour ne
+    // pas déclencher aussi le clic sur `row`). `appendFollowUpRows` est appelé depuis 3 contextes
+    // différents (liste "👀 Suivis" — redessinée par followUpsApi.subscribe —, mais aussi la
+    // fiche Personne et la préparation de point, qui affichent un instantané non réactif) : la
+    // ligne est donc mise à jour ICI, localement, plutôt que de compter sur un redessin externe
+    // qui n'arrive pas dans ces deux derniers cas.
+    const quickActions = row.querySelector(".followup-quick-actions");
+    if (quickActions) {
+      quickActions.addEventListener("click", (e) => e.stopPropagation());
+      const badgeEl = row.querySelector(".badge");
+      quickActions.querySelector("[data-quick-relance]").addEventListener("click", async () => {
+        await followUpsApi.setStatus(f.id, "relaunched");
+        f.status = "relaunched";
+        badgeEl.className = "badge badge-relaunched";
+        badgeEl.textContent = followUpsApi.STATUS_LABELS.relaunched;
+        showToast("Suivi relancé");
+      });
+      quickActions.querySelector("[data-quick-done]").addEventListener("click", async () => {
+        await followUpsApi.setStatus(f.id, "done");
+        f.status = "done";
+        badgeEl.className = "badge badge-done";
+        badgeEl.textContent = followUpsApi.STATUS_LABELS.done;
+        quickActions.remove();
+        showToast("Suivi réglé");
+      });
+    }
+    row.addEventListener("click", () => (onOpen ? onOpen(f) : openEditFollowUpModal(f)));
+    container.appendChild(row);
+  }
+}
+
+function renderFollowUpList(container, followUps, { onOpen, coveredIds } = {}) {
+  if (!followUps.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
+    return;
+  }
+  appendFollowUpRows(container, followUps, onOpen, coveredIds);
+}
+
+/** Variante groupée de `renderFollowUpList` : un sous-titre par groupe (ex. nom de projet),
+ *  puis ses suivis dans l'ordre déjà trié — voir `groupByProject`. Le compteur "x/y vus" sur
+ *  l'étiquette (retour de Charles-Henri, vague 21) ne s'affiche que dans le contexte de
+ *  préparation d'un point (`coveredIds` fourni). */
+function renderGroupedFollowUpList(container, groups, { onOpen, coveredIds } = {}) {
+  if (!groups.some((g) => g.items.length)) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ici.</div>`;
+    return;
+  }
+  container.innerHTML = "";
+  for (const group of groups) {
+    if (!group.items.length) continue;
+    const groupEl = document.createElement("div");
+    groupEl.className = "prep-group";
+    const label = document.createElement("div");
+    label.className = "prep-group-label";
+    groupEl.appendChild(label);
+    const updateLabel = () => {
+      if (!coveredIds) {
+        label.textContent = group.label;
+        return;
+      }
+      const covered = group.items.filter((i) => coveredIds.has(i.id)).length;
+      label.textContent = `${group.label} — ${covered}/${group.items.length} vu(s)`;
+    };
+    updateLabel();
+    appendFollowUpRows(groupEl, group.items, onOpen, coveredIds, updateLabel);
+    container.appendChild(groupEl);
+  }
+}
+
+/**
+ * Regroupe des Objectifs par campagne/période (LOT 11, TODO-024, "notion de campagne/période")
+ * — `period` est un simple champ texte libre (voir le commentaire en tête de
+ * js/domain/objectives.js pour l'arbitrage complet : pas de véritable entité "campagne" dans ce
+ * lot). Les objectifs sans période vont dans un groupe "Sans période" ; les groupes sont triés
+ * par la date de création la plus récente qu'ils contiennent, décroissante — volontairement
+ * PAS de notion de "campagne courante" à deviner ou à configurer, la récence suffit à faire
+ * ressortir les objectifs actuels avant les plus anciens, exactement le besoin exprimé
+ * ("distinguer clairement les objectifs de la campagne courante des objectifs historiques")
+ * sans construire de gestion de campagnes.
+ */
+export function groupObjectivesByPeriod(objectives) {
+  const groups = new Map();
+  for (const o of objectives) {
+    const key = o.period || "__none__";
+    if (!groups.has(key)) groups.set(key, { period: o.period || null, items: [] });
+    groups.get(key).items.push(o);
+  }
+  return [...groups.values()].sort((a, b) => {
+    const maxA = Math.max(0, ...a.items.map((o) => o.createdAt || 0));
+    const maxB = Math.max(0, ...b.items.map((o) => o.createdAt || 0));
+    return maxB - maxA;
+  });
+}
+
+/** Objectifs de campagne (§ préparation EADP) : liste + accès à leurs points de suivi datés. */
+function renderObjectivesList(container, objectives, person, reopen, projects = []) {
+  if (!objectives.length) {
+    container.innerHTML = `<div class="empty-state" style="padding:16px;">Pas encore d'objectif pour ${escapeHtml(person.name)}.</div>`;
+    return;
+  }
+  container.innerHTML = "";
+  const groups = groupObjectivesByPeriod(objectives);
+  const showGroupTitles = groups.length > 1;
+  for (const group of groups) {
+    if (showGroupTitles) {
+      const label = document.createElement("div");
+      label.className = "prep-group-label";
+      label.textContent = group.period || "Sans période";
+      container.appendChild(label);
+    }
+    for (const o of group.items) {
+      const project = projects.find((p) => p.id === o.projectId);
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+          <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openObjectiveDetail(o, person, { onDone: reopen });
+      });
+      container.appendChild(row);
+    }
+  }
+}
+
+/**
+ * Bloc optionnel "Détails" d'un Objectif (LOT 11, TODO-024) — repliable, replié par défaut sauf
+ * si `initial` porte déjà l'une de ces valeurs (fiche d'un objectif déjà enrichi). Réutilisé
+ * TEL QUEL par la création (collaborateur ici, personnelle depuis js/views/dashboard.js) et par
+ * la fiche détail (`openObjectiveDetail` plus bas) : un seul jeu de champs, jamais deux
+ * formulaires distincts — c'est le principe central demandé par Charles-Henri pour ce lot. Rien
+ * ici n'est obligatoire ; un objectif personnel simple n'a jamais besoin d'ouvrir ce bloc.
+ */
+export function renderObjectiveDetailsFieldset(container, initial = {}) {
+  const smart = initial.smart || {};
+  const hasAnyDetail =
+    initial.category || initial.scope || initial.description || initial.period || initial.reviewFrequency ||
+    initial.actionPlan || initial.responsibilityLevels || initial.watchPoints ||
+    smart.specific || smart.measurable || smart.achievable || smart.relevant || smart.timeBound;
+
+  container.innerHTML = `
+    <details ${hasAnyDetail ? "open" : ""}>
+      <summary class="section-title" style="cursor:pointer;margin-top:0;">Détails (optionnel — campagne, SMART, EADP...)</summary>
+      <div class="field">
+        <label for="objd-category">Catégorie</label>
+        <input id="objd-category" type="text" placeholder="Ex. Technique, Managérial, Client..." value="${escapeAttr(initial.category || "")}" />
+      </div>
+      <div class="field">
+        <label>Type</label>
+        <div class="chip-row">
+          <label class="chip-radio"><input type="radio" name="objd-scope" value="" ${!initial.scope ? "checked" : ""} /> — Aucun —</label>
+          ${objectivesApi.SCOPES.map((s) => `<label class="chip-radio"><input type="radio" name="objd-scope" value="${s}" ${initial.scope === s ? "checked" : ""} /> ${objectivesApi.SCOPE_LABELS[s]}</label>`).join("")}
+        </div>
+      </div>
+      <div class="field">
+        <label for="objd-description">Description / intention</label>
+        <textarea id="objd-description" placeholder="Contexte libre : pourquoi cet objectif ?">${escapeHtml(initial.description || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-period">Campagne / période</label>
+        <input id="objd-period" type="text" placeholder="Ex. 2026-2027, T3 2026..." value="${escapeAttr(initial.period || "")}" />
+      </div>
+      <div class="field">
+        <label for="objd-review-frequency">Fréquence de revue</label>
+        <input id="objd-review-frequency" type="text" placeholder="Ex. Mensuelle, à chaque point..." value="${escapeAttr(initial.reviewFrequency || "")}" />
+      </div>
+      <div class="section-title">SMART</div>
+      <div class="field">
+        <label for="objd-smart-specific">Spécifique</label>
+        <textarea id="objd-smart-specific" placeholder="Quoi, précisément ?">${escapeHtml(smart.specific || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-measurable">Mesurable</label>
+        <textarea id="objd-smart-measurable" placeholder="Comment sait-on que c'est atteint ?">${escapeHtml(smart.measurable || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-achievable">Atteignable</label>
+        <textarea id="objd-smart-achievable" placeholder="Réaliste avec les moyens disponibles ?">${escapeHtml(smart.achievable || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-relevant">Réaliste / Pertinent</label>
+        <textarea id="objd-smart-relevant" placeholder="En quoi ça compte vraiment ?">${escapeHtml(smart.relevant || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-smart-time-bound">Temporel</label>
+        <textarea id="objd-smart-time-bound" placeholder="Pour quand ?">${escapeHtml(smart.timeBound || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-action-plan">Plan / actions</label>
+        <textarea id="objd-action-plan" placeholder="Grandes étapes envisagées">${escapeHtml(initial.actionPlan || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-responsibility">Niveaux de responsabilité</label>
+        <textarea id="objd-responsibility" placeholder="Qui décide, qui contribue, qui est informé...">${escapeHtml(initial.responsibilityLevels || "")}</textarea>
+      </div>
+      <div class="field">
+        <label for="objd-watch-points">Points d'attention</label>
+        <textarea id="objd-watch-points" placeholder="Risques, dépendances, vigilance particulière...">${escapeHtml(initial.watchPoints || "")}</textarea>
+      </div>
+    </details>
+  `;
+
+  return {
+    read() {
+      const val = (id) => container.querySelector(id).value.trim();
+      return {
+        category: val("#objd-category") || null,
+        scope: container.querySelector('input[name="objd-scope"]:checked')?.value || null,
+        description: val("#objd-description"),
+        period: val("#objd-period") || null,
+        reviewFrequency: val("#objd-review-frequency"),
+        actionPlan: val("#objd-action-plan"),
+        responsibilityLevels: val("#objd-responsibility"),
+        watchPoints: val("#objd-watch-points"),
+        smart: {
+          specific: val("#objd-smart-specific"),
+          measurable: val("#objd-smart-measurable"),
+          achievable: val("#objd-smart-achievable"),
+          relevant: val("#objd-smart-relevant"),
+          timeBound: val("#objd-smart-time-bound"),
+        },
+      };
+    },
+  };
+}
+
+async function openCreateObjectiveModal(person, { onDone } = {}) {
+  // "Projet" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un
+  // projet") — Objectif était, avec les Informations/Idées de l'Inbox, le seul type sans aucun
+  // moyen de se rattacher à un projet. Optionnel, même sélecteur + "+ Nouveau projet…" que
+  // partout ailleurs (js/views/projects.js#attachProjectQuickCreate).
+  const projects = await projectsApi.listAll();
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="obj-title">Objectif de ${escapeHtml(person.name)}</label>
+      <input id="obj-title" type="text" placeholder="Ex. Monter en autonomie sur le pilotage de projet" />
+    </div>
+    <div class="field">
+      <label for="obj-project">Projet (optionnel)</label>
+      <select id="obj-project">
+        <option value="">— Aucun —</option>
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>
+    <div id="obj-details-fieldset"></div>
+  `;
+  attachProjectQuickCreate(body.querySelector("#obj-project"));
+  const details = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"));
+  const { bodyEl, close } = openModal({
+    title: "Nouvel objectif",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      {
+        label: "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const title = bodyEl.querySelector("#obj-title").value.trim();
+          if (!title) return;
+          const projectId = bodyEl.querySelector("#obj-project").value || null;
+          await objectivesApi.createObjective({ personId: person.id, title, projectId, ...details.read() });
+          close();
+          showToast("Objectif ajouté");
+          onDone?.();
+        },
+      },
+    ],
+  });
+}
+
+export async function openObjectiveDetail(objective, person, { onDone } = {}) {
+  const entries = [...(objective.entries || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const indicators = objective.indicators || [];
+  // "Projet" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un
+  // projet") — chargé ici plutôt que reçu en paramètre : cette fonction est aussi appelée
+  // directement depuis js/components/search.js et js/components/linkedItems.js sans que ces
+  // appelants n'aient de liste de projets sous la main (même principe que
+  // js/views/people.js#openEditFollowUpModal, déjà async et auto-suffisant pour la même raison).
+  const projects = await projectsApi.listAll();
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input id="obj-done" type="checkbox" style="width:auto;" ${objective.status === "done" ? "checked" : ""} />
+      <label for="obj-done" style="margin:0;">✅ Objectif atteint</label>
+    </div>
+    <div class="field">
+      <label for="obj-detail-project">Projet</label>
+      <select id="obj-detail-project">
+        <option value="">— Aucun —</option>
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === objective.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+    </div>
+    <div id="obj-details-fieldset" style="margin-bottom:8px;"></div>
+
+    <!-- Indicateurs (LOT 11, TODO-024, points 3/4/6) — données structurées PROPRES à
+         l'Objectif, jamais une fiche indépendante (arbitrage "Option A", voir le commentaire en
+         tête de js/domain/objectives.js) : pas de section "🔗 Lié" par indicateur, uniquement au
+         niveau de l'Objectif entier (section plus bas, inchangée). -->
+    <div class="section-title">📊 Indicateurs (${indicators.length})</div>
+    <div class="card" id="obj-indicators" style="margin-bottom:8px;"></div>
+    <div style="margin-bottom:16px;">
+      <button id="add-indicator-btn" type="button" class="btn btn-secondary btn-sm">+ Indicateur</button>
+    </div>
+
+    <div class="section-title">🕒 Suivis récents (${entries.length})</div>
+    <div class="card" id="obj-entries" style="margin-bottom:8px;"></div>
+    <div style="margin-bottom:16px;">
+      <button id="add-entry-btn" type="button" class="btn btn-secondary btn-sm">+ Ajouter un suivi</button>
+    </div>
+    <div class="section-title">🏷️ Tags</div>
+    <div id="obj-tags" style="margin-bottom:16px;"></div>
+    <!-- "🔗 Lié" (retour de Charles-Henri, 06/09/2026 : "pouvoir y rattacher d'autres projets ou
+         faire un suivi") — un Objectif se suit désormais comme les autres fiches : on y attache
+         des Projets/Suivis déjà existants (ou on en crée un nouveau déjà lié), même mécanique
+         partagée que partout ailleurs (js/components/linkedItems.js), sans dupliquer le Kanban
+         ni la mécanique Projet. -->
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="obj-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="obj-link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="obj-create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
+  `;
+
+  const objDetails = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"), objective);
+
+  const indicatorById = new Map(indicators.map((ind) => [ind.id, ind]));
+  const indicatorsEl = body.querySelector("#obj-indicators");
+  function renderIndicators(list) {
+    if (!list.length) {
+      indicatorsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun indicateur pour l'instant.</div>`;
+      return;
+    }
+    indicatorsEl.innerHTML = "";
+    for (const ind of list) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      const metaParts = [];
+      if (ind.target) metaParts.push(`Cible : ${escapeHtml(ind.target)}`);
+      if (ind.measurement) metaParts.push(`Mesure : ${escapeHtml(ind.measurement)}`);
+      if (ind.evidenceSource) metaParts.push(`Preuve : ${escapeHtml(ind.evidenceSource)}`);
+      if (ind.frequency) metaParts.push(`Fréquence : ${escapeHtml(ind.frequency)}`);
+      if (ind.currentValue) metaParts.push(`Valeur actuelle : ${escapeHtml(ind.currentValue)}`);
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(ind.label || "(sans libellé)")} <span class="badge badge-${ind.status}">${objectivesApi.INDICATOR_STATUS_LABELS[ind.status] || ind.status}</span></div>
+          ${metaParts.length ? `<div class="item-meta">${metaParts.join(" · ")}</div>` : ""}
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openIndicatorModal(objective, ind, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+      });
+      indicatorsEl.appendChild(row);
+    }
+  }
+  renderIndicators(indicators);
+  body.querySelector("#add-indicator-btn").addEventListener("click", () => {
+    closeModal();
+    openIndicatorModal(objective, null, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+  });
+
+  const entriesEl = body.querySelector("#obj-entries");
+  function renderEntries(list) {
+    if (!list.length) {
+      entriesEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun suivi pour l'instant.</div>`;
+      return;
+    }
+    entriesEl.innerHTML = "";
+    for (const e of list) {
+      const ind = e.indicatorId ? indicatorById.get(e.indicatorId) : null;
+      const row = document.createElement("div");
+      row.className = "item-row";
+      const titleParts = [];
+      if (ind) titleParts.push(`📊 ${escapeHtml(ind.label || "(indicateur)")}`);
+      if (e.status) titleParts.push(`<span class="badge badge-${e.status}">${objectivesApi.INDICATOR_STATUS_LABELS[e.status] || e.status}</span>`);
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${formatDate(e.date)}${titleParts.length ? " — " + titleParts.join(" ") : ""}</div>
+          ${e.note ? `<div>${escapeHtml(e.note)}</div>` : ""}
+          ${e.nextSteps ? `<div class="item-meta">Prévu avant le prochain point : ${escapeHtml(e.nextSteps)}</div>` : ""}
+          <div class="item-meta" id="obj-entry-ref-${e.id}"></div>
+        </div>
+      `;
+      entriesEl.appendChild(row);
+      if (e.ref) {
+        linkedItemsApi.resolveRefDirect(e.ref).then((resolved) => {
+          const refEl = row.querySelector(`#obj-entry-ref-${e.id}`);
+          if (refEl) refEl.textContent = resolved ? `🔗 ${resolved.emoji} ${resolved.title}` : "🔗 Élément supprimé";
+        });
+      }
+    }
+  }
+  renderEntries(entries);
+  body.querySelector("#add-entry-btn").addEventListener("click", () => {
+    closeModal();
+    openAddObjectiveEntryModal(objective, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+  });
+
+  const objProjectSelectEl = body.querySelector("#obj-detail-project");
+  attachProjectQuickCreate(objProjectSelectEl);
+  objProjectSelectEl.addEventListener("change", async () => {
+    if (objProjectSelectEl.value === "__create__") return; // géré par attachProjectQuickCreate lui-même
+    await objectivesApi.updateObjective(objective.id, { projectId: objProjectSelectEl.value || null });
+    objective.projectId = objProjectSelectEl.value || null;
+  });
+
+  const objLinkRef = { type: "Objective", id: objective.id };
+  renderTagsEditor(body.querySelector("#obj-tags"), "Objective", objective.id);
+  linkedItemsApi.renderLinkedSection(body.querySelector("#obj-links"), objLinkRef);
+  body.querySelector("#obj-link-existing-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openLinkPickerModal(objLinkRef, objective.title, {
+      onLinked: () => openObjectiveDetail(objective, person, { onDone }),
+      onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+    });
+  });
+  body.querySelector("#obj-create-linked-btn").addEventListener("click", () => {
+    closeModal();
+    linkedItemsApi.openCreateAndLinkModal(objLinkRef, objective.title, {
+      onLinked: () => openObjectiveDetail(objective, person, { onDone }),
+      onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+    });
+  });
+
+  const { bodyEl, close } = openModal({
+    title: `🎯 ${objective.title}`,
+    body,
+    actions: [
+      { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
+      {
+        label: "🗑️ Supprimer",
+        variant: "danger",
+        closesModal: false,
+        onClick: () => {
+          closeModal();
+          confirmDelete({
+            title: "Supprimer cet objectif ?",
+            message: `« ${objective.title} » et ses points de suivi seront définitivement supprimés.`,
+            onConfirm: async () => {
+              await objectivesApi.removeObjective(objective.id);
+              showToast("Objectif supprimé");
+              onDone?.();
+            },
+            onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+          });
+        },
+      },
+      {
+        label: "Enregistrer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          await objectivesApi.updateObjective(objective.id, {
+            status: bodyEl.querySelector("#obj-done").checked ? "done" : "active",
+            ...objDetails.read(),
+          });
+          close();
+          showToast("Objectif mis à jour");
+          onDone?.();
+        },
+      },
+    ],
+  });
+}
+
+/** Ajouter/modifier un indicateur (LOT 11, TODO-024, points 3/4) — petite modale imbriquée,
+ *  même convention que partout ailleurs dans ce fichier (fermer/rouvrir la fiche parente au
+ *  clic). `indicator` à `null` = création, sinon modification en place. */
+function openIndicatorModal(objective, indicator, { onDone } = {}) {
+  const isEdit = !!indicator;
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="ind-label">Libellé</label>
+      <input id="ind-label" type="text" placeholder="Ex. Participation à des contacts utilisateurs" value="${escapeAttr(indicator?.label || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-target">Cible</label>
+      <input id="ind-target" type="text" placeholder="Ex. 6 contacts terrain sur la période" value="${escapeAttr(indicator?.target || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-measurement">Mode de mesure</label>
+      <input id="ind-measurement" type="text" placeholder="Ex. Nombre de comptes rendus de contact" value="${escapeAttr(indicator?.measurement || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-evidence">Source de preuve</label>
+      <input id="ind-evidence" type="text" placeholder="Ex. Comptes rendus partagés sur le drive" value="${escapeAttr(indicator?.evidenceSource || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-frequency">Fréquence</label>
+      <input id="ind-frequency" type="text" placeholder="Ex. Mensuelle" value="${escapeAttr(indicator?.frequency || "")}" />
+    </div>
+    <div class="field">
+      <label for="ind-current-value">Valeur actuelle (optionnel)</label>
+      <input id="ind-current-value" type="text" placeholder="Ex. 3 contacts réalisés à ce jour" value="${escapeAttr(indicator?.currentValue || "")}" />
+    </div>
+    <div class="field">
+      <label>Statut</label>
+      <div class="chip-row">
+        ${objectivesApi.INDICATOR_STATUSES.map(
+          (s) => `<label class="chip-radio"><input type="radio" name="ind-status" value="${s}" ${(indicator?.status || "todo") === s ? "checked" : ""} /> ${objectivesApi.INDICATOR_STATUS_LABELS[s]}</label>`
+        ).join("")}
+      </div>
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: isEdit ? "Modifier l'indicateur" : "Nouvel indicateur",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      ...(isEdit
+        ? [
+            {
+              label: "🗑️ Supprimer",
+              variant: "danger",
+              closesModal: false,
+              onClick: () => {
+                closeModal();
+                confirmDelete({
+                  title: "Supprimer cet indicateur ?",
+                  message: `« ${indicator.label || "Cet indicateur"} » sera définitivement supprimé. Les suivis déjà enregistrés qui le concernaient sont conservés.`,
+                  onConfirm: async () => {
+                    await objectivesApi.removeIndicator(objective.id, indicator.id);
+                    showToast("Indicateur supprimé");
+                    onDone?.();
+                  },
+                  onCancel: () => openIndicatorModal(objective, indicator, { onDone }),
+                });
+              },
+            },
+          ]
+        : []),
+      {
+        label: isEdit ? "Enregistrer" : "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const patch = {
+            label: bodyEl.querySelector("#ind-label").value.trim(),
+            target: bodyEl.querySelector("#ind-target").value.trim(),
+            measurement: bodyEl.querySelector("#ind-measurement").value.trim(),
+            evidenceSource: bodyEl.querySelector("#ind-evidence").value.trim(),
+            frequency: bodyEl.querySelector("#ind-frequency").value.trim(),
+            currentValue: bodyEl.querySelector("#ind-current-value").value.trim(),
+            status: bodyEl.querySelector('input[name="ind-status"]:checked')?.value || "todo",
+          };
+          if (!patch.label) return;
+          if (isEdit) await objectivesApi.updateIndicator(objective.id, indicator.id, patch);
+          else await objectivesApi.addIndicator(objective.id, patch);
+          close();
+          showToast(isEdit ? "Indicateur mis à jour" : "Indicateur ajouté");
+          onDone?.();
+        },
+      },
+    ],
+  });
+}
+
+/**
+ * "+ Ajouter un suivi" sur un Objectif (LOT 11, TODO-024, point 7) — le formulaire ne redemande
+ * JAMAIS la cible/le mode de mesure/la source de preuve : ces informations sont déjà celles de
+ * l'indicateur choisi, affichées en contexte au-dessus du formulaire (retour de Charles-Henri :
+ * "le but est que le manager ou le collaborateur puisse faire un point en quelques minutes").
+ * Sans indicateur sur l'objectif (cas "Mes objectifs" simple), le sélecteur d'indicateur et le
+ * contexte associé n'apparaissent simplement pas — formulaire réduit à statut/réalisé/prévu/lien,
+ * l'expérience légère demandée pour un objectif personnel.
+ */
+function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
+  const indicators = objective.indicators || [];
+  const lastEntryFor = (indicatorId) =>
+    [...(objective.entries || [])]
+      .filter((e) => (indicatorId ? e.indicatorId === indicatorId : !e.indicatorId))
+      .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    ${
+      indicators.length
+        ? `<div class="field">
+      <label for="oe-indicator">Indicateur concerné</label>
+      <select id="oe-indicator">
+        <option value="">— Suivi général de l'objectif —</option>
+        ${indicators.map((ind) => `<option value="${ind.id}" ${prefill.indicatorId === ind.id ? "selected" : ""}>${escapeHtml(ind.label || "(sans libellé)")}</option>`).join("")}
+      </select>
+    </div>
+    <div class="card" id="oe-context" style="margin-bottom:16px;"></div>`
+        : ""
+    }
+    <div class="field">
+      <label>Statut</label>
+      <div class="chip-row">
+        <label class="chip-radio"><input type="radio" name="oe-status" value="" ${!prefill.status ? "checked" : ""} /> — Inchangé —</label>
+        ${objectivesApi.INDICATOR_STATUSES.map((s) => `<label class="chip-radio"><input type="radio" name="oe-status" value="${s}" ${prefill.status === s ? "checked" : ""} /> ${objectivesApi.INDICATOR_STATUS_LABELS[s]}</label>`).join("")}
+      </div>
+    </div>
+    <div class="field">
+      <label for="oe-date">Date</label>
+      <input id="oe-date" type="date" value="${escapeAttr(prefill.date || new Date().toISOString().slice(0, 10))}" />
+    </div>
+    <div class="field">
+      <label for="oe-note">Qu'est-ce qui a été réalisé ?</label>
+      <textarea id="oe-note" placeholder="Où en est-on depuis le dernier point ?">${escapeHtml(prefill.note || "")}</textarea>
+    </div>
+    <div class="field">
+      <label for="oe-next-steps">Qu'est-ce qui est prévu avant le prochain point ?</label>
+      <textarea id="oe-next-steps" placeholder="Optionnel">${escapeHtml(prefill.nextSteps || "")}</textarea>
+    </div>
+    <div class="field">
+      <label>Lien vers un élément existant (preuve/contexte, optionnel)</label>
+      <div id="oe-ref-display" class="item-meta" style="margin-bottom:6px;"></div>
+      <button type="button" id="oe-ref-pick-btn" class="btn btn-secondary btn-sm">🔗 Choisir une fiche</button>
+      <button type="button" id="oe-ref-clear-btn" class="btn btn-ghost btn-sm" style="display:none;">Retirer</button>
+    </div>
+  `;
+
+  let pickedRef = prefill.ref || null;
+  const refDisplay = body.querySelector("#oe-ref-display");
+  const refClearBtn = body.querySelector("#oe-ref-clear-btn");
+  function renderPickedRef() {
+    refClearBtn.style.display = pickedRef ? "" : "none";
+    if (!pickedRef) {
+      refDisplay.textContent = "";
+      return;
+    }
+    refDisplay.textContent = "Chargement...";
+    linkedItemsApi.resolveRefDirect(pickedRef).then((resolved) => {
+      refDisplay.textContent = resolved ? `🔗 ${resolved.emoji} ${resolved.title}` : "🔗 Élément supprimé";
+    });
+  }
+  // Snapshot des champs déjà saisis avant d'ouvrir le sélecteur de fiche — cette modale se
+  // referme forcément le temps du choix (`openModal()` n'affiche jamais deux modales à la
+  // fois), donc la saisie en cours est reprise via `prefill` à la réouverture plutôt que
+  // perdue, même principe qu'ailleurs dans ce fichier pour une modale imbriquée.
+  function snapshot() {
+    return {
+      indicatorId: body.querySelector("#oe-indicator")?.value || null,
+      status: body.querySelector('input[name="oe-status"]:checked')?.value || null,
+      date: body.querySelector("#oe-date").value,
+      note: body.querySelector("#oe-note").value,
+      nextSteps: body.querySelector("#oe-next-steps").value,
+      ref: pickedRef,
+    };
+  }
+  body.querySelector("#oe-ref-pick-btn").addEventListener("click", () => {
+    const current = snapshot();
+    closeModal();
+    linkedItemsApi.pickRef({
+      // Liste exacte demandée par Charles-Henri (LOT 11, TODO-024, point 7) : Suivi, Réunion,
+      // Décision, Information, Ressource, Projet — jamais Tâche/Personne/Objectif ici.
+      types: ["FollowUp", "Meeting", "Decision", "Kept", "Resource", "Project"],
+      title: "Choisir une fiche liée à ce suivi",
+      onPick: (ref) => openAddObjectiveEntryModal(objective, { onDone, prefill: { ...current, ref } }),
+      onCancel: () => openAddObjectiveEntryModal(objective, { onDone, prefill: current }),
+    });
+  });
+  refClearBtn.addEventListener("click", () => {
+    pickedRef = null;
+    renderPickedRef();
+  });
+
+  function fillContext(indicatorId) {
+    const contextEl = body.querySelector("#oe-context");
+    if (!contextEl) return;
+    const ind = indicators.find((i) => i.id === indicatorId);
+    if (!ind) {
+      contextEl.innerHTML = "";
+      return;
+    }
+    const last = lastEntryFor(indicatorId);
+    const lines = [];
+    if (ind.target) lines.push(`Cible : ${escapeHtml(ind.target)}`);
+    if (ind.measurement) lines.push(`Mesure : ${escapeHtml(ind.measurement)}`);
+    if (ind.evidenceSource) lines.push(`Source de preuve : ${escapeHtml(ind.evidenceSource)}`);
+    lines.push(`Statut actuel : ${objectivesApi.INDICATOR_STATUS_LABELS[ind.status] || ind.status}`);
+    if (last) {
+      lines.push(`Dernier suivi (${formatDate(last.date)}) : ${escapeHtml(last.note || "—")}`);
+      if (last.nextSteps) lines.push(`Prévu à ce moment-là : ${escapeHtml(last.nextSteps)}`);
+    }
+    contextEl.innerHTML = lines.map((l) => `<div class="item-meta">${l}</div>`).join("");
+  }
+  if (indicators.length) {
+    const select = body.querySelector("#oe-indicator");
+    select.addEventListener("change", () => fillContext(select.value));
+    if (prefill.indicatorId) fillContext(prefill.indicatorId);
+  }
+
+  renderPickedRef();
+
+  const { bodyEl, close } = openModal({
+    title: "Ajouter un suivi",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      {
+        label: "Ajouter",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const indicatorId = bodyEl.querySelector("#oe-indicator")?.value || null;
+          const status = bodyEl.querySelector('input[name="oe-status"]:checked')?.value || null;
+          const date = bodyEl.querySelector("#oe-date").value || null;
+          const note = bodyEl.querySelector("#oe-note").value.trim();
+          const nextSteps = bodyEl.querySelector("#oe-next-steps").value.trim();
+          if (!note && !nextSteps && !status) return;
+          await objectivesApi.addEntry(objective.id, { date, note, nextSteps, indicatorId, status, ref: pickedRef });
+          if (indicatorId && status) await objectivesApi.updateIndicator(objective.id, indicatorId, { status });
+          close();
+          showToast("Suivi ajouté");
+          onDone?.();
+        },
+      },
+    ],
+  });
+}
+
+/**
+ * "Préparer l'EADP" (retour de Charles-Henri) : sortir, sur une période choisie, les éléments
+ * notables (positif/négatif) d'une personne ainsi que l'avancement de ses objectifs — version
+ * simple délibérée (pas d'export/impression dédiée, pas de comparaison multi-campagnes),
+ * décision prise avec Charles-Henri. Recompose tout à la volée à l'ouverture, comme §33/§35.
+ */
+async function openPrepareEadpModal(person, { onDone } = {}) {
+  const [allFollowUps, allObjectives] = await Promise.all([followUpsApi.listAll(), objectivesApi.listAll()]);
+  const own = allFollowUps.filter((f) => f.personId === person.id);
+  const objectives = allObjectives.filter((o) => o.personId === person.id);
+
+  const defaultFrom = new Date();
+  defaultFrom.setFullYear(defaultFrom.getFullYear() - 1);
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <div class="field" style="flex:1;margin-bottom:0;">
+        <label for="eadp-from">Du</label>
+        <input id="eadp-from" type="date" value="${defaultFrom.toISOString().slice(0, 10)}" />
+      </div>
+      <div class="field" style="flex:1;margin-bottom:0;">
+        <label for="eadp-to">Au</label>
+        <input id="eadp-to" type="date" value="${new Date().toISOString().slice(0, 10)}" />
+      </div>
+    </div>
+    <div id="eadp-content"></div>
+    <button id="eadp-copy-btn" type="button" class="btn btn-secondary btn-block" style="margin-top:8px;">📋 Copier le résumé</button>
+  `;
+  const contentEl = body.querySelector("#eadp-content");
+  let summaryText = "";
+
+  function render() {
+    const from = new Date(body.querySelector("#eadp-from").value);
+    const to = new Date(body.querySelector("#eadp-to").value);
+    to.setHours(23, 59, 59, 999);
+    const inRange = (ts) => ts >= from.getTime() && ts <= to.getTime();
+
+    const notable = own.filter((f) => f.notable && inRange(f.createdAt));
+    const positive = notable.filter((f) => f.notable === "positive");
+    const negative = notable.filter((f) => f.notable === "negative");
+
+    const lines = [`📋 Préparation EADP — ${person.name}`, `Période : du ${formatDate(from)} au ${formatDate(to)}`, ""];
+
+    contentEl.innerHTML = `
+      <div class="section-title" style="margin-top:0;">👍 Notables positifs (${positive.length})</div>
+      <div class="card" id="eadp-positive" style="margin-bottom:16px;"></div>
+      <div class="section-title">👎 Notables négatifs (${negative.length})</div>
+      <div class="card" id="eadp-negative" style="margin-bottom:16px;"></div>
+      <div class="section-title">🎯 Objectifs (${objectives.length})</div>
+      <div class="card" id="eadp-objectives" style="margin-bottom:8px;"></div>
+    `;
+    renderSimpleList(contentEl.querySelector("#eadp-positive"), positive);
+    renderSimpleList(contentEl.querySelector("#eadp-negative"), negative);
+
+    lines.push(`👍 Notables positifs (${positive.length})`);
+    for (const f of positive) lines.push(`- ${f.title} (${formatDate(f.createdAt)})`);
+    lines.push("", `👎 Notables négatifs (${negative.length})`);
+    for (const f of negative) lines.push(`- ${f.title} (${formatDate(f.createdAt)})`);
+    lines.push("", `🎯 Objectifs (${objectives.length})`);
+
+    const objectivesEl = contentEl.querySelector("#eadp-objectives");
+    if (!objectives.length) {
+      objectivesEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun objectif défini.</div>`;
+    } else {
+      objectivesEl.innerHTML = "";
+      for (const o of objectives) {
+        const entriesInRange = (o.entries || []).filter((e) => inRange(e.createdAt));
+        const row = document.createElement("div");
+        row.className = "item-row";
+        row.innerHTML = `
+          <div class="item-main">
+            <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+            <div class="item-meta">${entriesInRange.map((e) => escapeHtml(e.date + " — " + e.note)).join("<br/>") || "Aucun point sur la période"}</div>
+          </div>
+        `;
+        objectivesEl.appendChild(row);
+        lines.push(`- ${o.title} (${o.status === "done" ? "atteint" : "en cours"})`);
+        for (const e of entriesInRange) lines.push(`  · ${e.date} — ${e.note}`);
+      }
+    }
+    summaryText = lines.join("\n");
+  }
+
+  function renderSimpleList(container, list) {
+    if (!list.length) {
+      container.innerHTML = `<div class="empty-state" style="padding:16px;">Rien sur cette période.</div>`;
+      return;
+    }
+    container.innerHTML = "";
+    for (const f of list) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.innerHTML = `<div class="item-main"><div class="item-title">${escapeHtml(f.title)}</div><div class="item-meta">${formatDate(f.createdAt)}</div></div>`;
+      container.appendChild(row);
+    }
+  }
+
+  render();
+  body.querySelector("#eadp-from").addEventListener("change", render);
+  body.querySelector("#eadp-to").addEventListener("change", render);
+  body.querySelector("#eadp-copy-btn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(summaryText);
+      showToast("Résumé copié");
+    } catch {
+      showToast("Impossible de copier");
+    }
+  });
+
+  openModal({
+    title: `📋 Préparer l'EADP — ${person.name}`,
+    body,
+    actions: [{ label: "Fermer", variant: "ghost", onClick: () => onDone?.() }],
+  });
+}
+
+/**
+ * Créer un suivi. `person` est optionnel : appelée depuis une fiche personne, il est déjà
+ * connu ; appelée depuis "+ Créer et lier" (fil conducteur, components/linkedItems.js) ou
+ * depuis la fiche projet ("+ Ajouter"), on ne sait pas encore de qui il s'agit — un
+ * sélecteur "Personne" apparaît alors dans le formulaire. `projectId` préremplit le projet
+ * quand on vient d'une fiche projet.
+ *
+ * `direction` (retour de Charles-Henri : comment noter un "push d'info" vers quelqu'un,
+ * pas seulement attendre quelque chose de lui) : le même objet Suivi sert dans les deux
+ * sens — soit j'attends quelque chose de la personne (comportement historique), soit c'est
+ * moi qui dois lui dire/transmettre quelque chose. `category` ne compte que pour ce second
+ * sens, et seulement quand la personne est de type Manager (§34/§35, voir management.js).
+ *
+ * `defaultTitle` (retour de Charles-Henri, 01/09/2026 : qualifier une capture Inbox en Suivi
+ * n'affichait pas le sens directement) — l'Inbox (js/views/inbox.js) appelle désormais cette
+ * même modale complète plutôt que sa propre version simplifiée, pour ne jamais avoir deux
+ * formulaires de création de Suivi qui divergent. Préremplit juste le champ "Sur quoi ?" avec
+ * le début de la capture brute.
+ *
+ * `defaultDueDate`/`defaultControlDate` (retour de Charles-Henri, vague 22 : "quand je clique
+ * sur oui [pour un autre suivi], j'aimerai que par défaut soit repris le projet et l'échéance
+ * de la dernière création") — préremplissent les deux champs date ; utilisés par
+ * `promptAnotherFollowUp()` ci-dessous pour reprendre les valeurs du Suivi qui vient d'être
+ * enregistré, jamais saisis directement par un appelant existant (tous omettent ce paramètre).
+ *
+ * Après un enregistrement réussi, la modale "Encore un suivi ?" s'affiche désormais
+ * systématiquement (retour de Charles-Henri, vague 22 : "j'aimerai que la modale encore un
+ * suivi s'affiche même en dehors des recettes [...] systématiquement après enregistrement du
+ * suivi") — plus seulement depuis la recette "Plusieurs suivis" (js/components/recipes.js, qui
+ * s'appuyait jusqu'ici sur sa propre boucle `promptAnotherFollowUp`, désormais superflue et
+ * simplifiée). Le `onCreated`/`onCancel` de l'appelant continue de s'exécuter normalement à
+ * chaque suivi créé (ex. `reopen()` sur la fiche Personne) ; la relance "Encore un suivi ?"
+ * vient s'ajouter par-dessus, pas à la place.
+ */
+export async function openCreateFollowUpModal({ person, projectId, defaultDirection = "waiting_on", defaultTitle = "", defaultDueDate = "", defaultControlDate = "", onCreated, onCancel } = {}) {
+  const [projects, people, existingFollowUps] = await Promise.all([
+    projectsApi.listAll(),
+    person ? Promise.resolve(null) : peopleApi.listAll(),
+    person ? Promise.resolve(null) : followUpsApi.listAll(),
+  ]);
+  // "💡 Suggestion" (vague 34, retour de Charles-Henri : "il te suggérerait à qui confier un
+  // nouveau sujet plutôt que de le décider à l'instinct ou par défaut sur la même personne") —
+  // calculée ici, au moment précis de la décision, plutôt que seulement consultable à part sur
+  // l'onglet Équipe (voir js/views/workload.js) : ce formulaire est LE point de passage commun
+  // à tous les endroits où un nouveau Suivi peut naître sans personne déjà choisie (Inbox,
+  // Capturer, fiche Projet, "🔗 Lier une fiche"...). N'a de sens qu'à partir de 2 collaborateurs
+  // à comparer, et seulement quand le picker est affiché (`!person`).
+  const loadSuggestion = !person && people && people.filter((p) => p.type !== "manager").length >= 2
+    ? workloadApi.rankByLoad(people, existingFollowUps)[0]
+    : null;
+  const body = document.createElement("div");
+  body.innerHTML = `
+    ${
+      person
+        ? ""
+        : `
+    <div class="field" id="fu-person-field">
+      <label for="fu-person">Personne</label>
+      <select id="fu-person">
+        ${people.map((p) => `<option value="${p.id}">${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+      <button type="button" id="fu-multi-toggle" class="btn btn-ghost btn-sm" style="padding-left:0;margin-top:6px;">👥 Assigner le même suivi à plusieurs personnes</button>
+      ${
+        loadSuggestion
+          ? `<div class="item-meta" id="fu-load-hint" style="margin-top:6px;">💡 Suggestion : <strong>${escapeHtml(loadSuggestion.person.name)}</strong> a la charge la plus légère (${loadSuggestion.volume} suivi${loadSuggestion.volume > 1 ? "s" : ""} actif${loadSuggestion.volume > 1 ? "s" : ""}) — <button type="button" id="fu-load-hint-pick" class="btn btn-ghost btn-sm" style="padding:0 4px;">Choisir</button></div>`
+          : ""
+      }
+    </div>
+    <div class="field" id="fu-multi-people-field" style="display:none;">
+      <label>À qui ?</label>
+      <div id="fu-multi-people-list" style="max-height:180px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);">
+        ${people.map((p) => `<label class="chip-radio" style="display:flex;"><input type="checkbox" class="fu-multi-person-cb" value="${p.id}" style="width:auto;margin-right:8px;" /> ${p.type === "manager" ? "👔" : "👤"} ${escapeHtml(p.name)}</label>`).join("")}
+      </div>
+      <button type="button" id="fu-multi-toggle-back" class="btn btn-ghost btn-sm" style="padding-left:0;margin-top:6px;">← Revenir à une seule personne</button>
+    </div>`
+    }
+    <div class="field">
+      <label>Sens</label>
+      <div class="chip-row">
+        ${followUpsApi.DIRECTIONS.map(
+          (d) => `<label class="chip-radio"><input type="radio" name="fu-direction" value="${d}" ${d === defaultDirection ? "checked" : ""} /> ${followUpsApi.DIRECTION_LABELS[d]}</label>`
+        ).join("")}
+      </div>
+    </div>
+    <div class="field">
+      <label for="fu-title" id="fu-title-label">Qu'est-ce que ${person ? escapeHtml(person.name) : "la personne"} s'engage à faire ?</label>
+      <input id="fu-title" type="text" placeholder="Ex. Terminer la migration" value="${escapeAttr(defaultTitle)}" />
+    </div>
+    <div class="field" id="fu-category-field" style="display:none;">
+      <label for="fu-category">Catégorie (pour le point manager, optionnel)</label>
+      <select id="fu-category">
+        <option value="">— Aucune —</option>
+        ${followUpsApi.CATEGORIES.map((c) => `<option value="${c}">${followUpsApi.CATEGORY_LABELS[c]}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field" id="fu-due-field">
+      <label for="fu-due">Échéance de la personne</label>
+      <input id="fu-due" type="date" value="${escapeAttr(defaultDueDate)}" />
+    </div>
+    <div class="field">
+      <label for="fu-control" id="fu-control-label">Quand dois-je contrôler / relancer ?</label>
+      <input id="fu-control" type="date" value="${escapeAttr(defaultControlDate)}" />
+    </div>
+    <div class="field">
+      <label for="fu-project">Projet (optionnel)</label>
+      <select id="fu-project">
+        <option value="">— Aucun —</option>
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+      <button type="button" id="fu-new-project-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">+ Nouveau projet</button>
+      <div id="fu-new-project-row" style="display:none;gap:8px;margin-top:6px;">
+        <input id="fu-new-project-name" type="text" placeholder="Nom du nouveau projet" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <button type="button" id="fu-new-project-confirm" class="btn btn-secondary btn-sm">Créer</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fu-description">Description (optionnel)</label>
+      <textarea id="fu-description" placeholder="Contexte libre, pas encore d'échéance à retenir ici"></textarea>
+    </div>
+    <div class="field">
+      <label>Élément notable ? (préparation EADP, optionnel)</label>
+      <div class="chip-row">
+        <label class="chip-radio"><input type="radio" name="fu-notable" value="" checked /> Aucun</label>
+        <label class="chip-radio"><input type="radio" name="fu-notable" value="positive" /> 👍 Positif</label>
+        <label class="chip-radio"><input type="radio" name="fu-notable" value="negative" /> 👎 Négatif</label>
+      </div>
+    </div>
+    <!-- LOT 11, TODO-025 — arbitrage explicite de Charles-Henri : décision INDÉPENDANTE du
+         "Sens" (direction, ci-dessus), disponible dès la création plutôt qu'à travers l'écran
+         de masquage privé (js/views/prepMask.js) qui reste la seule autre façon de la changer
+         plus tard. Réutilise le champ hiddenFromPrep déjà existant (js/domain/followups.js) —
+         aucune nouvelle valeur de direction créée, PAS de "suivi personnel" (voir l'arbitrage de
+         Charles-Henri : ce besoin n'a pas été retenu pour ce lot). Coché par défaut : un Suivi
+         remonte normalement au prochain point, comme c'était déjà le cas avant ce lot pour tout
+         Suivi jamais masqué. -->
+    <div class="field" style="display:flex;align-items:center;gap:8px;">
+      <input id="fu-remonte-prep" type="checkbox" style="width:auto;" checked />
+      <label for="fu-remonte-prep" style="margin:0;">Remonter au prochain point</label>
+    </div>
+  `;
+
+  // "Créer un projet à la volée" (retour de Charles-Henri, vague 21 : "dans la fiche nouveau
+  // suivi, je dois pouvoir créer un nouveau projet à la volée") — une simple rangée qui
+  // s'ouvre/se ferme dans le formulaire plutôt qu'une modale imbriquée, pour ne jamais perdre
+  // ce qui a déjà été saisi (titre, dates...) le temps de nommer le projet.
+  body.querySelector("#fu-new-project-btn").addEventListener("click", () => {
+    const row = body.querySelector("#fu-new-project-row");
+    row.style.display = row.style.display === "none" ? "flex" : "none";
+    if (row.style.display === "flex") body.querySelector("#fu-new-project-name").focus();
+  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
+  // non désactivé pendant l'écriture — un double-clic créait deux Projets identiques (l'un
+  // orphelin, jamais sélectionné).
+  const fuNewProjectConfirmBtn = body.querySelector("#fu-new-project-confirm");
+  fuNewProjectConfirmBtn.addEventListener(
+    "click",
+    guardClick(fuNewProjectConfirmBtn, async () => {
+      const name = body.querySelector("#fu-new-project-name").value.trim();
+      if (!name) return;
+      const project = await projectsApi.createProject({ name });
+      const select = body.querySelector("#fu-project");
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = project.name;
+      const options = [...select.options].filter((o) => o.value);
+      const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
+      select.insertBefore(option, insertBefore || null);
+      select.value = project.id;
+      body.querySelector("#fu-new-project-name").value = "";
+      body.querySelector("#fu-new-project-row").style.display = "none";
+      showToast("Projet créé");
+    })
+  );
+
+  // "Saisie en masse" (retour de Charles-Henri, vague 22 : "j'aimerai avoir plus de saisie en
+  // masse") — première des deux pistes qu'il a choisies parmi celles proposées : dupliquer un
+  // même engagement vers plusieurs personnes en une fois (ex. "tout le monde doit remplir le
+  // formulaire X d'ici vendredi"), plutôt que de ressaisir le même texte pour chacune. N'existe
+  // que quand le formulaire propose déjà un sélecteur de personne (`!person`) — depuis une
+  // fiche Personne déjà ouverte, il n'y a par construction qu'une seule personne possible.
+  if (loadSuggestion) {
+    body.querySelector("#fu-load-hint-pick").addEventListener("click", () => {
+      body.querySelector("#fu-person").value = loadSuggestion.person.id;
+    });
+  }
+
+  if (!person) {
+    const multiToggleBtn = body.querySelector("#fu-multi-toggle");
+    const multiToggleBackBtn = body.querySelector("#fu-multi-toggle-back");
+    const personField = body.querySelector("#fu-person-field");
+    const multiField = body.querySelector("#fu-multi-people-field");
+    multiToggleBtn.addEventListener("click", () => {
+      personField.style.display = "none";
+      multiField.style.display = "";
+    });
+    multiToggleBackBtn.addEventListener("click", () => {
+      multiField.style.display = "none";
+      personField.style.display = "";
+      multiField.querySelectorAll(".fu-multi-person-cb").forEach((cb) => (cb.checked = false));
+    });
+  }
+
+  showHintOnce(
+    body,
+    "followup-direction-v1",
+    "« J'attends quelque chose » : c'est <strong>elle</strong> qui agit, tu contrôles à la date choisie. « Je dois transmettre » : c'est <strong>toi</strong> qui dois lui dire quelque chose avant cette date. Dans les deux cas c'est un Suivi, jamais une Tâche."
+  );
+
+  const applyDirection = (direction) => {
+    const isToTell = direction === "to_tell";
+    body.querySelector("#fu-title-label").textContent = isToTell
+      ? `Qu'est-ce que je dois dire à ${person ? escapeHtml(person.name) : "la personne"} ?`
+      : `Qu'est-ce que ${person ? escapeHtml(person.name) : "la personne"} s'engage à faire ?`;
+    body.querySelector("#fu-category-field").style.display = isToTell ? "" : "none";
+    body.querySelector("#fu-due-field").style.display = isToTell ? "none" : "";
+    body.querySelector("#fu-control-label").textContent = isToTell
+      ? "Avant quand dois-je lui en parler ?"
+      : "Quand dois-je contrôler / relancer ?";
+  };
+  body.querySelectorAll('input[name="fu-direction"]').forEach((r) => r.addEventListener("change", () => applyDirection(r.value)));
+  applyDirection(defaultDirection);
+
+  const { bodyEl, close } = openModal({
+    title: "Nouveau suivi",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onCancel?.() },
+      {
+        label: "Créer",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          const title = bodyEl.querySelector("#fu-title").value.trim();
+          if (!title) return;
+          const direction = bodyEl.querySelector('input[name="fu-direction"]:checked')?.value || "waiting_on";
+          const commonFields = {
+            title,
+            direction,
+            category: direction === "to_tell" ? bodyEl.querySelector("#fu-category").value || null : null,
+            notable: bodyEl.querySelector('input[name="fu-notable"]:checked')?.value || null,
+            description: bodyEl.querySelector("#fu-description").value.trim(),
+            dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-due").value || null,
+            controlDate: bodyEl.querySelector("#fu-control").value || null,
+            projectId: bodyEl.querySelector("#fu-project").value || null,
+            // LOT 11, TODO-025 — voir le commentaire au-dessus du champ dans le HTML de ce
+            // formulaire : indépendant de `direction`, jamais déduit automatiquement.
+            hiddenFromPrep: !bodyEl.querySelector("#fu-remonte-prep").checked,
+          };
+
+          // Mode "saisie en masse" (vague 22) : le bloc multi-personnes n'existe que quand
+          // `!person`, et n'est actif que si Charles-Henri l'a explicitement révélé via
+          // "👥 Assigner le même suivi à plusieurs personnes" (affichage encore sur "none" sinon).
+          const multiField = bodyEl.querySelector("#fu-multi-people-field");
+          const isMultiMode = multiField && multiField.style.display !== "none";
+          if (isMultiMode) {
+            const personIds = [...bodyEl.querySelectorAll(".fu-multi-person-cb:checked")].map((cb) => cb.value);
+            if (!personIds.length) return;
+            const created = [];
+            for (const personId of personIds) {
+              created.push(await followUpsApi.createFollowUp({ ...commonFields, personId }));
+            }
+            close();
+            showToast(`${created.length} suivi${created.length > 1 ? "s" : ""} créé${created.length > 1 ? "s" : ""}`);
+            // Pas de "Encore un suivi ?" ici : cette action répond déjà, en un seul geste, au
+            // besoin qui aurait autrement demandé de répéter la modale N fois pour N personnes.
+            // `onCreated` reçoit le premier suivi créé — une limite assumée pour les appelants
+            // qui l'utilisent pour rattacher un objet unique (ex. qualification Inbox, qui ne
+            // peut de toute façon référencer qu'un seul `resultFollowUpId`) — voir "Point
+            // d'attention" du doc de suivi.
+            onCreated?.(created[0]);
+            return;
+          }
+
+          const personId = person ? person.id : bodyEl.querySelector("#fu-person").value;
+          if (!personId) return;
+          const followUp = await followUpsApi.createFollowUp({ ...commonFields, personId });
+          close();
+          showToast("Suivi créé");
+          // `onCreated` n'est PAS appelé ici (retour de test, vague 22) : la plupart des
+          // appelants (fiche Personne, fiche Projet) rouvrent leur propre modale dans
+          // `onCreated` (ex. `reopen()`), et `openModal()` ferme systématiquement la modale
+          // active avant d'en ouvrir une nouvelle (une seule modale à la fois). Si `onCreated`
+          // était invoqué immédiatement ici, sa réouverture de fiche entrerait en course avec
+          // l'ouverture de "Encore un suivi ?" juste après — laquelle des deux modales reste
+          // affichée dépendrait alors uniquement de la vitesse de la promesse `reopen()`
+          // (relecture en base), parfois plus lente que l'ouverture synchrone de cette modale-ci.
+          // `onCreated` est donc différé et déclenché une seule fois, quand la série de suivis
+          // est réellement terminée (clic sur "Terminé" dans promptAnotherFollowUp), avec le
+          // DERNIER suivi créé de la série — voir promptAnotherFollowUp() ci-dessous.
+          const resolvedPerson = person || (await peopleApi.getPerson(personId).catch(() => null));
+          if (resolvedPerson) promptAnotherFollowUp(resolvedPerson, followUp, { onCreated, onCancel });
+          else onCreated?.(followUp);
+        },
+      },
+    ],
+  });
+}
+
+/**
+ * "Encore un suivi ?" (retour de Charles-Henri, vague 22) — affichée systématiquement après la
+ * création d'un Suivi, quel que soit le point d'entrée (fiche Personne, qualification Inbox,
+ * recette de démarrage...). "+ Encore un suivi" rouvre la même modale pour la même personne en
+ * reprenant le projet, le sens et les deux dates du Suivi qui vient d'être créé — l'hypothèse
+ * étant qu'une série de suivis créés à la suite (ex. pendant un même point) partage
+ * généralement le même contexte, seul l'engagement individuel change.
+ *
+ * `continuation.onCreated` est délibérément déclenché ICI (au clic sur "Terminé"), pas à chaque
+ * création intermédiaire de la série (voir le commentaire dans le handler "Créer" ci-dessus) :
+ * c'est le seul moment où on sait que la série est terminée, donc le seul moment sûr pour
+ * déclencher un effet de bord qui rouvre une modale derrière (ex. `reopen()` de la fiche
+ * Personne) sans risquer que "Encore un suivi ?" ne soit jamais visible.
+ */
+function promptAnotherFollowUp(person, lastFollowUp, continuation = {}) {
+  const body = document.createElement("div");
+  body.textContent = `Ajouter un autre suivi pour ${person.name} ?`;
+  openModal({
+    title: "Encore un suivi ?",
+    body,
+    actions: [
+      { label: "Terminé", variant: "ghost", onClick: () => continuation.onCreated?.(lastFollowUp) },
+      {
+        label: "+ Encore un suivi",
+        variant: "primary",
+        onClick: () =>
+          openCreateFollowUpModal({
+            person,
+            projectId: lastFollowUp.projectId || undefined,
+            defaultDirection: lastFollowUp.direction || "waiting_on",
+            defaultDueDate: lastFollowUp.dueDate || "",
+            defaultControlDate: lastFollowUp.controlDate || "",
+            onCreated: continuation.onCreated,
+            onCancel: continuation.onCancel,
+          }),
+      },
+    ],
+  });
+}
+
+export async function openEditFollowUpModal(followUp, { onDone } = {}) {
+  preferencesApi.recordRecentlyViewed("FollowUp", followUp.id).catch(() => {});
+  const [projects, person] = await Promise.all([
+    projectsApi.listAll(),
+    followUp.personId ? peopleApi.getPerson(followUp.personId) : Promise.resolve(null),
+  ]);
+
+  // Titre de réunion composé (retour de Charles-Henri, 01/09/2026, voir
+  // js/components/meetingLauncher.js) : Catégorie du projet - Projet - Intitulé du suivi -
+  // Personne, chaque partie omise si absente.
+  const followUpProject = projects.find((p) => p.id === followUp.projectId) || null;
+  const meetingTitle = buildMeetingTitle({
+    category: followUpProject?.category || "",
+    projectName: followUpProject?.name || "",
+    itemTitle: followUp.title,
+    personName: person?.name || "",
+  });
+
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="field">
+      <label for="fu-edit-title">Engagement</label>
+      <input id="fu-edit-title" type="text" value="${escapeAttr(followUp.title)}" />
+    </div>
+    <div class="field">
+      <label for="fu-edit-status">Statut</label>
+      <select id="fu-edit-status">
+        ${followUpsApi.STATUSES.map((s) => `<option value="${s}" ${s === followUp.status ? "selected" : ""}>${followUpsApi.STATUS_LABELS[s]}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field">
+      <label>Sens</label>
+      <div class="chip-row">
+        ${followUpsApi.DIRECTIONS.map(
+          (d) => `<label class="chip-radio"><input type="radio" name="fu-edit-direction" value="${d}" ${d === (followUp.direction || "waiting_on") ? "checked" : ""} /> ${followUpsApi.DIRECTION_LABELS[d]}</label>`
+        ).join("")}
+      </div>
+    </div>
+    <div class="field" id="fu-edit-category-field" style="display:${followUp.direction === "to_tell" ? "" : "none"};">
+      <label for="fu-edit-category">Catégorie (pour le point manager, optionnel)</label>
+      <select id="fu-edit-category">
+        <option value="">— Aucune —</option>
+        ${followUpsApi.CATEGORIES.map((c) => `<option value="${c}" ${c === followUp.category ? "selected" : ""}>${followUpsApi.CATEGORY_LABELS[c]}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field" id="fu-edit-due-field" style="display:${followUp.direction === "to_tell" ? "none" : ""};">
+      <label for="fu-edit-due">Échéance de la personne</label>
+      <input id="fu-edit-due" type="date" value="${followUp.dueDate || ""}" />
+    </div>
+    <div class="field">
+      <label for="fu-edit-control" id="fu-edit-control-label">${followUp.direction === "to_tell" ? "Avant quand dois-je lui en parler ?" : "Prochain contrôle"}</label>
+      <input id="fu-edit-control" type="date" value="${followUp.controlDate || ""}" />
+    </div>
+    <div class="field">
+      <label for="fu-edit-project">Projet</label>
+      <select id="fu-edit-project">
+        <option value="">— Aucun —</option>
+        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === followUp.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+      </select>
+      <button type="button" id="fu-edit-new-project-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">+ Nouveau projet</button>
+      <div id="fu-edit-new-project-row" style="display:none;gap:8px;margin-top:6px;">
+        <input id="fu-edit-new-project-name" type="text" placeholder="Nom du nouveau projet" style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
+        <button type="button" id="fu-edit-new-project-confirm" class="btn btn-secondary btn-sm">Créer</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Élément notable ? (préparation EADP, optionnel)</label>
+      <div class="chip-row">
+        <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="" ${!followUp.notable ? "checked" : ""} /> Aucun</label>
+        <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="positive" ${followUp.notable === "positive" ? "checked" : ""} /> 👍 Positif</label>
+        <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="negative" ${followUp.notable === "negative" ? "checked" : ""} /> 👎 Négatif</label>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fu-edit-description">Description</label>
+      <textarea id="fu-edit-description" placeholder="Contexte libre">${escapeHtml(followUp.description || "")}</textarea>
+    </div>
+    <div class="section-title" id="fu-edit-checklist-title">☑️ Sous-étapes (${(followUp.checklist || []).filter((c) => c.done).length}/${(followUp.checklist || []).length})</div>
+    <div id="fu-edit-checklist" style="margin-bottom:16px;"></div>
+    <div class="section-title">🗓️ Réunion</div>
+    <div class="field" style="margin-bottom:8px;">
+      <input id="meeting-title-preview" type="text" readonly value="${escapeAttr(meetingTitle)}" />
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <button id="copy-meeting-title-btn" type="button" class="btn btn-secondary btn-sm">📋 Copier le titre</button>
+      <button id="create-meeting-btn" type="button" class="btn btn-secondary btn-sm">🗓️ Créer une réunion (.ics)</button>
+    </div>
+    <div class="section-title">🗒️ Notes</div>
+    <div id="detail-notes" style="margin-bottom:16px;"></div>
+    <div class="section-title">🏷️ Tags</div>
+    <div id="detail-tags" style="margin-bottom:16px;"></div>
+    <div class="section-title">🔗 Lié</div>
+    <div class="card" id="detail-links" style="margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="link-existing-btn" class="btn btn-secondary btn-sm">🔗 Lier une fiche</button>
+      <button id="create-linked-btn" class="btn btn-secondary btn-sm">+ Créer et lier</button>
+    </div>
+  `;
+
+  body.querySelector("#fu-edit-new-project-btn").addEventListener("click", () => {
+    const row = body.querySelector("#fu-edit-new-project-row");
+    row.style.display = row.style.display === "none" ? "flex" : "none";
+    if (row.style.display === "flex") body.querySelector("#fu-edit-new-project-name").focus();
+  });
+  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : même
+  // correctif que "#fu-new-project-confirm" ci-dessus, sur la variante "Modifier le suivi".
+  const fuEditNewProjectConfirmBtn = body.querySelector("#fu-edit-new-project-confirm");
+  fuEditNewProjectConfirmBtn.addEventListener(
+    "click",
+    guardClick(fuEditNewProjectConfirmBtn, async () => {
+      const name = body.querySelector("#fu-edit-new-project-name").value.trim();
+      if (!name) return;
+      const project = await projectsApi.createProject({ name });
+      const select = body.querySelector("#fu-edit-project");
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = project.name;
+      const options = [...select.options].filter((o) => o.value);
+      const insertBefore = options.find((o) => o.textContent.localeCompare(project.name, "fr") > 0);
+      select.insertBefore(option, insertBefore || null);
+      select.value = project.id;
+      body.querySelector("#fu-edit-new-project-name").value = "";
+      body.querySelector("#fu-edit-new-project-row").style.display = "none";
+      showToast("Projet créé");
+    })
+  );
+
+  const checklistTitleEl = body.querySelector("#fu-edit-checklist-title");
+  function updateChecklistTitle() {
+    const list = followUp.checklist || [];
+    checklistTitleEl.textContent = `☑️ Sous-étapes (${list.filter((c) => c.done).length}/${list.length})`;
+  }
+  renderChecklist(body.querySelector("#fu-edit-checklist"), followUp.checklist || [], {
+    onAdd: async (text) => {
+      // TODO-010 (LOT 4B) : followUpsApi.addChecklistItem() renvoie désormais l'élément ajouté
+      // seul (écriture ciblée, plus de relecture du tableau complet).
+      const item = await followUpsApi.addChecklistItem(followUp.id, text);
+      const updated = item ? [...(followUp.checklist || []), item] : followUp.checklist;
+      followUp.checklist = updated;
       updateChecklistTitle();
       return updated;
     },
     onToggle: async (itemId, done) => {
-      const updated = await tasksApi.toggleChecklistItem(task.id, itemId, done);
-      task.checklist = updated;
+      const updated = await followUpsApi.toggleChecklistItem(followUp.id, itemId, done);
+      followUp.checklist = updated;
       updateChecklistTitle();
       return updated;
     },
     onRemove: async (itemId) => {
-      const updated = await tasksApi.removeChecklistItem(task.id, itemId);
-      task.checklist = updated;
+      const updated = await followUpsApi.removeChecklistItem(followUp.id, itemId);
+      followUp.checklist = updated;
       updateChecklistTitle();
       return updated;
     },
@@ -1742,13 +2354,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
     // plus ancien" — voir le commentaire en tête de js/components/checklist.js.
     sortDoneToBottom: true,
   });
-  renderNotesBlock(body.querySelector("#detail-notes"), task.notesLog || [], {
+
+  renderNotesBlock(body.querySelector("#detail-notes"), followUp.notesLog || [], {
     onAdd: async (text) => {
-      // TODO-010 (LOT 4B) : tasksApi.addNote() renvoie désormais la note ajoutée seule (écriture
-      // ciblée) — voir le commentaire équivalent sur la checklist juste au-dessus.
-      const note = await tasksApi.addNote(task.id, text);
-      const updated = note ? [...(task.notesLog || []), note] : task.notesLog;
-      task.notesLog = updated;
+      // TODO-010 (LOT 4B) : followUpsApi.addNote() renvoie désormais la note ajoutée seule
+      // (écriture ciblée) — voir le commentaire équivalent sur la checklist juste au-dessus.
+      const note = await followUpsApi.addNote(followUp.id, text);
+      const updated = note ? [...(followUp.notesLog || []), note] : followUp.notesLog;
+      followUp.notesLog = updated;
       return updated;
     },
   });
@@ -1758,129 +2371,55 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
   body.querySelector("#create-meeting-btn").addEventListener("click", () => {
     closeModal();
     launchMeetingFromEntity({
-      ref: { type: "Task", id: task.id },
-      routeHash: "#/kanban",
+      ref: { type: "FollowUp", id: followUp.id },
+      routeHash: "#/people",
       title: meetingTitle,
-      onLinked: () => openTaskDetail(task, projects, { onClose }),
-      onCancel: () => openTaskDetail(task, projects, { onClose }),
+      onLinked: () => openEditFollowUpModal(followUp, { onDone }),
+      onCancel: () => openEditFollowUpModal(followUp, { onDone }),
     });
   });
-  renderTagsEditor(body.querySelector("#detail-tags"), "Task", task.id);
-  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), { type: "Task", id: task.id });
+
+  body.querySelectorAll('input[name="fu-edit-direction"]').forEach((r) =>
+    r.addEventListener("change", () => {
+      const isToTell = r.value === "to_tell";
+      if (!r.checked) return;
+      body.querySelector("#fu-edit-category-field").style.display = isToTell ? "" : "none";
+      body.querySelector("#fu-edit-due-field").style.display = isToTell ? "none" : "";
+      body.querySelector("#fu-edit-control-label").textContent = isToTell ? "Avant quand dois-je lui en parler ?" : "Prochain contrôle";
+    })
+  );
+
+  const linkRef = { type: "FollowUp", id: followUp.id };
+  renderTagsEditor(body.querySelector("#detail-tags"), "FollowUp", followUp.id);
+  linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), linkRef);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
     closeModal();
-    linkedItemsApi.openLinkPickerModal({ type: "Task", id: task.id }, task.title, {
-      onLinked: () => openTaskDetail(task, projects, { onClose }),
-      onCancel: () => openTaskDetail(task, projects, { onClose }),
+    linkedItemsApi.openLinkPickerModal(linkRef, followUp.title, {
+      onLinked: () => openEditFollowUpModal(followUp, { onDone }),
+      onCancel: () => openEditFollowUpModal(followUp, { onDone }),
     });
   });
   body.querySelector("#create-linked-btn").addEventListener("click", () => {
     closeModal();
-    linkedItemsApi.openCreateAndLinkModal({ type: "Task", id: task.id }, task.title, {
-      onLinked: () => openTaskDetail(task, projects, { onClose }),
-      onCancel: () => openTaskDetail(task, projects, { onClose }),
+    linkedItemsApi.openCreateAndLinkModal(linkRef, followUp.title, {
+      onLinked: () => openEditFollowUpModal(followUp, { onDone }),
+      onCancel: () => openEditFollowUpModal(followUp, { onDone }),
     });
   });
-
-  const resourcesEl = body.querySelector("#detail-resources");
-  renderResourceList(resourcesEl, linkedResources, {
-    onUnlink: (r) => resourcesApi.linkToTask(r.id, task.id, false),
-  });
-  renderHistoryTimeline(body.querySelector("#detail-history"), taskHistory);
-  body.querySelector("#link-resource-btn").addEventListener("click", () => {
-    if (!unlinkedResources.length) {
-      showToast("Aucune autre ressource à lier pour l'instant");
-      return;
-    }
-    // Une seule modale à la fois (voir components/modal.js) : on referme la fiche tâche
-    // avant d'ouvrir le sélecteur, puis on la rouvre avec des données fraîches ensuite —
-    // sinon la fiche tâche disparaît silencieusement sous le sélecteur.
-    closeModal();
-    openResourcePickerModal(
-      unlinkedResources,
-      async (resource) => {
-        await resourcesApi.linkToTask(resource.id, task.id, true);
-        showToast("Ressource liée");
-        openTaskDetail(task, projects, { onClose });
-      },
-      () => openTaskDetail(task, projects, { onClose })
-    );
-  });
-  body.querySelector("#new-resource-btn-inline").addEventListener("click", () => {
-    closeModal();
-    openCreateResourceModal({
-      taskId: task.id,
-      onCreated: () => openTaskDetail(task, projects, { onClose }),
-      onCancel: () => openTaskDetail(task, projects, { onClose }),
-    });
-  });
-
-  const promptsEl = body.querySelector("#detail-prompts");
-  renderPromptList(promptsEl, linkedPrompts, {
-    onUnlink: (p) => promptsApi.linkToTask(p.id, task.id, false),
-  });
-  body.querySelector("#link-prompt-btn").addEventListener("click", () => {
-    if (!unlinkedPrompts.length) {
-      showToast("Aucun autre prompt à lier pour l'instant");
-      return;
-    }
-    closeModal();
-    openPromptPickerModal(
-      unlinkedPrompts,
-      async (prompt) => {
-        await promptsApi.linkToTask(prompt.id, task.id, true);
-        showToast("Prompt lié");
-        openTaskDetail(task, projects, { onClose });
-      },
-      () => openTaskDetail(task, projects, { onClose })
-    );
-  });
-  body.querySelector("#new-prompt-btn-inline").addEventListener("click", () => {
-    closeModal();
-    openCreatePromptModal({
-      taskId: task.id,
-      onCreated: () => openTaskDetail(task, projects, { onClose }),
-      onCancel: () => openTaskDetail(task, projects, { onClose }),
-    });
-  });
-
-  const outlookEl = body.querySelector("#detail-outlook");
-  renderOutlookList(outlookEl, task);
-  // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
-  // non désactivé pendant l'écriture — un double-clic associait deux fois la même réunion.
-  const addOutlookBtn = body.querySelector("#add-outlook-btn");
-  addOutlookBtn.addEventListener(
-    "click",
-    guardClick(addOutlookBtn, async () => {
-      const title = body.querySelector("#outlook-title").value.trim();
-      if (!title) return;
-      const date = body.querySelector("#outlook-date").value || null;
-      // TODO-010 (LOT 4B) : tasksApi.addOutlookMeeting() renvoie désormais la réunion ajoutée
-      // seule (écriture ciblée, plus le document complet) — voir le commentaire équivalent sur
-      // la checklist/les notes plus haut dans cette fiche.
-      const meeting = await tasksApi.addOutlookMeeting(task.id, { title, date });
-      task.outlookMeetings = [...(task.outlookMeetings || []), meeting];
-      renderOutlookList(outlookEl, task);
-      body.querySelector("#outlook-title").value = "";
-      body.querySelector("#outlook-date").value = "";
-      showToast("Réunion Outlook associée");
-    })
-  );
 
   const { bodyEl, close } = openModal({
-    title: "Détail de la tâche",
+    title: "Modifier le suivi",
     body,
     actions: [
-      { icon: "✕", label: "Fermer", variant: "ghost", compact: true, onClick: () => onClose?.() },
+      { icon: "✕", label: "Fermer", variant: "ghost", compact: true, onClick: () => onDone?.() },
       {
-        // Lien de partage (retour de Charles-Henri, vague 23 : "un lien que je peux copier et
-        // mettre dans une conversation Teams") — voir js/components/copyLink.js.
+        // Lien de partage (retour de Charles-Henri, vague 23) — voir js/components/copyLink.js.
         icon: "🔗",
         label: "Copier le lien",
         variant: "secondary",
         compact: true,
         closesModal: false,
-        onClick: () => copyEntityLink("#/kanban", "Task", task.id),
+        onClick: () => copyEntityLink("#/people", "FollowUp", followUp.id),
       },
       {
         // "🔁 Changer de type" (retour de Charles-Henri, vague 40, 09/09/2026) — voir
@@ -1892,26 +2431,10 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         closesModal: false,
         onClick: () => {
           closeModal();
-          openChangeTypeModal("task", task, ["followup", "kept"], {
-            onConverted: () => onClose?.(),
-            onCancel: () => openTaskDetail(task, projects, { onClose }),
-          });
-        },
-      },
-      {
-        // "🗐 Dupliquer" (retour de Charles-Henri, 07/09/2026) — voir
-        // js/components/duplicateTask.js pour tout ce qui est repris ou non. L'autre point
-        // d'entrée (recherche globale) est câblé dans js/components/search.js.
-        icon: "🗐",
-        label: "Dupliquer",
-        variant: "secondary",
-        compact: true,
-        closesModal: false,
-        onClick: () => {
-          closeModal();
-          openDuplicateTaskModal(task, {
-            onDuplicated: (newTask) => openTaskDetail(newTask, projects, { onClose }),
-            onCancel: () => openTaskDetail(task, projects, { onClose }),
+          openChangeTypeModal("followup", followUp, ["task", "kept"], {
+            personName: person?.name || "",
+            onConverted: () => onDone?.(),
+            onCancel: () => openEditFollowUpModal(followUp, { onDone }),
           });
         },
       },
@@ -1924,14 +2447,14 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         onClick: () => {
           closeModal();
           confirmDelete({
-            title: "Supprimer cette tâche ?",
-            message: `« ${task.title} » sera définitivement supprimée. Cette action est irréversible.`,
+            title: "Supprimer ce suivi ?",
+            message: `« ${followUp.title} » sera définitivement supprimé.`,
             onConfirm: async () => {
-              await tasksApi.removeTask(task.id);
-              showToast("Tâche supprimée");
-              onClose?.();
+              await followUpsApi.removeFollowUp(followUp.id);
+              showToast("Suivi supprimé");
+              onDone?.();
             },
-            onCancel: () => openTaskDetail(task, projects, { onClose }),
+            onCancel: () => openEditFollowUpModal(followUp, { onDone }),
           });
         },
       },
@@ -1942,61 +2465,25 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
         compact: true,
         closesModal: false,
         onClick: async () => {
-          // Même échec silencieux que openCreateTaskModal (UX-002) — corrigé ici aussi, en
-          // modification, pas seulement à la création.
-          if (!validateRequiredFields(bodyEl, [{ selector: "#detail-title", label: "Le titre" }])) return;
-          const title = bodyEl.querySelector("#detail-title").value.trim();
-          const newStatus = bodyEl.querySelector("#detail-status").value;
-          const prevStatus = task.status;
-          await tasksApi.updateTask(task.id, {
-            title,
-            description: bodyEl.querySelector("#detail-description").value,
-            successCriteria: bodyEl.querySelector("#detail-criteria").value,
-            dueDate: bodyEl.querySelector("#detail-due").value || null,
-            status: newStatus,
-            projectId: bodyEl.querySelector("#detail-project").value || null,
-            isBlocked: bodyEl.querySelector("#detail-blocked").checked,
+          const direction = bodyEl.querySelector('input[name="fu-edit-direction"]:checked')?.value || "waiting_on";
+          await followUpsApi.updateFollowUp(followUp.id, {
+            title: bodyEl.querySelector("#fu-edit-title").value.trim(),
+            status: bodyEl.querySelector("#fu-edit-status").value,
+            direction,
+            category: direction === "to_tell" ? bodyEl.querySelector("#fu-edit-category").value || null : null,
+            notable: bodyEl.querySelector('input[name="fu-edit-notable"]:checked')?.value || null,
+            dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-edit-due").value || null,
+            controlDate: bodyEl.querySelector("#fu-edit-control").value || null,
+            projectId: bodyEl.querySelector("#fu-edit-project").value || null,
+            description: bodyEl.querySelector("#fu-edit-description").value.trim(),
           });
           close();
-          // Un seul toast à la fois (voir components/toast.js) : la clôture prime sur le
-          // message générique de sauvegarde plutôt que de l'écraser silencieusement juste après.
-          if (!celebrateIfJustDone(prevStatus, newStatus)) showToast("Tâche mise à jour");
-          onClose?.();
+          showToast("Suivi mis à jour");
+          onDone?.();
         },
       },
     ],
   });
-}
-
-/** Référence manuelle (pas de vraie synchro Outlook, voir js/domain/tasks.js) — liste simple
- *  avec suppression, réutilisée à chaque ajout sans devoir rouvrir toute la fiche. */
-function renderOutlookList(container, task) {
-  const meetings = task.outlookMeetings || [];
-  if (!meetings.length) {
-    container.innerHTML = `<div class="empty-state" style="padding:16px;">Aucune réunion Outlook associée.</div>`;
-    return;
-  }
-  container.innerHTML = "";
-  for (const m of meetings) {
-    const row = document.createElement("div");
-    row.className = "item-row";
-    row.innerHTML = `
-      <div class="item-main">
-        <div class="item-title">📅 ${escapeHtml(m.title)}</div>
-        ${m.date ? `<div class="item-meta">${formatDate(m.date)}</div>` : ""}
-      </div>
-    `;
-    const btn = document.createElement("button");
-    btn.className = "btn btn-ghost btn-sm";
-    btn.textContent = "Retirer";
-    btn.addEventListener("click", async () => {
-      await tasksApi.removeOutlookMeeting(task.id, m.id);
-      task.outlookMeetings = (task.outlookMeetings || []).filter((x) => x.id !== m.id);
-      renderOutlookList(container, task);
-    });
-    row.appendChild(btn);
-    container.appendChild(row);
-  }
 }
 
 function formatDate(dateStr) {
