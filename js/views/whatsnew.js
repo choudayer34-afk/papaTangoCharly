@@ -94,6 +94,13 @@ const WHATS_NEW = [
         howTo: "À la création d'un objectif : bouton \"📋 Importer depuis un texte\". Sur un objectif déjà créé : bouton \"📋 Importer\" à côté de \"+ Indicateur\". Colle le texte généré par l'IA, puis \"Analyser\".",
         gain: "Un copier-coller au lieu de ressaisir chaque champ et chaque indicateur à la main.",
       },
+      {
+        type: "add",
+        title: "✏️ Sous-étapes : modification et réordonnancement",
+        text: "Sur une checklist de sous-étapes (Tâche, Suivi, Pense-bête), une sous-étape mal orthographiée ou mal formulée peut désormais être corrigée directement, sans la supprimer et la retaper. Les sous-étapes non terminées peuvent aussi être remontées ou descendues dans la liste.",
+        howTo: "Bouton ✏️ à côté d'une sous-étape pour la modifier (Entrée pour valider, Échap pour annuler). Boutons ▲/▼ pour la monter ou la descendre parmi les sous-étapes non terminées.",
+        gain: "Corriger une coquille ou réorganiser ses priorités sans perdre l'historique de coche d'une sous-étape déjà en place.",
+      },
     ],
   },
   {
