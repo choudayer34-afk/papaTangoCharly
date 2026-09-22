@@ -22,17 +22,28 @@ import { openChangeTypeModal } from "../components/changeType.js";
 import * as tagsApi from "../domain/tags.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 
-const KEPT_TYPE_LABELS = { kept: "🧠 Information", idea: "💡 Idée" };
+// TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
+// (décision produit du 15/09/2026) : un seul libellé affiché désormais, quelle que soit la
+// valeur historique de `keptAsType` ("kept" ou, pour un élément plus ancien, "idea") — le champ
+// technique lui-même n'est pas migré, seul l'affichage est unifié (voir TODO_TECHNIQUE.md).
+const KEPT_TYPE_LABEL = "🧠 Information";
 
-// Les 9 issues de qualification du §12 sont maintenant toutes réellement implémentées :
+// Les 8 issues de qualification du §12 sont maintenant toutes réellement implémentées :
 // chacune crée sa vraie entité (Task / FollowUp / Project / Meeting / Decision / Resource)
 // au lieu de retomber en "Information" générique — la Règle 3 (ne jamais perdre la capture)
 // reste garantie par inboxApi.qualify(), qui journalise toujours le lien vers l'objet créé.
 //
 // `primary` (audit de simplification du 02/09/2026, retour de Charles-Henri : "9 choix d'un
 // coup à la qualification, c'est trop") : Action/Suivi/Information couvrent l'essentiel des
-// captures et restent seuls visibles d'emblée ; les 6 autres issues, plus rares, passent sous
+// captures et restent seuls visibles d'emblée ; les 5 autres issues, plus rares, passent sous
 // "Autre" (voir openQualifyModal) — jamais supprimées, juste à un clic de plus.
+//
+// TODO-021 (LOT 9, 21/09/2026) — le choix "idea" (💡 Idée, `mapsTo: "kept"`) est retiré d'ici :
+// il produisait déjà exactement le même résultat que "kept" (même `outcome` après résolution de
+// `mapsTo`, même toast "Conservé comme information", voir handleChoice ci-dessous) — les deux
+// boutons étaient déjà, en pratique, un seul et même choix sous deux libellés. Le retirer
+// n'enlève donc aucune capacité réelle ; le garder aurait au contraire laissé un doublon visible
+// après la fusion du libellé (voir KEPT_TYPE_LABEL plus haut).
 const QUALIFY_CHOICES = [
   { key: "task", emoji: "✅", label: "Action", primary: true },
   { key: "followup", emoji: "👀", label: "Suivi", primary: true },
@@ -41,17 +52,17 @@ const QUALIFY_CHOICES = [
   { key: "meeting", emoji: "📅", label: "Réunion" },
   { key: "decision", emoji: "🗳️", label: "Décision" },
   { key: "resource", emoji: "📎", label: "Ressource" },
-  { key: "idea", emoji: "💡", label: "Idée", mapsTo: "kept" },
   { key: "archived", emoji: "🗑️", label: "Archiver" },
 ];
 
-// TODO-013 (LOT 6, 21/09/2026) — "Traiter en lot" : strictement limité aux 3 qualifications de
-// QUALIFY_CHOICES qui ne nécessitent aucun formulaire de création (kept/idea/archived — voir
-// leur commentaire plus haut, "primary" et "Autre" n'y changent rien). Ne concerne jamais
-// Action/Suivi/Projet/Réunion/Décision/Ressource, qui gardent leur formulaire dédié. Dérivé de
-// QUALIFY_CHOICES par filtre plutôt que redéfini séparément, pour ne jamais pouvoir diverger
-// silencieusement de la liste "sans formulaire" si elle change un jour.
-const BULK_ELIGIBLE_KEYS = ["kept", "idea", "archived"];
+// TODO-013 (LOT 6, 21/09/2026) — "Traiter en lot" : strictement limité aux qualifications de
+// QUALIFY_CHOICES qui ne nécessitent aucun formulaire de création (kept/archived — voir leur
+// commentaire plus haut, "primary" et "Autre" n'y changent rien ; "idea" y figurait aussi avant
+// sa suppression par TODO-021, LOT 9). Ne concerne jamais Action/Suivi/Projet/Réunion/Décision/
+// Ressource, qui gardent leur formulaire dédié. Dérivé de QUALIFY_CHOICES par filtre plutôt que
+// redéfini séparément, pour ne jamais pouvoir diverger silencieusement de la liste "sans
+// formulaire" si elle change un jour.
+const BULK_ELIGIBLE_KEYS = ["kept", "archived"];
 const BULK_CHOICES = QUALIFY_CHOICES.filter((c) => BULK_ELIGIBLE_KEYS.includes(c.key));
 
 export function renderInbox(container) {
@@ -559,7 +570,7 @@ export async function openAllKeptItemsModal() {
       row.innerHTML = `
         <div class="item-main">
           <div class="item-title">${escapeHtml(item.rawContent)}</div>
-          <div class="item-meta">${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept} · ${formatDate(item.createdAt)}${archivedTag}${tagsLine}</div>
+          <div class="item-meta">${KEPT_TYPE_LABEL} · ${formatDate(item.createdAt)}${archivedTag}${tagsLine}</div>
         </div>
       `;
       row.addEventListener("click", () => {
@@ -608,7 +619,7 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <label>${KEPT_TYPE_LABELS[item.keptAsType] || KEPT_TYPE_LABELS.kept}</label>
+      <label>${KEPT_TYPE_LABEL}</label>
       <p style="white-space:pre-wrap;margin:4px 0 0;">${escapeHtml(item.rawContent)}</p>
     </div>
     <div class="item-meta" style="margin-bottom:16px;">Capturé le ${formatDate(item.createdAt)}</div>
@@ -667,7 +678,7 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
   });
 
   openModal({
-    title: item.keptAsType === "idea" ? "💡 Idée" : "🧠 Information",
+    title: KEPT_TYPE_LABEL,
     body,
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onClose?.() },
