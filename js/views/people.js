@@ -1247,17 +1247,74 @@ export function renderObjectiveDetailsFieldset(container, initial = {}) {
   };
 }
 
-async function openCreateObjectiveModal(person, { onDone } = {}) {
+/**
+ * Mode import depuis un texte généré par IA (22/09/2026, retour direct de Charles-Henri :
+ * "c'est pénible de saisir tout [...] il faudrait un mode import qui permet d'importer les
+ * indicateurs et de remplir les champs") — colle le texte produit par son prompt IA (format
+ * imposé, voir le commentaire en tête de js/domain/objectives.js#parseObjectiveImportText) et le
+ * fait analyser pour préremplir un objectif et/ou mettre en file des indicateurs. Fonction
+ * PARTAGÉE (exportée) : utilisée ici même pour préremplir une création
+ * (`openCreateObjectiveModal` juste en dessous), par js/views/dashboard.js
+ * #openCreatePersonalObjectiveModal pour le même besoin côté "Mes objectifs", et par
+ * `openObjectiveDetail` plus bas pour importer des indicateurs sur un objectif déjà existant —
+ * un seul point d'analyse, jamais trois formulaires de collage différents.
+ */
+export function openImportObjectiveTextModal({ onParsed, onCancel } = {}) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <p class="item-meta" style="margin-top:0;">Collez ci-dessous le texte généré par l'assistant IA (catégorie, titre, SMART, indicateurs...). Les champs reconnus seront pré-remplis.</p>
+    <div class="field">
+      <label for="obj-import-textarea">Texte généré</label>
+      <textarea id="obj-import-textarea" rows="16" placeholder="Collez ici le texte complet généré par l'IA..."></textarea>
+    </div>
+  `;
+  const { bodyEl, close } = openModal({
+    title: "📋 Importer depuis un texte",
+    body,
+    actions: [
+      { label: "Annuler", variant: "ghost", onClick: () => onCancel?.() },
+      {
+        label: "Analyser",
+        variant: "primary",
+        closesModal: false,
+        onClick: () => {
+          const text = bodyEl.querySelector("#obj-import-textarea").value;
+          if (!text.trim()) return;
+          const parsed = objectivesApi.parseObjectiveImportText(text);
+          const s = parsed.smart || {};
+          const hasContent =
+            parsed.title || parsed.description || (parsed.indicators || []).length ||
+            parsed.category || parsed.actionPlan || parsed.watchPoints ||
+            s.specific || s.measurable || s.achievable || s.relevant || s.timeBound;
+          if (!hasContent) {
+            showToast("Aucune information reconnue dans ce texte — vérifiez le format");
+            return;
+          }
+          close();
+          onParsed?.(parsed);
+        },
+      },
+    ],
+  });
+}
+
+async function openCreateObjectiveModal(person, { onDone, prefill } = {}) {
   // "Projet" (retour de Charles-Henri, 13/09/2026 : "tout élément doit être rattachable à un
   // projet") — Objectif était, avec les Informations/Idées de l'Inbox, le seul type sans aucun
   // moyen de se rattacher à un projet. Optionnel, même sélecteur + "+ Nouveau projet…" que
   // partout ailleurs (js/views/projects.js#attachProjectQuickCreate).
   const projects = await projectsApi.listAll();
+  // Indicateurs importés en attente (mode import, voir openImportObjectiveTextModal
+  // ci-dessus) : cette modale de création n'a pas de section indicateurs (elle n'existe qu'une
+  // fois l'objectif créé, voir openObjectiveDetail) — ils sont donc simplement mis en file ici et
+  // ajoutés en boucle juste après la création, plutôt que d'ouvrir une UI d'indicateurs dédiée à
+  // la création qui n'existait pas avant ce besoin.
+  const queuedIndicators = prefill?.indicators || [];
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
       <label for="obj-title">Objectif de ${escapeHtml(person.name)}</label>
-      <input id="obj-title" type="text" placeholder="Ex. Monter en autonomie sur le pilotage de projet" />
+      <input id="obj-title" type="text" placeholder="Ex. Monter en autonomie sur le pilotage de projet" value="${escapeAttr(prefill?.title || "")}" />
     </div>
     <div class="field">
       <label for="obj-project">Projet (optionnel)</label>
@@ -1266,10 +1323,21 @@ async function openCreateObjectiveModal(person, { onDone } = {}) {
         ${sortProjectsByName(projects).map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
       </select>
     </div>
+    <div style="margin-bottom:8px;">
+      <button id="obj-import-text-btn" type="button" class="btn btn-secondary btn-sm">📋 Importer depuis un texte</button>
+    </div>
+    ${queuedIndicators.length ? `<div class="item-meta" style="margin-bottom:8px;">📊 ${queuedIndicators.length} indicateur(s) importé(s) seront ajoutés à la création.</div>` : ""}
     <div id="obj-details-fieldset"></div>
   `;
   attachProjectQuickCreate(body.querySelector("#obj-project"));
-  const details = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"));
+  const details = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"), prefill || {});
+  body.querySelector("#obj-import-text-btn").addEventListener("click", () => {
+    closeModal();
+    openImportObjectiveTextModal({
+      onParsed: (parsed) => openCreateObjectiveModal(person, { onDone, prefill: parsed }),
+      onCancel: () => openCreateObjectiveModal(person, { onDone, prefill }),
+    });
+  });
   const { bodyEl, close } = openModal({
     title: "Nouvel objectif",
     body,
@@ -1283,7 +1351,8 @@ async function openCreateObjectiveModal(person, { onDone } = {}) {
           const title = bodyEl.querySelector("#obj-title").value.trim();
           if (!title) return;
           const projectId = bodyEl.querySelector("#obj-project").value || null;
-          await objectivesApi.createObjective({ personId: person.id, title, projectId, ...details.read() });
+          const created = await objectivesApi.createObjective({ personId: person.id, title, projectId, ...details.read() });
+          for (const ind of queuedIndicators) await objectivesApi.addIndicator(created.id, ind);
           close();
           showToast("Objectif ajouté");
           onDone?.();
@@ -1302,6 +1371,21 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   // appelants n'aient de liste de projets sous la main (même principe que
   // js/views/people.js#openEditFollowUpModal, déjà async et auto-suffisant pour la même raison).
   const projects = await projectsApi.listAll();
+  // BUG corrigé (22/09/2026, retour direct de Charles-Henri : "quand j'ajoute un indicateur, il
+  // est pris en compte mais ne s'affiche pas directement dans la modale [...] c'est à
+  // l'enregistrement et réouverture que je le vois") — chaque modale imbriquée (indicateur,
+  // suivi, lien) rouvrait cette fiche avec le paramètre `objective` reçu en ENTRÉE de cet appel,
+  // un simple objet JS jamais remis à jour après l'écriture (`addIndicator`/`addEntry`/
+  // `createLink`... n'ont jamais muté cet objet en place, ils écrivent en base séparément) — la
+  // fiche se redessinait donc avec les données d'AVANT l'ajout, jusqu'à ce qu'un aller-retour
+  // complet (fermeture de la fiche puis réouverture depuis la LISTE, qui relit bien la base)
+  // finisse par la rafraîchir. `reopenSelf` relit l'Objectif en base avant de rouvrir CETTE
+  // fiche, exactement comme le fait déjà `reopenProject` dans js/views/projects.js pour le même
+  // genre de rafraîchissement après un "+ Ajouter" imbriqué.
+  const reopenSelf = async () => {
+    const fresh = await objectivesApi.getObjective(objective.id);
+    openObjectiveDetail(fresh || objective, person, { onDone });
+  };
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field" style="display:flex;align-items:center;gap:8px;">
@@ -1323,8 +1407,9 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
          niveau de l'Objectif entier (section plus bas, inchangée). -->
     <div class="section-title">📊 Indicateurs (${indicators.length})</div>
     <div class="card" id="obj-indicators" style="margin-bottom:8px;"></div>
-    <div style="margin-bottom:16px;">
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
       <button id="add-indicator-btn" type="button" class="btn btn-secondary btn-sm">+ Indicateur</button>
+      <button id="import-indicators-btn" type="button" class="btn btn-secondary btn-sm">📋 Importer</button>
     </div>
 
     <div class="section-title">🕒 Suivis récents (${entries.length})</div>
@@ -1375,7 +1460,7 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
       `;
       row.addEventListener("click", () => {
         closeModal();
-        openIndicatorModal(objective, ind, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+        openIndicatorModal(objective, ind, { onDone: reopenSelf });
       });
       indicatorsEl.appendChild(row);
     }
@@ -1383,7 +1468,23 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   renderIndicators(indicators);
   body.querySelector("#add-indicator-btn").addEventListener("click", () => {
     closeModal();
-    openIndicatorModal(objective, null, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+    openIndicatorModal(objective, null, { onDone: reopenSelf });
+  });
+  // Mode import (22/09/2026, retour de Charles-Henri) — importe uniquement les indicateurs
+  // reconnus dans le texte collé sur CET objectif déjà existant (contrairement à
+  // openCreateObjectiveModal, qui préremplit une création) : ajoute chacun via addIndicator puis
+  // rouvre la fiche à jour via reopenSelf, exactement comme "+ Indicateur".
+  body.querySelector("#import-indicators-btn").addEventListener("click", () => {
+    closeModal();
+    openImportObjectiveTextModal({
+      onParsed: async (parsed) => {
+        const toAdd = parsed.indicators || [];
+        for (const ind of toAdd) await objectivesApi.addIndicator(objective.id, ind);
+        showToast(toAdd.length ? `${toAdd.length} indicateur(s) importé(s)` : "Aucun indicateur reconnu dans ce texte");
+        reopenSelf();
+      },
+      onCancel: reopenSelf,
+    });
   });
 
   const entriesEl = body.querySelector("#obj-entries");
@@ -1420,7 +1521,7 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   renderEntries(entries);
   body.querySelector("#add-entry-btn").addEventListener("click", () => {
     closeModal();
-    openAddObjectiveEntryModal(objective, { onDone: () => openObjectiveDetail(objective, person, { onDone }) });
+    openAddObjectiveEntryModal(objective, { onDone: reopenSelf });
   });
 
   const objProjectSelectEl = body.querySelector("#obj-detail-project");
@@ -1437,15 +1538,15 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
   body.querySelector("#obj-link-existing-btn").addEventListener("click", () => {
     closeModal();
     linkedItemsApi.openLinkPickerModal(objLinkRef, objective.title, {
-      onLinked: () => openObjectiveDetail(objective, person, { onDone }),
-      onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+      onLinked: reopenSelf,
+      onCancel: reopenSelf,
     });
   });
   body.querySelector("#obj-create-linked-btn").addEventListener("click", () => {
     closeModal();
     linkedItemsApi.openCreateAndLinkModal(objLinkRef, objective.title, {
-      onLinked: () => openObjectiveDetail(objective, person, { onDone }),
-      onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+      onLinked: reopenSelf,
+      onCancel: reopenSelf,
     });
   });
 
@@ -1468,7 +1569,7 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
               showToast("Objectif supprimé");
               onDone?.();
             },
-            onCancel: () => openObjectiveDetail(objective, person, { onDone }),
+            onCancel: reopenSelf,
           });
         },
       },
