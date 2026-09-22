@@ -300,7 +300,18 @@
 // modifiés : js/components/checklist.js, js/domain/tasks.js, js/domain/followups.js,
 // js/views/kanban.js, js/views/people.js, js/views/dashboard.js, js/views/whatsnew.js (nouvelles
 // entrées). `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v71";
+// (22/09/2026, v72) : correctif LOT 11, révélé par le premier passage réel des tests LOT 11 sur
+// GitHub Actions (voir TODO_TECHNIQUE.md, LOT 11) — `js/views/people.js#openPersonDetail`
+// rouvrait TOUJOURS la fiche d'une personne sur l'onglet "Suivis", quel que soit l'onglet
+// réellement actif au moment de l'action (ex. ajouter un objectif depuis l'onglet "Objectifs"
+// renvoyait ensuite sur "Suivis", cachant l'objectif qu'on venait de créer). Nouveau paramètre
+// optionnel `initialTab`, capturé dans `activeTab` et repassé par `reopen()`. Fichier précaché
+// modifié : js/views/people.js, js/views/whatsnew.js (nouvelle entrée). `CACHE_NAME` incrémenté
+// en conséquence. Deux tests LOT 11 (tests/e2e/lot11-objective-unified-model.spec.js,
+// tests/e2e/lot11-objective-indicators-entries.spec.js) corrigés au passage — voir le détail
+// sous LOT 11 dans TODO_TECHNIQUE.md ; ces fichiers de test ne sont pas précachés, aucun impact
+// sur le numéro de version.
+const CACHE_NAME = "pilotage-cache-v72";
 const APP_SHELL = [
   "./",
   "./index.html",
