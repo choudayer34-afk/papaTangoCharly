@@ -4,17 +4,22 @@
 // Périmètre couvert ici (voir TODO_TECHNIQUE.md, TODO-013) :
 //  - le mode lot est désactivé par défaut (aucune case à cocher tant qu'il n'est pas activé
 //    explicitement) ;
-//  - une fois activé, seules les 3 qualifications sans formulaire de création (Information,
-//    Idée, Archiver) sont proposées en lot — jamais Action/Suivi/Projet/Réunion/Décision/
-//    Ressource ;
+//  - une fois activé, seules les qualifications sans formulaire de création (Information,
+//    Archiver) sont proposées en lot — jamais Action/Suivi/Projet/Réunion/Décision/Ressource ;
 //  - le traitement en lot qualifie effectivement tous les éléments sélectionnés, sans qu'un
 //    élément puisse être traité deux fois (la sélection et la barre d'actions disparaissent de
 //    façon synchrone avant l'écriture réelle — voir processBulk() dans js/views/inbox.js) ;
-//  - le comportement individuel ("Traiter" → les 9 choix) reste inchangé, y compris quand le
+//  - le comportement individuel ("Traiter" → les 8 choix) reste inchangé, y compris quand le
 //    mode lot est actif ;
 //  - la Revue hebdomadaire applique le même principe pour sa propre section Inbox, sans fermer
 //    toute la revue (contrairement au traitement individuel, qui la ferme pour ouvrir la fiche
 //    résultante).
+//
+// MIS À JOUR (22/09/2026, LOT 9, TODO-021) : « Idée » n'existe plus comme choix de qualification
+// séparé — fusionné avec « Information » (décision produit du 15/09/2026, voir js/views/inbox.js
+// #KEPT_TYPE_LABEL). Ce test attendait encore 3 choix en lot (Information/Idée/Archiver) et 9
+// choix en qualification individuelle ; mis à jour à 2 et 8 respectivement, avec une assertion
+// négative ajoutée pour verrouiller la disparition d'« Idée » contre une régression future.
 //
 // AVERTISSEMENT (21/09/2026) : écrit et relu manuellement à partir du code réel, mais jamais
 // exécuté dans l'environnement où il a été rédigé (registre npm bloqué, voir tests/README.md).
@@ -43,7 +48,7 @@ async function captureRaw(page, rawText) {
   await expect(page.getByText("Enregistré dans l'Inbox")).toBeVisible({ timeout: 10_000 });
 }
 
-test("Inbox — Traiter en lot : désactivé par défaut, limité à Information/Idée/Archiver, qualifie sans double traitement", async ({ page }) => {
+test("Inbox — Traiter en lot : désactivé par défaut, limité à Information/Archiver, qualifie sans double traitement", async ({ page }) => {
   const rawA = `Test LOT 6 — lot A ${Date.now()}`;
   const rawB = `Test LOT 6 — lot B ${Date.now()}`;
   const consoleErrors = [];
@@ -72,16 +77,17 @@ test("Inbox — Traiter en lot : désactivé par défaut, limité à Information
   await expect(rowA.getByRole("button", { name: "Traiter" })).toBeVisible();
 
   // 3. Sélection des deux éléments capturés par ce test — la barre d'actions n'apparaît que
-  //    lorsqu'au moins un élément est sélectionné, et ne propose QUE les 3 issues sans
-  //    formulaire (jamais Action/Suivi/Projet/Réunion/Décision/Ressource).
+  //    lorsqu'au moins un élément est sélectionné, et ne propose QUE les issues sans formulaire
+  //    (jamais Action/Suivi/Projet/Réunion/Décision/Ressource). « Idée » n'existe plus comme
+  //    choix séparé depuis la fusion TODO-021 (LOT 9) — assertion négative ajoutée ci-dessous.
   await rowA.locator('input[type="checkbox"]').check();
   await rowB.locator('input[type="checkbox"]').check();
   const toolbar = page.locator("#inbox-bulk-toolbar-slot .pilotage-bulk-toolbar");
   await expect(toolbar).toBeVisible();
   await expect(toolbar).toContainText("2 éléments sélectionnés");
-  await expect(toolbar.locator("[data-bulk-choice]")).toHaveCount(3);
+  await expect(toolbar.locator("[data-bulk-choice]")).toHaveCount(2);
   await expect(toolbar.getByRole("button", { name: /Information/ })).toBeVisible();
-  await expect(toolbar.getByRole("button", { name: /Idée/ })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: /Idée/ })).toHaveCount(0);
   await expect(toolbar.getByRole("button", { name: /Archiver/ })).toBeVisible();
   await expect(toolbar.getByRole("button", { name: /^Action$/ })).toHaveCount(0);
   await expect(toolbar.getByRole("button", { name: /Suivi/ })).toHaveCount(0);
@@ -102,7 +108,7 @@ test("Inbox — Traiter en lot : désactivé par défaut, limité à Information
   expect(consoleErrors).toEqual([]);
 });
 
-test("Inbox — Traiter en lot désactivé n'affecte pas la qualification individuelle (9 choix toujours proposés)", async ({ page }) => {
+test("Inbox — Traiter en lot désactivé n'affecte pas la qualification individuelle (8 choix toujours proposés)", async ({ page }) => {
   const rawText = `Test LOT 6 — individuel ${Date.now()}`;
   await login(page);
   await captureRaw(page, rawText);
@@ -112,8 +118,10 @@ test("Inbox — Traiter en lot désactivé n'affecte pas la qualification indivi
   await expect(row).toBeVisible({ timeout: 10_000 });
   await row.getByRole("button", { name: "Traiter" }).click();
 
-  // Les 9 issues de qualification restent toutes proposées (3 primaires visibles d'emblée + 6
-  // sous "Autre") — TODO-013 n'a rien retiré ni changé au parcours individuel existant.
+  // Les 8 issues de qualification restent toutes proposées (3 primaires visibles d'emblée + 5
+  // sous "Autre") — TODO-013 n'a rien retiré ni changé au parcours individuel existant. « Idée »
+  // n'existe plus comme choix séparé depuis la fusion TODO-021 (LOT 9, 22/09/2026) — assertion
+  // négative ajoutée pour verrouiller cette absence contre une régression future.
   await expect(page.getByRole("button", { name: /Action/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Suivi/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Information/ })).toBeVisible();
@@ -122,7 +130,7 @@ test("Inbox — Traiter en lot désactivé n'affecte pas la qualification indivi
   await expect(page.getByRole("button", { name: /Réunion/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Décision/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Ressource/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Idée/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Idée/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Archiver/ })).toBeVisible();
 });
 
