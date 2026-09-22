@@ -26,6 +26,7 @@ import { openChangeTypeModal } from "../components/changeType.js";
 import { copyEntityLink } from "../components/copyLink.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 import { guideLinkHtml } from "./guide.js";
+import * as dateUtils from "../services/dateUtils.js";
 
 /** Suivis triés par date d'ajout décroissante (retour de Charles-Henri : "ordonner par date
  *  décroissante le visu du suivi") — explicitement par `createdAt` plutôt que l'ordre déjà
@@ -898,6 +899,43 @@ function groupByProject(items, projects) {
  * sur `openPrepModal`). `onCoveredChange` permet au regroupement par projet de rafraîchir le
  * compteur "x/y vus" de son étiquette après une case cochée sans tout redessiner.
  */
+// TODO-030 (retour direct de Charles-Henri, 22/09/2026 : "je dois sur échéances et prochain
+// contrôle pouvoir disposer d'un bouton pour ajouter directement +1 jours ou +7 jours comme sur
+// le kanban [...] dans le point avec le collaborateur et dans la fiche elle-même") — reprend tel
+// quel le contrôle "+1j / +7j / date libre" du Kanban (js/views/kanban.js#renderCard, classes
+// CSS `.kanban-card-postpone`/`.kanban-postpone-btn`/`.kanban-postpone-custom` réutilisées à
+// l'identique) et le calcul `dateUtils.addDaysToIsoDate` désormais partagé (voir son commentaire
+// dans js/services/dateUtils.js). Posé ici, dans `appendFollowUpRows`, plutôt que sur le
+// formulaire de création/édition (`#fu-due`/`#fu-control`, périmètre initialement envisagé par
+// TODO-030) : c'est cette fonction, partagée par la liste "👀 Suivis", la fiche Personne ET
+// "Préparer mon point" (voir son commentaire ci-dessous), qui couvre exactement les deux
+// endroits demandés ("dans le point avec le collaborateur et dans la fiche elle-même") sans
+// avoir à ouvrir la fiche complète d'édition — le formulaire de création/édition n'a pas été
+// touché.
+//
+// Champs concernés par ligne, selon le Sens (`direction`) du Suivi — jamais les deux mêmes
+// champs pour les deux Sens, `dueDate` restant toujours `null` pour un "to_tell" (voir
+// `js/domain/followups.js#createFollowUp`) :
+//  - `waiting_on` : "Échéance" (`dueDate`, appartient à la personne suivie) ET "Prochain
+//    contrôle" (`controlDate`, quand JE dois vérifier/relancer — même libellé que
+//    `js/views/people.js#openEditFollowUpModal`), l'un et l'autre indépendamment réglables.
+//  - `to_tell` : seule "À dire avant" (`controlDate` — même libellé qu'avant ce patch) a un sens,
+//    `dueDate` n'existe pas pour ce Sens.
+//
+// `followUpsApi.updateFollowUp` applique déjà sa propre règle de plafond/calage
+// `controlDate`/`dueDate` (voir son commentaire dans js/domain/followups.js) exactement comme le
+// ferait une sauvegarde du formulaire d'édition — le document complet renvoyé par cet appel est
+// donc utilisé pour rafraîchir les DEUX valeurs affichées après un report d'échéance, au cas où
+// `controlDate` aurait elle-même été recalculée en silence par cette règle.
+function relevantFollowUpDateFields(f) {
+  return f.direction === "to_tell"
+    ? [{ field: "controlDate", label: "À dire avant" }]
+    : [
+        { field: "dueDate", label: "Échéance" },
+        { field: "controlDate", label: "Prochain contrôle" },
+      ];
+}
+
 function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredChange) {
   for (const f of followUps) {
     const isToTell = f.direction === "to_tell";
@@ -905,19 +943,27 @@ function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredC
     const row = document.createElement("div");
     row.className = "item-row" + (isCovered ? " item-row-covered" : "");
     row.style.cursor = "pointer";
-    const meta = isToTell
-      ? f.controlDate
-        ? "À dire avant : " + formatDate(f.controlDate)
-        : "Pas de date"
-      : f.dueDate
-        ? "Échéance : " + formatDate(f.dueDate)
-        : "Pas d'échéance";
+    const dateFields = relevantFollowUpDateFields(f);
     const notableIcon = f.notable === "positive" ? "👍 " : f.notable === "negative" ? "👎 " : "";
     row.innerHTML = `
       ${coveredIds ? `<label class="covered-check" title="Marquer comme vu pendant ce point"><input type="checkbox" ${isCovered ? "checked" : ""} aria-label="Vu pendant ce point" /></label>` : ""}
       <div class="item-main">
         <div class="item-title">${notableIcon}${isToTell ? "📣 " : ""}${escapeHtml(f.title)}${f.category ? ` <span class="item-meta">· ${followUpsApi.CATEGORY_LABELS[f.category]}</span>` : ""}</div>
-        <div class="item-meta">${meta} · Ajouté le ${formatDate(f.createdAt)}</div>
+        <div class="item-meta">Ajouté le ${formatDate(f.createdAt)}</div>
+        ${dateFields.map(({ field, label }) => `
+          <div class="followup-date-row" data-date-field="${field}">
+            <span class="item-meta">${label} : <span data-date-value>${f[field] ? formatDate(f[field]) : "—"}</span></span>
+            <button type="button" class="followup-quick-btn" data-date-toggle title="Reporter" aria-label="Reporter — ${label}">📅</button>
+            <div class="kanban-card-postpone" data-date-panel style="display:none;">
+              <button type="button" class="kanban-postpone-btn" data-date-offset="1">+1 j</button>
+              <button type="button" class="kanban-postpone-btn" data-date-offset="7">+7 j</button>
+              <label class="kanban-postpone-custom">
+                <span>Date libre</span>
+                <input type="date" data-date-custom value="${f[field] || ""}" aria-label="${label} — date libre" />
+              </label>
+            </div>
+          </div>
+        `).join("")}
       </div>
       <span class="badge badge-${f.status}">${followUpsApi.STATUS_LABELS[f.status]}</span>
       ${f.status !== "done" ? `
@@ -927,6 +973,36 @@ function appendFollowUpRows(container, followUps, onOpen, coveredIds, onCoveredC
         </div>
       ` : ""}
     `;
+    row.querySelectorAll("[data-date-field]").forEach((dateRow) => {
+      const field = dateRow.dataset.dateField;
+      const toggleBtn = dateRow.querySelector("[data-date-toggle]");
+      const panel = dateRow.querySelector("[data-date-panel]");
+      const customInput = dateRow.querySelector("[data-date-custom]");
+      // Même précaution que .covered-check/.followup-quick-actions ci-dessous : ne jamais
+      // laisser un clic sur ce contrôle ouvrir aussi la fiche complète du Suivi.
+      dateRow.addEventListener("click", (e) => e.stopPropagation());
+      toggleBtn.addEventListener("click", () => {
+        panel.style.display = panel.style.display === "none" ? "flex" : "none";
+      });
+      function applyNewDate(newDate) {
+        followUpsApi.updateFollowUp(f.id, { [field]: newDate }).then((updated) => {
+          f.dueDate = updated.dueDate;
+          f.controlDate = updated.controlDate;
+          for (const { field: otherField } of dateFields) {
+            const otherValueEl = row.querySelector(`[data-date-field="${otherField}"] [data-date-value]`);
+            if (otherValueEl) otherValueEl.textContent = f[otherField] ? formatDate(f[otherField]) : "—";
+            const otherCustomInput = row.querySelector(`[data-date-field="${otherField}"] [data-date-custom]`);
+            if (otherCustomInput) otherCustomInput.value = f[otherField] || "";
+          }
+          panel.style.display = "none";
+          showToast(newDate ? `Date reportée au ${formatDate(newDate)}` : "Date supprimée");
+        });
+      }
+      dateRow.querySelectorAll("[data-date-offset]").forEach((btn) => {
+        btn.addEventListener("click", () => applyNewDate(dateUtils.addDaysToIsoDate(f[field], Number(btn.dataset.dateOffset))));
+      });
+      customInput.addEventListener("change", () => applyNewDate(customInput.value || null));
+    });
     if (coveredIds) {
       const checkWrap = row.querySelector(".covered-check");
       // Empêche la case de déclencher aussi l'ouverture de la fiche (clic qui bulle vers `row`).
@@ -2273,6 +2349,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       updateChecklistTitle();
       return updated;
     },
+    // Retour direct de Charles-Henri (22/09/2026) : "idem pour les étapes, quand je coche une
+    // étape, les étapes cochées se mettent après les non cochées et se trient du plus récent au
+    // plus ancien" — voir le commentaire en tête de js/components/checklist.js.
+    sortDoneToBottom: true,
   });
 
   renderNotesBlock(body.querySelector("#detail-notes"), followUp.notesLog || [], {
