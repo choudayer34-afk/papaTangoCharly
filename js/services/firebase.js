@@ -153,6 +153,12 @@ export const USER_DATA_COLLECTIONS = [
   "preferences",
   "prompts",
   "inboxItems",
+  // Gamification (LOT G1, TODO_GAMIFICATION.md, 24/09/2026 — roadmap indépendante de
+  // TODO_TECHNIQUE.md) : nouveau domaine avec sa propre collection (js/domain/gamification.js,
+  // document unique "state"), ajoutée ici pour ne pas échapper silencieusement à l'export ni à
+  // la suppression de compte — voir le commentaire ci-dessus sur cette liste, qui prévient
+  // explicitement de ce risque.
+  "gamification",
 ];
 
 /** Exporte l'intégralité du contenu applicatif d'un compte (les collections ci-dessus, sous
