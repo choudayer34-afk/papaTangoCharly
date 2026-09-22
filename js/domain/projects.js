@@ -20,6 +20,7 @@ import * as storage from "../services/storage.js";
 import { generateId } from "../services/id.js";
 import { STATUSES } from "./tasks.js";
 import { buildSteps } from "./templates.js";
+import * as gamification from "./gamification.js";
 
 const COLLECTION = "projects";
 
@@ -168,6 +169,11 @@ export async function closeProject(id) {
     return { status: "archived" };
   });
   await storage.logHistory("Project", id, "closed", {});
+  // Gamification (LOT G1, TODO_GAMIFICATION.md §3) : "Projet clôturé", 40 XP, une seule fois
+  // par Projet — le registre "déjà récompensé" de gamification.js absorbe un appel répété sur
+  // un projet déjà clôturé (closeProject() ne vérifie pas lui-même le statut courant). Jamais
+  // bloquant pour la clôture elle-même, déjà effectuée ci-dessus.
+  gamification.recordProjectClosed(id).catch((err) => console.error("[gamification] Échec du crédit XP (Projet clôturé) :", err));
   return updated;
 }
 
