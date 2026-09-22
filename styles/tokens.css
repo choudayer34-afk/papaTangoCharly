@@ -34,6 +34,16 @@
   --color-waiting: #7A6FD1;
   --color-waiting-bg: #EEEBFA;
 
+  /* `-light` (à ne pas confondre avec les `-bg` juste au-dessus) — pensés dès le départ comme
+     `--color-primary-light` : un fond teinté qui doit rester lisible avec le texte NEUTRE
+     hérité (`--color-text`), donc théorisé comme théoriquement variable selon le thème (repris
+     plus bas dans le bloc mode sombre), contrairement aux `-bg` ci-dessus qui restent fixes et
+     s'utilisent toujours avec leur couleur associée explicite (ex. `--color-warning-bg` +
+     `color: var(--color-warning)`, jamais avec du texte neutre — voir le correctif ci-dessous
+     pour l'erreur que ça a causée). */
+  --color-warning-light: #FBF0DC;
+  --color-danger-light: #FBE4E5;
+
   /* Rayons */
   --radius-sm: 10px;
   --radius-md: 16px;
@@ -117,6 +127,23 @@
     --color-text: #EDEFFB;
     --color-text-muted: #A2A5C7;
     --color-primary-light: #2A2D5E;
+    /* BUG corrigé (22/09/2026, retour de Charles-Henri : "des éléments dans le guide sont
+       illisibles" en mode sombre, ex. l'encart "👀 Suivi" de "Tâche ou Suivi ?" et l'encart
+       "Ce que l'app ne fait pas" d'un cas d'usage, js/views/guide.js) — même famille de bug que
+       TODO-023 (LOT 10) : ces deux encarts posent `background: var(--color-warning-bg)` /
+       `var(--color-danger-bg)` avec du texte hérité (`--color-text`), qui devient clair en mode
+       sombre — sauf que ces deux jetons `-bg`, contrairement à `--color-primary-light`
+       ci-dessus, n'avaient jamais reçu de valeur sombre : ils restent le même fond clair fixe
+       dans les deux thèmes, d'où texte clair sur fond clair. Plutôt que de changer `-bg` (utilisé
+       PARTOUT ailleurs avec une couleur associée explicite et constante — badges, `.hint-banner`,
+       `.review-banner`, `.kanban-card-waiting`, `.info-tip-body` — un changement là casserait
+       ces usages déjà corrects), deux nouveaux jetons dédiés `-light` reprennent le même
+       principe que `--color-primary-light` : un fond teinté qui suit le thème, pensé pour du
+       texte neutre hérité, jamais pour une couleur sémantique fixe. `js/views/guide.js` est seul
+       à les utiliser à ce jour.
+       */
+    --color-warning-light: #3D331E;
+    --color-danger-light: #452026;
   }
 }
 
@@ -128,6 +155,8 @@
   --color-text: #EDEFFB;
   --color-text-muted: #A2A5C7;
   --color-primary-light: #2A2D5E;
+  --color-warning-light: #3D331E;
+  --color-danger-light: #452026;
   color-scheme: dark;
 }
 
