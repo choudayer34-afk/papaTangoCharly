@@ -122,6 +122,31 @@ test.describe("LOT 13 — js/domain/stickyNotes.js (post-it du Bureau)", () => {
     expect(result.afterResizeHeight).toBe(260);
   });
 
+  // Complément du 23/09/2026 (retour direct de Charles-Henri le jour même de la livraison
+  // initiale : "je dois pouvoir [épingler] n'importe où dans l'écran [...] au-dessus des autres
+  // modales") — `floatX`/`floatY` (widget flottant, js/components/pinnedNotesOverlay.js),
+  // totalement indépendants de `x`/`y` (plan de travail "Tout voir") : voir le commentaire de
+  // setFloatPosition dans js/domain/stickyNotes.js.
+  test("setFloatPosition : écrit uniquement floatX/floatY, sans jamais toucher x/y (positions indépendantes)", async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { stickyNotesApi } = window.__pilotageTestApi;
+      const note = await stickyNotesApi.createStickyNote({ x: 10, y: 10 });
+      await stickyNotesApi.setFloatPosition(note.id, { x: 400, y: 120 });
+      const afterFloat = await window.__pilotageTestApi.storageApi.get("stickyNotes", note.id);
+      return {
+        x: afterFloat.x,
+        y: afterFloat.y,
+        floatX: afterFloat.floatX,
+        floatY: afterFloat.floatY,
+      };
+    });
+    // Le plan de travail (x/y) reste intact — setFloatPosition ne touche jamais ces champs.
+    expect(result.x).toBe(10);
+    expect(result.y).toBe(10);
+    expect(result.floatX).toBe(400);
+    expect(result.floatY).toBe(120);
+  });
+
   test("setType ne perd jamais content/checklist de l'autre mode (les deux cohabitent toujours sur le même document)", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { stickyNotesApi } = window.__pilotageTestApi;
