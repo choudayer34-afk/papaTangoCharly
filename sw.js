@@ -208,7 +208,29 @@
 // rechargement peut ne pas suffire si le Service Worker actuellement actif reste bloqué en
 // attente de contrôle — désinscrire le Service Worker existant (ou vider les données du site)
 // puis recharger complètement une fois ce fichier redéployé.
-const CACHE_NAME = "pilotage-cache-v63";
+//
+// BUG corrigé (22/09/2026, remonté par Charles-Henri : "sur Équipe j'ai la vue Pilotage") —
+// exactement la même classe de bug que ci-dessus, et pour exactement la même raison : la règle
+// rappelée plus haut ("`CACHE_NAME` incrémenté à CHAQUE vague qui modifie ne serait-ce qu'un
+// seul fichier précaché") n'a pas été suivie depuis ce correctif du 21/09/2026 (v63), alors que
+// LOT 4B (storage.js, tasks.js, projects.js, followups.js), LOT 6 (inbox.js ×2, linkedItems.js,
+// weeklyReview.js), LOT 7 (resources.js ×2, linkedItems.js, calendar.js), LOT 8 (modal.js,
+// kanban.js, projects.js, components.css) et LOT 9 (tokens.css, components.css, priorisation.js,
+// resources.js, dashboard.js, preferences.js, people.js, more.js, guide.js, whatsnew.js,
+// inbox.js ×2, weeklyReview.js, changeType.js, linkedItems.js, search.js, onboarding.js,
+// shortcuts.js) ont chacun modifié des fichiers précachés sans qu'aucun d'eux ne touche ce
+// fichier ni sa constante — LOT 5 seul en est exempté (documentation pure, `PROJECT_CONTEXT.md`
+// n'est pas précaché). Même mécanisme de fond que le 21/09 : un onglet resté ouvert (ou jamais
+// fermé/rouvert assez de fois) accumule un mélange incohérent d'anciens et de nouveaux fichiers
+// rafraîchis indépendamment au fil du cache-first de fond — ici, très probablement un ancien
+// `js/app.js` et/ou `js/views/people.js` encore en mémoire/cache alors que le reste de l'app a
+// avancé, d'où l'écran Kanban affiché sous l'onglet Équipe. `CACHE_NAME` incrémenté ici pour
+// forcer une reconstruction propre du cache chez tout le monde, comme le veut la règle. **Même
+// vérification que le 21/09 à refaire côté navigateur** : désinscrire le Service Worker existant
+// (ou vider les données du site) puis recharger complètement une fois ce fichier redéployé — un
+// simple rechargement peut ne pas suffire si le Service Worker actif reste bloqué en attente de
+// contrôle.
+const CACHE_NAME = "pilotage-cache-v64";
 const APP_SHELL = [
   "./",
   "./index.html",
