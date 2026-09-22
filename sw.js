@@ -374,7 +374,18 @@
 // déjà appliqué à `note.checklist`) — fichier précaché, `CACHE_NAME` incrémenté en conséquence.
 // Aucun autre fichier précaché touché par ce correctif (le fichier de test corrigé au passage,
 // tests/e2e/lot13-bureau-conversion.spec.js, ne fait pas partie de l'app livrée).
-const CACHE_NAME = "pilotage-cache-v78";
+//
+// LOT G6 de TODO_GAMIFICATION.md (25/09/2026) : premier écran UI de la roadmap gamification,
+// nouveau fichier `js/views/gamification.js` ("🏅 Galerie des badges") — ajouté ci-dessous.
+// `js/domain/gamification.js` (modifié dans ce lot : `BADGES` exporté, `FAMILLES_BADGES`,
+// `valeurCouranteFamille`, `subscribe`) N'EST PAS ajouté ici : il ne l'a jamais été depuis sa
+// création en LOT G1 (24/09/2026), un oubli déjà signalé dans les bilans de LOT G1/G3/G4/G5 —
+// hors du périmètre de CE lot de le corriger silencieusement au passage (voir le bilan de LOT
+// G6 pour le rappel explicite de ce point toujours ouvert). `styles/components.css` (nouvelles
+// classes `.badge-tuile*`/`.badges-grid`) et `js/views/more.js` (nouvelle entrée) sont déjà
+// précachés par ailleurs, aucun ajout de ligne nécessaire pour eux ici. `CACHE_NAME` incrémenté
+// en conséquence.
+const CACHE_NAME = "pilotage-cache-v79";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -474,6 +485,7 @@ const APP_SHELL = [
   "./js/views/guide.js",
   "./js/views/whatsnew.js",
   "./js/views/memory.js",
+  "./js/views/gamification.js",
   "./js/views/login.js",
   "./js/views/prepMask.js",
   "./js/views/followupsOverview.js",
