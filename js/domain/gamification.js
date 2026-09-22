@@ -17,6 +17,14 @@
 // récompense" (§2.3) via un registre "déjà récompensé". Le niveau (§4), les badges (§5), les
 // séries (§5.3/§6) et les déblocages ne font PAS partie de ce lot (LOT G2/G3/G5/G7) — ce fichier
 // ne fait donc, pour l'instant, que créditer de l'XP brut, rien de plus.
+//
+// Portée EXACTE de LOT G2 (voir TODO_GAMIFICATION.md → §11, LOT G2) : dériver le NIVEAU courant
+// depuis l'XP total (§4) et exposer un indicateur de progression vers le niveau suivant — voir
+// la section "Niveaux (LOT G2)" en bas de ce fichier. Fonctions PURES uniquement (aucune lecture
+// ni écriture Firestore, testables sans émulateur) : le niveau n'est **jamais stocké** (§10,
+// décision actée le 24/09/2026 — "le niveau est toujours calculé à partir de l'XP") pour éviter
+// toute incohérence entre un niveau figé et l'XP réel. Les badges (§5), séries (§5.3) et
+// déblocages (§6) restent hors de ce lot (LOT G3/G5/G7).
 
 import * as storage from "../services/storage.js";
 
@@ -132,4 +140,90 @@ export async function recordResourceCreated(resourceId) {
 /** Prompt créé — 3 XP, une fois par Prompt (voir js/domain/prompts.js#createPrompt). */
 export async function recordPromptCreated(promptId) {
   return awardXpOnce(`prompt-cree:${promptId}`, 3);
+}
+
+// --- Niveaux (LOT G2 de la roadmap, §4) — fonctions PURES, sans état, sans aucun appel à
+// storage.js : le niveau n'est jamais stocké, il est recalculé à la demande depuis l'XP total
+// (§10). Aucune de ces fonctions n'est appelée depuis ce fichier lui-même ni depuis aucun autre
+// fichier de domaine à ce stade — l'écran qui les affichera arrive avec LOT G8 (Progression),
+// LOT G2 ne livre que le moteur de calcul, testable indépendamment. ------------------------------
+
+/**
+ * XP requis pour passer du niveau `niveau` au niveau `niveau + 1` — formule figée du barème
+ * (§4) : progression arithmétique fixe (`50 + 25 × (n − 1)`), jamais aléatoire ni dépendante
+ * d'un multiplicateur variable, SANS AUCUNE BORNE SUPÉRIEURE ni changement de formule au-delà
+ * d'un quelconque seuil (§4, "niveau infini", décision actée le 24/09/2026) — appliquée telle
+ * quelle à partir du niveau 1, y compris bien au-delà du niveau 30 documenté dans le tableau du
+ * §4. Fonction privée : seule la position dans le barème (`positionBareme` ci-dessous) et le
+ * niveau qui en découle (`niveauDepuisXP`) sont exposés aux appelants.
+ */
+function coutNiveauSuivant(niveau) {
+  return 50 + 25 * (niveau - 1);
+}
+
+/**
+ * Calcule en un seul passage la position exacte d'un total d'XP dans le barème de niveaux : le
+ * niveau atteint, l'XP déjà cumulé pour l'avoir atteint (`xpDebutNiveau`), et le coût du palier
+ * suivant. Mutualisée par `niveauDepuisXP()` et `progressionNiveau()` ci-dessous pour ne jamais
+ * risquer un écart entre deux implémentations indépendantes de la même boucle — la roadmap (§4)
+ * exige explicitement que "deux implémentations indépendantes qui appliquent cette même
+ * récurrence [...] obtiennent, pour n'importe quelle valeur d'XP, exactement le même niveau".
+ * Un XP négatif ou non numérique (donnée corrompue) est ramené à 0 plutôt que de produire un
+ * niveau incohérent ou une boucle infinie.
+ */
+function positionBareme(xpTotal) {
+  const xp = Number.isFinite(xpTotal) && xpTotal > 0 ? xpTotal : 0;
+  let niveau = 1;
+  let xpDebutNiveau = 0;
+  while (xpDebutNiveau + coutNiveauSuivant(niveau) <= xp) {
+    xpDebutNiveau += coutNiveauSuivant(niveau);
+    niveau += 1;
+  }
+  return { niveau, xpDebutNiveau, xpPourNiveauSuivant: coutNiveauSuivant(niveau) };
+}
+
+/**
+ * Niveau courant à partir de l'XP total (§4) — fonction pure, sans plafond (niveau infini) :
+ * pour tout `xpTotal` ≥ 0, renvoie le plus grand niveau dont le seuil cumulé (voir le tableau du
+ * §4) est ≤ `xpTotal`. Jamais stocké (§10) : à appeler à chaque affichage plutôt que de mettre en
+ * cache une valeur qui pourrait devenir incohérente avec l'XP réel.
+ */
+export function niveauDepuisXP(xpTotal) {
+  return positionBareme(xpTotal).niveau;
+}
+
+/**
+ * Palier (regroupement visuel de 6 niveaux, calqué sur les raretés de badges — §4/§9) associé à
+ * un niveau donné. Le palier affiché pour tout niveau ≥ 25 reste "💎 Légendaire", y compris
+ * indéfiniment au-delà du niveau 30 (§4, "niveau infini" : "aucun nouveau déblocage n'est
+ * associé à un niveau au-delà de 30", mais le palier affiché ne change pas pour autant).
+ */
+export function palierDuNiveau(niveau) {
+  if (niveau >= 25) return { id: "legendaire", label: "💎 Légendaire" };
+  if (niveau >= 19) return { id: "platine", label: "🏆 Platine" };
+  if (niveau >= 13) return { id: "or", label: "🥇 Or" };
+  if (niveau >= 7) return { id: "argent", label: "🥈 Argent" };
+  return { id: "bronze", label: "🥉 Bronze" };
+}
+
+/**
+ * Indicateur de progression vers le niveau suivant (LOT G2, objectif explicite du lot) — dérivé
+ * lui aussi entièrement de l'XP total, jamais stocké (§10) : niveau courant, palier, XP déjà
+ * acquis dans le niveau en cours, XP restant avant le niveau suivant, et un ratio [0, 1]
+ * directement utilisable pour une barre de progression (l'écran qui l'affichera, "Progression",
+ * arrive avec LOT G8 — aucune UI dans ce lot).
+ */
+export function progressionNiveau(xpTotal) {
+  const { niveau, xpDebutNiveau, xpPourNiveauSuivant } = positionBareme(xpTotal);
+  const xp = Number.isFinite(xpTotal) && xpTotal > 0 ? xpTotal : 0;
+  const xpDansNiveauCourant = xp - xpDebutNiveau;
+  return {
+    niveau,
+    palier: palierDuNiveau(niveau).label,
+    xpTotal: xp,
+    xpDansNiveauCourant,
+    xpPourNiveauSuivant,
+    xpRestantAvantNiveauSuivant: xpPourNiveauSuivant - xpDansNiveauCourant,
+    progressionRatio: xpDansNiveauCourant / xpPourNiveauSuivant,
+  };
 }
