@@ -90,9 +90,15 @@ export function subscribePending(callback) {
 }
 
 /**
- * Éléments qualifiés en "Information" ou "Idée" (§47 "information de contexte") : ils ne
- * deviennent jamais une tâche, mais restaient jusqu'ici invisibles une fois qualifiés — retour
- * de Charles-Henri ("les informations, idées, ne remontent pas"). Exposés au Dashboard.
+ * Éléments qualifiés en "Information" (§47 "information de contexte") : ils ne deviennent
+ * jamais une tâche, mais restaient jusqu'ici invisibles une fois qualifiés — retour de
+ * Charles-Henri ("les informations, idées, ne remontent pas"). Exposés au Dashboard.
+ *
+ * TODO-021 (LOT 9, 21/09/2026) — « Information » et « Idée » n'étaient déjà que deux libellés
+ * pour un même statut ("kept"), sans nuance réellement exploitée ; fusionnés en un seul libellé
+ * utilisateur (décision produit du 15/09/2026, voir js/views/inbox.js#KEPT_TYPE_LABEL). Le champ
+ * technique `keptAsType` documenté ci-dessous reste inchangé, y compris sa valeur historique
+ * "idea" sur les éléments qualifiés avant cette fusion — seul l'affichage ne la distingue plus.
  */
 export function listKept() {
   return storage.listAll(COLLECTION).then((items) => items.filter((i) => i.status === "kept"));
