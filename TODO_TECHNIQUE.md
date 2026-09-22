@@ -968,7 +968,7 @@ Validation : Non déterminé — vérification visuelle manuelle en mode sombre 
 
 Ordre recommandé : nouveau LOT 10 — priorité élevée proposée vu la gêne d'usage immédiate et le faible coût de correction, malgré son ajout tardif à la roadmap
 
-Statut (22/09/2026, LOT 10) : **Terminé (implémentation) — en attente de la vérification visuelle manuelle prévue par Charles-Henri** ("Validation : Non déterminé — vérification visuelle manuelle en mode sombre"), aucun test automatisé n'existant pour le mode sombre à ce jour. Les trois causes ont été identifiées précisément (aucune n'était dans les fichiers pressentis par ce TODO — voir plus bas) :
+Statut (22/09/2026, LOT 10) : **Terminé — vérification visuelle manuelle confirmée par Charles-Henri** (Validation prévue par ce TODO : "Non déterminé — vérification visuelle manuelle en mode sombre"), aucun test automatisé n'existant pour le mode sombre à ce jour. Les trois causes ont été identifiées précisément (aucune n'était dans les fichiers pressentis par ce TODO — voir plus bas) :
 
 1. **Texte noir sur le traitement d'un item Inbox** : `.choice-btn` (`styles/components.css`, boutons "Action"/"Suivi"/"Information"... de la fenêtre "Traiter", `js/views/inbox.js#openQualifyModal`, également utilisée par `js/components/linkedItems.js`) ne fixait aucune couleur de texte. Un `<button>` n'hérite pas de la couleur de son parent (règle du navigateur : `color: buttontext`, un noir/gris foncé indépendant du thème) — contrairement à `.btn`/`.btn-primary`/etc. qui posent chacun leur propre `color`. Invisible en mode clair par coïncidence (noir sur fond clair), illisible en mode sombre (resté noir sur fond assombri). Corrigé en ajoutant `color: var(--color-text)`.
 2. **Toasts à fond blanc et texte blanc** : `.toast` (`styles/components.css`) utilisait `background: var(--color-text)` + `color: var(--color-text-inverse)` — correct par coïncidence en mode clair (`--color-text` alors foncé), mais cassé en mode sombre puisque `--color-text` s'y inverse en clair, donnant une pastille quasi blanche avec du texte blanc dessus. Corrigé avec deux nouveaux jetons dédiés et non affectés par le thème, `--color-toast-bg`/`--color-toast-text` (`styles/tokens.css`), pour que le toast reste la même pastille sombre à texte blanc dans les deux thèmes, comme c'était déjà visuellement le cas en mode clair.
@@ -1006,6 +1006,20 @@ Validation : Non déterminé — à définir lors du cadrage
 
 Ordre recommandé : nouveau LOT 11, avec TODO-025
 
+Statut (22/09/2026, LOT 11) : **Terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri et d'une première exécution réelle des tests automatisés écrits pour ce lot (registre npm bloqué dans cet environnement, voir tests/README.md).**
+
+Cadrage reçu de Charles-Henri (22/09/2026, document d'arbitrage détaillé) — décisions structurantes, chacune imposée à la lettre :
+
+- **Un seul modèle d'Objectif**, jamais deux : "Mes objectifs" (personnel, `personId: null`) et les objectifs EADP d'un collaborateur (`personId` renseigné) partagent désormais exactement le même document Firestore (`objectives`) et la même fiche de détail (`js/views/people.js#openObjectiveDetail`). Tous les nouveaux champs (`category`, `scope`, `description`, `period`, `reviewFrequency`, `smart{}`, `actionPlan`, `responsibilityLevels`, `watchPoints`, `indicators[]`) sont optionnels et vides par défaut — un objectif simple (titre + projet, comme avant ce lot) reste possible sans jamais ouvrir le bloc "Détails" (`js/views/people.js#renderObjectiveDetailsFieldset`, repliable, réutilisé à l'identique par les trois points d'entrée : `js/views/people.js#openCreateObjectiveModal`, `js/views/dashboard.js#openCreatePersonalObjectiveModal`, et la fiche détail elle-même).
+- **Indicateurs (`indicators[]`)** : éléments structurés (libellé, cible, mode de mesure, source de preuve, fréquence, valeur courante, statut) portés directement par l'Objectif — jamais une fiche indépendante. Trois statuts qualitatifs seulement (`todo`/`in_progress`/`done`, "À démarrer"/"En cours"/"Atteint"), délibérément sans score ni pourcentage automatique (arbitrage explicite) ; réutilise sans aucune nouvelle règle CSS les classes `.badge-todo`/`.badge-in_progress`/`.badge-done` déjà présentes. `js/domain/objectives.js#addIndicator/updateIndicator/removeIndicator`.
+- **Points de suivi enrichis (`entries[]`)** : `addEntry` étendu (rétrocompatible, `date`/`note` inchangés) avec `indicatorId` (quel indicateur ce suivi concerne, ou suivi général de l'objectif entier), `status` (statut de l'indicateur AU MOMENT de ce suivi — un instantané de journal, distinct du statut courant de l'indicateur), `nextSteps` ("qu'est-ce qui est prévu avant le prochain point"), et `ref` optionnel. Le formulaire d'ajout (`js/views/people.js#openAddObjectiveEntryModal`) affiche le contexte de l'indicateur choisi (cible/mesure/dernier point) sans jamais le redemander, et synchronise le statut courant de l'indicateur quand `indicatorId` et `status` sont tous deux renseignés.
+- **Liens ("Option A")** : arbitrage définitif — un indicateur n'est jamais une fiche indépendante, le mécanisme "🔗 Lié" (`js/components/linkedItems.js`) continue de cibler l'Objectif dans son ensemble, exactement comme avant ce lot. La référence "preuve/contexte" d'un point de suivi (`entries[].ref`, `{type,id}`) n'est PAS un lien au sens de `js/domain/links.js` : c'est une simple donnée résolue en lecture seule (`linkedItemsApi.resolveRefDirect`, désormais exportée) via un nouveau sélecteur dédié (`linkedItemsApi.pickRef`, restreint aux types `FollowUp`/`Meeting`/`Decision`/`Kept`/`Resource`/`Project` demandés par Charles-Henri) qui n'écrit jamais dans la collection `links`.
+- **Campagne / période** : le modèle antérieur à ce lot n'avait AUCUN champ de période/campagne (vérifié par recherche exhaustive avant de trancher). Conformément à la préférence explicite de Charles-Henri ("si un simple champ de période/exercice permet de répondre au besoin, privilégie cette solution"), un simple champ `period` texte libre (ex. "2026-2027") a été retenu — **volontairement écarté de ce lot** : une véritable entité "campagne" (collection dédiée, gestion campagne courante/passées, écran de gestion des campagnes). Les objectifs sont regroupés par valeur de `period` (`js/views/people.js#groupObjectivesByPeriod`, réutilisée telle quelle par `js/views/dashboard.js#openMyObjectivesModal`), triés par récence de création la plus élevée dans chaque groupe — un titre de groupe n'apparaît que s'il existe réellement plusieurs périodes distinctes, pour ne rien changer à l'affichage du cas courant (une seule période, ou aucune).
+
+Fichiers réellement modifiés : `js/domain/objectives.js`, `js/views/people.js`, `js/views/dashboard.js`, `js/components/linkedItems.js` (export de `resolveRefDirect` + nouvelle fonction `pickRef`).
+
+Tests écrits (jamais exécutés dans cet environnement, voir `tests/README.md` → section LOT 11) : `tests/unit/lot11-objectives-model.spec.js` (modèle commun, indicateurs, points de suivi, non-régression), `tests/e2e/lot11-objective-unified-model.spec.js` (parcours de création personnel/EADP, campagnes multiples), `tests/e2e/lot11-objective-indicators-entries.spec.js` (indicateurs + suivis liés).
+
 ## [ ] P1 — TODO-025 — Qualification immédiate des éléments créés sur une fiche Personne (suivi perso / à transmettre / attendu, préparation du point de suivi)
 
 *Ajouté le 21/09/2026 — besoin produit (BESOIN-001, volet personnes), voir section 9.*
@@ -1033,6 +1047,19 @@ Complexité : M — à affiner lors du cadrage
 Validation : Non déterminé — à définir lors du cadrage
 
 Ordre recommandé : nouveau LOT 11, avec TODO-024
+
+Statut (22/09/2026, LOT 11) : **Terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri et d'une première exécution réelle des tests automatisés écrits pour ce lot (registre npm bloqué dans cet environnement, voir tests/README.md).**
+
+Cadrage reçu de Charles-Henri (22/09/2026, même document d'arbitrage que TODO-024) — périmètre resserré par rapport au libellé d'origine du TODO : seul le volet "remonter en préparation du point" est traité, PAS de nouvelle nature ("suivi perso / à transmettre / attendu") — en particulier, **aucun "suivi personnel" n'est introduit**, proposition explicitement écartée par Charles-Henri.
+
+- Réutilise le champ `hiddenFromPrep` déjà existant sur `FollowUp` (jusqu'ici posé seulement a posteriori, via l'écran de masquage privé, `js/views/prepMask.js`) — `js/domain/followups.js#createFollowUp` accepte désormais une valeur initiale explicite.
+- Nouvelle case à cocher "Remonter au prochain point" (cochée par défaut) ajoutée au formulaire de création d'un Suivi depuis une fiche Personne (`js/views/people.js#openCreateFollowUpModal`), pour les deux modes de création (personne unique et saisie en masse multi-personnes).
+- **Décision INDÉPENDANTE de `direction`** (waiting_on/to_tell) — jamais déduite de l'une à partir de l'autre, conformément à l'arbitrage explicite de Charles-Henri. `js/domain/followups.js#DIRECTIONS` reste strictement `["waiting_on", "to_tell"]`, sans ajout.
+- La seule autre façon de modifier ce réglage après création reste l'écran de masquage privé existant (`js/views/prepMask.js`), inchangé par ce lot.
+
+Fichiers réellement modifiés : `js/domain/followups.js`, `js/views/people.js` (formulaire de création de Suivi uniquement — l'écran d'édition, `openEditFollowUpModal`, n'expose pas ce champ, comme prévu par l'arbitrage).
+
+Tests écrits (jamais exécutés dans cet environnement, voir `tests/README.md` → section LOT 11) : `tests/unit/lot11-objectives-model.spec.js` (indépendance `hiddenFromPrep`/`direction`, absence de nouvelle valeur de `direction` — au niveau des données, plus robuste que l'UI pour cette garantie), `tests/e2e/lot11-followup-remonte-prep.spec.js` (comportement par défaut et indépendance du Sens côté formulaire).
 
 ## [ ] P1 — TODO-026 — US-026 : Navigation personnalisable par utilisateur
 
@@ -1545,7 +1572,7 @@ Aucun test automatisé écrit, conformément à la roadmap ("Tests nécessaires 
 
 *Lots 10 à 13 ajoutés le 21/09/2026 — besoins produit exprimés directement par Charles-Henri (BESOIN-001 à BESOIN-005, voir section 9), ne provenant d'aucun des 9 audits sources. Ajoutés au backlog et priorisés à sa demande explicite, mais **non traités dans l'immédiat** : la suite de la roadmap reprend au LOT 1, ces lots restent en attente d'être atteints dans l'ordre ou avancés selon une décision explicite ultérieure.*
 
-### LOT 10 — Corrections d'affichage mode sombre — **Terminé (implémentation) — en attente de vérification manuelle**
+### LOT 10 — Corrections d'affichage mode sombre — **Terminé**
 **Objectif** : rendre à nouveau lisibles les écrans signalés en mode sombre.
 **Problèmes concernés** : TODO-023
 **Prérequis** : aucun
@@ -1553,7 +1580,7 @@ Aucun test automatisé écrit, conformément à la roadmap ("Tests nécessaires 
 **Tests nécessaires** : Non déterminé — vérification visuelle manuelle en mode sombre
 **Risques** : faible
 
-**Clôture (22/09/2026)** : implémentation terminée, voir le détail exhaustif (causes, fichiers réellement modifiés, vérification effectuée) sous TODO-023 ci-dessus. **En attente de la vérification visuelle manuelle par Charles-Henri sur un appareil réel**, seule Validation prévue par ce TODO — le lot n'est donc pas encore définitivement clos au sens de la roadmap, seulement son implémentation.
+**Clôture (22/09/2026)** : implémentation terminée, voir le détail exhaustif (causes, fichiers réellement modifiés, vérification effectuée) sous TODO-023 ci-dessus. **Vérification manuelle confirmée par Charles-Henri** — le lot est définitivement clos.
 
 ### LOT 11 — Suivi structuré des objectifs et des points de suivi personnes
 **Objectif** : donner aux objectifs une structure exploitable (indicateurs de réussite, éléments de suivi) et qualifier dès la création les éléments créés sur une fiche Personne pour alimenter la préparation des points de suivi.
@@ -1562,6 +1589,12 @@ Aucun test automatisé écrit, conformément à la roadmap ("Tests nécessaires 
 **Modifications principales** : modèle de données objectifs enrichi (indicateurs de réussite, éléments de suivi), nouveaux champs de qualification à la création d'un élément Personne
 **Tests nécessaires** : Non déterminé, à définir lors du cadrage
 **Risques** : moyen — nouveau modèle de données, conception encore à trancher
+
+**Statut (22/09/2026)** : **Terminé (implémentation) — non clos, en attente de vérification manuelle par Charles-Henri.** Prérequis satisfait : Charles-Henri a fourni un document d'arbitrage détaillé (22/09/2026) tranchant chaque point resté ouvert lors du cadrage initial (modèle unique, indicateurs, liens, campagne/période, périmètre resserré de TODO-025) — repris intégralement, voir le détail complet sous TODO-024 et TODO-025 en section 5. Les deux TODO de ce lot sont implémentés et versionnés ; cinq fichiers de test ont été écrits (`tests/unit/lot11-objectives-model.spec.js`, `tests/e2e/lot11-objective-unified-model.spec.js`, `tests/e2e/lot11-objective-indicators-entries.spec.js`, `tests/e2e/lot11-followup-remonte-prep.spec.js`, plus `objectivesApi` ajouté à `tests/support/harness.html`) mais **jamais exécutés dans cet environnement** (registre npm bloqué, comme pour tous les tests de ce dépôt) — à faire tourner en premier lieu via GitHub Actions. `sw.js` incrémenté à v68 (`js/domain/objectives.js`, `js/domain/followups.js`, `js/components/linkedItems.js`, `js/views/people.js`, `js/views/dashboard.js`, `js/views/whatsnew.js`, tous précachés, ont changé). `js/views/whatsnew.js` mis à jour avec les nouveautés utilisateur de ce lot (et, au passage, l'entrée manquante pour le hotfix Guide livré en cours de lot, voir ci-dessous).
+
+Signalé plutôt que traité en silence : un hotfix sans rapport avec ce lot (deux encarts illisibles en mode sombre dans le Guide, même famille de bug que TODO-023/LOT 10) a été livré séparément EN COURS de LOT 11, sur signalement direct de Charles-Henri (`styles/tokens.css` — nouveaux jetons `--color-warning-light`/`--color-danger-light`, `js/views/guide.js`, `sw.js` v67) — voir le commentaire correspondant dans `styles/tokens.css`. N'a fait l'objet d'aucun TODO dédié dans ce document (correctif ponctuel, pas un nouveau besoin produit), mais son entrée `whatsnew.js` avait été omise sur le moment — rattrapée avec celle du LOT 11 lui-même plutôt que livrée séparément.
+
+**Éléments restant à valider avant clôture** : (1) vérification manuelle de Charles-Henri sur les deux TODO (création d'un objectif personnel/EADP avec le bloc Détails, indicateurs, points de suivi avec contexte et référence, regroupement par période, case "Remonter au prochain point") ; (2) premier passage réel des 5 fichiers de test de ce lot via GitHub Actions ; (3) confirmation qu'aucune régression n'affecte les objectifs déjà en base créés avant ce lot (champs absents traités comme vides partout où ils sont lus, par construction — jamais vérifié en conditions réelles avec des données de production).
 
 ### LOT 12 — Navigation personnalisable par utilisateur
 **Objectif** : permettre à chaque utilisateur de personnaliser sa barre de navigation, de façon cohérente entre web et mobile.
