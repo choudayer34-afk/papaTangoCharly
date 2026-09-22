@@ -230,3 +230,189 @@ export async function removeObjective(id) {
   await storage.logHistory("Objective", id, "deleted", {});
   return storage.remove(COLLECTION, id);
 }
+
+// --- Mode import depuis un texte généré par IA (22/09/2026, retour direct de Charles-Henri :
+// "c'est pénible de saisir tout. mes indicateurs sont toujours structurés, il faudrait un mode
+// import qui permet d'importer les indicateurs et de remplir les champs. L'indicateur actuel est
+// formé par IA via le prompt suivant.") ---
+//
+// Charles-Henri fabrique ses objectifs avec un prompt IA (fourni intégralement) qui IMPOSE un
+// format de sortie stable et toujours identique (sa section 14, "FORMAT DE SORTIE OBLIGATOIRE") :
+// CATÉGORIE D'OBJECTIF, TITRE, TYPE, DESCRIPTION, SMART (S/M/A/R/T), INDICATEURS DE RÉUSSITE
+// (liste numérotée, chacun avec 🎯 Cible / 📐 Mesure / 📂 Source de preuve / 🔍 Suivi et,
+// optionnel, ⚠️ Point d'attention), PLAN D'ACTION, NIVEAU DE RESPONSABILITÉ, POINTS D'ATTENTION.
+// C'est précisément cette stabilité de format qui rend un parseur texte réaliste : on ne cherche
+// pas à comprendre du langage libre, seulement à repérer des en-têtes de section connus et à
+// répartir ce qui suit chacun d'eux — Charles-Henri lui-même propose de faire évoluer son prompt
+// si besoin pour faciliter l'intégration, mais ce premier parseur colle au format tel que fourni.
+//
+// Volontairement une fonction PURE (aucun accès storage/Firebase) : entrée = texte brut, sortie =
+// objet simple. Deux conséquences volontaires :
+//  1. Elle est testable directement (voir le prototype validé avant intégration) sans DOM ni
+//     mock de storage — contrairement à la plupart des flux de cette app qui ne se vérifient
+//     qu'en e2e.
+//  2. La forme de sortie est conçue pour correspondre EXACTEMENT à celle attendue par
+//     js/views/people.js#renderObjectiveDetailsFieldset (paramètre `initial`) pour les champs
+//     objectif, et à celle attendue par `addIndicator()` ci-dessus pour chaque indicateur — afin
+//     que l'appelant (UI) n'ait besoin d'aucune couche de correspondance supplémentaire, juste à
+//     passer le résultat tel quel.
+//
+// Note : le modèle Indicateur (LOT 11) n'a PAS de champ "point d'attention" propre — seul
+// l'Objectif porte `watchPoints` (texte libre). Les éventuels "⚠️ Point d'attention" saisis par
+// indicateur dans le texte source sont donc repliés dans `watchPoints` de l'objectif, préfixés du
+// libellé de l'indicateur concerné, plutôt que perdus.
+
+function stripImportMarkdown(s) {
+  return (s || "").replace(/\*\*/g, "").replace(/^#+\s*/, "").trim();
+}
+
+const IMPORT_SECTION_DEFS = [
+  { key: "category", pattern: /^cat[ée]gorie\s*d[' ]?objectif\s*:?\s*(.*)$/i },
+  { key: "title", pattern: /^titre\s*:?\s*(.*)$/i },
+  { key: "scope", pattern: /^type\s*:?\s*(.*)$/i },
+  { key: "description", pattern: /^description\s*:?\s*(.*)$/i },
+  { key: "smart", pattern: /^smart\s*:?\s*(.*)$/i },
+  { key: "indicators", pattern: /^indicateurs?\s+de\s+r[ée]ussite\s*:?\s*(.*)$/i },
+  { key: "actionPlan", pattern: /^plan\s+d[' ]?action(\s*\/\s*modalit[ée]s?\s+de\s+r[ée]alisation)?\s*:?\s*(.*)$/i },
+  { key: "responsibilityLevels", pattern: /^niveau\s+de\s+responsabilit[ée]\s*:?\s*(.*)$/i },
+  { key: "watchPoints", pattern: /^points?\s+d[' ]?attention\s*:?\s*(.*)$/i },
+];
+
+function splitImportSections(text) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n").map((l) => stripImportMarkdown(l));
+  const sections = {};
+  let current = null;
+  for (const line of lines) {
+    let matched = null;
+    for (const def of IMPORT_SECTION_DEFS) {
+      const m = line.match(def.pattern);
+      if (m) {
+        matched = { def, m };
+        break;
+      }
+    }
+    if (matched) {
+      const { def, m } = matched;
+      current = def.key;
+      const inlineValue = (m[m.length - 1] || "").trim();
+      sections[current] = sections[current] || [];
+      if (inlineValue) sections[current].push(inlineValue);
+      continue;
+    }
+    if (current) {
+      sections[current] = sections[current] || [];
+      sections[current].push(line);
+    }
+  }
+  const joined = {};
+  for (const key of Object.keys(sections)) joined[key] = sections[key].join("\n").trim();
+  return joined;
+}
+
+function parseImportSmartBlock(block) {
+  const smart = { specific: "", measurable: "", achievable: "", relevant: "", timeBound: "" };
+  if (!block) return smart;
+  const markers = [
+    { key: "specific", re: /^s\s*[—\-:]/i },
+    { key: "measurable", re: /^m\s*[—\-:]/i },
+    { key: "achievable", re: /^a\s*[—\-:]/i },
+    { key: "relevant", re: /^r\s*[—\-:]/i },
+    { key: "timeBound", re: /^t\s*[—\-:]/i },
+  ];
+  let currentKey = null;
+  let buf = [];
+  function flush() {
+    if (currentKey) smart[currentKey] = buf.join("\n").trim();
+    buf = [];
+  }
+  for (const rawLine of block.split("\n")) {
+    const trimmed = rawLine.trim();
+    const found = markers.find((mk) => mk.re.test(trimmed));
+    if (found) {
+      flush();
+      currentKey = found.key;
+      buf.push(trimmed.replace(found.re, "").replace(/^[—\-:]\s*/, "").trim());
+    } else if (currentKey) {
+      buf.push(trimmed);
+    }
+  }
+  flush();
+  return smart;
+}
+
+function parseImportIndicatorsBlock(block) {
+  if (!block) return { indicators: [], perIndicatorWatchPoints: [] };
+  const groups = [];
+  let current = null;
+  const numberRe = /^(\d+)[.)]\s*(.*)$/;
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const m = line.match(numberRe);
+    if (m) {
+      current = { label: m[2].trim(), lines: [] };
+      groups.push(current);
+      continue;
+    }
+    if (current) current.lines.push(line);
+  }
+  const fieldDefs = [
+    { key: "target", re: /(?:🎯\s*)?cible\s*:?\s*(.*)$/i },
+    { key: "measurement", re: /(?:📐\s*)?mesure\s*:?\s*(.*)$/i },
+    { key: "evidenceSource", re: /(?:📂\s*)?source\s+de\s+preuve\s*:?\s*(.*)$/i },
+    { key: "frequency", re: /(?:🔍\s*)?suivi\s*:?\s*(.*)$/i },
+    { key: "watchPoint", re: /(?:⚠️\s*)?point\s+d[' ]?attention\s*:?\s*(.*)$/i },
+  ];
+  const indicators = [];
+  const perIndicatorWatchPoints = [];
+  for (const g of groups) {
+    const ind = { label: g.label, target: "", measurement: "", evidenceSource: "", frequency: "" };
+    let watchPoint = "";
+    for (const line of g.lines) {
+      for (const fd of fieldDefs) {
+        const m = line.match(fd.re);
+        if (m) {
+          if (fd.key === "watchPoint") watchPoint = m[1].trim();
+          else ind[fd.key] = m[1].trim();
+          break;
+        }
+      }
+    }
+    indicators.push(ind);
+    if (watchPoint) perIndicatorWatchPoints.push(`${g.label} : ${watchPoint}`);
+  }
+  return { indicators, perIndicatorWatchPoints };
+}
+
+/**
+ * Analyse un texte au format imposé par le prompt IA de Charles-Henri et renvoie :
+ *  - `title` : à utiliser tel quel comme titre de l'objectif ;
+ *  - le reste des champs (`category`, `scope`, `description`, `smart`, `actionPlan`,
+ *    `responsibilityLevels`, `watchPoints`) : même forme que le paramètre `initial` de
+ *    js/views/people.js#renderObjectiveDetailsFieldset, prêt à être passé tel quel ;
+ *  - `indicators[]` : même forme que les arguments attendus par `addIndicator()` ci-dessus
+ *    (`label`, `target`, `measurement`, `evidenceSource`, `frequency`), prêt à être bouclé.
+ * Ne lit ni n'écrit rien en base — fonction pure, appelée uniquement par l'UI (voir
+ * js/views/people.js#openImportObjectiveTextModal).
+ */
+export function parseObjectiveImportText(text) {
+  const sections = splitImportSections(text || "");
+  const scopeRaw = (sections.scope || "").toLowerCase();
+  const scope = /individ/.test(scopeRaw) ? "individual" : /collectif/.test(scopeRaw) ? "collective" : null;
+  const { indicators, perIndicatorWatchPoints } = parseImportIndicatorsBlock(sections.indicators);
+  const watchPointsParts = [];
+  if (sections.watchPoints) watchPointsParts.push(sections.watchPoints);
+  if (perIndicatorWatchPoints.length) watchPointsParts.push(...perIndicatorWatchPoints);
+
+  return {
+    title: sections.title || "",
+    category: sections.category || null,
+    scope,
+    description: sections.description || "",
+    smart: parseImportSmartBlock(sections.smart),
+    indicators,
+    actionPlan: sections.actionPlan || "",
+    responsibilityLevels: sections.responsibilityLevels || "",
+    watchPoints: watchPointsParts.join("\n"),
+  };
+}
