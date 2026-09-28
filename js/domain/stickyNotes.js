@@ -14,7 +14,8 @@
 //
 // Modèle de données (repris tel quel de la spec transmise par Charles-Henri) :
 //   StickyNote { id, title, type ("text"|"checklist"), color, content, checklist[], x, y, width,
-//                height, zIndex, pinned, archived, createdAt, updatedAt, floatX, floatY }
+//                height, zIndex, pinned, archived, createdAt, updatedAt, floatX, floatY,
+//                floatWidth, floatHeight }
 //   ChecklistItem { id, text, done, doneAt }
 //
 // `floatX`/`floatY` (complément du 23/09/2026, retour direct de Charles-Henri le même jour que la
@@ -26,6 +27,13 @@
 // (`undefined`) tant que le post-it flottant n'a jamais été glissé — voir js/components/
 // pinnedNotesOverlay.js#fallbackPosition, qui calcule une position de repli côté client sans
 // jamais l'écrire en base tant qu'aucun glisser n'a eu lieu.
+//
+// `floatWidth`/`floatHeight` (complément du 28/09/2026, retour direct de Charles-Henri : "pouvoir
+// agrandir ou réduire un post-it en dimension qui serait épinglé") — taille du même widget
+// flottant, même indépendance totale vis-à-vis de `width`/`height` (plan de travail) que
+// `floatX`/`floatY` vis-à-vis de `x`/`y` ci-dessus. Réutilisent DEFAULT_WIDTH/DEFAULT_HEIGHT/
+// MIN_WIDTH/MIN_HEIGHT plus bas plutôt qu'une deuxième paire de constantes dédiée — voir
+// setFloatSize() plus bas. Absents tant que le widget flottant n'a jamais été redimensionné.
 // Écart assumé avec la spec (à documenter dans le rapport de fin de lot) : le champ `checked` du
 // modèle ChecklistItem de la spec devient `done`/`doneAt` ici, pour rester au même format que
 // TOUTES les autres checklists de l'app (js/domain/tasks.js, js/domain/followups.js, l'ancien
@@ -127,6 +135,20 @@ export async function setFloatPosition(id, { x, y }) {
   const fields = {};
   if (Number.isFinite(x)) fields.floatX = x;
   if (Number.isFinite(y)) fields.floatY = y;
+  return storage.setFields(COLLECTION, id, fields);
+}
+
+/**
+ * Taille du post-it FLOTTANT (28/09/2026, voir le commentaire "floatWidth/floatHeight" en tête de
+ * fichier) — jamais confondue avec setLayout ci-dessus, qui pilote le plan de travail "Tout voir".
+ * Même principe d'écriture qu'un glisser/redimensionnement : la taille suit le pointeur en direct
+ * côté client (js/components/pinnedNotesOverlay.js#attachFloatResize), l'écriture Firestore n'a
+ * lieu qu'au relâchement.
+ */
+export async function setFloatSize(id, { width, height }) {
+  const fields = {};
+  if (Number.isFinite(width)) fields.floatWidth = width;
+  if (Number.isFinite(height)) fields.floatHeight = height;
   return storage.setFields(COLLECTION, id, fields);
 }
 
