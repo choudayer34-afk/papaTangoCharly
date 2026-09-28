@@ -15,7 +15,7 @@ import { renderMore } from "./views/more.js";
 import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
-import { renderGamificationGallery } from "./views/gamification.js";
+import { renderGamificationGallery, renderGamificationProgression } from "./views/gamification.js";
 import { renderLogin, renderRestricted, renderAuthError } from "./views/login.js";
 import { renderPrepMask } from "./views/prepMask.js";
 import { openModal } from "./components/modal.js";
@@ -101,6 +101,11 @@ const HIDDEN_ROUTES = {
   // ROUTES/NAV_ITEMS (pas d'icône dans la barre du bas). Accessible depuis ☰ Plus, voir
   // js/views/more.js.
   "#/gamification-galerie": { render: renderGamificationGallery, label: "Galerie des badges" },
+  // Écran Progression (LOT G8, TODO_GAMIFICATION.md §9) — même principe que la ligne
+  // ci-dessus : une page de pilotage consultée ponctuellement, pas un écran de travail, donc
+  // hors de ROUTES/NAV_ITEMS (pas d'icône dans la barre du bas). Accessible depuis ☰ Plus, voir
+  // js/views/more.js.
+  "#/progression": { render: renderGamificationProgression, label: "Progression" },
 };
 
 const appRoot = document.getElementById("app");
