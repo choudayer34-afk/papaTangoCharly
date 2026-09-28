@@ -213,6 +213,28 @@ export async function addKeptNote(id, text) {
   return updated.notesLog;
 }
 
+// `updateKeptNote`/`removeKeptNote` (ajout du 28/09/2026, retour de Charles-Henri : "je dois
+// pouvoir pour toutes les notes, les modifier si besoin") — la règle "additif seulement"
+// documentée dans js/components/notesBlock.js est levée sur les 8 fiches qui partagent ce
+// journal, celle-ci (Information/Idée gardée) comprise.
+export async function updateKeptNote(id, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Élément Inbox introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) };
+  });
+  return updated.notesLog;
+}
+
+export async function removeKeptNote(id, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Élément Inbox introuvable : " + id);
+    return { notesLog: (current.notesLog || []).filter((n) => n.id !== noteId) };
+  });
+  return updated.notesLog;
+}
+
 // Pour ces issues, l'entité résultante est déjà créée par la vue (js/views/inbox.js), qui
 // réutilise directement le domaine et — quand c'est possible — la modale de création déjà
 // existante (Projet, Ressource) plutôt que de dupliquer cette logique ici. `qualify()` se
