@@ -31,10 +31,23 @@
 // périodique (nouvelles données Firestore) est suspendu pendant ce temps pour ne pas la
 // réafficher entre-temps — voir suspend()/resume() plus bas, même principe que le
 // dragging/focusedInside de js/components/bureau.js.
+//
+// Redimensionnement (complément du 28/09/2026, retour direct de Charles-Henri : "pouvoir agrandir
+// ou réduire un post-it en dimension qui serait épinglé") — poignée bas-droite, même mécanique
+// Pointer Events que js/components/bureau.js#attachResize (voir attachFloatResize plus bas), mais
+// en coordonnées VIEWPORT plutôt que relatives à un conteneur, et bornée à la fenêtre plutôt qu'au
+// plan de travail. La largeur n'est donc plus une constante fixe (`WIDTH`, avant ce complément) :
+// chaque carte lit désormais sa propre taille (note.floatWidth/floatHeight, voir
+// js/domain/stickyNotes.js#setFloatSize), avec repli sur DEFAULT_WIDTH/DEFAULT_HEIGHT (220×190,
+// déjà les valeurs par défaut du plan de travail — réutilisées telles quelles plutôt qu'une
+// deuxième paire de constantes) tant qu'un post-it flottant n'a jamais été redimensionné.
+// L'aperçu (.pinned-float-note-preview, styles/components.css) n'est plus tronqué à 80 caractères
+// ni plafonné à 4.5em de hauteur : il remplit désormais tout l'espace restant de la carte et
+// défile si besoin (`overflow-y: auto`) — agrandir un post-it épinglé montre donc directement plus
+// de son contenu réel, sans avoir à l'ouvrir.
 import * as stickyNotesApi from "../domain/stickyNotes.js";
 import { openStickyNoteMenu, openStickyNoteEditor, escapeHtml } from "./stickyNoteShared.js";
 
-const WIDTH = 220;
 const MARGIN = 16;
 // Au-delà de ce seuil de déplacement (en pixels), un pointerdown/pointerup est un glisser ; en
 // dessous, un simple clic (ouvre l'édition rapide) — jamais les deux à la fois pour le même geste.
@@ -102,12 +115,22 @@ function render(notes) {
   });
 }
 
+/** Largeur/hauteur effectives d'un post-it flottant — sa propre taille si déjà redimensionné
+ *  (note.floatWidth/floatHeight, voir js/domain/stickyNotes.js#setFloatSize), sinon repli sur
+ *  DEFAULT_WIDTH/DEFAULT_HEIGHT (220×190, la largeur fixe déjà en place avant ce complément). */
+function floatSize(note) {
+  return {
+    width: Number.isFinite(note.floatWidth) ? note.floatWidth : stickyNotesApi.DEFAULT_WIDTH,
+    height: Number.isFinite(note.floatHeight) ? note.floatHeight : stickyNotesApi.DEFAULT_HEIGHT,
+  };
+}
+
 /** Position de repli en cascade pour un post-it épinglé jamais encore glissé sous sa forme
  *  flottante (voir le commentaire en tête de fichier) — jamais écrite en base. */
-function fallbackPosition(index) {
+function fallbackPosition(index, width) {
   const cascade = (index % 6) * 28;
   return {
-    x: Math.max(MARGIN, window.innerWidth - WIDTH - MARGIN - cascade),
+    x: Math.max(MARGIN, window.innerWidth - width - MARGIN - cascade),
     y: 80 + cascade,
   };
 }
@@ -115,8 +138,8 @@ function fallbackPosition(index) {
 /** Borne une position à l'intérieur du viewport courant — appliqué à chaque rendu (pas seulement
  *  au glisser) pour qu'un post-it positionné sur un grand écran reste atteignable si Charles-Henri
  *  revient ensuite sur un écran plus petit (redimensionnement de fenêtre, autre appareil). */
-function clampPosition(x, y, height) {
-  const maxX = Math.max(MARGIN, window.innerWidth - WIDTH - MARGIN);
+function clampPosition(x, y, width, height) {
+  const maxX = Math.max(MARGIN, window.innerWidth - width - MARGIN);
   const maxY = Math.max(MARGIN, window.innerHeight - height - MARGIN);
   return { x: Math.min(Math.max(MARGIN, x), maxX), y: Math.min(Math.max(MARGIN, y), maxY) };
 }
@@ -125,16 +148,19 @@ function buildFloatingNote(note, index) {
   const el = document.createElement("div");
   el.className = `pinned-float-note sticky-note--${note.color}`;
   el.dataset.id = note.id;
+  const { width, height } = floatSize(note);
   const hasStoredPosition = Number.isFinite(note.floatX) && Number.isFinite(note.floatY);
-  const raw = hasStoredPosition ? { x: note.floatX, y: note.floatY } : fallbackPosition(index);
-  // Hauteur estimée avant mesure réelle du DOM (~120px, une carte compacte titre + aperçu) — sert
-  // uniquement à borner Y avant le premier rendu ; un léger écart avec la hauteur réelle ne laisse
-  // jamais le post-it franchement hors-écran.
-  const { x, y } = clampPosition(raw.x, raw.y, 120);
+  const raw = hasStoredPosition ? { x: note.floatX, y: note.floatY } : fallbackPosition(index, width);
+  const { x, y } = clampPosition(raw.x, raw.y, width, height);
   el.style.left = `${x}px`;
   el.style.top = `${y}px`;
+  el.style.width = `${width}px`;
+  el.style.height = `${height}px`;
   el.style.zIndex = String(dragZCounter++);
-  const preview = stickyNotesApi.stickyNoteToText(note).slice(0, 80);
+  // Aperçu non tronqué (voir le commentaire en tête de fichier, 28/09/2026) — remplit désormais
+  // tout l'espace restant de la carte et défile au besoin (.pinned-float-note-preview,
+  // styles/components.css), au lieu d'un extrait fixe de 80 caractères/4.5em.
+  const preview = stickyNotesApi.stickyNoteToText(note);
   el.innerHTML = `
     <div class="pinned-float-note-header">
       <button type="button" class="pinned-float-unpin-btn" aria-label="Désépingler" title="Désépingler">📌</button>
@@ -142,6 +168,7 @@ function buildFloatingNote(note, index) {
       <button type="button" class="sticky-note-menu-btn" aria-label="Menu du post-it" title="Menu du post-it">⋯</button>
     </div>
     ${preview ? `<div class="pinned-float-note-preview">${escapeHtml(preview)}</div>` : ""}
+    <div class="sticky-note-resize-handle" role="separator" aria-label="Redimensionner le post-it" title="Redimensionner"></div>
   `;
 
   // Bouton dédié de désépinglage (retour direct de Charles-Henri, AskUserQuestion du 23/09/2026 :
@@ -164,6 +191,7 @@ function buildFloatingNote(note, index) {
   });
 
   attachFloatDrag(el, note);
+  attachFloatResize(el, note, el.querySelector(".sticky-note-resize-handle"));
   return el;
 }
 
@@ -193,7 +221,7 @@ function attachFloatDrag(el, note) {
       const dx = ev.clientX - startX;
       const dy = ev.clientY - startY;
       if (Math.abs(dx) > CLICK_THRESHOLD || Math.abs(dy) > CLICK_THRESHOLD) moved = true;
-      const clamped = clampPosition(startLeft + dx, startTop + dy, el.offsetHeight);
+      const clamped = clampPosition(startLeft + dx, startTop + dy, el.offsetWidth, el.offsetHeight);
       finalX = clamped.x;
       finalY = clamped.y;
       el.style.left = `${finalX}px`;
@@ -218,5 +246,48 @@ function attachFloatDrag(el, note) {
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
     el.addEventListener("pointercancel", onUp);
+  });
+}
+
+/**
+ * Poignée bas-droite (complément du 28/09/2026, voir le commentaire en tête de fichier) — même
+ * mécanique Pointer Events que js/components/bureau.js#attachResize, en coordonnées VIEWPORT et
+ * bornée à la fenêtre courante (MARGIN de chaque côté) plutôt qu'au plan de travail. `handleEl`
+ * a son propre `pointerdown` — `e.stopPropagation()` l'empêche de remonter jusqu'au `pointerdown`
+ * posé sur `el` par attachFloatDrag() ci-dessus (qui ne sait, lui, exclure qu'un `<button>` du
+ * geste de glisser), sans quoi redimensionner déplacerait aussi la carte.
+ */
+function attachFloatResize(el, note, handleEl) {
+  handleEl.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    suspend();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = el.offsetWidth;
+    const startHeight = el.offsetHeight;
+    const maxWidth = Math.max(stickyNotesApi.MIN_WIDTH, window.innerWidth - el.offsetLeft - MARGIN);
+    const maxHeight = Math.max(stickyNotesApi.MIN_HEIGHT, window.innerHeight - el.offsetTop - MARGIN);
+    let finalWidth = startWidth;
+    let finalHeight = startHeight;
+    handleEl.setPointerCapture(e.pointerId);
+
+    function onMove(ev) {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      finalWidth = Math.max(stickyNotesApi.MIN_WIDTH, Math.min(startWidth + dx, maxWidth));
+      finalHeight = Math.max(stickyNotesApi.MIN_HEIGHT, Math.min(startHeight + dy, maxHeight));
+      el.style.width = `${finalWidth}px`;
+      el.style.height = `${finalHeight}px`;
+    }
+    function onUp() {
+      handleEl.removeEventListener("pointermove", onMove);
+      handleEl.removeEventListener("pointerup", onUp);
+      handleEl.removeEventListener("pointercancel", onUp);
+      stickyNotesApi.setFloatSize(note.id, { width: finalWidth, height: finalHeight }).finally(resume);
+    }
+    handleEl.addEventListener("pointermove", onMove);
+    handleEl.addEventListener("pointerup", onUp);
+    handleEl.addEventListener("pointercancel", onUp);
   });
 }
