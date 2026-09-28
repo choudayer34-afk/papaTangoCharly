@@ -39,9 +39,53 @@ export async function addNote(id, text) {
   if (!trimmed) return null;
   const updated = await storage.update(COLLECTION, id, (current) => {
     if (!current) throw new Error("Personne introuvable : " + id);
-    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] };
+    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now(), eadpFlag: null }] };
   });
   await storage.logHistory("Person", id, "note_added", { text: trimmed });
+  return updated.notesLog;
+}
+
+// `EADP_FLAG_VALUES` (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
+// identifier dans notes & repères [...] si c'est une note que je veux remonter dans l'EADP, qui
+// est positif ou négatif ou neutre") — SEUL le journal de notes d'une Personne porte ce tag (les
+// 7 autres fiches qui partagent js/components/notesBlock.js n'ont pas de notion d'EADP). Une
+// note taguée se range dans "Préparer l'EADP" (js/views/people.js#openPrepareEadpModal) au même
+// titre que les Suivis marqués `notable` (voir js/domain/followups.js) — le texte de la note
+// elle-même sert de "en quoi c'est notable", pas besoin d'un champ séparé ici.
+export const EADP_FLAG_VALUES = ["positive", "negative", "neutral"];
+export const EADP_FLAG_LABELS = { positive: "👍 Positif", negative: "👎 Négatif", neutral: "⚪ Neutre" };
+
+/** `updateNote`/`removeNote` — même signature `(id, noteId, text)` que sur les 7 autres fiches
+ *  qui partagent js/components/notesBlock.js (la règle "additif seulement" y est levée partout,
+ *  celle-ci comprise) : ne touche jamais `eadpFlag`, voir `setNoteEadpFlag` juste en dessous
+ *  pour ça, qui reste un point d'écriture séparé et dédié à la Personne uniquement. */
+export async function updateNote(id, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Personne introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) };
+  });
+  return updated.notesLog;
+}
+
+export async function removeNote(id, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Personne introuvable : " + id);
+    return { notesLog: (current.notesLog || []).filter((n) => n.id !== noteId) };
+  });
+  return updated.notesLog;
+}
+
+/** Tag EADP d'une note (positif/négatif/neutre/aucun) — voir EADP_FLAG_VALUES ci-dessus.
+ *  Point d'écriture séparé de updateNote() : poser le tag n'est pas "corriger le texte", et
+ *  seule la Personne a cette notion (jamais les 7 autres fiches à journal de notes). */
+export async function setNoteEadpFlag(id, noteId, flag) {
+  const value = EADP_FLAG_VALUES.includes(flag) ? flag : null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Personne introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, eadpFlag: value } : n)) };
+  });
   return updated.notesLog;
 }
 
