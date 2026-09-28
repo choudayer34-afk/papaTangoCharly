@@ -412,7 +412,24 @@
 // (accent recoloré par Thème) + `js/domain/preferences.js`/`js/domain/gamification.js`/
 // `js/views/gamification.js`/`js/app.js`/`styles/components.css` (tous déjà précachés) +
 // `js/views/whatsnew.js` (nouvelle entrée). `CACHE_NAME` incrémenté à nouveau.
-const CACHE_NAME = "pilotage-cache-v83";
+//
+// "Petite parenthèse" Objectifs/EADP (28/09/2026, retour de Charles-Henri, hors numérotation
+// LOT) : suivi consolidé par indicateur (édition/suppression d'un suivi, "Prévu au point
+// précédent"), édition/suppression des notes du journal "Notes & repères" partout où il existe
+// (8 domaines : tasks/followups/projects (dont parts)/resources/meetings/decisions/inbox/people),
+// tag EADP positif/négatif/neutre sur les notes de Personne, `notableReason` sur un FollowUp
+// notable, et exports PDF/Excel des Objectifs. Trois fichiers NOUVEAUX (ajoutés à APP_SHELL
+// ci-dessous, même règle que tous les nouveaux fichiers précédents) : `js/domain/objectivesExport.js`,
+// `js/services/pdfWriter.js`, `js/services/xlsxWriter.js` — ces deux derniers sont des générateurs
+// PDF/XLSX vanilla écrits sans dépendance (ni npm ni CDN accessibles dans l'environnement où ce
+// patch a été développé, voir leur commentaire en tête de fichier). Fichiers modifiés (déjà
+// précachés, `CACHE_NAME` incrémenté pour qu'ils soient resservis) : `js/domain/objectives.js`,
+// `js/domain/people.js`, `js/domain/followups.js`, `js/domain/tasks.js`, `js/domain/projects.js`,
+// `js/domain/resources.js`, `js/domain/meetings.js`, `js/domain/decisions.js`, `js/domain/inbox.js`,
+// `js/components/notesBlock.js`, `js/views/dashboard.js`, `js/views/inbox.js`, `js/views/kanban.js`,
+// `js/views/people.js`, `js/views/projects.js`, `js/views/resources.js`, `js/views/whatsnew.js`,
+// `styles/components.css`.
+const CACHE_NAME = "pilotage-cache-v84";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -446,6 +463,10 @@ const APP_SHELL = [
   "./js/services/dateUtils.js",
   "./js/services/onlineStatus.js",
   "./js/services/navConfig.js",
+  // Nouveaux fichiers (28/09/2026, "petite parenthèse" Objectifs/EADP, voir le commentaire daté
+  // juste au-dessus de CACHE_NAME) : générateurs PDF/XLSX vanilla sans dépendance.
+  "./js/services/pdfWriter.js",
+  "./js/services/xlsxWriter.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
@@ -460,6 +481,9 @@ const APP_SHELL = [
   "./js/domain/tags.js",
   "./js/domain/templates.js",
   "./js/domain/objectives.js",
+  // Nouveau fichier (28/09/2026, "petite parenthèse" Objectifs/EADP, voir le commentaire daté
+  // juste au-dessus de CACHE_NAME) : orchestration des exports PDF/Excel des Objectifs.
+  "./js/domain/objectivesExport.js",
   "./js/domain/prompts.js",
   "./js/domain/casquettes.js",
   "./js/domain/convert.js",
