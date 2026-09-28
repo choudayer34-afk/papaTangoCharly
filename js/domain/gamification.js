@@ -1301,3 +1301,288 @@ export function repartitionXpParAction(state) {
     .filter((ligne) => ligne.occurrences > 0)
     .sort((a, b) => b.xp - a.xp);
 }
+
+// ================================================================================================
+// LOT G10 (TODO_GAMIFICATION.md §13/§14, ajout du 28/09/2026, retour de Charles-Henri "TODO-001
+// est validé et on fait la gamification §13/§14") — couche de PRÉSENTATION/mise en scène par-dessus
+// tout ce qui précède (§13, cadrage explicite : "aucun seuil, aucune condition, aucun barème XP,
+// aucun badge, aucun niveau, aucune Table de déblocage n'est modifié [...] une consommation
+// supplémentaire des données déjà produites par ces lots, jamais une nouvelle source de vérité").
+// Trois blocs ajoutés ici :
+//  1. Trois fonctions PURES de lecture (`xpDebutNiveau`, `prochainsBadgesPermanents`,
+//     `xpGagneAujourdhui`) et une quatrième (`chronologieRecompenses`) au service respectivement
+//     de la carte "Progression" de l'Accueil (§13.1) et du Centre de récompenses (§13.6).
+//  2. Le système d'événements de récompense (§13.2) — voir son commentaire détaillé plus bas pour
+//     le point technique non trivial explicitement signalé par la roadmap (§13, dernier paragraphe
+//     du cadrage) : comment connaître le RÉSULTAT d'un crédit XP/badge/déblocage sans jamais
+//     transformer le principe "tir et oublie" des 13 `recordXxx()` déjà en place (LOT G1/G3/G7)
+//     en quelque chose que l'appelant métier devrait attendre.
+//  3. La réassignation des 13 `recordXxx()` existants, tout en bas de ce fichier, pour les faire
+//     passer par ce système sans changer leur signature ni leur contrat de promesse.
+// ================================================================================================
+
+/**
+ * XP total nécessaire pour ATTEINDRE le niveau `niveau` (l'XP déjà cumulé au moment où ce niveau
+ * commence) — même formule que `positionBareme()` plus haut (LOT G2, §4), exposée séparément ici
+ * pour `chronologieRecompenses()` plus bas (§13.6), qui a besoin de ce seuil exact pour approximer
+ * une date de franchissement de niveau. Fonction pure, aucun accès storage.
+ */
+export function xpDebutNiveau(niveau) {
+  let total = 0;
+  for (let n = 1; n < niveau; n += 1) total += coutNiveauSuivant(n);
+  return total;
+}
+
+/**
+ * Les badges permanents (§5.1) les plus proches d'être obtenus, triés par distance croissante
+ * (§13.1 : "le badge permanent le plus proche" ; §13.6 onglet "À débloquer" : étend la même
+ * métrique aux 5 plus proches via `limite`). Exclut structurellement, dans cet ordre :
+ *  - les badges déjà obtenus (`state.badgesObtained`) ;
+ *  - les familles Régularité et Documentation (§13.1, reprend l'arbitrage LOT G3 jamais rouvert —
+ *    "un badge structurellement inobtenable ne doit jamais être présenté comme 'le plus proche'").
+ * Distance = seuil du badge − valeur courante de la métrique de sa famille (`valeurCouranteFamille`,
+ * LOT G6), jamais négative (repli à 0 par sécurité). Égalité de distance : l'ordre du catalogue
+ * `BADGES` (familles puis rareté croissante) tranche, exactement la règle déterministe exigée par
+ * le §13.1 — préservé ici tel quel puisque `Array.prototype.filter`/`.map` ne réordonnent jamais
+ * leurs éléments, l'indice dans le tableau filtré reste donc l'ordre du catalogue d'origine.
+ */
+export function prochainsBadgesPermanents(state, collaborateursDistincts = 0, limite = 1) {
+  const candidats = BADGES.filter((badge) => {
+    if (state.badgesObtained[badge.id]) return false;
+    if (badge.famille === "regularite" || badge.famille === "documentation") return false;
+    return true;
+  }).map((badge, ordreCatalogue) => {
+    const valeurCourante = valeurCouranteFamille(state, badge.famille, collaborateursDistincts);
+    const distance = Math.max(0, badge.seuil - valeurCourante);
+    return { badge, distance, valeurCourante, ordreCatalogue };
+  });
+  candidats.sort((a, b) => a.distance - b.distance || a.ordreCatalogue - b.ordreCatalogue);
+  return candidats.slice(0, limite).map(({ badge, distance, valeurCourante }) => ({ badge, distance, valeurCourante }));
+}
+
+/** Somme des montants de `historiqueGains` (§9 point 5, LOT G8) dont la date correspond au jour
+ *  local courant (§2.2) — §13.1 "XP gagnés aujourd'hui". Si aucune entrée du jour n'est présente
+ *  (borne de 30 dépassée par une synchronisation tardive, cas limite documenté au §13.1), renvoie 0
+ *  plutôt qu'une valeur incertaine — jamais une estimation. `maintenant` optionnel, même raison de
+ *  testabilité que le reste de ce fichier (LOT G5). */
+export function xpGagneAujourdhui(state, maintenant = new Date()) {
+  const aujourdhui = localDateKey(maintenant);
+  return state.historiqueGains
+    .filter((entree) => localDateKey(new Date(entree.dateMs)) === aujourdhui)
+    .reduce((somme, entree) => somme + entree.xp, 0);
+}
+
+/**
+ * Chronologie unique des niveaux/badges/déblocages déjà obtenus, la plus récente en tête (§13.6,
+ * onglet "Déjà obtenus"). Les dates de badges et déblocages sont EXACTES (déjà persistées, §10
+ * points 2 et 4) ; la date de chaque niveau est en revanche une APPROXIMATION documentée par la
+ * roadmap elle-même (§13.6 : "aucune date de franchissement de niveau n'est aujourd'hui
+ * persistée") — décision de Charles-Henri (AskUserQuestion, 28/09/2026, option recommandée) :
+ * dérivée de `historiqueGains` (LOT G8, borné à `HISTORIQUE_GAINS_MAX` entrées) plutôt que d'ajouter
+ * une nouvelle donnée persistée dédiée.
+ *
+ * Reconstruction : `historiqueGains` est parcouru du plus ANCIEN au plus RÉCENT en partant d'un
+ * total de départ approximatif (`xpTotal` actuel moins la somme de toutes les entrées conservées).
+ * Approximation par nature, assumée plutôt que cachée : les bonus XP de badges (jamais journalisés
+ * dans `historiqueGains`, voir son commentaire dans `withDefaults()`) crédités PENDANT la fenêtre
+ * couverte ne sont pas soustraits de ce total de départ, ce qui peut avancer légèrement la date
+ * estimée d'un niveau proche du début de cette fenêtre. Un niveau déjà dépassé AVANT la plus
+ * ancienne entrée connue (fenêtre trop courte pour un compte ancien, ou franchi uniquement via des
+ * bonus de badges jamais journalisés) n'a aucune date fiable : il apparaît quand même dans la
+ * chronologie (le niveau a bien été atteint) mais avec `dateMs: null` — à l'écran d'afficher une
+ * mention explicite plutôt que d'inventer une date.
+ */
+export function chronologieRecompenses(state) {
+  const entrees = [];
+
+  const niveauActuel = niveauDepuisXP(state.xpTotal);
+  if (niveauActuel > 1) {
+    const historiqueChronologique = [...state.historiqueGains].reverse(); // plus ancien en premier
+    const sommeFenetre = historiqueChronologique.reduce((somme, entree) => somme + entree.xp, 0);
+    let totalCourant = state.xpTotal - sommeFenetre; // approximatif, voir le commentaire ci-dessus
+    let prochainNiveauACaser = 2;
+    for (const entree of historiqueChronologique) {
+      totalCourant += entree.xp;
+      while (prochainNiveauACaser <= niveauActuel && totalCourant >= xpDebutNiveau(prochainNiveauACaser)) {
+        entrees.push({ type: "niveau", niveau: prochainNiveauACaser, dateMs: entree.dateMs });
+        prochainNiveauACaser += 1;
+      }
+    }
+    // Niveaux atteints avant la plus ancienne entrée connue — date inconnue, voir le commentaire.
+    while (prochainNiveauACaser <= niveauActuel) {
+      entrees.push({ type: "niveau", niveau: prochainNiveauACaser, dateMs: null });
+      prochainNiveauACaser += 1;
+    }
+  }
+
+  for (const badge of BADGES) {
+    const dateMs = state.badgesObtained[badge.id];
+    if (dateMs) entrees.push({ type: "badge", badge, dateMs });
+  }
+
+  for (const deblocage of DEBLOCAGES) {
+    const dateMs = state.deblocagesAcquis[deblocage.id];
+    if (dateMs) entrees.push({ type: "deblocage", deblocage, dateMs });
+  }
+
+  // Plus récent en tête — une entrée sans date connue (`dateMs: null`) est traitée comme la plus
+  // ANCIENNE possible (jamais devinée plus récente qu'une date réelle), reléguée en fin de liste
+  // plutôt que mélangée arbitrairement parmi des dates réelles.
+  entrees.sort((a, b) => (b.dateMs ?? -Infinity) - (a.dateMs ?? -Infinity));
+  return entrees;
+}
+
+// --- Événements de récompense (§13.2) — le point technique non trivial signalé par la roadmap
+// elle-même (§13, dernier paragraphe du cadrage) : le moteur (LOT G1/G3/G7) crédite XP/badges/
+// déblocages en mode "tir et oublie" (voir l'en-tête de ce fichier), et les 13 `recordXxx()`
+// ci-dessus sont appelés par les fichiers de domaine SANS jamais être attendus (`.catch()` seul) —
+// précisément pour qu'une panne de ce moteur ne puisse jamais faire échouer l'action métier qui
+// l'a déclenché. Afficher un écran de récompense suppose pourtant de savoir CE QUI vient d'être
+// gagné. Solution retenue, purement ADDITIVE (aucune des fonctions ci-dessus n'est modifiée) : un
+// petit bus pub/sub interne, EN MÉMOIRE UNIQUEMENT (jamais persisté, jamais lu par un autre
+// onglet/appareil) — chaque `recordXxx()` prend un cliché de l'état AVANT son propre travail puis,
+// une fois celui-ci terminé (XP, badges, déblocages, séries — tout ce qu'il fait déjà), un second
+// cliché APRÈS ; la différence entre les deux est ce qui est publié aux abonnés. Le contrat de
+// promesse de chaque `recordXxx()` (résolution/rejet vus par son appelant métier) reste identique
+// à l'octet près à ce qu'il était avant LOT G10 — voir `conRecompense()` et la réassignation tout
+// en bas de ce fichier.
+//
+// Sérialisation VOLONTAIRE de tous les `recordXxx()` entre eux (`fileRecompenses` ci-dessous) :
+// sans cela, deux appels concurrents (ex. deux Tâches terminées à quelques millisecondes d'intervalle)
+// pourraient chacun lire un cliché "avant"/"après" qui chevauche l'écriture de l'autre, et
+// attribuer par erreur un gain à la mauvaise action. Un tel chevauchement reste déjà extrêmement
+// improbable dans une app à usage strictement personnel (voir l'en-tête de storage.js) où chaque
+// action part d'un clic explicite, mais la sérialisation l'élimine complètement, à un coût nul
+// pour l'appelant métier : AUCUN appelant n'attend jamais la promesse de `recordXxx()` (voir
+// ci-dessus), un léger délai supplémentaire dans cette file interne ne retarde donc jamais une
+// action visible à l'écran, seulement le moment où sa récompense éventuelle est annoncée.
+const rewardSubscribers = new Set();
+
+/**
+ * Abonnement à la file d'événements de récompense (§13.2) — retourne la fonction de
+ * désabonnement, même convention que `subscribe()` plus haut. `callback(events)` reçoit un
+ * TABLEAU, jamais un seul événement : un seul `recordXxx()` peut faire franchir plusieurs seuils
+ * d'un coup (rattrapage, voir `evaluerFamille()`/`verifierDeblocages()`), et la roadmap exige
+ * qu'ils soient mis en FILE plutôt qu'affichés en parallèle ("les écrans s'affichent
+ * successivement, jamais superposés", §13.2) — à l'abonné (voir js/components/
+ * rewardOrchestrator.js) de les défiler un par un dans l'ordre du tableau reçu, qui respecte déjà
+ * l'ordre imposé par le §13.2 : niveau(x) croissants, puis badge(s) dans l'ordre du catalogue,
+ * puis déblocage(s) de Table B/C restants dans l'ordre du catalogue (Table B avant Table C, voir
+ * `diffRewardEvents()` ci-dessous).
+ */
+export function subscribeRewardEvents(callback) {
+  rewardSubscribers.add(callback);
+  return () => rewardSubscribers.delete(callback);
+}
+
+function publishRewardEvents(events) {
+  if (!events.length) return;
+  for (const callback of rewardSubscribers) {
+    try {
+      callback(events);
+    } catch (error) {
+      // Un abonné (l'écran de récompense) qui plante ne doit jamais remonter jusqu'à l'action
+      // métier d'origine (§1, principe "tir et oublie") — seulement journalisé.
+      console.error("[gamification] Abonné à la file de récompenses en erreur :", error);
+    }
+  }
+}
+
+/**
+ * Construit la liste des événements de récompense entre deux clichés `getGamificationState()`
+ * (avant/après un `recordXxx()`), déjà dans l'ordre imposé par le §13.2 — fonction PURE, aucun
+ * accès storage, les deux clichés sont déjà lus par l'appelant (`conRecompense()` ci-dessous).
+ *
+ * Table A (déblocages liés au seul niveau) : JAMAIS un événement séparé — annoncée à l'intérieur
+ * même de l'événement "niveau" (`deblocagesTableA`), conformément au tableau de routage du §13.2
+ * ("Toujours à l'intérieur de l'écran Niveau atteint [...], jamais par une notification séparée").
+ * Table B/C : événements "deblocage" séparés, dans l'ordre du catalogue `DEBLOCAGES` (Table B avant
+ * Table C, l'ordre du tableau les range déjà ainsi). Un déblocage de Table C (niveau ET badge)
+ * n'apparaît ici que lors du SEUL appel où sa seconde condition vient de se réaliser — garanti par
+ * construction : `deblocagesAcquis` est monotone (jamais retiré, §6) et le diff ne retient que ce
+ * qui bascule de faux à vrai entre les deux clichés de CET appel précis — jamais annoncé deux fois.
+ */
+function diffRewardEvents(avant, apres) {
+  const events = [];
+
+  const niveauAvant = niveauDepuisXP(avant.xpTotal);
+  const niveauApres = niveauDepuisXP(apres.xpTotal);
+  for (let niveau = niveauAvant + 1; niveau <= niveauApres; niveau += 1) {
+    events.push({
+      type: "niveau",
+      niveau,
+      progression: progressionNiveau(apres.xpTotal),
+      deblocagesTableA: DEBLOCAGES.filter((d) => d.type === "niveau" && d.niveau === niveau),
+    });
+  }
+
+  // `progression` (état APRÈS ce `recordXxx()` précis, jamais relu en direct au moment de
+  // l'affichage) attaché aussi aux badges — §13.3 "Barre d'XP mise à jour [...] après prise en
+  // compte du bonus XP" : si d'autres événements sont déjà en file au moment où celui-ci s'affiche
+  // (rattrapage groupé), la barre doit refléter l'état à CE moment précis de la séquence, pas
+  // l'état déjà plus avancé lu en direct depuis l'écran.
+  for (const badge of BADGES) {
+    if (!avant.badgesObtained[badge.id] && apres.badgesObtained[badge.id]) {
+      events.push({ type: "badge", badge, progression: progressionNiveau(apres.xpTotal) });
+    }
+  }
+
+  for (const deblocage of DEBLOCAGES) {
+    if (deblocage.type === "niveau") continue; // Table A — déjà porté par l'événement "niveau" ci-dessus
+    if (!avant.deblocagesAcquis[deblocage.id] && apres.deblocagesAcquis[deblocage.id]) {
+      events.push({ type: "deblocage", deblocage });
+    }
+  }
+
+  return events;
+}
+
+// File de sérialisation des `recordXxx()` entre eux — voir le commentaire au-dessus de
+// `rewardSubscribers`. Une simple chaîne de promesses, même principe minimal que `updateQueues`
+// de storage.js mais volontairement globale ici (une seule file, jamais une par document : tous
+// les `recordXxx()` écrivent de toute façon le même document `gamification/state`).
+let fileRecompenses = Promise.resolve();
+
+/**
+ * Enrobe un `recordXxx()` existant pour publier les événements de récompense une fois son travail
+ * interne terminé — AUCUN changement de contrat pour l'appelant métier (voir le commentaire
+ * détaillé au-dessus de la section) : la promesse renvoyée se résout/rejette exactement comme
+ * avant LOT G10 ; seule une PUBLICATION supplémentaire, en mémoire uniquement, a lieu en plus. Si
+ * `fn` échoue, aucun cliché "après" n'est pris et aucun événement n'est publié — cohérent avec le
+ * fait qu'une erreur en cours de route ne garantit rien sur l'état réellement écrit.
+ */
+function conRecompense(fn) {
+  return (...args) => {
+    const execution = fileRecompenses.then(async () => {
+      const avant = await getGamificationState();
+      const result = await fn(...args);
+      const apres = await getGamificationState();
+      publishRewardEvents(diffRewardEvents(avant, apres));
+      return result;
+    });
+    fileRecompenses = execution.catch(() => {}); // une exécution en erreur ne bloque jamais la suivante
+    return execution;
+  };
+}
+
+// Réassignation des 13 points d'écoute existants (LOT G1 : les 10 événements du barème XP ;
+// LOT G3/G6 : Lien/Post-it/Objectif créé, sans XP de base) — un changement PUREMENT additif :
+// chaque fonction garde exactement son nom, sa signature et son comportement de promesse déjà en
+// place ; seule la publication décrite ci-dessus s'ajoute après coup. Réassignation valide en JS :
+// une fonction déclarée par `function`/`async function` reste une liaison mutable du module, et un
+// export ES conserve une liaison "live" — tout fichier qui importe par exemple
+// `recordTaskCompleted` (js/domain/tasks.js) reçoit donc bien la version enrobée ci-dessous sans
+// qu'aucun import, dans aucun fichier, n'ait besoin de changer.
+recordTaskCompleted = conRecompense(recordTaskCompleted);
+recordFollowUpCompleted = conRecompense(recordFollowUpCompleted);
+recordProjectClosed = conRecompense(recordProjectClosed);
+recordMeetingCreated = conRecompense(recordMeetingCreated);
+recordDecisionCreated = conRecompense(recordDecisionCreated);
+recordObjectiveUpdated = conRecompense(recordObjectiveUpdated);
+recordObjectiveReviewAdded = conRecompense(recordObjectiveReviewAdded);
+recordInboxItemQualified = conRecompense(recordInboxItemQualified);
+recordResourceCreated = conRecompense(recordResourceCreated);
+recordPromptCreated = conRecompense(recordPromptCreated);
+recordLinkCreated = conRecompense(recordLinkCreated);
+recordStickyNoteCreated = conRecompense(recordStickyNoteCreated);
+recordObjectiveCreated = conRecompense(recordObjectiveCreated);
