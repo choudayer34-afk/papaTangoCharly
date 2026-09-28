@@ -17,6 +17,18 @@
 // reconfirmer au premier lancement réel — en particulier le test de superposition au-dessus d'une
 // autre modale (reproduit avec `page.click()`, dont l'échec en cas de recouvrement est justement
 // le comportement recherché ici, voir le commentaire du test concerné).
+//
+// Complément du 28/09/2026 (même avertissement, jamais exécuté) — retour direct de Charles-Henri :
+// "pouvoir agrandir ou réduire un post-it en dimension qui serait épinglé [...] quand je rentre
+// dans le post-it, pouvoir agrandir le champ de description pour voir l'intégralité du contenu
+// [...] sur un post-it épinglé, je dois pouvoir cocher les éléments ou en ajouter en mode
+// checklist et si je suis en mode texte, je dois pouvoir ajouter ou modifier le texte directement."
+// Deux nouveaux tests couvrent respectivement la poignée de redimensionnement
+// (js/components/pinnedNotesOverlay.js#attachFloatResize) et l'édition rapide en modale large
+// (js/components/stickyNoteShared.js#openStickyNoteEditor) — cette dernière confirme surtout
+// l'ABSENCE de régression : cocher/ajouter une ligne de checklist et taper/modifier du texte
+// libre fonctionnaient déjà directement dans cette modale (renderNoteBody, partagé avec le plan
+// de travail) avant ce complément, seule sa largeur et la hauteur du champ de texte changent ici.
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -138,6 +150,80 @@ test.describe.serial("LOT 13 — post-it flottants (widget \"toujours visible\")
     expect(parseInt(styleAfterReload.top, 10)).toBe(parseInt(styleAfterDrag.top, 10));
 
     await reloadedNote.locator(".pinned-float-unpin-btn").click();
+    await deleteViaFullCanvas(page, note.id);
+  });
+
+  test("Redimensionner le widget flottant (poignée bas-droite) : taille mise à jour en direct, ne déplace jamais la carte, persistée après rechargement", async ({ page }) => {
+    await loginAndGoToDashboard(page);
+    const note = await createPinnedNote(page);
+
+    const boxBefore = await note.el.boundingBox();
+    const handleBox = await note.el.locator(".sticky-note-resize-handle").boundingBox();
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + 150, handleBox.y + 100, { steps: 8 });
+    await page.mouse.up();
+
+    const styleAfterResize = await note.el.evaluate((el) => ({ width: el.style.width, height: el.style.height }));
+    expect(parseInt(styleAfterResize.width, 10)).toBeGreaterThan(Math.round(boxBefore.width));
+    expect(parseInt(styleAfterResize.height, 10)).toBeGreaterThan(Math.round(boxBefore.height));
+
+    // Le redimensionnement ne doit JAMAIS déplacer la carte (voir e.stopPropagation() dans
+    // attachFloatResize, qui empêche le pointerdown de la poignée de remonter jusqu'à celui,
+    // posé sur toute la carte, d'attachFloatDrag).
+    const boxAfter = await note.el.boundingBox();
+    expect(Math.round(boxAfter.x)).toBe(Math.round(boxBefore.x));
+    expect(Math.round(boxAfter.y)).toBe(Math.round(boxBefore.y));
+
+    // Même précaution que le test de glisser ci-dessus : l'écriture (`setFloatSize`, déclenchée
+    // au relâchement) n'est pas attendue avant de continuer.
+    await page.waitForTimeout(500);
+    await page.reload();
+    await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
+    const reloadedNote = page.locator(`.pinned-float-note[data-id="${note.id}"]`);
+    await expect(reloadedNote).toBeVisible({ timeout: 10_000 });
+    const styleAfterReload = await reloadedNote.evaluate((el) => ({ width: el.style.width, height: el.style.height }));
+    expect(parseInt(styleAfterReload.width, 10)).toBe(parseInt(styleAfterResize.width, 10));
+    expect(parseInt(styleAfterReload.height, 10)).toBe(parseInt(styleAfterResize.height, 10));
+
+    await reloadedNote.locator(".pinned-float-unpin-btn").click();
+    await deleteViaFullCanvas(page, note.id);
+  });
+
+  test("Édition rapide en modale large : champ de description manuellement agrandissable, checklist cochée/complétée et texte libre modifié directement", async ({ page }) => {
+    await loginAndGoToDashboard(page);
+    const note = await createPinnedNote(page);
+
+    await note.el.click();
+    await expect(page.getByRole("heading", { name: "📝 Post-it" })).toBeVisible({ timeout: 5_000 });
+
+    // Modale large (complément du 28/09/2026, retour de Charles-Henri : "agrandir le champ de
+    // description pour voir l'intégralité du contenu") — voir `.modal--wide`
+    // (styles/components.css) et `wide: true` sur openStickyNoteEditor
+    // (js/components/stickyNoteShared.js).
+    await expect(page.locator(".modal.modal--wide")).toBeVisible();
+
+    // Texte libre : modification directe (déjà le comportement de renderNoteBody, partagé avec le
+    // plan de travail) — ce test vérifie surtout l'absence de régression, plus le champ devenu
+    // manuellement redimensionnable (`.modal-body .sticky-note-textarea`, styles/components.css).
+    const textarea = page.locator(".modal-body .sticky-note-textarea");
+    await expect(textarea).toBeVisible();
+    await expect(textarea).toHaveCSS("resize", "vertical");
+    await textarea.fill("Contenu tapé directement depuis le widget flottant");
+    await textarea.blur();
+
+    // Bascule en checklist puis ajout ET coche DIRECTEMENT, toujours dans cette même modale, sans
+    // ouvrir aucun autre écran.
+    await page.locator(".sticky-note-mode-btn[data-mode='checklist']").click();
+    await page.locator("#checklist-new-text").fill("Première ligne ajoutée depuis le widget flottant");
+    await page.locator("#checklist-new-text").press("Enter");
+    const firstItem = page.locator(".checklist-item").first();
+    await expect(firstItem).toBeVisible({ timeout: 5_000 });
+    await firstItem.locator("input[type='checkbox']").check();
+    await expect(firstItem.locator("input[type='checkbox']")).toBeChecked();
+
+    await page.getByRole("button", { name: "Fermer" }).click();
+    await note.el.locator(".pinned-float-unpin-btn").click();
     await deleteViaFullCanvas(page, note.id);
   });
 });
