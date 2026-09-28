@@ -346,6 +346,53 @@ Charles-Henri avant de démarrer LOT G2 de `TODO_GAMIFICATION.md` — 3 échecs,
 exécutée dans l'environnement où elle a été rédigée (registre npm bloqué, émulateur Firebase non
 disponible ici). À reconfirmer au premier lancement réel qui suit ce correctif.
 
+**Complément du 28/09/2026 (retour direct de Charles-Henri) : "pouvoir agrandir ou réduire un
+post-it en dimension qui serait épinglé [...] quand je rentre dans le post-it, pouvoir agrandir le
+champ de description pour voir l'intégralité du contenu [...] sur un post-it épinglé, je dois
+pouvoir cocher les éléments ou en ajouter en mode checklist et si je suis en mode texte, je dois
+pouvoir ajouter ou modifier le texte directement."** — trois demandes, dont la troisième s'est
+révélée déjà satisfaite par le code existant (voir plus bas) :
+
+- **`js/domain/stickyNotes.js`** — nouveaux champs `floatWidth`/`floatHeight` (mêmes principes
+  d'indépendance que `floatX`/`floatY`, voir le commentaire en tête de fichier) + nouveau setter
+  `setFloatSize(id, { width, height })`, réutilisant `DEFAULT_WIDTH`/`DEFAULT_HEIGHT`/`MIN_WIDTH`/
+  `MIN_HEIGHT` déjà existants (aucune deuxième paire de constantes créée).
+- **`js/components/pinnedNotesOverlay.js`** — poignée bas-droite sur chaque widget flottant
+  (réutilise `.sticky-note-resize-handle`, déjà stylée pour le plan de travail), même mécanique
+  Pointer Events que `js/components/bureau.js#attachResize` mais en coordonnées viewport et bornée
+  à la fenêtre (`attachFloatResize`, nouveau) ; `e.stopPropagation()` empêche ce geste d'être aussi
+  interprété comme un glisser de la carte entière. L'aperçu du contenu n'est plus tronqué à 80
+  caractères ni plafonné à 4.5em : il remplit l'espace disponible et défile, donc agrandir un
+  post-it épinglé montre directement plus de son contenu réel.
+- **`js/components/stickyNoteShared.js`** — l'édition rapide (`openStickyNoteEditor`, seul appelant
+  de cette modale) s'ouvre désormais en modale large (`wide: true`) ; **`styles/components.css`**
+  ajoute une règle scopée `.modal-body .sticky-note-textarea { resize: vertical; min-height: 220px;
+  }` — UNIQUEMENT dans cette modale (le plan de travail utilise la même classe de champ dans
+  `.sticky-note-body`, jamais `.modal-body` : `resize: none` y reste inchangé, un post-it du plan
+  de travail ayant déjà sa propre poignée de redimensionnement pour toute la carte).
+- **Troisième demande (cocher/ajouter une ligne de checklist, taper/modifier du texte libre
+  "directement" sur un post-it épinglé) : DÉJÀ SATISFAITE, aucun changement de code nécessaire.**
+  `renderNoteBody` (`js/components/stickyNoteShared.js`), déjà partagé entre le plan de travail et
+  cette même édition rapide, fait déjà exactement cela (checklist entièrement interactive, texte
+  libre en sauvegarde automatique) depuis l'extraction du 23/09/2026. Lecture retenue du besoin
+  (voir la formulation "quand je rentre dans le post-it" citée ci-dessus, qui suppose l'ouverture de
+  cette même modale) plutôt qu'une refonte pour rendre le corps du post-it éditable EN PLACE sur la
+  carte flottante elle-même (sans ouvrir de modale) — cette deuxième lecture est un changement
+  d'architecture d'interaction non demandé explicitement, non retenu ici ; à confirmer si ce n'est
+  pas ce qui était réellement attendu.
+- **`tests/unit/lot13-sticky-notes-model.spec.js`** (complété) — nouveau test `setFloatSize` :
+  écriture ciblée de `floatWidth`/`floatHeight` sans jamais toucher `width`/`height`.
+- **`tests/e2e/lot13-pinned-float-notes.spec.js`** (complété) — deux nouveaux tests : redimensionner
+  la carte via sa poignée (taille mise à jour en direct, ne déplace jamais la carte, persistée après
+  rechargement) ; édition rapide en modale large avec confirmation que le champ de texte est
+  manuellement agrandissable et que cocher/ajouter une ligne de checklist et taper du texte libre
+  fonctionnent directement dans cette même modale (non-régression, pas une fonctionnalité nouvelle).
+
+**AVERTISSEMENT (28/09/2026)** : comme le reste de ce dossier, ce complément n'a pas pu être exécuté
+dans l'environnement où il a été rédigé (registre npm bloqué, émulateur Firebase non disponible
+ici). À reconfirmer au premier lancement réel — en particulier la poignée de redimensionnement au
+TACTILE (seul le geste souris, `page.mouse`, est exercé ici, même limite que le reste du LOT 13).
+
 ## "Petite parenthèse" Objectifs/EADP — ajoutée le 28/09/2026, hors numérotation LOT
 
 Retour direct de Charles-Henri (suivi consolidé par indicateur avec édition/suppression d'un
