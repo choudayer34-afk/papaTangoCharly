@@ -147,6 +147,30 @@ test.describe("LOT 13 — js/domain/stickyNotes.js (post-it du Bureau)", () => {
     expect(result.floatY).toBe(120);
   });
 
+  // Complément du 28/09/2026 (retour direct de Charles-Henri : "pouvoir agrandir ou réduire un
+  // post-it en dimension qui serait épinglé") — floatWidth/floatHeight (widget flottant, même
+  // fichier que floatX/floatY), totalement indépendants de width/height (plan de travail) — voir
+  // le commentaire de setFloatSize dans js/domain/stickyNotes.js.
+  test("setFloatSize : écrit uniquement floatWidth/floatHeight, sans jamais toucher width/height (dimensions indépendantes)", async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { stickyNotesApi } = window.__pilotageTestApi;
+      const note = await stickyNotesApi.createStickyNote({ width: 220, height: 190 });
+      await stickyNotesApi.setFloatSize(note.id, { width: 340, height: 260 });
+      const afterFloatSize = await window.__pilotageTestApi.storageApi.get("stickyNotes", note.id);
+      return {
+        width: afterFloatSize.width,
+        height: afterFloatSize.height,
+        floatWidth: afterFloatSize.floatWidth,
+        floatHeight: afterFloatSize.floatHeight,
+      };
+    });
+    // Le plan de travail (width/height) reste intact — setFloatSize ne touche jamais ces champs.
+    expect(result.width).toBe(220);
+    expect(result.height).toBe(190);
+    expect(result.floatWidth).toBe(340);
+    expect(result.floatHeight).toBe(260);
+  });
+
   test("setType ne perd jamais content/checklist de l'autre mode (les deux cohabitent toujours sur le même document)", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { stickyNotesApi } = window.__pilotageTestApi;
