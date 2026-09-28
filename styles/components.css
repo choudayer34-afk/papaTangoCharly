@@ -2169,3 +2169,44 @@ tbody.drag-over-group {
 .progression-mois-historique-label { flex: 1; font-size: var(--font-size-sm); }
 .progression-mois-historique-badge { opacity: 0.3; font-size: 1.1rem; }
 .progression-mois-historique-badge--obtenu { opacity: 1; }
+
+/* Fond cosmétique équipé (§6 Table A, 28/09/2026 ad hoc — voir js/views/gamification.js#
+   renderGamificationProgression) — un dégradé discret en haut de l'écran, jamais assez marqué
+   pour gêner la lecture du contenu au premier plan (aucune illustration réelle, LOT G9 non
+   démarré, même stand-in swappable que les badges de la Galerie, §8). Réutilise les jetons `-bg`
+   sémantiques existants (styles/tokens.css) uniquement comme teinte de dégradé, jamais avec leur
+   sens habituel (aucun rapport avec un statut retard/attention/succès ici). */
+.progression-fond--horizon {
+  background-image: linear-gradient(180deg, var(--color-info-bg) 0%, transparent 55%);
+  background-repeat: no-repeat;
+}
+.progression-fond--sommet {
+  background-image: linear-gradient(180deg, var(--color-warning-bg) 0%, transparent 55%);
+  background-repeat: no-repeat;
+}
+
+/* Ruban cosmétique équipé (§6 Table C, 28/09/2026 ad hoc) — une pastille de couleur pleine avec
+   texte blanc, sur la carte "Prochain niveau" (la "carte de progression" du §6). Couleur posée en
+   ligne par famille (js/domain/gamification.js#DEBLOCAGES), jamais une des 14 teintes ici : voir
+   le commentaire sur ce catalogue pour le choix des couleurs. */
+.progression-ruban {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  color: #fff;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+/* Pastille de couleur d'un Ruban dans sa tuile de déblocage de la Galerie (js/views/
+   gamification.js#renderTuileDeblocage) — remplace l'emoji générique de catégorie pour cette
+   seule catégorie, `deblocage.valeur` y étant une couleur plutôt qu'un emoji. */
+.ruban-pastille {
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
