@@ -265,6 +265,16 @@ export function closeModal() {
   activeClose?.();
 }
 
+// Ajouté le 28/09/2026 (LOT G10, TODO_GAMIFICATION.md §14 : "un écran de récompense ne s'affiche
+// jamais par-dessus une saisie en cours") — js/components/rewardOrchestrator.js doit pouvoir
+// attendre qu'AUCUNE modale ne soit ouverte avant d'en ouvrir une lui-même (une récompense
+// n'interrompt jamais une action métier en cours), sans dupliquer l'état déjà tenu par
+// `activeOverlay` ci-dessus ni l'exposer directement (encapsulation inchangée pour tout le reste
+// de l'app, qui continue de passer par `openModal()`/`closeModal()` uniquement).
+export function isModalOpen() {
+  return !!activeOverlay;
+}
+
 // Garde anti-double-clic générique (15/09/2026, retour de Charles-Henri : "refait une revue de
 // code entière... anomalies d'usage ou d'enregistrement en silence") — même principe que la
 // garde posée plus haut sur les actions `closesModal: false` d'`openModal()` (patch 0026 :
