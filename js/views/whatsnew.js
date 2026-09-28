@@ -38,6 +38,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → 🏅 Galerie des badges → section \"🔓 Déblocages\" ; pour la couleur d'un post-it, ouvre son menu \"⋯\" → 🎨 Couleur.",
         gain: "Une raison concrète de continuer à progresser, au-delà des badges eux-mêmes : de nouvelles options d'apparence à débloquer.",
       },
+      {
+        type: "add",
+        title: "🔎 Détail d'un badge en un clic",
+        text: "Chaque badge de la Galerie (obtenu ou verrouillé) s'ouvre maintenant en fiche détaillée : la condition exacte pour l'obtenir (avec ta progression réelle si pas encore obtenu, ou la date d'obtention et l'XP gagné sinon), et surtout ce qu'il donne EN PLUS de lui-même quand il en débloque un — l'icône ou le ruban qui lui est associé.",
+        howTo: "☰ Plus → 🏅 Galerie des badges → clique sur n'importe quel badge.",
+        gain: "Comprendre du premier coup d'œil ce qu'il te reste à faire pour un badge donné, et ce que ça t'apportera concrètement, sans avoir à recouper toi-même la Galerie et la section Déblocages.",
+      },
     ],
   },
   {
