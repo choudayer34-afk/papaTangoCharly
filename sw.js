@@ -452,7 +452,18 @@
 // (montage de la carte), `js/views/gamification.js` (bouton "🎁 Récompenses" sur les 2 topbars),
 // `js/views/more.js` (nouvelle ligne), `js/app.js` (route + montage de l'orchestrateur),
 // `styles/components.css` (styles des écrans de récompense), `js/views/whatsnew.js`.
-const CACHE_NAME = "pilotage-cache-v86";
+//
+// Complément du 28/09/2026 (retour sur le complément de redimensionnement des post-it épinglés,
+// même jour — "je voulais bien l'édition rapide donc que tu repasses dessus") — édition en place
+// (titre, texte, checklist) directement sur la carte flottante, sans plus jamais ouvrir de modale.
+// Aucun nouveau fichier (`CACHE_NAME` incrémenté uniquement pour que les fichiers déjà précachés
+// ci-dessous soient resservis) : `js/components/pinnedNotesOverlay.js` (structure de carte
+// reprenant celle du plan de travail complet, nouveau mécanisme `beginOwnModalChain`/
+// `endOwnModalChain`), `js/components/stickyNoteShared.js` (retrait de `openStickyNoteEditor`,
+// devenue sans appelant), `js/components/modal.js` (nouvelle primitive `subscribeModalState`),
+// `js/components/checklist.js` (classe `checklist-line-menu-btn`), `styles/components.css`
+// (en-tête flottant devenu la seule zone de glisser), `js/views/whatsnew.js`.
+const CACHE_NAME = "pilotage-cache-v87";
 const APP_SHELL = [
   "./",
   "./index.html",
