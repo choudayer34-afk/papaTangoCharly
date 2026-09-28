@@ -309,6 +309,16 @@ export async function openResourceDetail(resource, projects, tasks) {
       resource.notesLog = updated;
       return updated;
     },
+    onUpdate: async (noteId, text) => {
+      const updated = await resourcesApi.updateNote(resource.id, noteId, text);
+      resource.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await resourcesApi.removeNote(resource.id, noteId);
+      resource.notesLog = updated;
+      return updated;
+    },
   });
 
   const linkRef = { type: "Resource", id: resource.id };
