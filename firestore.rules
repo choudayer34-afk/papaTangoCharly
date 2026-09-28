@@ -14,6 +14,15 @@ rules_version = '2';
 // environnement) — voir TODO_TECHNIQUE.md → TODO-001, section "Validation". Tant que cette
 // vérification n'a pas eu lieu, aucune des corrections ci-dessous ne doit être considérée
 // comme "validée en production", seulement comme préparée.
+//
+// CORRECTIF DU 28/09/2026 (retour de Charles-Henri, incident réel constaté en production :
+// "en tant que ch-houdayer@hotmail.fr j'avais bien accès à l'application mais les autres
+// comptes n'avaient plus accès du tout à leur contenu") — voir le commentaire détaillé sur
+// `match /users/{uid}/...` ci-dessous. Un correctif intermédiaire de Charles-Henri (deux
+// blocs `allow read, write` sur `users/{uid}`, le second basé sur `exists()` seul) avait bien
+// restauré l'accès, mais rouvrait au passage la faille FIREBASE-001 (un compte fermé via
+// "👥 Comptes" retrouvait un accès Firestore direct, `disabled` n'étant plus vérifié par
+// aucun des deux blocs OR-és). Remplacé ici par une seule règle qui garde les deux propriétés.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -60,19 +69,28 @@ service cloud.firestore {
       // FIREBASE-001 : la vérification ne portait jusqu'ici que sur l'EXISTENCE du document
       // `allowedUsers/{email}`, jamais sur son champ `disabled` — fermer un compte depuis
       // "👥 Comptes" ne révoquait donc pas l'accès Firestore direct tant qu'une session/jeton
-      // restait valide (jusqu'à ~1h, voir FIREBASE-001). Corrigé ici en vérifiant
-      // explicitement `disabled`, comme recommandé dans AUDIT_FIREBASE.md.
-      // Bug trouvé le 21/09/2026 par le test de règles TEST-002 (LOT 0B) avant tout déploiement
-      // — cette correction FIREBASE-001 n'a donc jamais été live en production : `.data.disabled`
-      // lève une erreur d'évaluation (PERMISSION_DENIED) dès que le champ `disabled` est ABSENT
-      // du document `allowedUsers` — hors c'est le cas normal de tout compte jamais fermé (voir
-      // `disabled` (absent = compte autorisé) ci-dessus, seed.js#alice) : cela aurait bloqué
-      // l'accès de la quasi-totalité des comptes normaux. `.get('disabled', false)` renvoie une
-      // valeur par défaut au lieu de lever une erreur quand le champ est absent — comportement
-      // identique voulu, correctement implémenté.
+      // restait valide (jusqu'à ~1h, voir FIREBASE-001). Corrigé en vérifiant explicitement
+      // `disabled`, comme recommandé dans AUDIT_FIREBASE.md.
+      //
+      // CORRECTIF DU 28/09/2026 : la version qui ne faisait que `get(...).data.disabled !=
+      // true` (sans `exists()` devant) provoquait un refus TOTAL dès que le document
+      // `allowedUsers/{email}` de l'utilisateur n'existait pas — `get()` sur un document
+      // absent lève une exception en règles Firestore, qui fait échouer tout le `&&` et donc
+      // refuse l'accès. C'est ce qui a bloqué "tous les autres comptes" (constaté par
+      // Charles-Henri le 28/09/2026) : seul l'administrateur restait épargné, grâce à la règle
+      // séparée ci-dessous qui ne dépend pas d'`allowedUsers`. Le correctif intermédiaire posé
+      // dans l'intervalle (un second bloc `allow read, write` basé sur `exists()` seul, sans
+      // vérifier `disabled`) rouvrait la faille FIREBASE-001 : un compte fermé retrouvait un
+      // accès Firestore direct dès que son document existait, quel que soit `disabled`. La
+      // règle ci-dessous restaure les deux propriétés en une seule fois : `exists()` est
+      // évalué EN PREMIER (évaluation en court-circuit du `&&`, standard dans le langage des
+      // règles Firestore) — si le document n'existe pas, on s'arrête là, refus propre, sans
+      // jamais appeler `get()` sur un chemin absent ; s'il existe, `disabled` est ensuite
+      // réellement vérifié, donc un compte fermé reste bloqué.
       allow read, write: if request.auth != null
                            && request.auth.uid == uid
-                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.get('disabled', false) != true;
+                           && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower()))
+                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.disabled != true;
 
       // SEC-002 : accès administrateur large à TOUTES les données de tous les utilisateurs,
       // nécessaire à l'export/suppression de compte depuis "👥 Comptes"
