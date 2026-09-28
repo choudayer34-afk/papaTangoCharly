@@ -1115,6 +1115,15 @@ export async function openProjectDetail(project, tasks) {
 
   // Sous-parties (§ retour de Charles-Henri) : avancement d'un bloc de l'équipe sans passer
   // par une Tâche — un clic cycle le statut ⚪ → 🔵 → 🟢 → ⚪.
+  //
+  // Ordre d'affichage + édition en place (28/09/2026, retour direct de Charles-Henri : "les 🧩
+  // Sous-parties dans un projet doivent s'ordonner avec les mêmes règles que les checklist") —
+  // même principe que `js/components/checklist.js` : les Sous-parties non "Terminé" restent en
+  // tête dans leur ordre manuel (▲/▼, comme `onReorder`), les "Terminé" descendent en bas triées
+  // par date de passage à "Terminé" la plus récente en premier (voir
+  // `projectsApi.sortPartsForDisplay`, qui traite "Pas commencé" et "En cours" identiquement comme
+  // "non coché" — seul le passage à "Terminé" a le sens de "coché" ici). Le libellé s'édite en
+  // place via "✏️" (comme `onEdit`), jamais de modale pour un simple texte.
   const partsEl = body.querySelector("#detail-parts");
   function renderParts() {
     const currentParts = project.parts || [];
@@ -1123,17 +1132,66 @@ export async function openProjectDetail(project, tasks) {
       return;
     }
     partsEl.innerHTML = "";
-    for (const part of currentParts) {
+    const visible = projectsApi.sortPartsForDisplay(currentParts);
+    const notDoneIds = visible.filter((p) => p.status !== "done").map((p) => p.id);
+    for (const part of visible) {
       const partNotes = part.notesLog || [];
       const lastNote = partNotes.length ? [...partNotes].sort((a, b) => b.createdAt - a.createdAt)[0] : null;
       const row = document.createElement("div");
       row.className = "item-row";
       row.innerHTML = `
         <div class="item-main">
-          <div class="item-title">${escapeHtml(part.label)}</div>
+          <div class="item-title"></div>
           ${lastNote ? `<div class="item-meta">🗒️ ${escapeHtml(lastNote.text)} · ${formatDateTime(lastNote.createdAt)}</div>` : ""}
         </div>
       `;
+      const titleEl = row.querySelector(".item-title");
+      titleEl.textContent = part.label;
+
+      // ▲/▼ — uniquement sur les Sous-parties non "Terminé", même principe et même classe
+      // (`.kanban-move-btn`) que `js/components/checklist.js`.
+      if (part.status !== "done") {
+        const pos = notDoneIds.indexOf(part.id);
+        const upBtn = document.createElement("button");
+        upBtn.type = "button";
+        upBtn.className = "kanban-move-btn";
+        upBtn.setAttribute("aria-label", "Monter");
+        upBtn.title = "Monter";
+        upBtn.textContent = "▲";
+        if (pos <= 0) upBtn.disabled = true;
+        const downBtn = document.createElement("button");
+        downBtn.type = "button";
+        downBtn.className = "kanban-move-btn";
+        downBtn.setAttribute("aria-label", "Descendre");
+        downBtn.title = "Descendre";
+        downBtn.textContent = "▼";
+        if (pos < 0 || pos >= notDoneIds.length - 1) downBtn.disabled = true;
+        async function move(direction) {
+          const from = notDoneIds.indexOf(part.id);
+          const to = direction === "up" ? from - 1 : from + 1;
+          if (from < 0 || to < 0 || to >= notDoneIds.length) return;
+          const reordered = [...notDoneIds];
+          [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+          const updatedParts = await projectsApi.reorderParts(project.id, reordered);
+          project.parts = updatedParts || project.parts;
+          renderParts();
+        }
+        upBtn.addEventListener("click", () => move("up"));
+        downBtn.addEventListener("click", () => move("down"));
+        row.appendChild(upBtn);
+        row.appendChild(downBtn);
+      }
+
+      // ✏️ — édition en place du libellé, même principe que `js/components/checklist.js`.
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn btn-ghost btn-sm";
+      editBtn.setAttribute("aria-label", "Modifier cette sous-partie");
+      editBtn.title = "Modifier cette sous-partie";
+      editBtn.textContent = "✏️";
+      editBtn.addEventListener("click", () => startEditPart(part, titleEl));
+      row.appendChild(editBtn);
+
       const noteBtn = document.createElement("button");
       noteBtn.type = "button";
       noteBtn.className = "btn btn-ghost btn-sm";
@@ -1150,8 +1208,10 @@ export async function openProjectDetail(project, tasks) {
       cycleBtn.addEventListener("click", async () => {
         const idx = projectsApi.PART_STATUSES.indexOf(part.status);
         const nextStatus = projectsApi.PART_STATUSES[(idx + 1) % projectsApi.PART_STATUSES.length];
-        await projectsApi.updatePartStatus(project.id, part.id, nextStatus);
-        part.status = nextStatus;
+        const updated = await projectsApi.updatePartStatus(project.id, part.id, nextStatus);
+        const freshPart = (updated.parts || []).find((p) => p.id === part.id);
+        part.status = freshPart?.status ?? nextStatus;
+        part.doneAt = freshPart?.doneAt ?? null;
         renderParts();
       });
       row.appendChild(cycleBtn);
@@ -1167,6 +1227,49 @@ export async function openProjectDetail(project, tasks) {
       row.appendChild(removeBtn);
       partsEl.appendChild(row);
     }
+  }
+
+  // Édition en place du libellé d'une Sous-partie (28/09/2026) — même principe exactement que
+  // `js/components/checklist.js#startEdit` : Entrée ou perte de focus valide, Échap annule.
+  function startEditPart(part, titleEl) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = part.label;
+    input.style.flex = "1";
+    input.style.minWidth = "0";
+    input.style.border = "1px solid var(--color-border)";
+    input.style.borderRadius = "var(--radius-sm)";
+    input.style.padding = "4px 6px";
+    titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+    let settled = false;
+    async function commit() {
+      if (settled) return;
+      settled = true;
+      const newLabel = input.value.trim();
+      if (newLabel && newLabel !== part.label) {
+        const updatedParts = await projectsApi.editPart(project.id, part.id, newLabel);
+        project.parts = updatedParts || project.parts;
+        part.label = newLabel;
+      }
+      renderParts();
+    }
+    function cancel() {
+      if (settled) return;
+      settled = true;
+      renderParts();
+    }
+    input.addEventListener("blur", commit);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancel();
+      }
+    });
   }
   renderParts();
   // BUG corrigé (15/09/2026, audit "anomalies d'usage ou d'enregistrement en silence") : bouton
