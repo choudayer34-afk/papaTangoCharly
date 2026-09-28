@@ -47,6 +47,12 @@ const ITEMS = [
   // l'XP, badges mensuels, prochain niveau — tout ce qui relève du PILOTAGE plutôt que de la
   // COLLECTION.
   { hash: "#/progression", emoji: "📊", title: "Progression", subtitle: "Niveau, XP, séries et badges mensuels — le pilotage de ton activité", group: "Gamification" },
+  // Centre de récompenses (LOT G10, TODO_GAMIFICATION.md §13.6, 28/09/2026) — 3e écran du groupe
+  // "Gamification" : ce que Charles-Henri est sur le point de débloquer (onglet 1), la chronologie
+  // de ce qu'il a déjà obtenu (onglet 2), et l'équipement de ses cosmétiques (onglet 3) — distinct
+  // de la Galerie (collection complète) et de la Progression (pilotage de l'activité), voir
+  // js/views/recompenses.js pour la tension signalée et résolue avec Charles-Henri à ce sujet.
+  { hash: "#/recompenses", emoji: "🎁", title: "Récompenses", subtitle: "À débloquer, déjà obtenu, et personnalisation de tes cosmétiques", group: "Gamification" },
 ];
 
 function escapeHtml(str) {
