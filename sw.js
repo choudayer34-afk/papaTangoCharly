@@ -438,7 +438,21 @@
 // floatWidth/floatHeight + setFloatSize), `js/components/pinnedNotesOverlay.js` (poignée de
 // redimensionnement, aperçu non tronqué), `js/components/stickyNoteShared.js` (édition rapide en
 // modale large), `styles/components.css`, `js/views/whatsnew.js`.
-const CACHE_NAME = "pilotage-cache-v85";
+//
+// LOT G10 (28/09/2026, TODO_GAMIFICATION.md §13/§14, retour de Charles-Henri "TODO-001 est validé
+// et on fait la gamification §13/§14") — couche de récompense/mise en scène : carte "Progression"
+// sur l'Accueil (§13.1), écrans de badge/niveau/déblocage débloqué (§13.2 à §13.5) et Centre de
+// récompenses (§13.6). Trois nouveaux fichiers : `js/components/rewardOrchestrator.js` (file
+// d'écrans de récompense, montée une seule fois par js/app.js comme les autres widgets flottants),
+// `js/components/progressionCard.js` (carte de l'Accueil) et `js/views/recompenses.js` (Centre de
+// récompenses, route `#/recompenses`). Fichiers modifiés (déjà précachés, `CACHE_NAME` incrémenté
+// pour qu'ils soient resservis) : `js/domain/gamification.js` (événements de récompense, fonctions
+// de lecture `xpDebutNiveau`/`prochainsBadgesPermanents`/`xpGagneAujourdhui`/
+// `chronologieRecompenses`), `js/components/modal.js` (`isModalOpen`), `js/views/dashboard.js`
+// (montage de la carte), `js/views/gamification.js` (bouton "🎁 Récompenses" sur les 2 topbars),
+// `js/views/more.js` (nouvelle ligne), `js/app.js` (route + montage de l'orchestrateur),
+// `styles/components.css` (styles des écrans de récompense), `js/views/whatsnew.js`.
+const CACHE_NAME = "pilotage-cache-v86";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -536,6 +550,9 @@ const APP_SHELL = [
   "./js/components/bureau.js",
   "./js/components/stickyNoteShared.js",
   "./js/components/pinnedNotesOverlay.js",
+  // Nouveaux fichiers (28/09/2026, LOT G10, voir le commentaire daté juste au-dessus de CACHE_NAME).
+  "./js/components/rewardOrchestrator.js",
+  "./js/components/progressionCard.js",
   "./js/views/dashboard.js",
   "./js/views/inbox.js",
   "./js/views/kanban.js",
@@ -550,6 +567,8 @@ const APP_SHELL = [
   "./js/views/whatsnew.js",
   "./js/views/memory.js",
   "./js/views/gamification.js",
+  // Nouveau fichier (28/09/2026, LOT G10, voir le commentaire daté juste au-dessus de CACHE_NAME).
+  "./js/views/recompenses.js",
   "./js/views/login.js",
   "./js/views/prepMask.js",
   "./js/views/followupsOverview.js",
