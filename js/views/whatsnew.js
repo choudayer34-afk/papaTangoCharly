@@ -45,6 +45,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → 🏅 Galerie des badges → clique sur n'importe quel badge.",
         gain: "Comprendre du premier coup d'œil ce qu'il te reste à faire pour un badge donné, et ce que ça t'apportera concrètement, sans avoir à recouper toi-même la Galerie et la section Déblocages.",
       },
+      {
+        type: "add",
+        title: "📊 Écran Progression",
+        text: "Un nouvel écran regroupe tout le pilotage de ton activité, distinct de la Galerie des badges : ton niveau et ta progression vers le suivant, ton XP total, tes 4 séries (Pilotage, Inbox, Tâches, Revue hebdo) avec leur record personnel, un calendrier de ton activité du mois, l'historique de tes derniers gains d'XP (action, montant, date), la répartition de ton XP total par type d'action, et l'état des 5 badges mensuels du mois en cours avec un bref historique des mois précédents.",
+        howTo: "☰ Plus → 📊 Progression.",
+        gain: "Comprendre d'où vient ta progression et où tu en es, sans avoir à recouper toi-même plusieurs écrans ni à te souvenir de tes derniers gains d'XP.",
+      },
     ],
   },
   {
