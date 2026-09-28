@@ -29,6 +29,18 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "28 septembre 2026",
+    items: [
+      {
+        type: "add",
+        title: "🔓 Déblocages",
+        text: "La Galerie des badges (☰ Plus → 🏅 Galerie des badges) affiche maintenant aussi les récompenses cosmétiques débloquées en progressant : 2 couleurs de post-it (Océan, Aurore) et 14 icônes à afficher à côté du titre \"Mon pilotage\" — une seule équipée à la fois, avec un bouton \"Équiper\" sur chaque icône déjà débloquée. D'autres récompenses (thèmes, fonds d'écran, rubans) sont déjà suivies en coulisses mais pas encore visibles à l'écran — la Galerie l'indique clairement plutôt que de les cacher.",
+        howTo: "☰ Plus → 🏅 Galerie des badges → section \"🔓 Déblocages\" ; pour la couleur d'un post-it, ouvre son menu \"⋯\" → 🎨 Couleur.",
+        gain: "Une raison concrète de continuer à progresser, au-delà des badges eux-mêmes : de nouvelles options d'apparence à débloquer.",
+      },
+    ],
+  },
+  {
     date: "25 septembre 2026",
     items: [
       {
