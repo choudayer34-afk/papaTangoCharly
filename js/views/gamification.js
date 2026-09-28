@@ -40,6 +40,13 @@
 //    ci-dessus : "acquis" reste vrai et se voit ici, sans travail de reprise nécessaire plus
 //    tard) — renderNoteCategorieDifferee() rend cette limite explicite, jamais silencieuse.
 
+// Détail au clic (retour direct de Charles-Henri, 28/09/2026, hors numérotation LOT — ajout
+// ad hoc à la Galerie, pas une entrée de TODO_GAMIFICATION.md) : chaque tuile de badge est
+// désormais cliquable et ouvre une fiche détaillée (comment l'obtenir/progression réelle, ET
+// ce que le badge donne EN PLUS de lui-même — le ou les déblocages de Table B/Table C, §6, qui
+// dépendent de CE badge précis) — voir openBadgeDetailModal() plus bas. Avant ce jour, seul un
+// `title` HTML (info-bulle native, peu découvrable) portait `badge.description`.
+import { openModal } from "../components/modal.js";
 import * as gamificationApi from "../domain/gamification.js";
 import * as objectivesApi from "../domain/objectives.js";
 import * as preferencesApi from "../domain/preferences.js";
@@ -292,7 +299,84 @@ export function renderGamificationGallery(container) {
       <div class="badge-tuile-condition">${escapeHtml(badge.condition)}</div>
       ${progressionHtml}
     `;
+
+    // Fiche détaillée au clic (28/09/2026, voir le commentaire sur l'import d'openModal en tête
+    // de fichier) — le `title` HTML ci-dessus reste en place comme repli natif (survol souris),
+    // la tuile devient en plus un vrai contrôle activable au clavier.
+    tile.setAttribute("role", "button");
+    tile.tabIndex = 0;
+    const ouvrir = () => openBadgeDetailModal(badge, currentState, collabs, emoji, locked, obtenuAtMs);
+    tile.addEventListener("click", ouvrir);
+    tile.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        ouvrir();
+      }
+    });
+
     return tile;
+  }
+
+  /**
+   * Fiche détaillée d'un badge (28/09/2026, retour de Charles-Henri : "il faudrait une petite
+   * explication [...] de comment on l'obtient et ce que ça permet d'avoir en plus"). Deux
+   * informations, jamais recalculées différemment de la tuile elle-même (mêmes données,
+   * `badge.condition`/`valeurCouranteFamille()` pour "comment l'obtenir", `state.badgesObtained`
+   * pour la date d'obtention) :
+   *  - "Comment l'obtenir" — condition exacte (§5.1) + progression réelle si verrouillé, date
+   *    d'obtention + bonus XP si déjà obtenu.
+   *  - "Ce que ça débloque en plus" — les déblocages de Table B/Table C (§6) qui dépendent
+   *    SPÉCIFIQUEMENT de ce badge (`gamificationApi.DEBLOCAGES` filtré sur `badgeId ===
+   *    badge.id`), s'il y en a : un badge Or de famille en débloque un (icône Accueil), un
+   *    badge Bronze de famille en débloque un autre (ruban, combiné au niveau 15) — les badges
+   *    Argent/Platine/Légendaire n'en déclenchent structurellement aucun (aucune ligne du §6 ne
+   *    les référence), auquel cas la section l'indique plutôt que de rester silencieuse.
+   */
+  function openBadgeDetailModal(badge, currentState, collabs, emoji, locked, obtenuAtMs) {
+    const body = document.createElement("div");
+
+    let obtentionHtml;
+    if (!locked) {
+      const dateObtenu = new Date(obtenuAtMs).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+      obtentionHtml = `<p><strong>Obtenu le ${dateObtenu}</strong> · +${badge.xp} XP crédités à ce moment-là.</p>`;
+    } else {
+      const valeurCourante = gamificationApi.valeurCouranteFamille(currentState, badge.famille, collabs);
+      const valeurAffichee = Math.max(0, Math.min(valeurCourante, badge.seuil));
+      obtentionHtml = `<p><strong>Pas encore obtenu</strong> — progression actuelle : ${valeurAffichee} / ${badge.seuil}. Une fois obtenu, ce badge créditera +${badge.xp} XP.</p>`;
+    }
+
+    const noteFamilleBloquee = renderNoteFamilleBloquee(badge.famille);
+
+    const deblocageIcone = gamificationApi.DEBLOCAGES.find((d) => d.type === "badge" && d.badgeId === badge.id);
+    const deblocageRuban = gamificationApi.DEBLOCAGES.find((d) => d.type === "niveauEtBadge" && d.badgeId === badge.id);
+
+    let deblocagesHtml;
+    if (deblocageIcone) {
+      deblocagesHtml = `<p>Débloque l'icône ${deblocageIcone.valeur} (« ${escapeHtml(deblocageIcone.nom)} »), à afficher à côté du titre « Mon pilotage » sur l'Accueil une fois équipée (section « 🔓 Déblocages » ci-dessous).</p>`;
+    } else if (deblocageRuban) {
+      deblocagesHtml = `<p>Combiné au niveau 15, débloque le « ${escapeHtml(
+        deblocageRuban.nom
+      )} » — détecté et acquis dès que les deux conditions sont réunies, mais pas encore affiché à l'écran (dépend de l'écran Progression, LOT G8, pas encore construit).</p>`;
+    } else {
+      deblocagesHtml = `<p>Aucun déblocage cosmétique n'est associé à ce badge précis (seuls un badge Or et un badge Bronze par famille en déclenchent un, voir la section « 🔓 Déblocages » ci-dessous) — juste le bonus XP.</p>`;
+    }
+
+    body.innerHTML = `
+      <p>${escapeHtml(badge.description)}</p>
+      <div class="section-title" style="margin-top:0;">🔑 Comment l'obtenir</div>
+      <p>${escapeHtml(badge.condition)}</p>
+      ${obtentionHtml}
+      <div id="badge-detail-note-famille"></div>
+      <div class="section-title">🎁 Ce que ça débloque en plus</div>
+      ${deblocagesHtml}
+    `;
+    if (noteFamilleBloquee) body.querySelector("#badge-detail-note-famille").appendChild(noteFamilleBloquee);
+
+    openModal({
+      title: `${emoji} ${badge.nom}`,
+      body,
+      actions: [{ label: "Fermer", variant: "ghost" }],
+    });
   }
 
   const unsubGamification = gamificationApi.subscribe((newState) => {
