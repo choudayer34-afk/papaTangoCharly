@@ -62,6 +62,11 @@
     // `data-gamification-theme`) sans passer par l'écran Galerie ni js/app.js. Aucun changement à
     // ce fichier lui-même au-delà de son ajout ici.
     import * as gamificationThemeStore from "/js/services/gamificationThemeStore.js";
+    // Ajouté le 28/09/2026 ("petite parenthèse" Objectifs/EADP, retour de Charles-Henri) :
+    // peopleApi n'était pas encore exposé ici — nécessaire pour tester addNote/updateNote/
+    // removeNote/setNoteEadpFlag (js/domain/people.js) sans passer par l'écran Personne. Aucun
+    // changement à ce fichier lui-même au-delà de son ajout ici.
+    import * as peopleApi from "/js/domain/people.js";
 
     window.__pilotageTestApi = {
       firebaseApi,
@@ -81,6 +86,7 @@
       gamificationApi,
       preferencesApi,
       gamificationThemeStore,
+      peopleApi,
     };
     window.__pilotageTestApiReady = true;
   </script>
