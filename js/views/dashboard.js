@@ -14,6 +14,12 @@ import * as casquettesApi from "../domain/casquettes.js";
 import * as priorisationApi from "../domain/priorisation.js";
 import * as objectivesApi from "../domain/objectives.js";
 import * as projectHealthApi from "../domain/projectHealth.js";
+// LOT G7 (TODO_GAMIFICATION.md §6, Table B "Icône") — l'icône équipée (préférence
+// gamificationIconeEquipeeId, js/domain/preferences.js) s'affiche à côté du titre "Mon pilotage"
+// (arbitrage AskUserQuestion du 25/09/2026 : l'app n'a pas de nom d'utilisateur affiché à l'Accueil
+// pour l'accueillir "à côté du nom" comme le prévoyait littéralement le §6). Voir
+// refreshGamificationIcon() plus bas.
+import * as gamificationApi from "../domain/gamification.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
@@ -124,7 +130,7 @@ export function renderDashboard(container) {
           <span class="theme-toggle-icon" id="theme-toggle-icon-dark" aria-hidden="true">🌙</span>
         </div>
         <div>
-          <h1>Mon pilotage</h1>
+          <h1>Mon pilotage <span id="gamification-icon" aria-hidden="true"></span></h1>
           <div class="subtitle">${formatToday()}</div>
         </div>
       </div>
@@ -194,6 +200,23 @@ export function renderDashboard(container) {
     if (getTheme() === "system") refreshThemeToggleUI();
   };
   themeMediaQuery?.addEventListener("change", onSystemThemeChange);
+
+  // Icône équipée (LOT G7, TODO_GAMIFICATION.md §6 Table B) — relit la préférence ET l'état de
+  // gamification à chaque appel : une icône "équipée" mais dont le déblocage aurait disparu (cas
+  // normalement impossible, les déblocages ne sont jamais retirés une fois acquis, mais gardé par
+  // défense) ne s'affiche jamais. Rappelée une première fois au montage puis à chaque changement
+  // d'état de gamification (voir gamificationApi.subscribe() plus bas) ; ne se rafraîchit PAS tout
+  // seul si l'icône équipée change depuis l'écran "🏆 Galerie" pendant que l'Accueil reste déjà
+  // ouvert dans un autre onglet — préférences.js n'a pas d'abonnement temps réel, seulement un
+  // prochain montage de l'Accueil le reverra (point d'attention notifié dans le bilan de lot).
+  const gamificationIconEl = container.querySelector("#gamification-icon");
+  async function refreshGamificationIcon() {
+    const [prefs, state] = await Promise.all([preferencesApi.getPreferences(), gamificationApi.getGamificationState()]);
+    const iconeId = prefs.gamificationIconeEquipeeId;
+    const deblocage = iconeId && state.deblocagesAcquis[iconeId] ? gamificationApi.DEBLOCAGES.find((d) => d.id === iconeId) : null;
+    gamificationIconEl.textContent = deblocage ? deblocage.valeur : "";
+  }
+  refreshGamificationIcon();
 
   const captureDraftBannerEl = container.querySelector("#capture-draft-banner");
   const reviewReminderEl = container.querySelector("#review-reminder");
@@ -2120,6 +2143,10 @@ export function renderDashboard(container) {
     stickyNotes = items;
     bureauHandle.update(stickyNotes);
   });
+  // LOT G7 — un nouveau déblocage d'icône (ou, en théorie, sa disparition) doit se refléter sans
+  // attendre un remontage de l'Accueil ; la préférence d'icône équipée elle-même n'a pas
+  // d'abonnement (voir le commentaire de refreshGamificationIcon() plus haut).
+  const unsubGamification = gamificationApi.subscribe(() => refreshGamificationIcon());
 
   return function cleanup() {
     document.removeEventListener("visibilitychange", refreshCaptureDraftBanner);
@@ -2135,6 +2162,7 @@ export function renderDashboard(container) {
     unsubFollowUps();
     unsubTags();
     unsubStickyNotes();
+    unsubGamification();
   };
 }
 
