@@ -87,6 +87,20 @@ const WHATS_NEW = [
         howTo: "Rien à faire, c'est automatique. Pour tout revoir ou équiper un cosmétique : Accueil (carte \"Progression\") → \"🎁 Voir mes récompenses\", ou ☰ Plus → 🎁 Récompenses.",
         gain: "Ressentir immédiatement une progression au moment où elle a lieu, sans avoir à aller la chercher soi-même dans un écran séparé — et un seul endroit pour voir ce qui approche, ce qui est déjà acquis, et personnaliser ses cosmétiques.",
       },
+      {
+        type: "add",
+        title: "🧩 Sous-parties de projet : mêmes règles d'ordre et d'édition qu'une checklist",
+        text: "Dans la fiche d'un Projet, les Sous-parties se comportent désormais comme les checklists de Tâche/Suivi : celles \"Pas commencé\" ou \"En cours\" restent en haut, dans un ordre que tu peux ajuster toi-même (▲/▼) ; celles passées \"Terminé\" descendent en bas, classées de la plus récemment terminée à la plus ancienne. Le libellé d'une Sous-partie se corrige directement sur place via \"✏️\", sans avoir à la supprimer et la retaper.",
+        howTo: "Fiche Projet → 🧩 Sous-parties : ▲/▼ pour réordonner une sous-partie non terminée, ✏️ pour corriger son libellé.",
+        gain: "Retrouver en un coup d'œil ce qui reste à faire sur un projet sans que les sous-parties déjà terminées n'encombrent la lecture, et corriger une erreur de libellé sans perdre les notes déjà attachées.",
+      },
+      {
+        type: "add",
+        title: "🔁 Suivi : trace automatique sur relance/règlement rapide + confort de saisie des dates",
+        text: "Cliquer sur \"🔁 Relancer\" ou \"✅ Réglé\" sur une ligne de Suivi ajoute désormais automatiquement une note horodatée (\"🔁 Relancé le...\"/\"✅ Réglé le...\") dans le journal \"Notes & repères\" de ce Suivi, visible ensuite dans sa fiche complète. Par ailleurs, le contrôle rapide \"+1 j\"/\"+7 j\" (déjà disponible sur la carte Tâche) apparaît maintenant aussi à côté des champs de date du formulaire Suivi (Échéance, Prochain contrôle / À dire avant), à la création comme à l'édition.",
+        howTo: "Rien à faire pour la note automatique, c'est automatique dès un clic sur \"🔁\"/\"✅\". Pour les dates : + Suivi (ou fiche d'un Suivi existant) → boutons \"+1 j\"/\"+7 j\" sous chaque champ de date.",
+        gain: "Retrouver dans l'historique d'un Suivi qu'une relance ou un règlement a bien eu lieu, et à quelle date, sans avoir à s'en souvenir soi-même ; ajuster une date de Suivi aussi vite qu'une échéance de Tâche, sans ressaisir une date complète à la main.",
+      },
     ],
   },
   {
