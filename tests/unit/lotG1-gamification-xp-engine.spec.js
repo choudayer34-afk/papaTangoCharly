@@ -94,7 +94,7 @@ test.describe("LOT G1 — Moteur XP (TODO_GAMIFICATION.md §3), une récompense 
   test("Projet clôturé : +40 XP à la première clôture, jamais recrédité si closeProject() est rappelé", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { projectsApi, gamificationApi } = window.__pilotageTestApi;
-      const project = await projectsApi.createProject({ title: `Test LOT G1 — projet ${Date.now()}` });
+      const project = await projectsApi.createProject({ name: `Test LOT G1 — projet ${Date.now()}` });
 
       const before = await gamificationApi.getGamificationState();
       await projectsApi.closeProject(project.id);
