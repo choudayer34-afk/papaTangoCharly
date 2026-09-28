@@ -2001,6 +2001,20 @@ tbody.drag-over-group {
   margin-bottom: var(--space-2);
 }
 .notes-entry-text { white-space: pre-wrap; margin-top: 2px; }
+/* Ajout du 28/09/2026 (édition/suppression + tag EADP, retour de Charles-Henri) — actions par
+   note (✏️/✕) et, uniquement sur le journal d'une Personne, 3 chips positif/négatif/neutre. */
+.notes-entry-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.notes-entry-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.notes-entry-eadp-row { display: flex; gap: 4px; margin-top: var(--space-2); }
+.notes-entry-eadp-chip {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  padding: 2px 8px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+.notes-entry-eadp-chip.active { border-color: var(--color-primary); background: var(--color-primary-light); }
 
 /* ---------- Galerie des badges (LOT G6, js/views/gamification.js) ----------
    Traitement par RARETÉ demandé au §8 de TODO_GAMIFICATION.md, "dérivé de la palette déjà en
