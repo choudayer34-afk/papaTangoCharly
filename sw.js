@@ -404,7 +404,15 @@
 // (déjà précaché) + `js/app.js`/`js/views/more.js` (route + entrée de nav, déjà précachés) +
 // `styles/components.css` (déjà précaché) — aucun nouveau fichier, uniquement du contenu modifié
 // dans des fichiers déjà listés ci-dessous : `CACHE_NAME` incrémenté pour qu'il soit resservi.
-const CACHE_NAME = "pilotage-cache-v82";
+//
+// Ajout ad hoc du 28/09/2026 (suite directe de LOT G7/LOT G8, retour de Charles-Henri "on fait") :
+// application visuelle de Thème/Fond/Ruban (18 déblocages restés sans rendu depuis LOT G7) — voir
+// le commentaire détaillé sur `DEBLOCAGES` dans js/domain/gamification.js. Nouveau fichier
+// `js/services/gamificationThemeStore.js` (ajouté à APP_SHELL ci-dessous) + `styles/tokens.css`
+// (accent recoloré par Thème) + `js/domain/preferences.js`/`js/domain/gamification.js`/
+// `js/views/gamification.js`/`js/app.js`/`styles/components.css` (tous déjà précachés) +
+// `js/views/whatsnew.js` (nouvelle entrée). `CACHE_NAME` incrémenté à nouveau.
+const CACHE_NAME = "pilotage-cache-v83";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -431,6 +439,10 @@ const APP_SHELL = [
   "./js/services/usageTracking.js",
   "./js/services/accountAdmin.js",
   "./js/services/themeStore.js",
+  // Nouveau fichier (28/09/2026, ad hoc — Thème cosmétique équipé, voir le commentaire daté
+  // juste au-dessus de CACHE_NAME) : ajouté à APP_SHELL dès sa création, même règle que tous les
+  // nouveaux fichiers précédents de ce document.
+  "./js/services/gamificationThemeStore.js",
   "./js/services/dateUtils.js",
   "./js/services/onlineStatus.js",
   "./js/services/navConfig.js",
