@@ -660,6 +660,16 @@ export async function openKeptItemDetail(item, { onClose } = {}) {
       item.notesLog = updated;
       return updated;
     },
+    onUpdate: async (noteId, text) => {
+      const updated = await inboxApi.updateKeptNote(item.id, noteId, text);
+      item.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await inboxApi.removeKeptNote(item.id, noteId);
+      item.notesLog = updated;
+      return updated;
+    },
   });
   linkedItemsApi.renderLinkedSection(body.querySelector("#detail-links"), ref);
   body.querySelector("#link-existing-btn").addEventListener("click", () => {
