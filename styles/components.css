@@ -1790,6 +1790,19 @@ tbody.drag-over-group {
   color: inherit;
 }
 .sticky-note-textarea:focus-visible { outline: none; }
+/* Champ de description agrandissable DANS L'ÉDITION RAPIDE d'un post-it épinglé uniquement
+   (complément du 28/09/2026, retour direct de Charles-Henri : "quand je rentre dans le post-it,
+   pouvoir agrandir le champ de description pour voir l'intégralité du contenu") — ce sélecteur ne
+   cible QUE la textarea affichée dans js/components/stickyNoteShared.js#openStickyNoteEditor
+   (`.modal-body`, voir js/components/modal.js#openModal) : sur le plan de travail "Tout voir"
+   (js/components/bureau.js), cette même classe vit dans `.sticky-note-body`, jamais dans
+   `.modal-body` — `resize: none` y reste inchangé, un post-it du plan de travail ayant déjà sa
+   propre poignée de redimensionnement (.sticky-note-resize-handle) qui, elle, fait grandir toute
+   la carte plutôt que la seule zone de texte à l'intérieur. */
+.modal-body .sticky-note-textarea {
+  resize: vertical;
+  min-height: 220px;
+}
 .sticky-note-resize-handle {
   position: absolute;
   right: 2px;
@@ -1849,9 +1862,12 @@ tbody.drag-over-group {
   z-index: 55;
 }
 .pinned-float-note {
+  /* Largeur/hauteur (avant, une largeur fixe de 220px ci-dessous, hauteur automatique) pilotées en
+     JS depuis le 28/09/2026 (js/components/pinnedNotesOverlay.js#buildFloatingNote) — chaque carte
+     lit désormais sa propre taille (redimensionnement libre, poignée .sticky-note-resize-handle
+     réutilisée telle quelle depuis le plan de travail, voir plus haut dans ce fichier). */
   position: absolute;
   pointer-events: auto;
-  width: 220px;
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-sm);
@@ -1888,11 +1904,17 @@ tbody.drag-over-group {
   color: inherit;
 }
 .pinned-float-note-preview {
+  /* Avant le 28/09/2026 : extrait fixe (80 caractères, plafonné à 4.5em) — un post-it flottant
+     n'avait alors aucune taille propre à remplir. Remplit désormais tout l'espace restant de la
+     carte et défile au besoin (`min-height: 0` indispensable pour qu'un enfant flex avec overflow
+     accepte de rétrécir sous sa taille de contenu naturelle) : agrandir la carte
+     (.sticky-note-resize-handle, voir plus haut) montre directement plus de contenu réel. */
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0 8px 8px;
   font-size: var(--font-size-sm);
   white-space: pre-wrap;
-  overflow: hidden;
-  max-height: 4.5em;
+  overflow-y: auto;
 }
 
 .sticky-color-swatch {
