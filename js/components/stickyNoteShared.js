@@ -207,7 +207,15 @@ export function openStickyNoteMenu(note, { onClose } = {}) {
  * Édition rapide d'un post-it (titre + type + contenu) SANS passer par le plan de travail complet
  * — ajoutée le 23/09/2026 pour les widgets flottants (js/components/pinnedNotesOverlay.js) : un
  * post-it épinglé n'a plus de zone de saisie directement sur sa carte flottante (juste un aperçu),
- * cette modale est le seul moyen d'y taper du texte tant qu'on n'ouvre pas "🔍 Tout voir".
+ * cette modale est le seul moyen d'y taper du texte tant qu'on n'ouvre pas "🔍 Tout voir". Le
+ * corps texte/checklist (renderNoteBody) y fonctionne déjà à l'identique du plan de travail :
+ * cocher/ajouter une ligne de checklist, ou taper/modifier le texte libre, se fait donc déjà
+ * directement ici, sans action supplémentaire.
+ * `wide: true` (complément du 28/09/2026, retour direct de Charles-Henri : "quand je rentre dans
+ * le post-it, pouvoir agrandir le champ de description pour voir l'intégralité du contenu") — cette
+ * modale est la seule à utiliser cette classe de champ de texte en édition rapide ; l'associer à
+ * `.modal--wide` (js/components/modal.js#openModal) plus une hauteur redimensionnable dédiée
+ * (`.modal-body .sticky-note-textarea`, styles/components.css) lui donne la place nécessaire.
  * `onClose` — même usage que sur openStickyNoteMenu ci-dessus.
  */
 export function openStickyNoteEditor(note, { onClose } = {}) {
@@ -244,7 +252,7 @@ export function openStickyNoteEditor(note, { onClose } = {}) {
       renderNoteBody(bodyWrap, note);
     });
   });
-  openModal({ title: "📝 Post-it", body, actions: [{ label: "Fermer", variant: "ghost" }], onClose });
+  openModal({ title: "📝 Post-it", body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true, onClose });
 }
 
 /**
