@@ -8,6 +8,38 @@ import { showToast } from "./toast.js";
 let activeOverlay = null;
 let activeClose = null; // la fonction close() propre à la modale actuellement ouverte — voir closeModal() plus bas
 
+// Abonnés à l'état global "une modale est ouverte / plus aucune ne l'est" (complément du
+// 28/09/2026, retour de Charles-Henri sur l'édition en place des post-it épinglés flottants —
+// voir js/components/pinnedNotesOverlay.js#beginOwnModalChain). Un post-it épinglé est un widget
+// `position: fixed` avec un z-index SUPÉRIEUR à `.modal-overlay` : la carte doit rester visible
+// au-dessus de N'IMPORTE QUELLE modale ouverte AILLEURS dans l'app (c'est tout le principe du
+// widget flottant), mais doit au contraire se MASQUER le temps d'une modale qu'ELLE-MÊME a
+// déclenchée (menu "⋯", conversion d'une ligne de checklist, puis la fiche de création qui en
+// découle), sous peine de recouvrir le fond de sa propre modale. Impossible à distinguer depuis
+// `isModalOpen()` seul (qui ne dit pas QUI a ouvert la modale) : l'appelant s'abonne donc lui-même,
+// UNIQUEMENT le temps de sa propre chaîne (depuis l'action qui l'a déclenchée jusqu'à ce qu'aucune
+// modale ne reste ouverte), plutôt que ce module ne décide à la place de tout post-it épinglé.
+// Purement additif : aucun appelant existant de openModal()/closeModal() n'a besoin de changer,
+// cette liste reste vide tant que rien ne s'y abonne.
+const modalStateListeners = new Set();
+function notifyModalStateListeners() {
+  const open = isModalOpen();
+  for (const cb of modalStateListeners) cb(open);
+}
+/**
+ * @param {(open: boolean) => void} callback - appelé à chaque fois que l'état "une modale est
+ *   ouverte" change de valeur (jamais à l'identique). `openModal()` fermant systématiquement la
+ *   modale précédente avant d'ouvrir la suivante ("une seule modale à la fois", voir plus bas),
+ *   enchaîner deux modales peut déclencher un très bref aller-retour true→false→true — même
+ *   principe déjà accepté ailleurs dans l'app pour un enchaînement de modales (voir le commentaire
+ *   de js/components/bureau.js#buildNoteEl sur la réouverture furtive de "Tout voir").
+ * @returns {Function} désabonnement.
+ */
+export function subscribeModalState(callback) {
+  modalStateListeners.add(callback);
+  return () => modalStateListeners.delete(callback);
+}
+
 /**
  * @param {Object} opts
  * @param {string} opts.title
@@ -225,11 +257,13 @@ export function openModal({ title, body, actions = [], dismissible = true, wide 
     // supprimée), auquel cas il n'y a rien de sensé où revenir, on laisse le focus où il est.
     if (previouslyFocusedEl && previouslyFocusedEl.isConnected) previouslyFocusedEl.focus();
     onClose?.();
+    notifyModalStateListeners();
   }
 
   document.body.appendChild(overlay);
   activeOverlay = overlay;
   activeClose = close;
+  notifyModalStateListeners();
 
   // Déplace le focus dans la modale à l'ouverture — sans ça, le piège de focus ci-dessus ne sert
   // à rien tant qu'on n'a pas déjà tabulé une première fois DANS la modale : le focus resterait
