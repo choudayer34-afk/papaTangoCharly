@@ -429,7 +429,16 @@
 // `js/components/notesBlock.js`, `js/views/dashboard.js`, `js/views/inbox.js`, `js/views/kanban.js`,
 // `js/views/people.js`, `js/views/projects.js`, `js/views/resources.js`, `js/views/whatsnew.js`,
 // `styles/components.css`.
-const CACHE_NAME = "pilotage-cache-v84";
+//
+// Post-it épinglés flottants — redimensionnement + champ de description agrandissable (28/09/2026,
+// retour direct de Charles-Henri : "pouvoir agrandir ou réduire un post-it en dimension qui serait
+// épinglé [...] quand je rentre dans le post-it, pouvoir agrandir le champ de description [...]").
+// Aucun nouveau fichier — uniquement du contenu modifié dans des fichiers déjà précachés (`CACHE_NAME`
+// incrémenté pour qu'ils soient resservis) : `js/domain/stickyNotes.js` (nouveaux champs
+// floatWidth/floatHeight + setFloatSize), `js/components/pinnedNotesOverlay.js` (poignée de
+// redimensionnement, aperçu non tronqué), `js/components/stickyNoteShared.js` (édition rapide en
+// modale large), `styles/components.css`, `js/views/whatsnew.js`.
+const CACHE_NAME = "pilotage-cache-v85";
 const APP_SHELL = [
   "./",
   "./index.html",
