@@ -80,6 +80,13 @@ const WHATS_NEW = [
         howTo: "Sur un post-it épinglé : glisse la petite poignée en bas à droite de la carte pour la redimensionner ; clique ailleurs sur la carte pour l'ouvrir en édition, où le champ de texte a lui-même une poignée en bas.",
         gain: "Voir et modifier tout le contenu d'un post-it épinglé, même long, sans devoir rouvrir \"🔍 Tout voir\" à chaque fois.",
       },
+      {
+        type: "add",
+        title: "🎉 Récompenses instantanées",
+        text: "Obtenir un badge, passer un niveau ou débloquer une récompense cosmétique (thème, fond, icône, ruban ou couleur de post-it) affiche maintenant un petit écran de félicitations au moment même où ça arrive, au lieu de rester à découvrir plus tard dans la Galerie ou l'écran Progression. Plusieurs gains d'un coup (par exemple un badge ET un niveau en terminant une seule Tâche) s'affichent l'un après l'autre, jamais superposés, et jamais par-dessus une saisie en cours. Un nouvel écran \"🎁 Récompenses\" (accessible depuis l'Accueil, la Galerie et Progression) regroupe en plus ce qu'il te reste à débloquer de plus proche, une chronologie de tout ce que tu as déjà obtenu, et l'équipement de tes cosmétiques (Thème, Fond, Icône, Ruban) au même endroit. L'Accueil affiche enfin une carte \"Progression\" compacte (niveau, XP, série en cours, XP du jour, badge le plus proche) sans avoir à ouvrir un écran dédié.",
+        howTo: "Rien à faire, c'est automatique. Pour tout revoir ou équiper un cosmétique : Accueil (carte \"Progression\") → \"🎁 Voir mes récompenses\", ou ☰ Plus → 🎁 Récompenses.",
+        gain: "Ressentir immédiatement une progression au moment où elle a lieu, sans avoir à aller la chercher soi-même dans un écran séparé — et un seul endroit pour voir ce qui approche, ce qui est déjà acquis, et personnaliser ses cosmétiques.",
+      },
     ],
   },
   {
