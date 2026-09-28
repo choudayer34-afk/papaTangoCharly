@@ -408,3 +408,311 @@ function escapeHtml(str) {
   div.textContent = str || "";
   return div.innerHTML;
 }
+
+// ================================================================================================
+// Écran "📊 Progression" (LOT G8, TODO_GAMIFICATION.md §9) — le pilotage de l'activité : niveau,
+// XP, séries, activité mensuelle, historique des gains, répartition des XP, badges mensuels,
+// prochain niveau. Écran STRICTEMENT distinct de la Galerie ci-dessus (§9, décision actée le
+// 24/09/2026 : "il ne montre ni grille de badges obtenus/verrouillés, ni illustrations de badges,
+// ni déblocages") — aucune tuile de badge ni de déblocage ici, uniquement des données de pilotage.
+// Toute la logique de calcul (répartition de l'XP, seuils/labels des badges mensuels, position
+// dans le barème de niveaux, séries affichables) vit dans js/domain/gamification.js — ce fichier
+// ne fait que LIRE cet état et l'afficher, exactement comme la Galerie plus haut.
+//
+// Route dédiée `#/progression` (voir js/app.js#HIDDEN_ROUTES et js/views/more.js), tranchée lors du
+// cadrage de ce lot — même principe que `#/gamification-galerie` (une page de consultation, pas un
+// écran de travail, donc hors de ROUTES/NAV_ITEMS).
+// ================================================================================================
+
+const SERIES_INFO = [
+  { id: "pilotage", label: "🧭 Pilotage", type: "jour" },
+  { id: "inbox", label: "📥 Inbox", type: "jour" },
+  { id: "taches", label: "✅ Tâches", type: "jour" },
+  { id: "revueHebdo", label: "📅 Revue hebdo", type: "semaine" },
+];
+
+const NOMS_MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+/** Mois local courant au format "YYYY-MM" (§2.2 : date locale, jamais `toISOString()`, même
+ *  précaution que le domaine) — pure mise en forme d'affichage pour comparer au mois enregistré
+ *  dans `badgesMensuelsCourant.mois` et construire la grille du calendrier-heatmap ci-dessous,
+ *  aucune règle métier dupliquée ici. */
+function moisActuel() {
+  const maintenant = new Date();
+  return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Date locale du jour au format "YYYY-MM-DD" (même format que js/domain/gamification.js) —
+ *  utilisée uniquement pour griser visuellement, dans le calendrier-heatmap, les jours ouvrés du
+ *  mois pas encore atteints. */
+function todayKey() {
+  const maintenant = new Date();
+  return `${maintenant.getFullYear()}-${String(maintenant.getMonth() + 1).padStart(2, "0")}-${String(maintenant.getDate()).padStart(2, "0")}`;
+}
+
+/** Tous les jours OUVRÉS (lundi-vendredi, calendrier local) du mois "YYYY-MM" donné, au format
+ *  "YYYY-MM-DD" — même définition que js/domain/gamification.js#estJourOuvre (aucun jour férié),
+ *  reformulée ici uniquement pour construire la grille d'affichage du calendrier-heatmap (§9,
+ *  "même principe visuel qu'un calendrier de contributions") : ce fichier ne fait QUE lire l'état
+ *  déjà calculé par le domaine (`badgesMensuelsCourant.jours.regulier`), jamais une nouvelle règle
+ *  métier de comptage. */
+function joursOuvresDuMois(moisStr) {
+  const [annee, mois] = moisStr.split("-").map(Number);
+  const dernierJour = new Date(annee, mois, 0).getDate();
+  const jours = [];
+  for (let j = 1; j <= dernierJour; j++) {
+    const dow = new Date(annee, mois - 1, j).getDay();
+    if (dow !== 0 && dow !== 6) jours.push(`${moisStr}-${String(j).padStart(2, "0")}`);
+  }
+  return jours;
+}
+
+/** Libellé "Septembre 2026" à partir de "2026-09" — affichage uniquement, pour l'historique des
+ *  mois précédents de badges mensuels (§9). */
+function formatMoisLabel(moisStr) {
+  const [annee, mois] = moisStr.split("-").map(Number);
+  const nom = NOMS_MOIS[mois - 1] || moisStr;
+  return `${nom.charAt(0).toUpperCase()}${nom.slice(1)} ${annee}`;
+}
+
+export function renderGamificationProgression(container) {
+  container.innerHTML = `
+    <div class="topbar">
+      <div>
+        <h1>📊 Progression</h1>
+        <div class="subtitle" id="progression-subtitle">—</div>
+      </div>
+    </div>
+    <div class="view">
+      <div class="stat-grid" id="progression-stats"></div>
+      <div class="card" id="progression-niveau-suivant"></div>
+
+      <div class="section-title">🔥 Séries</div>
+      <div class="stat-grid" id="progression-series"></div>
+
+      <div class="section-title">📅 Activité mensuelle</div>
+      <div class="card"><div class="progression-heatmap" id="progression-heatmap"></div></div>
+
+      <div class="section-title">🥇 Badges mensuels</div>
+      <div class="card" id="progression-badges-mensuels-courant"></div>
+
+      <div class="section-title">🗓️ Historique des mois précédents</div>
+      <div class="card" id="progression-badges-mensuels-historique"></div>
+
+      <div class="section-title">🧭 Répartition des XP</div>
+      <div class="card" id="progression-repartition"></div>
+
+      <div class="section-title">🕓 Historique des gains</div>
+      <div id="progression-historique"></div>
+    </div>
+  `;
+
+  const els = {
+    subtitle: container.querySelector("#progression-subtitle"),
+    stats: container.querySelector("#progression-stats"),
+    niveauSuivant: container.querySelector("#progression-niveau-suivant"),
+    series: container.querySelector("#progression-series"),
+    heatmap: container.querySelector("#progression-heatmap"),
+    badgesMensuelsCourant: container.querySelector("#progression-badges-mensuels-courant"),
+    badgesMensuelsHistorique: container.querySelector("#progression-badges-mensuels-historique"),
+    repartition: container.querySelector("#progression-repartition"),
+    historique: container.querySelector("#progression-historique"),
+  };
+
+  let state = null;
+
+  function render() {
+    if (!state) {
+      els.subtitle.textContent = "Chargement...";
+      return;
+    }
+
+    const progression = gamificationApi.progressionNiveau(state.xpTotal);
+    els.subtitle.textContent = `Niveau ${progression.niveau} · ${progression.palier} · ${state.xpTotal} XP cumulés`;
+
+    els.stats.innerHTML = `
+      <div class="stat-tile">
+        <div class="stat-value">${progression.niveau}</div>
+        <div class="stat-label">${progression.palier}</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-value">${state.xpTotal}</div>
+        <div class="stat-label">⭐ XP total</div>
+      </div>
+    `;
+
+    const pourcent = Math.max(0, Math.min(1, progression.progressionRatio)) * 100;
+    els.niveauSuivant.innerHTML = `
+      <div class="progression-repartition-tete">
+        <strong>🚀 Prochain niveau</strong>
+        <span>${progression.xpDansNiveauCourant} / ${progression.xpPourNiveauSuivant} XP</span>
+      </div>
+      <div class="progression-bar-track"><div class="progression-bar-fill" style="width:${pourcent}%"></div></div>
+      <div style="color: var(--color-text-muted); font-size: var(--font-size-xs); margin-top: 4px;">
+        ${progression.xpRestantAvantNiveauSuivant} XP avant le niveau ${progression.niveau + 1}
+      </div>
+    `;
+
+    renderSeries();
+    renderHeatmap();
+    renderBadgesMensuels();
+    renderRepartition();
+    renderHistorique();
+  }
+
+  function renderSeries() {
+    els.series.innerHTML = SERIES_INFO.map((info) => {
+      const serieRaw = state.series[info.id];
+      const longueur =
+        info.type === "jour"
+          ? gamificationApi.longueurSerieJournaliereCourante(serieRaw)
+          : gamificationApi.longueurSerieHebdoCourante(serieRaw);
+      return `
+        <div class="stat-tile">
+          <div class="stat-value">${longueur}</div>
+          <div class="stat-label">${info.label} · record ${serieRaw.record}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  /** Calendrier-heatmap des jours ouvrés du mois courant (§9) — réutilise directement
+   *  `badgesMensuelsCourant.jours.regulier` (LOT G4, déjà "les jours ouvrés du mois avec au moins
+   *  une action valorisée", voir js/domain/gamification.js#enregistrerJoursMensuels) : AUCUNE
+   *  nouvelle donnée persistée pour cet élément. Si l'état stocké n'a pas encore basculé sur le
+   *  mois civil réel (aucune action depuis le début du mois, la bascule de LOT G4 est paresseuse —
+   *  elle n'a lieu qu'au prochain appel réel), la grille s'affiche simplement sans aucun jour actif
+   *  plutôt que de lire les jours d'un mois différent — cohérent avec la donnée réelle : aucune
+   *  action valorisée n'a encore eu lieu ce mois-ci. */
+  function renderHeatmap() {
+    const mois = moisActuel();
+    const joursActifs = state.badgesMensuelsCourant.mois === mois ? state.badgesMensuelsCourant.jours.regulier : [];
+    const aujourdhui = todayKey();
+    els.heatmap.innerHTML = joursOuvresDuMois(mois)
+      .map((jour) => {
+        const actif = joursActifs.includes(jour);
+        const futur = jour > aujourdhui;
+        const classes = ["progression-heatmap-jour"];
+        if (actif) classes.push("progression-heatmap-jour--actif");
+        if (futur) classes.push("progression-heatmap-jour--futur");
+        return `<div class="${classes.join(" ")}" title="${jour}${actif ? " · actif" : ""}"></div>`;
+      })
+      .join("");
+  }
+
+  /** Badges mensuels (§9) — état du mois courant (jours distincts / seuil, §5.2, LOT G4) et bref
+   *  historique des mois précédents (obtenu oui/non par mois, jamais la progression partielle,
+   *  cohérent avec ce que `badgesMensuelsHistorique` conserve réellement, voir LOT G4). Même
+   *  précaution de bascule paresseuse que `renderHeatmap()` ci-dessus pour le mois courant. */
+  function renderBadgesMensuels() {
+    const mois = moisActuel();
+    const courant =
+      state.badgesMensuelsCourant.mois === mois
+        ? state.badgesMensuelsCourant
+        : {
+            jours: { organise: [], focus: [], regulier: [], decideur: [], livreur: [] },
+            obtenus: { organise: false, focus: false, regulier: false, decideur: false, livreur: false },
+          };
+
+    els.badgesMensuelsCourant.innerHTML = gamificationApi.BADGES_MENSUELS_INFO.map((info) => {
+      const jours = courant.jours[info.id].length;
+      const seuil = gamificationApi.SEUILS_BADGES_MENSUELS[info.id];
+      const obtenu = courant.obtenus[info.id];
+      return `
+        <div class="progression-mois-historique-ligne">
+          <span class="progression-mois-historique-badge${obtenu ? " progression-mois-historique-badge--obtenu" : ""}">${info.emoji}</span>
+          <span class="progression-mois-historique-label">${escapeHtml(info.label)}</span>
+          <span style="color: var(--color-text-muted); font-size: var(--font-size-xs);">
+            ${Math.min(jours, seuil)} / ${seuil} jours${obtenu ? " · obtenu" : ""}
+          </span>
+        </div>
+      `;
+    }).join("");
+
+    const moisHistorique = Object.keys(state.badgesMensuelsHistorique)
+      .sort()
+      .reverse()
+      .slice(0, 6);
+    if (!moisHistorique.length) {
+      els.badgesMensuelsHistorique.innerHTML = `<div class="empty-state">Aucun mois précédent enregistré pour l'instant.</div>`;
+      return;
+    }
+    els.badgesMensuelsHistorique.innerHTML = moisHistorique
+      .map((moisCle) => {
+        const obtenus = state.badgesMensuelsHistorique[moisCle];
+        const badges = gamificationApi.BADGES_MENSUELS_INFO.map(
+          (info) =>
+            `<span class="progression-mois-historique-badge${obtenus[info.id] ? " progression-mois-historique-badge--obtenu" : ""}" title="${escapeHtml(info.label)}">${info.emoji}</span>`
+        ).join("");
+        return `
+          <div class="progression-mois-historique-ligne">
+            <span class="progression-mois-historique-label">${formatMoisLabel(moisCle)}</span>
+            <span>${badges}</span>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  /** Répartition de l'XP total par type d'action (§9) — total depuis toujours (décision de
+   *  Charles-Henri, AskUserQuestion du 28/09/2026, voir js/domain/gamification.js
+   *  #repartitionXpParAction pour le détail de l'arbitrage §9/§10). Pourcentage relatif à la
+   *  somme des lignes du barème (§3) uniquement — pas à `xpTotal`, qui inclut aussi les bonus de
+   *  badges (§5.1, hors périmètre de cette répartition par action). */
+  function renderRepartition() {
+    const lignes = gamificationApi.repartitionXpParAction(state);
+    if (!lignes.length) {
+      els.repartition.innerHTML = `<div class="empty-state">Aucune action valorisée enregistrée pour l'instant.</div>`;
+      return;
+    }
+    const totalXp = lignes.reduce((somme, ligne) => somme + ligne.xp, 0);
+    els.repartition.innerHTML = lignes
+      .map((ligne) => {
+        const pourcent = totalXp > 0 ? Math.round((ligne.xp / totalXp) * 100) : 0;
+        return `
+          <div class="progression-repartition-ligne">
+            <div class="progression-repartition-tete">
+              <span>${escapeHtml(ligne.label)}</span>
+              <span>${ligne.xp} XP · ${pourcent}%</span>
+            </div>
+            <div class="progression-bar-track"><div class="progression-bar-fill" style="width:${pourcent}%"></div></div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  /** Historique des gains (§9) — liste chronologique des derniers événements ayant rapporté de
+   *  l'XP (action + montant + date), directement `state.historiqueGains` (LOT G8, déjà trié du
+   *  plus récent au plus ancien et borné, voir js/domain/gamification.js#awardXpOnce). Réutilise
+   *  `.notes-entry` (déjà le style d'une liste chronologique ailleurs dans l'app, voir le journal
+   *  de notes horodaté) plutôt qu'un nouveau composant pour la même chose. */
+  function renderHistorique() {
+    if (!state.historiqueGains.length) {
+      els.historique.innerHTML = `<div class="empty-state"><span class="emoji">🕓</span>Aucun gain d'XP enregistré pour l'instant.</div>`;
+      return;
+    }
+    els.historique.innerHTML = state.historiqueGains
+      .map((entree) => {
+        const date = new Date(entree.dateMs).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+        return `
+          <div class="notes-entry">
+            <div>${escapeHtml(entree.label)} · +${entree.xp} XP</div>
+            <div style="color: var(--color-text-muted); font-size: var(--font-size-xs);">${date}</div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  const unsubGamification = gamificationApi.subscribe((newState) => {
+    state = newState;
+    render();
+  });
+
+  render();
+
+  return function cleanup() {
+    unsubGamification();
+  };
+}
