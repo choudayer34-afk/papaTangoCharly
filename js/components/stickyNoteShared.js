@@ -10,6 +10,7 @@
 import * as stickyNotesApi from "../domain/stickyNotes.js";
 import * as inboxApi from "../domain/inbox.js";
 import * as peopleApi from "../domain/people.js";
+import * as gamificationApi from "../domain/gamification.js";
 import { openCreateTaskModal } from "../views/kanban.js";
 import { openCreateResourceModal } from "../views/resources.js";
 import { openCreateFollowUpModal } from "../views/people.js";
@@ -19,7 +20,13 @@ import { renderChecklist } from "./checklist.js";
 import { openModal, closeModal, confirmDelete } from "./modal.js";
 import { showToast } from "./toast.js";
 
-export const COLOR_LABELS = { yellow: "Jaune", blue: "Bleu", green: "Vert", pink: "Rose", purple: "Violet", gray: "Gris" };
+export const COLOR_LABELS = { yellow: "Jaune", blue: "Bleu", green: "Vert", pink: "Rose", purple: "Violet", gray: "Gris", ocean: "Océan", aurore: "Aurore" };
+
+// "Océan"/"Aurore" (LOT G7, TODO_GAMIFICATION.md §6 Table A, 25/09/2026) — ces 2 couleurs de
+// stickyNotesApi.COLORS sont des déblocages de gamification (js/domain/gamification.js#DEBLOCAGES,
+// catégorie "palette") : jamais proposées dans le sélecteur tant que le déblocage correspondant
+// n'est pas acquis (voir openStickyNoteMenu ci-dessous, qui filtre puis complète après coup).
+const COULEURS_DEBLOCABLES = { ocean: "palette-ocean", aurore: "palette-aurore" };
 
 // Choix de conversion (post-it entier ET ligne de checklist) — un post-it n'est jamais "archivé
 // sans suite" par ce menu : l'action "🗄️ Archiver" existe séparément (voir openStickyNoteMenu).
@@ -114,6 +121,11 @@ export function renderNoteBody(bodyEl, note, { onLineConvertClose } = {}) {
  *  pinnedNotesOverlay.js sur le conflit de superposition avec .modal-overlay). */
 export function openStickyNoteMenu(note, { onClose } = {}) {
   const body = document.createElement("div");
+  // Couleurs affichées immédiatement : toutes les couleurs fixes, plus les couleurs débloquées
+  // (LOT G7) uniquement si déjà acquises, plus la couleur courante de la note (même si son
+  // déblocage venait à être perdu, on ne cache jamais la couleur active). Les couleurs débloquées
+  // pas encore acquises sont ajoutées dynamiquement plus bas, après vérification asynchrone.
+  const couleursInitiales = stickyNotesApi.COLORS.filter((c) => !COULEURS_DEBLOCABLES[c] || c === note.color);
   body.innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
       <button type="button" id="note-menu-pin" class="btn btn-secondary btn-sm">${note.pinned ? "📌 Désépingler" : "📌 Épingler"}</button>
@@ -122,10 +134,12 @@ export function openStickyNoteMenu(note, { onClose } = {}) {
     </div>
     <div class="section-title" style="margin-top:0;">🎨 Couleur</div>
     <div class="chip-row" id="note-menu-colors" style="margin-bottom:16px;">
-      ${stickyNotesApi.COLORS.map(
-        (c) =>
-          `<button type="button" class="chip sticky-color-swatch sticky-note--${c}${c === note.color ? " active" : ""}" data-color="${c}" aria-label="${COLOR_LABELS[c]}" title="${COLOR_LABELS[c]}"></button>`
-      ).join("")}
+      ${couleursInitiales
+        .map(
+          (c) =>
+            `<button type="button" class="chip sticky-color-swatch sticky-note--${c}${c === note.color ? " active" : ""}" data-color="${c}" aria-label="${COLOR_LABELS[c]}" title="${COLOR_LABELS[c]}"></button>`
+        )
+        .join("")}
     </div>
     <div class="section-title">🔀 Transformer en</div>
     <div class="choice-grid" id="note-menu-convert"></div>
@@ -150,12 +164,15 @@ export function openStickyNoteMenu(note, { onClose } = {}) {
       },
     });
   });
-  body.querySelectorAll("#note-menu-colors .sticky-color-swatch").forEach((btn) => {
+  // Câblage du clic pour une pastille de couleur, factorisé pour être réutilisé à la fois sur les
+  // pastilles initiales et sur celles ajoutées dynamiquement ci-dessous (LOT G7).
+  function wireColorSwatch(btn) {
     btn.addEventListener("click", async () => {
       await stickyNotesApi.setColor(note.id, btn.dataset.color);
       closeModal();
     });
-  });
+  }
+  body.querySelectorAll("#note-menu-colors .sticky-color-swatch").forEach(wireColorSwatch);
   body.querySelector("#note-menu-convert").appendChild(
     buildConvertChoiceGrid((key) => {
       closeModal();
@@ -163,6 +180,27 @@ export function openStickyNoteMenu(note, { onClose } = {}) {
     })
   );
   openModal({ title: note.title || "📝 Post-it", body, actions: [{ label: "Fermer", variant: "ghost" }], onClose });
+
+  // Complète la palette avec les couleurs débloquées (LOT G7) une fois l'état de gamification lu —
+  // asynchrone car storage.get() ne peut pas être attendu avant l'ouverture du menu (le menu doit
+  // rester réactif immédiatement). Sans effet si la modale a déjà été fermée entre-temps (le
+  // conteneur n'existe alors plus dans le DOM détaché).
+  gamificationApi.getGamificationState().then((state) => {
+    const container = body.querySelector("#note-menu-colors");
+    if (!container) return;
+    for (const [color, deblocageId] of Object.entries(COULEURS_DEBLOCABLES)) {
+      if (color === note.color) continue;
+      if (!state.deblocagesAcquis[deblocageId]) continue;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `chip sticky-color-swatch sticky-note--${color}`;
+      btn.dataset.color = color;
+      btn.setAttribute("aria-label", COLOR_LABELS[color]);
+      btn.title = COLOR_LABELS[color];
+      wireColorSwatch(btn);
+      container.appendChild(btn);
+    }
+  });
 }
 
 /**
