@@ -294,8 +294,30 @@ export async function updateFollowUp(id, patch) {
   return updated;
 }
 
+// TODO-029 (LOT 14, 28/09/2026, retour direct de Charles-Henri après livraison de TODO-004 —
+// BESOIN-006 : "il faudrait qu'une note s'alimente automatiquement sur la fiche du Suivi pour
+// indiquer qu'une relance ou un règlement a été fait, et à quelle date") — note automatique
+// horodatée ajoutée au journal "Notes & repères" du Suivi à chaque relance/règlement rapide,
+// pour en garder la trace même quand l'action est faite depuis une liste (👀 Suivis, fiche
+// Personne) sans jamais ouvrir la fiche complète. `setStatus` n'est appelée QUE par ces deux
+// boutons rapides (`js/views/people.js#appendFollowUpRows`,
+// `js/views/followupsOverview.js#renderGroup`) — le formulaire d'édition complet change le statut
+// via `updateFollowUp({status: ...})` directement (voir `js/views/people.js#openEditFollowUpModal`),
+// jamais via `setStatus` — donc modifier `setStatus` ici, plutôt que `updateFollowUp` lui-même,
+// cible exactement les deux actions concernées sans note en double sur une simple sauvegarde du
+// formulaire. Seuls les deux statuts atteignables par ce chemin ("relaunched"/"done") déclenchent
+// une note ; un futur appel de `setStatus` avec un autre statut n'en ajouterait silencieusement
+// aucune plutôt que de planter.
+function formatAutoNoteDate() {
+  return new Date().toLocaleDateString("fr-FR");
+}
+
 export async function setStatus(id, status) {
-  return updateFollowUp(id, { status });
+  const updated = await updateFollowUp(id, { status });
+  const autoNoteText =
+    status === "relaunched" ? `🔁 Relancé le ${formatAutoNoteDate()}` : status === "done" ? `✅ Réglé le ${formatAutoNoteDate()}` : null;
+  if (autoNoteText) await addNote(id, autoNoteText);
+  return updated;
 }
 
 export async function listAll() {
