@@ -76,6 +76,9 @@ export function renderGamificationGallery(container) {
         <h1>🏅 Galerie des badges</h1>
         <div class="subtitle" id="gamification-subtitle">—</div>
       </div>
+      <!-- Centre de récompenses (LOT G10, §13.6) — 3e destination distincte de cette Galerie, voir
+           js/views/recompenses.js pour l'arbitrage détaillé. -->
+      <button type="button" class="btn btn-secondary btn-sm" id="gamification-recompenses-btn">🎁 Récompenses</button>
     </div>
     <div class="view">
       <div class="chip-row" id="gamification-filters"></div>
@@ -117,6 +120,10 @@ export function renderGamificationGallery(container) {
       ruban: prefs.gamificationRubanEquipeId || null,
     };
     render();
+  });
+
+  container.querySelector("#gamification-recompenses-btn").addEventListener("click", () => {
+    location.hash = "#/recompenses";
   });
 
   filtersEl.innerHTML = RARETES.map((r) => `<button type="button" class="chip" data-rarete="${r.key}">${r.label}</button>`).join("");
@@ -500,6 +507,8 @@ export function renderGamificationProgression(container) {
         <h1>📊 Progression</h1>
         <div class="subtitle" id="progression-subtitle">—</div>
       </div>
+      <!-- Centre de récompenses (LOT G10, §13.6) — même bouton que la Galerie ci-dessus. -->
+      <button type="button" class="btn btn-secondary btn-sm" id="progression-recompenses-btn">🎁 Récompenses</button>
     </div>
     <div class="view" id="progression-view">
       <div class="stat-grid" id="progression-stats"></div>
@@ -541,6 +550,10 @@ export function renderGamificationProgression(container) {
     repartition: container.querySelector("#progression-repartition"),
     historique: container.querySelector("#progression-historique"),
   };
+
+  container.querySelector("#progression-recompenses-btn").addEventListener("click", () => {
+    location.hash = "#/recompenses";
+  });
 
   let state = null;
   // Fond/Ruban équipés (28/09/2026, ad hoc — voir js/domain/preferences.js#
