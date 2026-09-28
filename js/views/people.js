@@ -477,9 +477,29 @@ export async function openPersonDetail(person, allFollowUps, { initialTab = "fol
     },
   });
   renderHistoryTimeline(body.querySelector("#person-history"), personHistory);
+  // `eadpTagging` (28/09/2026, retour de Charles-Henri : "je dois pouvoir identifier dans notes
+  // & repères [...] si c'est une note que je veux remonter dans l'EADP, qui est positif ou
+  // négatif ou neutre") — SEUL le journal de notes d'une Personne porte cette option (voir
+  // js/domain/people.js#EADP_FLAG_VALUES et js/components/notesBlock.js).
   renderNotesBlock(body.querySelector("#detail-notes"), person.notesLog || [], {
     onAdd: async (text) => {
       const updated = await peopleApi.addNote(person.id, text);
+      person.notesLog = updated;
+      return updated;
+    },
+    onUpdate: async (noteId, text) => {
+      const updated = await peopleApi.updateNote(person.id, noteId, text);
+      person.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await peopleApi.removeNote(person.id, noteId);
+      person.notesLog = updated;
+      return updated;
+    },
+    eadpTagging: true,
+    onEadpFlagChange: async (noteId, flag) => {
+      const updated = await peopleApi.setNoteEadpFlag(person.id, noteId, flag);
       person.notesLog = updated;
       return updated;
     },
@@ -1400,19 +1420,97 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
     openObjectiveDetail(fresh || objective, person, { onDone });
   };
   const body = document.createElement("div");
+  // Refonte du 28/09/2026 (retour de Charles-Henri, "petite parenthèse" objectifs/EADP) :
+  //  - Titre éditable (manquait jusqu'ici) ;
+  //  - "+ Ajouter un suivi" en haut de l'écran (était en bas, section Suivis) ;
+  //  - Campagne / Type / Description hors "Détails", en premier, juste sous "Objectif atteint" ;
+  //  - "Détails" (Catégorie, Projet, Fréquence de revue, SMART, Plan/actions, Niveaux de
+  //    responsabilité, Points d'attention) TOUJOURS replié par défaut (avant : ouvert si déjà
+  //    rempli) — Projet y est désormais, alors qu'il vivait hors Détails jusqu'ici.
+  // `renderObjectiveDetailsFieldset` (partagée avec les 2 modales de création, inchangées) ne
+  // convient plus ici : cette fiche construit son propre balisage, plus scindé.
+  const smart = objective.smart || {};
   body.innerHTML = `
+    <div class="field">
+      <label for="obj-title">Titre</label>
+      <input id="obj-title" type="text" value="${escapeAttr(objective.title)}" />
+    </div>
     <div class="field" style="display:flex;align-items:center;gap:8px;">
       <input id="obj-done" type="checkbox" style="width:auto;" ${objective.status === "done" ? "checked" : ""} />
       <label for="obj-done" style="margin:0;">✅ Objectif atteint</label>
     </div>
-    <div class="field">
-      <label for="obj-detail-project">Projet</label>
-      <select id="obj-detail-project">
-        <option value="">— Aucun —</option>
-        ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === objective.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
-      </select>
+    <div style="margin-bottom:16px;">
+      <button id="add-entry-btn-top" type="button" class="btn btn-secondary btn-block">+ Ajouter un suivi</button>
     </div>
-    <div id="obj-details-fieldset" style="margin-bottom:8px;"></div>
+    <div class="field">
+      <label for="obj-period">Campagne / période</label>
+      <input id="obj-period" type="text" placeholder="Ex. 2026-2027, T3 2026..." value="${escapeAttr(objective.period || "")}" />
+    </div>
+    <div class="field">
+      <label>Type</label>
+      <div class="chip-row">
+        <label class="chip-radio"><input type="radio" name="obj-scope" value="" ${!objective.scope ? "checked" : ""} /> — Aucun —</label>
+        ${objectivesApi.SCOPES.map((s) => `<label class="chip-radio"><input type="radio" name="obj-scope" value="${s}" ${objective.scope === s ? "checked" : ""} /> ${objectivesApi.SCOPE_LABELS[s]}</label>`).join("")}
+      </div>
+    </div>
+    <div class="field">
+      <label for="obj-description">Description / intention</label>
+      <textarea id="obj-description" placeholder="Contexte libre : pourquoi cet objectif ?">${escapeHtml(objective.description || "")}</textarea>
+    </div>
+
+    <details style="margin-bottom:16px;">
+      <summary class="section-title" style="cursor:pointer;margin-top:0;">Détails (catégorie, projet, SMART, EADP...)</summary>
+      <div style="margin-top:8px;">
+        <div class="field">
+          <label for="obj-category">Catégorie</label>
+          <input id="obj-category" type="text" placeholder="Ex. Technique, Managérial, Client..." value="${escapeAttr(objective.category || "")}" />
+        </div>
+        <div class="field">
+          <label for="obj-detail-project">Projet</label>
+          <select id="obj-detail-project">
+            <option value="">— Aucun —</option>
+            ${sortProjectsByName(projects).map((p) => `<option value="${p.id}" ${p.id === objective.projectId ? "selected" : ""}>${escapeHtml(p.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label for="obj-review-frequency">Fréquence de revue</label>
+          <input id="obj-review-frequency" type="text" placeholder="Ex. Mensuelle, à chaque point..." value="${escapeAttr(objective.reviewFrequency || "")}" />
+        </div>
+        <div class="section-title">SMART</div>
+        <div class="field">
+          <label for="obj-smart-specific">Spécifique</label>
+          <textarea id="obj-smart-specific">${escapeHtml(smart.specific || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="obj-smart-measurable">Mesurable</label>
+          <textarea id="obj-smart-measurable">${escapeHtml(smart.measurable || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="obj-smart-achievable">Atteignable</label>
+          <textarea id="obj-smart-achievable">${escapeHtml(smart.achievable || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="obj-smart-relevant">Réaliste / Pertinent</label>
+          <textarea id="obj-smart-relevant">${escapeHtml(smart.relevant || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="obj-smart-time-bound">Temporel</label>
+          <textarea id="obj-smart-time-bound">${escapeHtml(smart.timeBound || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="obj-action-plan">Plan / actions</label>
+          <textarea id="obj-action-plan">${escapeHtml(objective.actionPlan || "")}</textarea>
+        </div>
+        <div class="field">
+          <label for="obj-responsibility">Niveaux de responsabilité</label>
+          <textarea id="obj-responsibility">${escapeHtml(objective.responsibilityLevels || "")}</textarea>
+        </div>
+        <div class="field" style="margin-bottom:0;">
+          <label for="obj-watch-points">Points d'attention</label>
+          <textarea id="obj-watch-points">${escapeHtml(objective.watchPoints || "")}</textarea>
+        </div>
+      </div>
+    </details>
 
     <!-- Indicateurs (LOT 11, TODO-024, points 3/4/6) — données structurées PROPRES à
          l'Objectif, jamais une fiche indépendante (arbitrage "Option A", voir le commentaire en
@@ -1445,8 +1543,6 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
     </div>
   `;
 
-  const objDetails = renderObjectiveDetailsFieldset(body.querySelector("#obj-details-fieldset"), objective);
-
   const indicatorById = new Map(indicators.map((ind) => [ind.id, ind]));
   const indicatorsEl = body.querySelector("#obj-indicators");
   function renderIndicators(list) {
@@ -1458,7 +1554,6 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
     for (const ind of list) {
       const row = document.createElement("div");
       row.className = "item-row";
-      row.style.cursor = "pointer";
       const metaParts = [];
       if (ind.target) metaParts.push(`Cible : ${escapeHtml(ind.target)}`);
       if (ind.measurement) metaParts.push(`Mesure : ${escapeHtml(ind.measurement)}`);
@@ -1466,15 +1561,27 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
       if (ind.frequency) metaParts.push(`Fréquence : ${escapeHtml(ind.frequency)}`);
       if (ind.currentValue) metaParts.push(`Valeur actuelle : ${escapeHtml(ind.currentValue)}`);
       row.innerHTML = `
-        <div class="item-main">
+        <div class="item-main" style="cursor:pointer;">
           <div class="item-title">${escapeHtml(ind.label || "(sans libellé)")} <span class="badge badge-${ind.status}">${objectivesApi.INDICATOR_STATUS_LABELS[ind.status] || ind.status}</span></div>
           ${metaParts.length ? `<div class="item-meta">${metaParts.join(" · ")}</div>` : ""}
         </div>
       `;
-      row.addEventListener("click", () => {
+      row.querySelector(".item-main").addEventListener("click", () => {
         closeModal();
         openIndicatorModal(objective, ind, { onDone: reopenSelf });
       });
+      // "🕒 Suivi" (28/09/2026, retour de Charles-Henri : "pouvoir accéder directement au suivi
+      // compilé pour cet indicateur") — bouton séparé du clic sur la ligne (qui reste l'édition
+      // de l'indicateur lui-même) : voir openIndicatorTrackingModal plus bas.
+      const trackingBtn = document.createElement("button");
+      trackingBtn.type = "button";
+      trackingBtn.className = "btn btn-secondary btn-sm";
+      trackingBtn.textContent = "🕒 Suivi";
+      trackingBtn.addEventListener("click", () => {
+        closeModal();
+        openIndicatorTrackingModal(objective, ind, { onDone: reopenSelf });
+      });
+      row.appendChild(trackingBtn);
       indicatorsEl.appendChild(row);
     }
   }
@@ -1511,6 +1618,7 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
       const ind = e.indicatorId ? indicatorById.get(e.indicatorId) : null;
       const row = document.createElement("div");
       row.className = "item-row";
+      row.style.cursor = "pointer";
       const titleParts = [];
       if (ind) titleParts.push(`📊 ${escapeHtml(ind.label || "(indicateur)")}`);
       if (e.status) titleParts.push(`<span class="badge badge-${e.status}">${objectivesApi.INDICATOR_STATUS_LABELS[e.status] || e.status}</span>`);
@@ -1522,6 +1630,13 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
           <div class="item-meta" id="obj-entry-ref-${e.id}"></div>
         </div>
       `;
+      // Édition/suppression d'un suivi (28/09/2026, retour de Charles-Henri : "je dois pouvoir
+      // modifier ou supprimer un suivi") — clic sur la ligne, même convention que les
+      // indicateurs juste au-dessus.
+      row.addEventListener("click", () => {
+        closeModal();
+        openAddObjectiveEntryModal(objective, { onDone: reopenSelf, entry: e });
+      });
       entriesEl.appendChild(row);
       if (e.ref) {
         linkedItemsApi.resolveRefDirect(e.ref).then((resolved) => {
@@ -1532,10 +1647,12 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
     }
   }
   renderEntries(entries);
-  body.querySelector("#add-entry-btn").addEventListener("click", () => {
+  const openAddEntry = () => {
     closeModal();
     openAddObjectiveEntryModal(objective, { onDone: reopenSelf });
-  });
+  };
+  body.querySelector("#add-entry-btn").addEventListener("click", openAddEntry);
+  body.querySelector("#add-entry-btn-top").addEventListener("click", openAddEntry);
 
   const objProjectSelectEl = body.querySelector("#obj-detail-project");
   attachProjectQuickCreate(objProjectSelectEl);
@@ -1569,6 +1686,18 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
     actions: [
       { label: "Fermer", variant: "ghost", onClick: () => onDone?.() },
       {
+        // "Je dois pouvoir éditer la fiche de cet objectif et que ça me ressorte en PDF"
+        // (28/09/2026) — même fiche pour un objectif personnel ("Mes objectifs") ou de
+        // collaborateur, aucune distinction nécessaire ici.
+        label: "📄 Export PDF",
+        variant: "secondary",
+        closesModal: false,
+        onClick: async () => {
+          const { downloadObjectivePdf } = await import("../domain/objectivesExport.js");
+          await downloadObjectivePdf(objective);
+        },
+      },
+      {
         label: "🗑️ Supprimer",
         variant: "danger",
         closesModal: false,
@@ -1591,9 +1720,27 @@ export async function openObjectiveDetail(objective, person, { onDone } = {}) {
         variant: "primary",
         closesModal: false,
         onClick: async () => {
+          const title = bodyEl.querySelector("#obj-title").value.trim();
+          if (!title) return;
+          const val = (id) => bodyEl.querySelector(id).value.trim();
           await objectivesApi.updateObjective(objective.id, {
+            title,
             status: bodyEl.querySelector("#obj-done").checked ? "done" : "active",
-            ...objDetails.read(),
+            period: val("#obj-period") || null,
+            scope: bodyEl.querySelector('input[name="obj-scope"]:checked')?.value || null,
+            description: val("#obj-description"),
+            category: val("#obj-category") || null,
+            reviewFrequency: val("#obj-review-frequency"),
+            actionPlan: val("#obj-action-plan"),
+            responsibilityLevels: val("#obj-responsibility"),
+            watchPoints: val("#obj-watch-points"),
+            smart: {
+              specific: val("#obj-smart-specific"),
+              measurable: val("#obj-smart-measurable"),
+              achievable: val("#obj-smart-achievable"),
+              relevant: val("#obj-smart-relevant"),
+              timeBound: val("#obj-smart-time-bound"),
+            },
           });
           close();
           showToast("Objectif mis à jour");
@@ -1698,6 +1845,97 @@ function openIndicatorModal(objective, indicator, { onDone } = {}) {
 }
 
 /**
+ * "🕒 Suivi" compilé d'un indicateur (ajout du 28/09/2026, retour de Charles-Henri : "pouvoir
+ * accéder directement au suivi compilé pour cet indicateur en visualisant [...] son titre, sa
+ * cible puis de manière consolidée une partie sur ce qui a été réalisé, puis le dernier élément
+ * saisi sur ce qui est prévu avant le prochain point") — vue de LECTURE construite par la
+ * fonction pure `objectivesApi.consolidateIndicatorTracking` (aucune restructuration du
+ * stockage, voir son commentaire). Depuis ici : "+ Ajouter un suivi" (préremplit l'indicateur) et
+ * "🕒 Historique" (liste des suivis DISTINCTS, triée décroissante, chacun éditable/supprimable).
+ */
+export function openIndicatorTrackingModal(objective, indicator, { onDone } = {}) {
+  const tracking = objectivesApi.consolidateIndicatorTracking(objective, indicator.id);
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="item-meta" style="margin-bottom:8px;">
+      ${indicator.target ? `Cible : ${escapeHtml(indicator.target)}` : "Aucune cible renseignée"}
+      · <span class="badge badge-${indicator.status}">${objectivesApi.INDICATOR_STATUS_LABELS[indicator.status] || indicator.status}</span>
+    </div>
+    <div class="section-title" style="margin-top:0;">✅ Réalisé</div>
+    <div class="card" id="tracking-realise" style="margin-bottom:16px;"></div>
+    <div class="section-title">📌 Prévu avant le prochain point</div>
+    <div class="card" id="tracking-prevu" style="margin-bottom:16px;"></div>
+    <div style="display:flex;gap:8px;">
+      <button id="tracking-add-btn" type="button" class="btn btn-secondary btn-block">+ Ajouter un suivi</button>
+      <button id="tracking-history-btn" type="button" class="btn btn-secondary btn-block">🕒 Historique (${tracking.historique.length})</button>
+    </div>
+  `;
+  const realiseEl = body.querySelector("#tracking-realise");
+  if (!tracking.realise.length) {
+    realiseEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien de réalisé enregistré pour l'instant.</div>`;
+  } else {
+    realiseEl.innerHTML = tracking.realise
+      .map((r) => `<div class="item-row"><div class="item-main"><div class="item-title">${formatDate(r.date)}</div><div>${escapeHtml(r.text)}</div></div></div>`)
+      .join("");
+  }
+  const prevuEl = body.querySelector("#tracking-prevu");
+  prevuEl.innerHTML = tracking.dernierPrevu
+    ? `<div class="item-row"><div class="item-main"><div class="item-title">${formatDate(tracking.dernierPrevu.date)}</div><div>${escapeHtml(tracking.dernierPrevu.text)}</div></div></div>`
+    : `<div class="empty-state" style="padding:16px;">Rien de prévu pour l'instant.</div>`;
+
+  body.querySelector("#tracking-add-btn").addEventListener("click", () => {
+    closeModal();
+    openAddObjectiveEntryModal(objective, { onDone, prefill: { indicatorId: indicator.id } });
+  });
+  body.querySelector("#tracking-history-btn").addEventListener("click", () => {
+    closeModal();
+    openIndicatorHistoryModal(objective, indicator, { onDone });
+  });
+
+  openModal({
+    title: `🕒 Suivi compilé — ${indicator.label || "(sans libellé)"}`,
+    body,
+    actions: [{ label: "Fermer", variant: "ghost", onClick: () => onDone?.() }],
+  });
+}
+
+/** Historique des suivis d'un indicateur, triés par date DÉCROISSANTE (retour de Charles-Henri :
+ *  "je dois pouvoir visualiser la liste des suivis pour cet indicateur [...] ordonnée par ordre
+ *  décroissant") — chaque ligne ouvre directement l'édition de CE suivi. */
+function openIndicatorHistoryModal(objective, indicator, { onDone } = {}) {
+  const tracking = objectivesApi.consolidateIndicatorTracking(objective, indicator.id);
+  const body = document.createElement("div");
+  body.innerHTML = `<div id="history-list"></div>`;
+  const listEl = body.querySelector("#history-list");
+  if (!tracking.historique.length) {
+    listEl.innerHTML = `<div class="empty-state" style="padding:16px;">Aucun suivi pour l'instant.</div>`;
+  } else {
+    for (const e of tracking.historique) {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      row.style.cursor = "pointer";
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${formatDate(e.date)}${e.status ? ` — <span class="badge badge-${e.status}">${objectivesApi.INDICATOR_STATUS_LABELS[e.status] || e.status}</span>` : ""}</div>
+          ${e.note ? `<div>${escapeHtml(e.note)}</div>` : ""}
+          ${e.nextSteps ? `<div class="item-meta">Prévu avant le prochain point : ${escapeHtml(e.nextSteps)}</div>` : ""}
+        </div>
+      `;
+      row.addEventListener("click", () => {
+        closeModal();
+        openAddObjectiveEntryModal(objective, { onDone, entry: e });
+      });
+      listEl.appendChild(row);
+    }
+  }
+  openModal({
+    title: `🕒 Historique — ${indicator.label || "(sans libellé)"}`,
+    body,
+    actions: [{ label: "Fermer", variant: "ghost", onClick: () => onDone?.() }],
+  });
+}
+
+/**
  * "+ Ajouter un suivi" sur un Objectif (LOT 11, TODO-024, point 7) — le formulaire ne redemande
  * JAMAIS la cible/le mode de mesure/la source de preuve : ces informations sont déjà celles de
  * l'indicateur choisi, affichées en contexte au-dessus du formulaire (retour de Charles-Henri :
@@ -1706,11 +1944,18 @@ function openIndicatorModal(objective, indicator, { onDone } = {}) {
  * contexte associé n'apparaissent simplement pas — formulaire réduit à statut/réalisé/prévu/lien,
  * l'expérience légère demandée pour un objectif personnel.
  */
-function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
+function openAddObjectiveEntryModal(objective, { onDone, prefill = {}, entry = null } = {}) {
+  // Édition d'un suivi existant (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
+  // modifier ou supprimer un suivi") — `entry` non nul = édition en place, sinon création comme
+  // avant. `prefill` reste utilisé pour reprendre une saisie en cours après une modale imbriquée
+  // (choix d'une fiche liée) : fusionné PAR-DESSUS `entry` pour ne rien perdre dans ce cas.
+  const isEdit = !!entry;
+  const initial = { ...(entry || {}), ...prefill };
   const indicators = objective.indicators || [];
   const lastEntryFor = (indicatorId) =>
     [...(objective.entries || [])]
       .filter((e) => (indicatorId ? e.indicatorId === indicatorId : !e.indicatorId))
+      .filter((e) => !isEdit || e.id !== entry.id)
       .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
 
   const body = document.createElement("div");
@@ -1721,30 +1966,36 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
       <label for="oe-indicator">Indicateur concerné</label>
       <select id="oe-indicator">
         <option value="">— Suivi général de l'objectif —</option>
-        ${indicators.map((ind) => `<option value="${ind.id}" ${prefill.indicatorId === ind.id ? "selected" : ""}>${escapeHtml(ind.label || "(sans libellé)")}</option>`).join("")}
+        ${indicators.map((ind) => `<option value="${ind.id}" ${initial.indicatorId === ind.id ? "selected" : ""}>${escapeHtml(ind.label || "(sans libellé)")}</option>`).join("")}
       </select>
     </div>
     <div class="card" id="oe-context" style="margin-bottom:16px;"></div>`
         : ""
     }
+    <!-- "Prévu au point précédent" (28/09/2026, retour de Charles-Henri : "je dois visualiser ce
+         qui était dans 'Prévu avant le prochain point' du dernier suivi [...] et pouvoir indiquer
+         si c'est réalisé ou non ou reporté") — uniquement à la CRÉATION d'un nouveau suivi
+         (jamais en édition, voir renderPreviousOutcome plus bas), et seulement si un suivi
+         précédent existe avec quelque chose de prévu. -->
+    <div id="oe-previous-outcome"></div>
     <div class="field">
       <label>Statut</label>
       <div class="chip-row">
-        <label class="chip-radio"><input type="radio" name="oe-status" value="" ${!prefill.status ? "checked" : ""} /> — Inchangé —</label>
-        ${objectivesApi.INDICATOR_STATUSES.map((s) => `<label class="chip-radio"><input type="radio" name="oe-status" value="${s}" ${prefill.status === s ? "checked" : ""} /> ${objectivesApi.INDICATOR_STATUS_LABELS[s]}</label>`).join("")}
+        <label class="chip-radio"><input type="radio" name="oe-status" value="" ${!initial.status ? "checked" : ""} /> — Inchangé —</label>
+        ${objectivesApi.INDICATOR_STATUSES.map((s) => `<label class="chip-radio"><input type="radio" name="oe-status" value="${s}" ${initial.status === s ? "checked" : ""} /> ${objectivesApi.INDICATOR_STATUS_LABELS[s]}</label>`).join("")}
       </div>
     </div>
     <div class="field">
       <label for="oe-date">Date</label>
-      <input id="oe-date" type="date" value="${escapeAttr(prefill.date || new Date().toISOString().slice(0, 10))}" />
+      <input id="oe-date" type="date" value="${escapeAttr(initial.date || new Date().toISOString().slice(0, 10))}" />
     </div>
     <div class="field">
-      <label for="oe-note">Qu'est-ce qui a été réalisé ?</label>
-      <textarea id="oe-note" placeholder="Où en est-on depuis le dernier point ?">${escapeHtml(prefill.note || "")}</textarea>
+      <label for="oe-note">Qu'est-ce qui a été réalisé ? (retours à la ligne possibles)</label>
+      <textarea id="oe-note" placeholder="Où en est-on depuis le dernier point ?">${escapeHtml(initial.note || "")}</textarea>
     </div>
     <div class="field">
       <label for="oe-next-steps">Qu'est-ce qui est prévu avant le prochain point ?</label>
-      <textarea id="oe-next-steps" placeholder="Optionnel">${escapeHtml(prefill.nextSteps || "")}</textarea>
+      <textarea id="oe-next-steps" placeholder="Optionnel">${escapeHtml(initial.nextSteps || "")}</textarea>
     </div>
     <div class="field">
       <label>Lien vers un élément existant (preuve/contexte, optionnel)</label>
@@ -1754,7 +2005,7 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
     </div>
   `;
 
-  let pickedRef = prefill.ref || null;
+  let pickedRef = initial.ref || null;
   const refDisplay = body.querySelector("#oe-ref-display");
   const refClearBtn = body.querySelector("#oe-ref-clear-btn");
   function renderPickedRef() {
@@ -1771,7 +2022,8 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
   // Snapshot des champs déjà saisis avant d'ouvrir le sélecteur de fiche — cette modale se
   // referme forcément le temps du choix (`openModal()` n'affiche jamais deux modales à la
   // fois), donc la saisie en cours est reprise via `prefill` à la réouverture plutôt que
-  // perdue, même principe qu'ailleurs dans ce fichier pour une modale imbriquée.
+  // perdue, même principe qu'ailleurs dans ce fichier pour une modale imbriquée. `entry` est
+  // repassé tel quel pour ne jamais perdre le mode édition pendant ce détour.
   function snapshot() {
     return {
       indicatorId: body.querySelector("#oe-indicator")?.value || null,
@@ -1790,8 +2042,8 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
       // Décision, Information, Ressource, Projet — jamais Tâche/Personne/Objectif ici.
       types: ["FollowUp", "Meeting", "Decision", "Kept", "Resource", "Project"],
       title: "Choisir une fiche liée à ce suivi",
-      onPick: (ref) => openAddObjectiveEntryModal(objective, { onDone, prefill: { ...current, ref } }),
-      onCancel: () => openAddObjectiveEntryModal(objective, { onDone, prefill: current }),
+      onPick: (ref) => openAddObjectiveEntryModal(objective, { onDone, entry, prefill: { ...current, ref } }),
+      onCancel: () => openAddObjectiveEntryModal(objective, { onDone, entry, prefill: current }),
     });
   });
   refClearBtn.addEventListener("click", () => {
@@ -1819,21 +2071,83 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
     }
     contextEl.innerHTML = lines.map((l) => `<div class="item-meta">${l}</div>`).join("");
   }
+
+  // "Prévu au point précédent" (voir le commentaire dans le HTML plus haut) — jamais en édition
+  // (`isEdit`) : ça n'a de sens qu'au moment où un NOUVEAU suivi referme la boucle du précédent.
+  function renderPreviousOutcome(indicatorId) {
+    const poEl = body.querySelector("#oe-previous-outcome");
+    if (!poEl) return;
+    if (isEdit) {
+      poEl.innerHTML = "";
+      return;
+    }
+    const tracking = objectivesApi.consolidateIndicatorTracking(objective, indicatorId || null);
+    if (!tracking.dernierPrevu) {
+      poEl.innerHTML = "";
+      return;
+    }
+    poEl.innerHTML = `
+      <div class="field">
+        <div class="item-meta">Prévu au point précédent (${formatDate(tracking.dernierPrevu.date)}) : ${escapeHtml(tracking.dernierPrevu.text)}</div>
+        <div class="chip-row" style="margin-top:4px;">
+          <label class="chip-radio"><input type="radio" name="oe-prev-outcome" value="" checked /> — Ne pas qualifier —</label>
+          ${objectivesApi.PREVIOUS_STEP_OUTCOMES.map((v) => `<label class="chip-radio"><input type="radio" name="oe-prev-outcome" value="${v}" /> ${objectivesApi.PREVIOUS_STEP_OUTCOME_LABELS[v]}</label>`).join("")}
+        </div>
+      </div>
+    `;
+    // "Reporté" reprend le texte prévu comme point de départ du nouveau "prévu avant le
+    // prochain point" (reste éditable ensuite) — sans quoi le report ne serait qu'une case
+    // cochée, perdant le texte lui-même.
+    poEl.querySelectorAll('input[name="oe-prev-outcome"]').forEach((r) =>
+      r.addEventListener("change", () => {
+        if (r.value !== "postponed" || !r.checked) return;
+        const nextStepsEl = body.querySelector("#oe-next-steps");
+        if (!nextStepsEl.value.trim()) nextStepsEl.value = tracking.dernierPrevu.text;
+      })
+    );
+  }
+
   if (indicators.length) {
     const select = body.querySelector("#oe-indicator");
-    select.addEventListener("change", () => fillContext(select.value));
-    if (prefill.indicatorId) fillContext(prefill.indicatorId);
+    select.addEventListener("change", () => {
+      fillContext(select.value);
+      renderPreviousOutcome(select.value);
+    });
+    if (initial.indicatorId) fillContext(initial.indicatorId);
   }
+  renderPreviousOutcome(initial.indicatorId);
 
   renderPickedRef();
 
   const { bodyEl, close } = openModal({
-    title: "Ajouter un suivi",
+    title: isEdit ? "Modifier le suivi" : "Ajouter un suivi",
     body,
     actions: [
       { label: "Annuler", variant: "ghost", onClick: () => onDone?.() },
+      ...(isEdit
+        ? [
+            {
+              label: "🗑️ Supprimer",
+              variant: "danger",
+              closesModal: false,
+              onClick: () => {
+                closeModal();
+                confirmDelete({
+                  title: "Supprimer ce suivi ?",
+                  message: "Ce point de suivi sera définitivement supprimé.",
+                  onConfirm: async () => {
+                    await objectivesApi.removeEntry(objective.id, entry.id);
+                    showToast("Suivi supprimé");
+                    onDone?.();
+                  },
+                  onCancel: () => openAddObjectiveEntryModal(objective, { onDone, entry }),
+                });
+              },
+            },
+          ]
+        : []),
       {
-        label: "Ajouter",
+        label: isEdit ? "Enregistrer" : "Ajouter",
         variant: "primary",
         closesModal: false,
         onClick: async () => {
@@ -1842,11 +2156,16 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
           const date = bodyEl.querySelector("#oe-date").value || null;
           const note = bodyEl.querySelector("#oe-note").value.trim();
           const nextSteps = bodyEl.querySelector("#oe-next-steps").value.trim();
+          const previousStepOutcome = bodyEl.querySelector('input[name="oe-prev-outcome"]:checked')?.value || null;
           if (!note && !nextSteps && !status) return;
-          await objectivesApi.addEntry(objective.id, { date, note, nextSteps, indicatorId, status, ref: pickedRef });
+          if (isEdit) {
+            await objectivesApi.updateEntry(objective.id, entry.id, { date, note, nextSteps, indicatorId, status, ref: pickedRef });
+          } else {
+            await objectivesApi.addEntry(objective.id, { date, note, nextSteps, indicatorId, status, ref: pickedRef, previousStepOutcome });
+          }
           if (indicatorId && status) await objectivesApi.updateIndicator(objective.id, indicatorId, { status });
           close();
-          showToast("Suivi ajouté");
+          showToast(isEdit ? "Suivi mis à jour" : "Suivi ajouté");
           onDone?.();
         },
       },
@@ -1860,6 +2179,36 @@ function openAddObjectiveEntryModal(objective, { onDone, prefill = {} } = {}) {
  * simple délibérée (pas d'export/impression dédiée, pas de comparaison multi-campagnes),
  * décision prise avec Charles-Henri. Recompose tout à la volée à l'ouverture, comme §33/§35.
  */
+/**
+ * Éléments notables d'une personne pour l'EADP (ajout du 28/09/2026, retour de Charles-Henri) —
+ * fusionne DEUX sources distinctes en une forme commune `{title, reason, createdAt, polarity}` :
+ *  - les Suivis marqués `notable` (js/domain/followups.js — positif/négatif seulement, jamais
+ *    neutre, arbitrage de LOT 11) : `title` = le titre du Suivi, `reason` = `notableReason` (28/09,
+ *    "en quoi cet élément est notable") ;
+ *  - les notes du journal taguées `eadpFlag` (js/domain/people.js — positif/négatif/neutre) :
+ *    `title` = le texte de la note lui-même (pas de champ "raison" séparé, le texte EST la
+ *    raison), `reason` = "".
+ * Exportée pour être réutilisée telle quelle par l'export PDF global (js/domain/objectivesExport.js)
+ * — un seul calcul, jamais deux logiques qui pourraient diverger entre l'écran et le PDF.
+ */
+export function collectEadpNotableItems(person, followUps, { from, to } = {}) {
+  const inRange = (ts) => (from == null || ts >= from) && (to == null || ts <= to);
+  const items = [];
+  for (const f of followUps) {
+    if (!f.notable || !inRange(f.createdAt)) continue;
+    items.push({ title: f.title, reason: f.notableReason || "", createdAt: f.createdAt, polarity: f.notable });
+  }
+  for (const n of person.notesLog || []) {
+    if (!n.eadpFlag || !inRange(n.createdAt)) continue;
+    items.push({ title: n.text, reason: "", createdAt: n.createdAt, polarity: n.eadpFlag });
+  }
+  return {
+    positive: items.filter((i) => i.polarity === "positive"),
+    negative: items.filter((i) => i.polarity === "negative"),
+    neutral: items.filter((i) => i.polarity === "neutral"),
+  };
+}
+
 async function openPrepareEadpModal(person, { onDone } = {}) {
   const [allFollowUps, allObjectives] = await Promise.all([followUpsApi.listAll(), objectivesApi.listAll()]);
   const own = allFollowUps.filter((f) => f.personId === person.id);
@@ -1881,20 +2230,52 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
       </div>
     </div>
     <div id="eadp-content"></div>
-    <button id="eadp-copy-btn" type="button" class="btn btn-secondary btn-block" style="margin-top:8px;">📋 Copier le résumé</button>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button id="eadp-copy-btn" type="button" class="btn btn-secondary btn-block">📋 Copier le résumé</button>
+      <button id="eadp-pdf-btn" type="button" class="btn btn-secondary btn-block">📄 Export PDF</button>
+    </div>
   `;
   const contentEl = body.querySelector("#eadp-content");
   let summaryText = "";
+  let currentRange = null;
+
+  // Bloc d'avancement d'un Objectif "comme décrit pour le PDF" (retour de Charles-Henri : "je
+  // dois visualiser pour chaque objectifs les éléments comme décrit dans le PDF pour cet
+  // objectif") — suivi général consolidé puis, par indicateur, cible + réalisé consolidé +
+  // dernier prévu. Réutilise objectivesApi.consolidateIndicatorTracking (fonction pure), sur une
+  // copie de l'objectif dont les suivis sont filtrés à la période choisie.
+  function renderObjectiveProgress(container, o, inRange) {
+    const scoped = { ...o, entries: (o.entries || []).filter((e) => inRange(e.createdAt)) };
+    const indicators = o.indicators || [];
+    const parts = [];
+    const general = objectivesApi.consolidateIndicatorTracking(scoped, null);
+    if (general.realise.length || general.dernierPrevu) {
+      parts.push(
+        `<div class="item-meta"><strong>Suivi général</strong></div>` +
+          (general.realise.length ? `<div>${general.realise.map((r) => escapeHtml(`${r.date} — ${r.text}`)).join("<br/>")}</div>` : "") +
+          (general.dernierPrevu ? `<div class="item-meta">Prévu avant le prochain point : ${escapeHtml(general.dernierPrevu.text)}</div>` : "")
+      );
+    }
+    for (const ind of indicators) {
+      const tracking = objectivesApi.consolidateIndicatorTracking(scoped, ind.id);
+      if (!tracking.realise.length && !tracking.dernierPrevu) continue;
+      parts.push(
+        `<div class="item-meta" style="margin-top:6px;"><strong>📊 ${escapeHtml(ind.label || "(indicateur)")}${ind.target ? ` — Cible : ${escapeHtml(ind.target)}` : ""}</strong></div>` +
+          (tracking.realise.length ? `<div>${tracking.realise.map((r) => escapeHtml(`${r.date} — ${r.text}`)).join("<br/>")}</div>` : "") +
+          (tracking.dernierPrevu ? `<div class="item-meta">Prévu avant le prochain point : ${escapeHtml(tracking.dernierPrevu.text)}</div>` : "")
+      );
+    }
+    container.innerHTML = parts.length ? parts.join("") : "Aucun point sur la période";
+  }
 
   function render() {
     const from = new Date(body.querySelector("#eadp-from").value);
     const to = new Date(body.querySelector("#eadp-to").value);
     to.setHours(23, 59, 59, 999);
     const inRange = (ts) => ts >= from.getTime() && ts <= to.getTime();
+    currentRange = { from: from.getTime(), to: to.getTime() };
 
-    const notable = own.filter((f) => f.notable && inRange(f.createdAt));
-    const positive = notable.filter((f) => f.notable === "positive");
-    const negative = notable.filter((f) => f.notable === "negative");
+    const { positive, negative, neutral } = collectEadpNotableItems(person, own, currentRange);
 
     const lines = [`📋 Préparation EADP — ${person.name}`, `Période : du ${formatDate(from)} au ${formatDate(to)}`, ""];
 
@@ -1903,17 +2284,25 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
       <div class="card" id="eadp-positive" style="margin-bottom:16px;"></div>
       <div class="section-title">👎 Notables négatifs (${negative.length})</div>
       <div class="card" id="eadp-negative" style="margin-bottom:16px;"></div>
+      <div class="section-title">⚪ Notables neutres (${neutral.length})</div>
+      <div class="card" id="eadp-neutral" style="margin-bottom:16px;"></div>
       <div class="section-title">🎯 Objectifs (${objectives.length})</div>
       <div class="card" id="eadp-objectives" style="margin-bottom:8px;"></div>
     `;
     renderSimpleList(contentEl.querySelector("#eadp-positive"), positive);
     renderSimpleList(contentEl.querySelector("#eadp-negative"), negative);
+    renderSimpleList(contentEl.querySelector("#eadp-neutral"), neutral);
 
-    lines.push(`👍 Notables positifs (${positive.length})`);
-    for (const f of positive) lines.push(`- ${f.title} (${formatDate(f.createdAt)})`);
-    lines.push("", `👎 Notables négatifs (${negative.length})`);
-    for (const f of negative) lines.push(`- ${f.title} (${formatDate(f.createdAt)})`);
-    lines.push("", `🎯 Objectifs (${objectives.length})`);
+    for (const [emoji, list] of [
+      ["👍", positive],
+      ["👎", negative],
+      ["⚪", neutral],
+    ]) {
+      lines.push(`${emoji} (${list.length})`);
+      for (const item of list) lines.push(`- ${item.title}${item.reason ? " — " + item.reason : ""} (${formatDate(item.createdAt)})`);
+      lines.push("");
+    }
+    lines.push(`🎯 Objectifs (${objectives.length})`);
 
     const objectivesEl = contentEl.querySelector("#eadp-objectives");
     if (!objectives.length) {
@@ -1921,18 +2310,14 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
     } else {
       objectivesEl.innerHTML = "";
       for (const o of objectives) {
-        const entriesInRange = (o.entries || []).filter((e) => inRange(e.createdAt));
         const row = document.createElement("div");
         row.className = "item-row";
-        row.innerHTML = `
-          <div class="item-main">
-            <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
-            <div class="item-meta">${entriesInRange.map((e) => escapeHtml(e.date + " — " + e.note)).join("<br/>") || "Aucun point sur la période"}</div>
-          </div>
-        `;
+        const progressEl = document.createElement("div");
+        row.innerHTML = `<div class="item-main"><div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div></div>`;
+        row.querySelector(".item-main").appendChild(progressEl);
+        renderObjectiveProgress(progressEl, o, inRange);
         objectivesEl.appendChild(row);
         lines.push(`- ${o.title} (${o.status === "done" ? "atteint" : "en cours"})`);
-        for (const e of entriesInRange) lines.push(`  · ${e.date} — ${e.note}`);
       }
     }
     summaryText = lines.join("\n");
@@ -1944,10 +2329,16 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
       return;
     }
     container.innerHTML = "";
-    for (const f of list) {
+    for (const item of list) {
       const row = document.createElement("div");
       row.className = "item-row";
-      row.innerHTML = `<div class="item-main"><div class="item-title">${escapeHtml(f.title)}</div><div class="item-meta">${formatDate(f.createdAt)}</div></div>`;
+      row.innerHTML = `
+        <div class="item-main">
+          <div class="item-title">${escapeHtml(item.title)}</div>
+          ${item.reason ? `<div>${escapeHtml(item.reason)}</div>` : ""}
+          <div class="item-meta">${formatDate(item.createdAt)}</div>
+        </div>
+      `;
       container.appendChild(row);
     }
   }
@@ -1962,6 +2353,10 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
     } catch {
       showToast("Impossible de copier");
     }
+  });
+  body.querySelector("#eadp-pdf-btn").addEventListener("click", async () => {
+    const { downloadEadpPdf } = await import("../domain/objectivesExport.js");
+    await downloadEadpPdf(person, objectives, collectEadpNotableItems(person, own, currentRange), currentRange);
   });
 
   openModal({
@@ -2101,6 +2496,13 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
         <label class="chip-radio"><input type="radio" name="fu-notable" value="negative" /> 👎 Négatif</label>
       </div>
     </div>
+    <!-- notableReason (28/09/2026, retour de Charles-Henri : "je dois indiquer en quoi cet
+         élément est notable") — visible seulement si "Positif"/"Négatif" est choisi ci-dessus,
+         voir le script plus bas pour le masquage. -->
+    <div class="field" id="fu-notable-reason-field" style="display:none;">
+      <label for="fu-notable-reason">En quoi cet élément est-il notable ?</label>
+      <textarea id="fu-notable-reason" placeholder="Ce qui rend ce point marquant, à ressortir dans l'EADP"></textarea>
+    </div>
     <!-- LOT 11, TODO-025 — arbitrage explicite de Charles-Henri : décision INDÉPENDANTE du
          "Sens" (direction, ci-dessus), disponible dès la création plutôt qu'à travers l'écran
          de masquage privé (js/views/prepMask.js) qui reste la seule autre façon de la changer
@@ -2196,6 +2598,13 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
   body.querySelectorAll('input[name="fu-direction"]').forEach((r) => r.addEventListener("change", () => applyDirection(r.value)));
   applyDirection(defaultDirection);
 
+  // "En quoi c'est notable" (28/09/2026) — visible seulement si "Positif"/"Négatif" est choisi,
+  // même principe que #fu-category-field ci-dessus pour "Sens".
+  const applyNotable = (value) => {
+    body.querySelector("#fu-notable-reason-field").style.display = value ? "" : "none";
+  };
+  body.querySelectorAll('input[name="fu-notable"]').forEach((r) => r.addEventListener("change", () => applyNotable(r.value)));
+
   const { bodyEl, close } = openModal({
     title: "Nouveau suivi",
     body,
@@ -2214,6 +2623,7 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
             direction,
             category: direction === "to_tell" ? bodyEl.querySelector("#fu-category").value || null : null,
             notable: bodyEl.querySelector('input[name="fu-notable"]:checked')?.value || null,
+            notableReason: bodyEl.querySelector("#fu-notable-reason").value.trim(),
             description: bodyEl.querySelector("#fu-description").value.trim(),
             dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-due").value || null,
             controlDate: bodyEl.querySelector("#fu-control").value || null,
@@ -2385,6 +2795,10 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
         <label class="chip-radio"><input type="radio" name="fu-edit-notable" value="negative" ${followUp.notable === "negative" ? "checked" : ""} /> 👎 Négatif</label>
       </div>
     </div>
+    <div class="field" id="fu-edit-notable-reason-field" style="display:${followUp.notable ? "" : "none"};">
+      <label for="fu-edit-notable-reason">En quoi cet élément est-il notable ?</label>
+      <textarea id="fu-edit-notable-reason" placeholder="Ce qui rend ce point marquant, à ressortir dans l'EADP">${escapeHtml(followUp.notableReason || "")}</textarea>
+    </div>
     <div class="field">
       <label for="fu-edit-description">Description</label>
       <textarea id="fu-edit-description" placeholder="Contexte libre">${escapeHtml(followUp.description || "")}</textarea>
@@ -2494,6 +2908,16 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       followUp.notesLog = updated;
       return updated;
     },
+    onUpdate: async (noteId, text) => {
+      const updated = await followUpsApi.updateNote(followUp.id, noteId, text);
+      followUp.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await followUpsApi.removeNote(followUp.id, noteId);
+      followUp.notesLog = updated;
+      return updated;
+    },
   });
   body.querySelector("#copy-meeting-title-btn").addEventListener("click", () => {
     copyMeetingTitle(meetingTitle);
@@ -2516,6 +2940,13 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       body.querySelector("#fu-edit-category-field").style.display = isToTell ? "" : "none";
       body.querySelector("#fu-edit-due-field").style.display = isToTell ? "none" : "";
       body.querySelector("#fu-edit-control-label").textContent = isToTell ? "Avant quand dois-je lui en parler ?" : "Prochain contrôle";
+    })
+  );
+  // "En quoi c'est notable" (28/09/2026) — visible seulement si "Positif"/"Négatif" est choisi.
+  body.querySelectorAll('input[name="fu-edit-notable"]').forEach((r) =>
+    r.addEventListener("change", () => {
+      if (!r.checked) return;
+      body.querySelector("#fu-edit-notable-reason-field").style.display = r.value ? "" : "none";
     })
   );
 
@@ -2602,6 +3033,7 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
             direction,
             category: direction === "to_tell" ? bodyEl.querySelector("#fu-edit-category").value || null : null,
             notable: bodyEl.querySelector('input[name="fu-edit-notable"]:checked')?.value || null,
+            notableReason: bodyEl.querySelector("#fu-edit-notable-reason").value.trim(),
             dueDate: direction === "to_tell" ? null : bodyEl.querySelector("#fu-edit-due").value || null,
             controlDate: bodyEl.querySelector("#fu-edit-control").value || null,
             projectId: bodyEl.querySelector("#fu-edit-project").value || null,
