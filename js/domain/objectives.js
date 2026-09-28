@@ -148,8 +148,13 @@ export async function updateObjective(id, patch) {
  *  - `ref` : `{type, id}` optionnel vers un élément existant servant de preuve/contexte —
  *    PAS un lien (voir le commentaire en tête de fichier), une simple donnée résolue en
  *    lecture seule par `linkedItemsApi.resolveRefForDisplay`.
+ *
+ * `previousStepOutcome` (ajout du 28/09/2026, voir PREVIOUS_STEP_OUTCOMES plus bas) : ce que ce
+ * NOUVEAU suivi indique sur le "prévu avant le prochain point" du suivi PRÉCÉDENT du même
+ * indicateur — optionnel, `null` si rien à qualifier (pas de suivi précédent, ou rien n'était
+ * prévu).
  */
-export async function addEntry(id, { date, note, indicatorId, status, nextSteps, ref } = {}) {
+export async function addEntry(id, { date, note, indicatorId, status, nextSteps, ref, previousStepOutcome } = {}) {
   const updated = await storage.update(COLLECTION, id, (current) => {
     if (!current) throw new Error("Objectif introuvable : " + id);
     return {
@@ -162,6 +167,7 @@ export async function addEntry(id, { date, note, indicatorId, status, nextSteps,
           indicatorId: indicatorId || null,
           status: INDICATOR_STATUSES.includes(status) ? status : null,
           nextSteps: nextSteps || "",
+          previousStepOutcome: PREVIOUS_STEP_OUTCOMES.includes(previousStepOutcome) ? previousStepOutcome : null,
           ref: ref && ref.type && ref.id ? { type: ref.type, id: ref.id } : null,
           createdAt: Date.now(),
         },
@@ -185,6 +191,39 @@ export async function removeEntry(id, entryId) {
     return { entries: (current.entries || []).filter((e) => e.id !== entryId) };
   });
 }
+
+/**
+ * Modifie un suivi déjà existant (ajout du 28/09/2026, retour de Charles-Henri : "je dois
+ * pouvoir modifier ou supprimer un suivi") — jusqu'ici seuls addEntry (ajout) et removeEntry
+ * (suppression) existaient, aucune édition en place. Même principe que updateIndicator()
+ * ci-dessus : retrouve l'entrée par son id et fusionne le patch, sans jamais toucher `id` ni
+ * `createdAt` (date de création réelle de l'ENREGISTREMENT, distincte du champ `date` du suivi
+ * qui reste, lui, modifiable). Ne recrédite AUCUN gain de gamification :
+ * recordObjectiveReviewAdded() a déjà été crédité une fois à la création (clé = id de l'entrée,
+ * qui ne change jamais) — une simple correction de texte ne doit pas repayer les mêmes 6 XP.
+ */
+export async function updateEntry(id, entryId, patch) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Objectif introuvable : " + id);
+    return {
+      entries: (current.entries || []).map((e) =>
+        e.id === entryId ? { ...e, ...patch, id: e.id, createdAt: e.createdAt } : e
+      ),
+    };
+  });
+  await storage.logHistory("Objective", id, "entry_updated", { entryId, patch });
+  return updated;
+}
+
+// "Prévu avant le prochain point" du suivi précédent (ajout du 28/09/2026, retour de
+// Charles-Henri : "je dois pouvoir visualiser ce qui était dans 'Prévu avant le prochain point'
+// du dernier suivi pour cet indicateur et pouvoir indiquer si c'est réalisé ou non ou reporté
+// pour ajout dans le nouveau suivi") — statut qualitatif OPTIONNEL porté par le NOUVEAU suivi
+// (celui qui referme la boucle), jamais par l'ancien : un premier suivi sur un indicateur n'a
+// simplement rien à qualifier. Voir addEntry ci-dessus et
+// js/views/people.js#openAddObjectiveEntryModal pour l'usage.
+export const PREVIOUS_STEP_OUTCOMES = ["done", "not_done", "postponed"];
+export const PREVIOUS_STEP_OUTCOME_LABELS = { done: "✅ Réalisé", not_done: "❌ Non réalisé", postponed: "↪️ Reporté" };
 
 /**
  * Indicateurs de réussite (LOT 11, TODO-024, points 3 et 4) — même principe additif que les
@@ -259,6 +298,44 @@ export function getObjective(id) {
 export async function removeObjective(id) {
   await storage.logHistory("Objective", id, "deleted", {});
   return storage.remove(COLLECTION, id);
+}
+
+/**
+ * Vue consolidée d'un indicateur — ou du suivi général de l'objectif si `indicatorId` est
+ * `null` (ajout du 28/09/2026, retour de Charles-Henri : "le suivi pour un indicateur doit
+ * s'incrémenter avec des ajouts par date et non distinct suivi par suivi, ce qui permet de voir
+ * tout ce qu'on a réalisé et ce qu'il reste à faire" ; question posée avant développement :
+ * "vue consolidée à l'affichage" confirmée — AUCUNE restructuration du stockage). Les suivis
+ * restent des entrées datées INDIVIDUELLES (modifiables/supprimables une par une, voir
+ * updateEntry/removeEntry ci-dessus) : cette fonction se contente de les recomposer pour la
+ * lecture, sans jamais rien réécrire en base. Fonction PURE (aucun accès storage), réutilisée à
+ * la fois par l'écran (js/views/people.js#openIndicatorTrackingModal,
+ * js/views/dashboard.js#openMyObjectivesModal) et par les exports PDF
+ * (js/domain/objectivesExport.js) — un seul calcul, jamais deux logiques qui pourraient
+ * diverger entre l'écran et le PDF.
+ *
+ * Renvoie :
+ *  - `historique` : les suivis concernés, triés par date DÉCROISSANTE (pour la liste "🕒
+ *    Historique", triée décroissante comme demandé) ;
+ *  - `realise` : les mêmes suivis, mais triés par date CROISSANTE et réduits à leur `note` non
+ *    vide — la lecture narrative "ce qui a été réalisé", du plus ancien au plus récent ;
+ *  - `dernierPrevu` : le `nextSteps` du suivi le plus récent seulement (`null` si absent ou si
+ *    aucun suivi) — jamais un cumul des anciens "prévu", qui n'ont plus lieu d'être une fois le
+ *    point suivant passé.
+ */
+export function consolidateIndicatorTracking(objective, indicatorId = null) {
+  const matching = (objective.entries || []).filter((e) => (indicatorId ? e.indicatorId === indicatorId : !e.indicatorId));
+  const historique = [...matching].sort((a, b) => new Date(b.date) - new Date(a.date) || b.createdAt - a.createdAt);
+  const realise = [...matching]
+    .sort((a, b) => new Date(a.date) - new Date(b.date) || a.createdAt - b.createdAt)
+    .filter((e) => (e.note || "").trim())
+    .map((e) => ({ date: e.date, text: e.note.trim() }));
+  const dernier = historique[0] || null;
+  return {
+    historique,
+    realise,
+    dernierPrevu: dernier && (dernier.nextSteps || "").trim() ? { date: dernier.date, text: dernier.nextSteps.trim() } : null,
+  };
 }
 
 // --- Mode import depuis un texte généré par IA (22/09/2026, retour direct de Charles-Henri :
