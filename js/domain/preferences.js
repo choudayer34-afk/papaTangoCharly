@@ -179,6 +179,24 @@ function withDefaults(raw) {
     // d'affichage de l'utilisateur, pas l'état objectif "obtenu ou non" — même séparation que
     // pour toutes les autres préférences de ce document.
     gamificationIconeEquipeeId: null,
+    // Ad hoc du 28/09/2026 (suite directe de LOT G7/LOT G8, retour de Charles-Henri : "on fait" en
+    // réponse au bilan signalant que Thème/Fond/Ruban restaient acquis sans rendu visuel — décidé
+    // par AskUserQuestion, pas une réouverture unilatérale de LOT G7) — même principe que
+    // `gamificationIconeEquipeeId` juste au-dessus, un par catégorie (§6/§10 point 4) : le Thème
+    // cosmétique équipé parmi les déblocages Table A de catégorie "theme" (js/domain/
+    // gamification.js#DEBLOCAGES). Appliqué par js/services/gamificationThemeStore.js — voir son
+    // en-tête pour la décision de Charles-Henri sur la portée (toute l'app) et la coexistence avec
+    // le mode clair/sombre (superposé, jamais remplacé).
+    gamificationThemeEquipeId: null,
+    // Même principe, catégorie "fond" (Table A, "fond discret" de l'écran Progression, §9) —
+    // appliqué par js/views/gamification.js#renderGamificationProgression comme arrière-plan
+    // discret de cet écran uniquement (jamais ailleurs, contrairement au Thème ci-dessus).
+    gamificationFondEquipeId: null,
+    // Même principe, catégorie "ruban" (Table C, un ruban de couleur par famille, combiné au
+    // niveau 15) — affiché par js/views/gamification.js#renderGamificationProgression sur la
+    // carte "Prochain niveau" (la "carte de progression" du §6), jamais dans la Galerie elle-même
+    // au-delà de sa propre tuile de déblocage (comme les autres catégories).
+    gamificationRubanEquipeId: null,
     ...raw,
   };
 }
@@ -495,4 +513,25 @@ export async function markPersonalObjectivesMigratedV1() {
  */
 export async function setGamificationIconeEquipee(deblocageId) {
   return storage.update(COLLECTION, DOC_ID, () => ({ gamificationIconeEquipeeId: deblocageId || null }));
+}
+
+/** Équipe (ou déséquipe) le Thème cosmétique — voir `gamificationThemeEquipeId` ci-dessus. Même
+ *  principe que `setGamificationIconeEquipee` : enregistre un CHOIX, ne vérifie pas
+ *  l'acquisition réelle (responsabilité de l'écran appelant). L'appelant est aussi responsable
+ *  d'appliquer immédiatement le changement via js/services/gamificationThemeStore.js#
+ *  applyGamificationTheme — cette fonction n'écrit que la préférence, jamais le DOM. */
+export async function setGamificationThemeEquipee(deblocageId) {
+  return storage.update(COLLECTION, DOC_ID, () => ({ gamificationThemeEquipeId: deblocageId || null }));
+}
+
+/** Équipe (ou déséquipe) le Fond cosmétique — voir `gamificationFondEquipeId` ci-dessus. Même
+ *  principe que `setGamificationIconeEquipee`. */
+export async function setGamificationFondEquipee(deblocageId) {
+  return storage.update(COLLECTION, DOC_ID, () => ({ gamificationFondEquipeId: deblocageId || null }));
+}
+
+/** Équipe (ou déséquipe) le Ruban cosmétique — voir `gamificationRubanEquipeId` ci-dessus. Même
+ *  principe que `setGamificationIconeEquipee`. */
+export async function setGamificationRubanEquipee(deblocageId) {
+  return storage.update(COLLECTION, DOC_ID, () => ({ gamificationRubanEquipeId: deblocageId || null }));
 }
