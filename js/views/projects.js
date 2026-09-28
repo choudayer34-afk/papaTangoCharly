@@ -1083,6 +1083,16 @@ export async function openProjectDetail(project, tasks) {
       project.notesLog = updated;
       return updated;
     },
+    onUpdate: async (noteId, text) => {
+      const updated = await projectsApi.updateNote(project.id, noteId, text);
+      project.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await projectsApi.removeNote(project.id, noteId);
+      project.notesLog = updated;
+      return updated;
+    },
   });
 
   renderCanevas(body.querySelector("#detail-canevas"), project.steps, async (stepKey, done) => {
@@ -1395,6 +1405,16 @@ function openPartNotesModal(project, part, onDone) {
   renderNotesBlock(body.querySelector("#part-notes"), part.notesLog || [], {
     onAdd: async (text) => {
       const updated = await projectsApi.addPartNote(project.id, part.id, text);
+      part.notesLog = updated;
+      return updated;
+    },
+    onUpdate: async (noteId, text) => {
+      const updated = await projectsApi.updatePartNote(project.id, part.id, noteId, text);
+      part.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await projectsApi.removePartNote(project.id, part.id, noteId);
       part.notesLog = updated;
       return updated;
     },
