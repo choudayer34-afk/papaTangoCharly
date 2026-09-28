@@ -199,7 +199,12 @@ export function renderChecklist(
       if (onLineMenu) {
         const lineMenuBtn = document.createElement("button");
         lineMenuBtn.type = "button";
-        lineMenuBtn.className = "btn btn-ghost btn-sm";
+        // `checklist-line-menu-btn` (complément du 28/09/2026) — classe dédiée, en plus des classes
+        // visuelles existantes, uniquement pour que js/components/pinnedNotesOverlay.js puisse
+        // repérer ce bouton précis par délégation d'événement (sans dépendre du texte de
+        // l'aria-label, plus fragile) — voir son commentaire sur la carte flottante éditée en
+        // place, qui doit savoir masquer/réafficher toute la carte le temps de CETTE modale.
+        lineMenuBtn.className = "btn btn-ghost btn-sm checklist-line-menu-btn";
         lineMenuBtn.setAttribute("aria-label", "Créer une fiche à partir de cette ligne");
         lineMenuBtn.title = "Créer une fiche à partir de cette ligne";
         lineMenuBtn.textContent = "⋯";
