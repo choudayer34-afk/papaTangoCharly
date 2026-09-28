@@ -23,12 +23,19 @@
 // dans le post-it, pouvoir agrandir le champ de description pour voir l'intégralité du contenu
 // [...] sur un post-it épinglé, je dois pouvoir cocher les éléments ou en ajouter en mode
 // checklist et si je suis en mode texte, je dois pouvoir ajouter ou modifier le texte directement."
-// Deux nouveaux tests couvrent respectivement la poignée de redimensionnement
-// (js/components/pinnedNotesOverlay.js#attachFloatResize) et l'édition rapide en modale large
-// (js/components/stickyNoteShared.js#openStickyNoteEditor) — cette dernière confirme surtout
-// l'ABSENCE de régression : cocher/ajouter une ligne de checklist et taper/modifier du texte
-// libre fonctionnaient déjà directement dans cette modale (renderNoteBody, partagé avec le plan
-// de travail) avant ce complément, seule sa largeur et la hauteur du champ de texte changent ici.
+// Un nouveau test couvre la poignée de redimensionnement
+// (js/components/pinnedNotesOverlay.js#attachFloatResize).
+//
+// RETOUR SUR CE MÊME COMPLÉMENT, plus tard le 28/09/2026 — Charles-Henri a confirmé vouloir la
+// lecture alternative proposée puis d'abord écartée (voir
+// claude/postits-epingles-redimensionnement-28-09-2026.md §2) : le contenu (titre, type,
+// checklist/texte) s'édite désormais DIRECTEMENT sur la carte flottante, à la manière du plan de
+// travail "Tout voir" — la modale d'édition rapide (`openStickyNoteEditor`) a été RETIRÉE, elle
+// n'avait plus aucun autre appelant. Les deux premiers tests de ce fichier (titre édité en place
+// dans l'en-tête, glisser restreint à l'en-tête) et le dernier (checklist/texte édités en place
+// dans le corps) reflètent ce changement — plus aucun test de ce fichier n'ouvre de modale
+// d'édition pour le CONTENU d'un post-it flottant (le menu "⋯", couleur/épingle/archive/
+// suppression/transformation, reste lui une modale, inchangé).
 
 import { test, expect } from "@playwright/test";
 import { E2E_TEST_USER } from "./global-setup.js";
@@ -74,27 +81,28 @@ async function deleteViaFullCanvas(page, noteId) {
 }
 
 test.describe.serial("LOT 13 — post-it flottants (widget \"toujours visible\")", () => {
-  test("Un nouveau post-it épinglé apparaît immédiatement comme widget flottant ; un clic (sans glisser) ouvre l'édition rapide", async ({ page }) => {
+  test("Un nouveau post-it épinglé apparaît immédiatement comme widget flottant ; son titre s'édite directement dans l'en-tête, sans ouvrir de modale", async ({ page }) => {
     const uniqueTitle = `Test LOT 13 — flottant ${Date.now()}`;
     await loginAndGoToDashboard(page);
     const note = await createPinnedNote(page);
 
-    // Un simple clic (sans mouvement) sur la carte ouvre l'édition rapide — voir CLICK_THRESHOLD
-    // dans js/components/pinnedNotesOverlay.js#attachFloatDrag, jamais le glisser pour ce même
-    // geste.
-    await note.el.click();
-    await expect(page.getByRole("heading", { name: "📝 Post-it" })).toBeVisible({ timeout: 5_000 });
-    await page.locator("#note-editor-title").fill(uniqueTitle);
-    await page.locator("#note-editor-title").press("Tab"); // déclenche le blur → sauvegarde immédiate
-    await page.getByRole("button", { name: "Fermer" }).click();
+    // Titre édité EN PLACE (complément du 28/09/2026, voir le commentaire en tête de fichier) —
+    // même sauvegarde anti-rebond + immédiate au blur que js/components/bureau.js#buildNoteEl.
+    // Aucune modale ne doit s'ouvrir pour ça.
+    const titleInput = note.el.locator(".sticky-note-title-input");
+    await titleInput.fill(uniqueTitle);
+    await titleInput.blur();
+    await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
-    // La carte flottante réapparaît (masquée seulement le temps de l'édition — voir
-    // suspend()/resume() dans pinnedNotesOverlay.js) avec le nouveau titre.
-    await expect(note.el).toBeVisible({ timeout: 5_000 });
-    await expect(note.el.locator(".pinned-float-note-title")).toHaveText(uniqueTitle);
+    // Persisté après rechargement — preuve que la sauvegarde a bien eu lieu, pas seulement un
+    // état local optimiste.
+    await page.reload();
+    await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
+    const reloadedNote = page.locator(`.pinned-float-note[data-id="${note.id}"]`);
+    await expect(reloadedNote.locator(".sticky-note-title-input")).toHaveValue(uniqueTitle, { timeout: 10_000 });
 
-    await note.el.locator(".pinned-float-unpin-btn").click();
-    await expect(note.el).toHaveCount(0, { timeout: 5_000 });
+    await reloadedNote.locator(".pinned-float-unpin-btn").click();
+    await expect(reloadedNote).toHaveCount(0, { timeout: 5_000 });
     await deleteViaFullCanvas(page, note.id);
   });
 
@@ -124,11 +132,14 @@ test.describe.serial("LOT 13 — post-it flottants (widget \"toujours visible\")
     await loginAndGoToDashboard(page);
     const note = await createPinnedNote(page);
 
-    // Glisser à partir du titre (au centre de l'en-tête, hors des boutons épingler/⋯ aux deux
-    // extrémités — voir attachFloatDrag : ignoré si le geste démarre sur `button`).
-    const box = await note.el.boundingBox();
-    const startX = box.x + box.width / 2;
-    const startY = box.y + 10;
+    // Glisser à partir de l'en-tête, en évitant le titre (désormais un vrai champ de saisie) et
+    // les boutons épingler/⋯ — un point proche du bord gauche de l'en-tête, même technique que
+    // tests/e2e/lot13-bureau-notes.spec.js pour le même en-tête sur le plan de travail complet
+    // (voir js/components/pinnedNotesOverlay.js#attachFloatDrag, ignoré si le geste démarre sur
+    // `input, button`).
+    const headerBox = await note.el.locator(".pinned-float-note-header").boundingBox();
+    const startX = headerBox.x + 3;
+    const startY = headerBox.y + headerBox.height / 2;
     await page.mouse.move(startX, startY);
     await page.mouse.down();
     await page.mouse.move(startX + 120, startY + 90, { steps: 8 });
@@ -170,7 +181,7 @@ test.describe.serial("LOT 13 — post-it flottants (widget \"toujours visible\")
 
     // Le redimensionnement ne doit JAMAIS déplacer la carte (voir e.stopPropagation() dans
     // attachFloatResize, qui empêche le pointerdown de la poignée de remonter jusqu'à celui,
-    // posé sur toute la carte, d'attachFloatDrag).
+    // posé sur l'en-tête, d'attachFloatDrag).
     const boxAfter = await note.el.boundingBox();
     expect(Math.round(boxAfter.x)).toBe(Math.round(boxBefore.x));
     expect(Math.round(boxAfter.y)).toBe(Math.round(boxBefore.y));
@@ -190,39 +201,78 @@ test.describe.serial("LOT 13 — post-it flottants (widget \"toujours visible\")
     await deleteViaFullCanvas(page, note.id);
   });
 
-  test("Édition rapide en modale large : champ de description manuellement agrandissable, checklist cochée/complétée et texte libre modifié directement", async ({ page }) => {
+  test("Édition en place, directement sur la carte flottante, sans jamais ouvrir de modale : texte libre modifié, puis checklist ajoutée et cochée", async ({ page }) => {
     await loginAndGoToDashboard(page);
     const note = await createPinnedNote(page);
 
-    await note.el.click();
-    await expect(page.getByRole("heading", { name: "📝 Post-it" })).toBeVisible({ timeout: 5_000 });
+    // RETOUR direct de Charles-Henri (28/09/2026, voir le commentaire en tête de fichier) : ni le
+    // texte libre ni la checklist ne doivent plus passer par une modale — tout se tape et se coche
+    // directement dans le corps de la carte flottante elle-même.
+    await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
-    // Modale large (complément du 28/09/2026, retour de Charles-Henri : "agrandir le champ de
-    // description pour voir l'intégralité du contenu") — voir `.modal--wide`
-    // (styles/components.css) et `wide: true` sur openStickyNoteEditor
-    // (js/components/stickyNoteShared.js).
-    await expect(page.locator(".modal.modal--wide")).toBeVisible();
-
-    // Texte libre : modification directe (déjà le comportement de renderNoteBody, partagé avec le
-    // plan de travail) — ce test vérifie surtout l'absence de régression, plus le champ devenu
-    // manuellement redimensionnable (`.modal-body .sticky-note-textarea`, styles/components.css).
-    const textarea = page.locator(".modal-body .sticky-note-textarea");
+    // Texte libre — mode par défaut d'un nouveau post-it (js/domain/stickyNotes.js).
+    const textarea = note.el.locator(".sticky-note-textarea");
     await expect(textarea).toBeVisible();
-    await expect(textarea).toHaveCSS("resize", "vertical");
     await textarea.fill("Contenu tapé directement depuis le widget flottant");
     await textarea.blur();
+    await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
-    // Bascule en checklist puis ajout ET coche DIRECTEMENT, toujours dans cette même modale, sans
-    // ouvrir aucun autre écran.
-    await page.locator(".sticky-note-mode-btn[data-mode='checklist']").click();
-    await page.locator("#checklist-new-text").fill("Première ligne ajoutée depuis le widget flottant");
-    await page.locator("#checklist-new-text").press("Enter");
-    const firstItem = page.locator(".checklist-item").first();
+    // Bascule en checklist puis ajout ET coche DIRECTEMENT sur la carte, toujours sans la moindre
+    // modale — même correctif "réaffichage immédiat" que js/components/bureau.js#buildNoteEl
+    // (CI du 25/09/2026) : le nouveau champ #checklist-new-text doit être immédiatement utilisable.
+    await note.el.locator(".sticky-note-mode-btn[data-mode='checklist']").click();
+    await note.el.locator("#checklist-new-text").fill("Première ligne ajoutée depuis le widget flottant");
+    await note.el.locator("#checklist-new-text").press("Enter");
+    const firstItem = note.el.locator(".checklist-item").first();
     await expect(firstItem).toBeVisible({ timeout: 5_000 });
     await firstItem.locator("input[type='checkbox']").check();
     await expect(firstItem.locator("input[type='checkbox']")).toBeChecked();
+    await expect(page.locator(".modal-overlay")).toHaveCount(0);
 
-    await page.getByRole("button", { name: "Fermer" }).click();
+    // Persisté après rechargement (type + contenu de la checklist).
+    await page.waitForTimeout(500);
+    await page.reload();
+    await expect(page.locator("#bureau-new-note-btn")).toBeVisible({ timeout: 10_000 });
+    const reloadedNote = page.locator(`.pinned-float-note[data-id="${note.id}"]`);
+    await expect(reloadedNote.locator(".sticky-note-mode-btn[data-mode='checklist']")).toHaveClass(/active/, { timeout: 10_000 });
+    await expect(reloadedNote.locator(".checklist-item").first().locator("input[type='checkbox']")).toBeChecked();
+
+    await reloadedNote.locator(".pinned-float-unpin-btn").click();
+    await deleteViaFullCanvas(page, note.id);
+  });
+
+  test("Convertir une ligne de checklist depuis la carte flottante masque la carte le temps de la modale de conversion, sans la laisser recouvrir son fond", async ({ page }) => {
+    await loginAndGoToDashboard(page);
+    const note = await createPinnedNote(page);
+
+    // Complément du 28/09/2026 (édition en place) — la checklist vit désormais directement sur la
+    // carte, TOUJOURS au-dessus de tout (z-index 55, voir le commentaire en tête de fichier) : sans
+    // le mécanisme dédié (js/components/pinnedNotesOverlay.js#beginOwnModalChain), la carte
+    // recouvrirait le fond de la modale de conversion ouverte depuis sa propre ligne de checklist.
+    await note.el.locator(".sticky-note-mode-btn[data-mode='checklist']").click();
+    await note.el.locator("#checklist-new-text").fill("Ligne à convertir en Tâche");
+    await note.el.locator("#checklist-new-text").press("Enter");
+    const item = note.el.locator(".checklist-item").first();
+    await expect(item).toBeVisible({ timeout: 5_000 });
+
+    await item.locator(".checklist-line-menu-btn").click();
+    await expect(page.getByRole("heading", { name: "Créer depuis cette ligne" })).toBeVisible({ timeout: 5_000 });
+    // La carte est bien masquée (jamais juste "en dessous" visuellement — `visibility: hidden` la
+    // retire entièrement, y compris de l'arbre d'accessibilité).
+    await expect(note.el).toBeHidden();
+
+    // Choisir "Tâche" ferme cette modale et en ouvre une seconde (création de tâche) SANS jamais
+    // repasser par un état "aucune modale ouverte" observable — la carte doit rester masquée tout
+    // du long, pas seulement le temps de la première.
+    await page.getByRole("button", { name: /Tâche/ }).click();
+    await expect(page.getByRole("heading", { name: "Nouvelle tâche" })).toBeVisible({ timeout: 5_000 });
+    await expect(note.el).toBeHidden();
+
+    await page.getByRole("button", { name: "Annuler" }).click();
+    await expect(page.locator(".modal-overlay")).toHaveCount(0, { timeout: 5_000 });
+    // La carte réapparaît d'elle-même dès qu'aucune modale ne reste ouverte.
+    await expect(note.el).toBeVisible({ timeout: 5_000 });
+
     await note.el.locator(".pinned-float-unpin-btn").click();
     await deleteViaFullCanvas(page, note.id);
   });
