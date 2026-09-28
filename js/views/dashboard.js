@@ -25,7 +25,7 @@ import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openRecipesModal } from "../components/recipes.js";
 import { renderHistoryTimeline } from "../components/historyTimeline.js";
-import { openEditFollowUpModal, openObjectiveDetail, renderObjectiveDetailsFieldset, groupObjectivesByPeriod, openImportObjectiveTextModal } from "./people.js";
+import { openEditFollowUpModal, openObjectiveDetail, renderObjectiveDetailsFieldset, groupObjectivesByPeriod, openImportObjectiveTextModal, openIndicatorTrackingModal } from "./people.js";
 import { openProjectDetail, attachProjectQuickCreate } from "./projects.js";
 import { openTaskDetail } from "./kanban.js";
 import * as linkedItemsApi from "../components/linkedItems.js";
@@ -1366,20 +1366,47 @@ export function renderDashboard(container) {
         }
         for (const o of group.items) {
           const project = o.projectId ? allProjects.find((p) => p.id === o.projectId) : null;
+          const indicators = o.indicators || [];
+          // Refonte du 28/09/2026 (retour de Charles-Henri : "quand je clique sur 'Mes
+          // objectifs' [...] je dois voir en premier le type d'objectif si renseigné, en plus
+          // des titres, visualiser directement le titre, en dessous sa description puis les
+          // indicateurs avec leur titre et la cible [...] et pouvoir accéder directement au
+          // suivi compilé pour cet indicateur") — la ligne n'est plus qu'un titre + compteur :
+          // type, description et indicateurs (chacun cliquable vers son suivi compilé) sont
+          // désormais visibles sans ouvrir la fiche complète.
           const row = document.createElement("div");
           row.className = "item-row";
-          row.style.cursor = "pointer";
+          row.style.display = "block";
           row.innerHTML = `
             <div class="item-main">
-              <div class="item-title">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+              ${o.scope ? `<div class="item-meta">${objectivesApi.SCOPE_LABELS[o.scope] || ""}</div>` : ""}
+              <div class="item-title obj-open-detail" style="cursor:pointer;">${o.status === "done" ? "✅ " : "🎯 "}${escapeHtml(o.title)}</div>
+              ${o.description ? `<div>${escapeHtml(o.description)}</div>` : ""}
               <div class="item-meta">${(o.entries || []).length} point(s) de suivi${project ? ` · 📦 ${escapeHtml(project.name)}` : ""}</div>
               ${tagsLineHtml("Objective", o.id)}
+              ${indicators.length ? `<div class="obj-indicators-mini" style="margin-top:6px;"></div>` : ""}
             </div>
           `;
-          row.addEventListener("click", () => {
+          row.querySelector(".obj-open-detail").addEventListener("click", () => {
             closeModal();
             openObjectiveDetail(o, null, { onDone: reopen });
           });
+          const miniEl = row.querySelector(".obj-indicators-mini");
+          if (miniEl) {
+            for (const ind of indicators) {
+              const indBtn = document.createElement("button");
+              indBtn.type = "button";
+              indBtn.className = "btn btn-secondary btn-sm";
+              indBtn.style.marginRight = "6px";
+              indBtn.style.marginBottom = "4px";
+              indBtn.textContent = `📊 ${ind.label || "(sans libellé)"}${ind.target ? ` — Cible : ${ind.target}` : ""}`;
+              indBtn.addEventListener("click", () => {
+                closeModal();
+                openIndicatorTrackingModal(o, ind, { onDone: reopen });
+              });
+              miniEl.appendChild(indBtn);
+            }
+          }
           list.appendChild(row);
         }
       }
@@ -1389,11 +1416,84 @@ export function renderDashboard(container) {
     const { close } = openModal({
       title: "🎯 Mes objectifs",
       body,
-      actions: [{ label: "Fermer", variant: "ghost" }],
+      actions: [
+        { label: "Fermer", variant: "ghost" },
+        {
+          // "Je dois disposer de tout cela également dans la partie des objectifs qui me
+          // concerne personnellement" (28/09/2026) — même export global que l'EADP d'un
+          // collaborateur, sans la section "notables" (pas de journal de notes pour soi-même).
+          label: "📄 Export PDF",
+          variant: "secondary",
+          closesModal: false,
+          onClick: async () => {
+            const { downloadPersonalObjectivesPdf } = await import("../domain/objectivesExport.js");
+            await downloadPersonalObjectivesPdf(mine);
+          },
+        },
+        {
+          label: "📊 Export Excel",
+          variant: "secondary",
+          closesModal: false,
+          onClick: () => {
+            closeModal();
+            openObjectivesExcelFilterModal(allObjectives, { onCancel: reopen });
+          },
+        },
+      ],
     });
     body.querySelector("#add-my-objective-btn").addEventListener("click", () => {
       closeModal();
       openCreatePersonalObjectiveModal(allProjects, { onDone: reopen });
+    });
+  }
+
+  /**
+   * Filtre avant export Excel (retour de Charles-Henri : "sortir les objectifs dans un fichier
+   * excel avec filtres : campagne, personne (facultatif)") — porte sur TOUS les objectifs
+   * (collaborateurs + personnels), pas seulement "Mes objectifs" : c'est pour ça que ce filtre
+   * s'ouvre ici plutôt que d'être une simple case à cocher, et pourquoi il reçoit `allObjectives`
+   * (non filtré à `personId: null`) depuis l'appelant.
+   */
+  async function openObjectivesExcelFilterModal(allObjectives, { onCancel } = {}) {
+    const { listDistinctPeriods, downloadObjectivesExcel } = await import("../domain/objectivesExport.js");
+    const allPeople = await peopleApi.listAll();
+    const periods = listDistinctPeriods(allObjectives);
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <div class="field">
+        <label for="obj-xlsx-period">Campagne / période (optionnel)</label>
+        <select id="obj-xlsx-period">
+          <option value="">— Toutes —</option>
+          ${periods.map((p) => `<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label for="obj-xlsx-person">Personne (optionnel)</label>
+        <select id="obj-xlsx-person">
+          <option value="">— Toutes (dont Moi) —</option>
+          <option value="__me__">Moi</option>
+          ${allPeople.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join("")}
+        </select>
+      </div>
+    `;
+    const { bodyEl } = openModal({
+      title: "📊 Export Excel — Objectifs",
+      body,
+      actions: [
+        { label: "Annuler", variant: "ghost", onClick: () => onCancel?.() },
+        {
+          label: "Exporter",
+          variant: "primary",
+          closesModal: false,
+          onClick: async () => {
+            const period = bodyEl.querySelector("#obj-xlsx-period").value || null;
+            const personId = bodyEl.querySelector("#obj-xlsx-person").value || null;
+            await downloadObjectivesExcel({ period, personId });
+            closeModal();
+            onCancel?.();
+          },
+        },
+      ],
     });
   }
 
@@ -2490,6 +2590,16 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
   renderNotesBlock(body.querySelector("#detail-notes"), data.notesLog || [], {
     onAdd: async (text) => {
       const updated = isMeeting ? await meetingsApi.addNote(data.id, text) : await decisionsApi.addNote(data.id, text);
+      data.notesLog = updated;
+      return updated;
+    },
+    onUpdate: async (noteId, text) => {
+      const updated = isMeeting ? await meetingsApi.updateNote(data.id, noteId, text) : await decisionsApi.updateNote(data.id, noteId, text);
+      data.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = isMeeting ? await meetingsApi.removeNote(data.id, noteId) : await decisionsApi.removeNote(data.id, noteId);
       data.notesLog = updated;
       return updated;
     },
