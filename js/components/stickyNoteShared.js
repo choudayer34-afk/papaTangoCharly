@@ -7,6 +7,17 @@
 // texte/checklist) qu'un post-it du plan de travail. Aucune de ces fonctions ne dépendait de
 // l'état interne de mountBureau() (glisser en cours, notes courantes, etc.) — extraction directe,
 // sans changement de comportement pour le plan de travail existant.
+//
+// `openStickyNoteEditor` (édition rapide en modale, ajoutée le 23/09/2026 pour la carte flottante,
+// SEUL appelant qu'elle ait jamais eu) a été RETIRÉE le 28/09/2026 : retour direct de
+// Charles-Henri sur le complément de redimensionnement livré ce même jour ("je voulais bien
+// l'édition rapide donc que tu repasses dessus") confirmant la lecture alternative qui avait été
+// explicitement proposée sans être retenue à ce moment-là — rendre le contenu (titre, type,
+// checklist/texte) éditable DIRECTEMENT sur la carte flottante, à la manière du plan de travail
+// "Tout voir", sans plus jamais passer par une modale dédiée. Voir
+// js/components/pinnedNotesOverlay.js#buildFloatingNote, qui reproduit désormais la même
+// structure (en-tête avec titre éditable, bascule texte/checklist, corps via renderNoteBody
+// ci-dessous) que js/components/bureau.js#buildNoteEl.
 import * as stickyNotesApi from "../domain/stickyNotes.js";
 import * as inboxApi from "../domain/inbox.js";
 import * as peopleApi from "../domain/people.js";
@@ -65,7 +76,8 @@ export function buildConvertChoiceGrid(onChoose) {
 /**
  * Contenu éditable d'un post-it (titre géré par l'appelant, ici seulement le corps
  * texte/checklist) — utilisé par le plan de travail complet (js/components/bureau.js#buildNoteEl)
- * ET par l'édition rapide depuis un post-it flottant (openStickyNoteEditor ci-dessous).
+ * ET par la carte flottante (js/components/pinnedNotesOverlay.js#buildFloatingNote), qui affiche
+ * et édite désormais son contenu en place, exactement de la même façon.
  * `note.checklist` est mutée localement à chaque callback (même pattern que
  * js/views/kanban.js#openTaskDetail pour `task.checklist`) pour un réaffichage immédiat, sans
  * attendre le prochain aller-retour Firestore (qui finira de toute façon par recréer cet élément
@@ -201,58 +213,6 @@ export function openStickyNoteMenu(note, { onClose } = {}) {
       container.appendChild(btn);
     }
   });
-}
-
-/**
- * Édition rapide d'un post-it (titre + type + contenu) SANS passer par le plan de travail complet
- * — ajoutée le 23/09/2026 pour les widgets flottants (js/components/pinnedNotesOverlay.js) : un
- * post-it épinglé n'a plus de zone de saisie directement sur sa carte flottante (juste un aperçu),
- * cette modale est le seul moyen d'y taper du texte tant qu'on n'ouvre pas "🔍 Tout voir". Le
- * corps texte/checklist (renderNoteBody) y fonctionne déjà à l'identique du plan de travail :
- * cocher/ajouter une ligne de checklist, ou taper/modifier le texte libre, se fait donc déjà
- * directement ici, sans action supplémentaire.
- * `wide: true` (complément du 28/09/2026, retour direct de Charles-Henri : "quand je rentre dans
- * le post-it, pouvoir agrandir le champ de description pour voir l'intégralité du contenu") — cette
- * modale est la seule à utiliser cette classe de champ de texte en édition rapide ; l'associer à
- * `.modal--wide` (js/components/modal.js#openModal) plus une hauteur redimensionnable dédiée
- * (`.modal-body .sticky-note-textarea`, styles/components.css) lui donne la place nécessaire.
- * `onClose` — même usage que sur openStickyNoteMenu ci-dessus.
- */
-export function openStickyNoteEditor(note, { onClose } = {}) {
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="field">
-      <input type="text" id="note-editor-title" placeholder="Titre..." value="${escapeAttr(note.title)}" />
-    </div>
-    <div class="sticky-note-mode-row" style="padding:0;margin-bottom:12px;">
-      <button type="button" class="sticky-note-mode-btn${note.type === "text" ? " active" : ""}" data-mode="text" title="Texte libre" style="color:var(--color-text);">📝 Texte</button>
-      <button type="button" class="sticky-note-mode-btn${note.type === "checklist" ? " active" : ""}" data-mode="checklist" title="Checklist" style="color:var(--color-text);">☑️ Checklist</button>
-    </div>
-    <div id="note-editor-body"></div>
-  `;
-  const titleInput = body.querySelector("#note-editor-title");
-  let titleSaveTimer = null;
-  titleInput.addEventListener("input", () => {
-    clearTimeout(titleSaveTimer);
-    titleSaveTimer = setTimeout(() => stickyNotesApi.setTitle(note.id, titleInput.value), 500);
-  });
-  titleInput.addEventListener("blur", () => {
-    clearTimeout(titleSaveTimer);
-    stickyNotesApi.setTitle(note.id, titleInput.value);
-  });
-
-  const bodyWrap = body.querySelector("#note-editor-body");
-  renderNoteBody(bodyWrap, note);
-  body.querySelectorAll(".sticky-note-mode-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.dataset.mode === note.type) return;
-      note.type = btn.dataset.mode;
-      stickyNotesApi.setType(note.id, note.type);
-      body.querySelectorAll(".sticky-note-mode-btn").forEach((b) => b.classList.toggle("active", b === btn));
-      renderNoteBody(bodyWrap, note);
-    });
-  });
-  openModal({ title: "📝 Post-it", body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true, onClose });
 }
 
 /**
