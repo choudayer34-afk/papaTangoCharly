@@ -52,6 +52,11 @@
     // Aucun changement à ces deux fichiers eux-mêmes au-delà de leur ajout ici.
     import * as promptsApi from "/js/domain/prompts.js";
     import * as gamificationApi from "/js/domain/gamification.js";
+    // Ajouté pour LOT G7 (TODO_GAMIFICATION.md, Déblocages §6, 28/09/2026) : nécessaire pour
+    // tester setGamificationIconeEquipee()/gamificationIconeEquipeeId (l'icône équipée, catégorie
+    // "icone" des déblocages) sans passer par l'écran Galerie. Aucun changement à ce fichier
+    // lui-même au-delà de son ajout ici.
+    import * as preferencesApi from "/js/domain/preferences.js";
 
     window.__pilotageTestApi = {
       firebaseApi,
@@ -69,6 +74,7 @@
       stickyNotesApi,
       promptsApi,
       gamificationApi,
+      preferencesApi,
     };
     window.__pilotageTestApiReady = true;
   </script>
