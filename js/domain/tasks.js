@@ -119,6 +119,30 @@ export async function addNote(id, text) {
   return note;
 }
 
+// `updateNote`/`removeNote` (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
+// pour toutes les notes, les modifier si besoin") — la règle "additif seulement" documentée
+// dans js/components/notesBlock.js est levée sur les 8 fiches qui partagent ce journal, celle-ci
+// comprise. Comme `toggleChecklistItem`/`removeChecklistItem` ci-dessus (et contrairement à
+// addNote()) : doivent localiser un élément EXISTANT par son id, donc `storage.update()` plutôt
+// que `storage.appendToArray()`.
+export async function updateNote(id, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) };
+  });
+  return updated.notesLog;
+}
+
+export async function removeNote(id, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Tâche introuvable : " + id);
+    return { notesLog: (current.notesLog || []).filter((n) => n.id !== noteId) };
+  });
+  return updated.notesLog;
+}
+
 /**
  * Sous-étapes courtes libres (retour de Charles-Henri, 01/09/2026 — piste TDAH : découper une
  * tâche en petits pas concrets et cochables, distinct du canevas Communication à cases fixes
