@@ -36,6 +36,24 @@ test.describe("LOT G1 — Moteur XP (TODO_GAMIFICATION.md §3), une récompense 
   test("Tâche terminée : +10 XP à la première clôture, jamais recrédité sur réouverture/re-clôture", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { tasksApi, gamificationApi } = window.__pilotageTestApi;
+
+      // CORRECTIF (28/09/2026, premier passage réel de ce fichier en CI — delta reçu : 15 au
+      // lieu de 10) : js/domain/gamification.js#recordTaskCompleted crédite aussi, en plus des
+      // +10 XP de base (§3), le bonus du badge "Premier pas" (famille "productivite", seuil 1,
+      // +5 XP, voir evaluerFamille/CATALOGUE_BADGES) dès la TOUTE PREMIÈRE Tâche menée à "done"
+      // de tout le compte de test. Sur un émulateur Firebase fraîchement recréé (chaque
+      // exécution CI repart de zéro, voir tests/README.md), rien ne garantit qu'un autre fichier
+      // de test se soit déjà chargé de "brûler" ce badge avant celui-ci — cela s'est d'ailleurs
+      // produit ici : aucun autre test ne clôt de Tâche avant celui-ci dans l'ordre
+      // d'exécution réel. On brûle donc nous-mêmes ce badge avec une Tâche jetable AVANT de
+      // capturer `before`, pour que seul le crédit de base (§3) soit mesuré ci-dessous, quel que
+      // soit l'ordre d'exécution des fichiers de test (§5.1 est un système à part, hors du
+      // périmètre de CE test qui ne vérifie que le moteur XP de base — voir tests/unit/
+      // lotG3-gamification-badges.spec.js pour la couverture dédiée aux familles de badges).
+      const burn = await tasksApi.createTask({ title: `Test LOT G1 — burn badge productivité ${Date.now()}` });
+      await tasksApi.updateTask(burn.id, { status: "done" });
+      await new Promise((r) => setTimeout(r, 300));
+
       const task = await tasksApi.createTask({ title: `Test LOT G1 — tâche ${Date.now()}` });
 
       const before = await gamificationApi.getGamificationState();
@@ -94,6 +112,15 @@ test.describe("LOT G1 — Moteur XP (TODO_GAMIFICATION.md §3), une récompense 
   test("Projet clôturé : +40 XP à la première clôture, jamais recrédité si closeProject() est rappelé", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { projectsApi, gamificationApi } = window.__pilotageTestApi;
+
+      // CORRECTIF (28/09/2026, même cause que "Tâche terminée" ci-dessus — delta reçu : 45 au
+      // lieu de 40) : recordProjectClosed crédite aussi le badge "Premier livré" (famille
+      // "delivery", seuil 1, +5 XP) dès le tout premier Projet clôturé du compte de test. On
+      // brûle ce badge avec un Projet jetable avant de mesurer.
+      const burnProject = await projectsApi.createProject({ name: `Test LOT G1 — burn badge delivery ${Date.now()}` });
+      await projectsApi.closeProject(burnProject.id);
+      await new Promise((r) => setTimeout(r, 300));
+
       const project = await projectsApi.createProject({ name: `Test LOT G1 — projet ${Date.now()}` });
 
       const before = await gamificationApi.getGamificationState();
@@ -156,6 +183,14 @@ test.describe("LOT G1 — Moteur XP (TODO_GAMIFICATION.md §3), une récompense 
   test("Prompt créé : +3 XP à la création", async ({ page }) => {
     const result = await page.evaluate(async () => {
       const { promptsApi, gamificationApi } = window.__pilotageTestApi;
+
+      // CORRECTIF (28/09/2026, même cause que "Tâche terminée" plus haut — delta reçu : 8 au
+      // lieu de 3) : recordPromptCreated crédite aussi le badge "Premier prompt" (famille
+      // "prompts", seuil 1, +5 XP) dès le tout premier Prompt créé du compte de test. On brûle
+      // ce badge avec un Prompt jetable avant de mesurer.
+      await promptsApi.createPrompt({ title: `Test LOT G1 — burn badge prompts ${Date.now()}`, text: "Jetable — brûle le badge Premier prompt" });
+      await new Promise((r) => setTimeout(r, 300));
+
       const before = await gamificationApi.getGamificationState();
       await promptsApi.createPrompt({ title: `Test LOT G1 — prompt ${Date.now()}`, text: "Contenu du prompt de test" });
       await new Promise((r) => setTimeout(r, 300));
