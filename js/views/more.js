@@ -41,6 +41,12 @@ const ITEMS = [
   // de la glisser dans un groupe existant, la gamification n'étant ni de l'aide, ni une
   // bibliothèque, ni une pause.
   { hash: "#/gamification-galerie", emoji: "🏅", title: "Galerie des badges", subtitle: "Tes badges obtenus, verrouillés et leur progression", group: "Gamification" },
+  // Écran Progression (LOT G8, TODO_GAMIFICATION.md §9) — même groupe "Gamification" que la
+  // Galerie ci-dessus, mais un écran distinct (§9 : "il ne montre ni grille de badges [...] ni
+  // déblocages") : niveau, XP, séries, activité mensuelle, historique des gains, répartition de
+  // l'XP, badges mensuels, prochain niveau — tout ce qui relève du PILOTAGE plutôt que de la
+  // COLLECTION.
+  { hash: "#/progression", emoji: "📊", title: "Progression", subtitle: "Niveau, XP, séries et badges mensuels — le pilotage de ton activité", group: "Gamification" },
 ];
 
 function escapeHtml(str) {
