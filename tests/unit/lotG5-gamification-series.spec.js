@@ -299,6 +299,17 @@ test.describe("LOT G5 — Séries (TODO_GAMIFICATION.md §5.3), jours ouvrés co
           revueHebdo: { longueur: 9, record: 9, derniereSemaine: "2020-W01" },
         },
       });
+      // CORRECTIF (28/09/2026, premier passage réel en CI — `longueur` reçu : 9, c'est-à-dire la
+      // valeur semée ci-dessus, INCHANGÉE, au lieu de 1) : contrairement au test "Cassure" juste
+      // au-dessus (qui enchaîne sur un `tasksApi.createTask()` + `updateTask()`, deux allers-retours
+      // réseau bien plus longs qu'une simple écriture directe), rien ici ne laisse le temps à
+      // l'écriture `storageApi.setFields()` ci-dessus de se propager avant l'appel `addEntry()`
+      // suivant — `recordObjectiveReviewAdded` → `enregistrerSerieHebdomadaire()` a donc pu lire un
+      // état encore antérieur au seed (celui de l'"amorce" plus haut, où `derniereSemaine` valait
+      // déjà `semaineCouranteReelle`), conclure à tort "déjà enregistré cette semaine" et ne rien
+      // réécrire — d'où le "2020-W01"/9 semé qui ressort tel quel. Attente courte ajoutée ici,
+      // même principe que le reste de ce fichier.
+      await new Promise((r) => setTimeout(r, 300));
       await objectivesApi.addEntry(objective.id, { note: `Test LOT G5 — après cassure ${Date.now()}` });
       await new Promise((r) => setTimeout(r, 500));
       const apresCassure = await gamificationApi.getGamificationState();
