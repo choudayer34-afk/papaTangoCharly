@@ -101,6 +101,10 @@ import * as storage from "../services/storage.js";
 const COLLECTION = "gamification";
 const DOC_ID = "state";
 
+// Bornage de `historiqueGains` (§9 "Historique des gains", LOT G8) — voir son commentaire dans
+// `withDefaults()` ci-dessous et `awardXpOnce()` qui l'alimente.
+const HISTORIQUE_GAINS_MAX = 30;
+
 function withDefaults(raw) {
   return {
     id: DOC_ID,
@@ -154,6 +158,17 @@ function withDefaults(raw) {
     // déjà existantes"), pour la même raison que le reste de ce document sépare toujours l'état
     // OBJECTIF (obtenu ou non, ici) du CHOIX de l'utilisateur (préférence d'affichage, ailleurs).
     deblocagesAcquis: {},
+    // Historique des gains (§9 "Historique des gains", §10 point 3, LOT G8) — liste chronologique
+    // (plus récent en tête) des derniers événements du barème XP (§3) ayant crédité de l'XP :
+    // `{ label, xp, dateMs }`. Alimentée uniquement par `awardXpOnce()` ci-dessous (jamais par un
+    // bonus de badge ou de déblocage — le §9 ne distingue pas ces bonus séparément, seule l'action
+    // d'origine du barème compte ici) ; bornée à `HISTORIQUE_GAINS_MAX` entrées les plus récentes
+    // pour ne jamais faire grossir sans borne le document réécrit à chaque gain d'XP (même
+    // philosophie que `rewardedKeys`, §10 point 5). Contrairement au reste de cet état (niveau,
+    // séries affichables...), cette liste n'est PAS re-dérivable rétroactivement de `rewardedKeys`
+    // (qui ne porte ni date ni montant) — elle ne commence donc à s'alimenter qu'à partir de la
+    // mise en production de ce lot, jamais avant.
+    historiqueGains: [],
     ...raw,
   };
 }
@@ -195,9 +210,14 @@ async function awardXpOnce(key, xp) {
   const result = await storage.update(COLLECTION, DOC_ID, (raw) => {
     const current = withDefaults(raw);
     if (current.rewardedKeys[key]) return undefined; // déjà récompensé — aucune écriture
+    // Historique des gains (§9, LOT G8) — voir le commentaire sur `historiqueGains` dans
+    // `withDefaults()` : une entrée par crédit RÉEL uniquement (jamais sur le retour anticipé
+    // ci-dessus), bornée à HISTORIQUE_GAINS_MAX, la plus récente en tête.
+    const entreeHistorique = { label: libelleActionBareme(key), xp, dateMs: Date.now() };
     return {
       xpTotal: (current.xpTotal || 0) + xp,
       rewardedKeys: { ...current.rewardedKeys, [key]: true },
+      historiqueGains: [entreeHistorique, ...current.historiqueGains].slice(0, HISTORIQUE_GAINS_MAX),
     };
   });
   await verifierDeblocages();
@@ -209,8 +229,24 @@ async function awardXpOnce(key, xp) {
 // Organisation/Management ne sont pas des "actions valorisées (§3)" au sens du badge "Régulier",
 // voir le mapping détaillé sur chaque `recordXxx()` ci-dessous). ------------------------------
 
-/** Seuil (jours ouvrés distincts dans le mois) de chaque badge mensuel — table exacte du §5.2. */
-const SEUILS_BADGES_MENSUELS = { organise: 15, focus: 12, regulier: 18, decideur: 4, livreur: 10 };
+/** Seuil (jours ouvrés distincts dans le mois) de chaque badge mensuel — table exacte du §5.2.
+ *  Exporté depuis LOT G8 (écran Progression, §9, élément "Badges mensuels" — afficher "X / seuil
+ *  jours" exige de connaître le seuil exact) ; aucun changement de valeur ni de comportement,
+ *  simple visibilité en plus pour un lecteur externe à ce fichier. */
+export const SEUILS_BADGES_MENSUELS = { organise: 15, focus: 12, regulier: 18, decideur: 4, livreur: 10 };
+
+/** Libellé + emoji d'affichage des 5 badges mensuels (§5.2) — n'existait pas avant LOT G8 : LOT G4
+ *  n'avait aucune UI (voir son commentaire de portée en tête de fichier), seul l'écran Progression
+ *  (§9, élément "Badges mensuels") en a besoin. Emoji choisis par proximité avec la famille de
+ *  badges permanents la plus proche du même thème (Inbox/Productivité/Régularité/Décisions/
+ *  Delivery, voir `FAMILLES_BADGES` plus bas), jamais une nouvelle direction artistique. */
+export const BADGES_MENSUELS_INFO = [
+  { id: "organise", label: "Organisé", emoji: "📥" },
+  { id: "focus", label: "Focus", emoji: "✅" },
+  { id: "regulier", label: "Régulier", emoji: "🔥" },
+  { id: "decideur", label: "Décideur", emoji: "⚖️" },
+  { id: "livreur", label: "Livreur", emoji: "🚀" },
+];
 
 /** Jour ouvré (lundi-vendredi), calendrier LOCAL (§2.1 : "le calcul des séries et des badges
  *  mensuels basés sur des jours ne considère que les jours ouvrés"). Aucun jour férié pris en
@@ -1167,4 +1203,69 @@ export function progressionNiveau(xpTotal) {
     xpRestantAvantNiveauSuivant: xpPourNiveauSuivant - xpDansNiveauCourant,
     progressionRatio: xpDansNiveauCourant / xpPourNiveauSuivant,
   };
+}
+
+// --- Écran Progression (LOT G8 de la roadmap, §9) — le niveau (LOT G2, ci-dessus), l'XP total,
+// les séries affichables (LOT G5, `longueurSerieJournaliereCourante`/`longueurSerieHebdoCourante`)
+// et les badges mensuels (LOT G4, `SEUILS_BADGES_MENSUELS`/`BADGES_MENSUELS_INFO`, désormais
+// exportés) couvrent déjà 6 des 8 éléments requis par le §9 sans rien ajouter ici. Il ne restait
+// que deux éléments réellement NOUVEAUX à ce lot : "Historique des gains" (voir `historiqueGains`
+// et `awardXpOnce()` plus haut) et "Répartition des XP" ci-dessous. ------------------------------
+//
+// Ambiguïté §9/§10 signalée à Charles-Henri AVANT tout développement (AskUserQuestion, 28/09/2026,
+// conformément à sa consigne explicite de ce lot : "si un élément de la roadmap est ambigu ou
+// contradictoire, arrête-toi [...] avant de prendre une décision d'architecture ou de produit à
+// [s]a place") : le §9 décrit "Répartition des XP" comme "la répartition de l'XP TOTAL par type
+// d'action" (lecture au sens strict : total depuis toujours), tandis que le §10 point 3 suggère
+// "un sous-document par mois" avec "mois courant + historique des mois précédents" — une
+// architecture matériellement différente (nouvelle donnée persistée, qui ne pourrait commencer à
+// s'accumuler qu'à partir de maintenant, aucune reconstruction rétroactive possible puisque la
+// plupart des clés de `rewardedKeys` ne portent pas de date, LOT G1). **Décision de Charles-Henri,
+// choisie parmi les options présentées : "Total depuis toujours" (recommandée)** — recalculée à la
+// demande depuis `rewardedKeys` déjà tenu par LOT G1, AUCUNE nouvelle donnée persistée, cohérent
+// avec le §10 ("aucune collection de premier niveau nouvelle") et avec le principe déjà appliqué
+// au niveau (LOT G2) et aux séries affichables (LOT G5) : ne jamais stocker ce qui peut se
+// recalculer sans ambiguïté depuis une donnée déjà fiable.
+const BAREME_XP_LABELS = [
+  { prefixe: "tache-terminee:", label: "Tâche terminée", xp: 10 },
+  { prefixe: "suivi-termine:", label: "Suivi terminé", xp: 8 },
+  { prefixe: "projet-cloture:", label: "Projet clôturé", xp: 40 },
+  { prefixe: "reunion-creee:", label: "Réunion créée", xp: 5 },
+  { prefixe: "decision-creee:", label: "Décision créée", xp: 6 },
+  { prefixe: "objectif-maj:", label: "Objectif mis à jour", xp: 8 },
+  { prefixe: "revue-eadp:", label: "Revue EADP ajoutée", xp: 6 },
+  { prefixe: "inbox-qualifiee:", label: "Inbox qualifiée", xp: 4 },
+  { prefixe: "ressource-creee:", label: "Ressource créée", xp: 3 },
+  { prefixe: "prompt-cree:", label: "Prompt créé", xp: 3 },
+];
+
+/** Libellé lisible d'une clé de récompense du barème XP (§3), pour l'historique des gains
+ *  (`historiqueGains`, voir `awardXpOnce()` plus haut). Les montants ci-dessus sont dupliqués
+ *  depuis les 10 `recordXxx()` du barème (LOT G1) plutôt que lus dynamiquement (ces fonctions ne
+ *  retournent pas leur propre montant) — un risque de divergence jugé minime : ce barème est
+ *  explicitement "figé" par LOT G1 (§3, "montants [...] jamais recalculés ni redéfinis par un
+ *  appelant") et n'a plus bougé depuis. Clé inconnue (ne devrait jamais arriver, seul
+ *  `awardXpOnce` l'appelle avec l'une des 10 clés du barème) : repli sur la clé brute plutôt qu'un
+ *  texte vide. */
+function libelleActionBareme(key) {
+  const entree = BAREME_XP_LABELS.find((e) => key.startsWith(e.prefixe));
+  return entree ? entree.label : key;
+}
+
+/**
+ * Répartition de l'XP total par type d'action (§9 "Répartition des XP") — voir la décision
+ * ci-dessus : total depuis toujours, recalculée à la demande depuis `rewardedKeys` (§10 point 5,
+ * LOT G1), jamais stockée. Réutilise `compterParPrefixe()` (LOT G3) — même garantie "une clé = une
+ * occurrence" (§2.3) que pour les familles de badges, jamais un second compteur qui risquerait de
+ * diverger. Ne renvoie que les lignes avec au moins une occurrence (jamais une ligne à 0 XP, pour
+ * ne pas polluer l'écran d'entrées vides), triées de la plus grande contribution d'XP à la plus
+ * petite — le plus lisible pour "voir d'où vient sa progression" (§9).
+ */
+export function repartitionXpParAction(state) {
+  return BAREME_XP_LABELS.map((entree) => {
+    const occurrences = compterParPrefixe(state, entree.prefixe);
+    return { label: entree.label, xp: occurrences * entree.xp, occurrences };
+  })
+    .filter((ligne) => ligne.occurrences > 0)
+    .sort((a, b) => b.xp - a.xp);
 }
