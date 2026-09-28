@@ -59,6 +59,20 @@ const WHATS_NEW = [
         howTo: "☰ Plus → 🏅 Galerie des badges → section \"🔓 Déblocages\" → \"Équiper\" sur un Thème, un Fond ou un Ruban déjà débloqué.",
         gain: "Profiter enfin visuellement de récompenses obtenues en progressant, sans qu'elles restent invisibles en coulisses.",
       },
+      {
+        type: "add",
+        title: "🎯 Suivi des Objectifs enrichi + exports",
+        text: "Le suivi d'un Objectif (personnel ou EADP d'un collaborateur) se fait maintenant indicateur par indicateur : un bouton \"🕒 Suivi\" ouvre la cible, le réalisé consolidé (tous les points regroupés) et le dernier \"prévu\" en un coup d'œil, avec un historique complet et modifiable/supprimable. Un nouveau suivi peut préciser si ce qui était prévu au point précédent a été fait, non fait ou reporté (dans ce dernier cas, le prochain plan d'action est prérempli automatiquement). La fiche d'un Objectif s'exporte en PDF (campagne, statut, description, suivis par indicateur, ressources liées), et l'écran \"Préparer l'EADP\" d'un collaborateur exporte en PDF l'ensemble (notables positifs/négatifs/neutres + avancement de tous ses objectifs sur la période choisie). \"Mes objectifs\" (☰ Plus) permet en plus un export Excel de tous les objectifs, avec filtre par campagne et par personne.",
+        howTo: "Sur un Objectif : bouton \"🕒 Suivi\" à côté d'un indicateur, ou \"📄 Export PDF\" en bas de sa fiche. Sur l'EADP d'un collaborateur : \"📄 Export PDF\" dans \"Préparer l'EADP\". Pour l'Excel global : ☰ Plus → 🎯 Mes objectifs → \"📊 Export Excel\".",
+        gain: "Ne plus reconstituer à la main l'historique d'un indicateur ni ce qui a été dit lors du dernier point, et repartir en réunion (ou en EADP) avec un document déjà prêt plutôt qu'à rédiger sur place.",
+      },
+      {
+        type: "add",
+        title: "📝 Notes & repères modifiables partout",
+        text: "Le journal \"Notes & repères\" (Tâches, Suivis, Projets et leurs volets, Ressources, Réunions, Décisions, Personnes, et les éléments \"Gardés\" de l'Inbox) permet maintenant de corriger ou supprimer une note existante, plus seulement d'en ajouter. Sur la fiche d'une Personne, chaque note peut en plus être marquée 👍 positive, 👎 négative ou ⚪ neutre — repris automatiquement dans \"Préparer l'EADP\" à côté des éléments notables d'un Suivi (qui peuvent eux aussi préciser en quoi ils sont notables).",
+        howTo: "Sur n'importe quel journal \"Notes & repères\" : survole une note pour voir apparaître ✏️ Modifier et ✕ Supprimer.",
+        gain: "Pouvoir corriger une erreur ou une note devenue obsolète sans devoir la laisser telle quelle indéfiniment.",
+      },
     ],
   },
   {
