@@ -56,6 +56,15 @@ async function openFullCanvas(page) {
   await expect(page.locator("#bureau-full-canvas")).toBeVisible({ timeout: 10_000 });
 }
 
+/** Lit le nombre affiché sur "#bureau-archived-btn" ("🗄️ Archivés (N)", ou "🗄️ Archivés" sans
+ *  parenthèses si N vaut 0) — voir js/components/bureau.js. Utilisé pour ATTENDRE un changement
+ *  réel plutôt qu'une durée arbitraire (voir le correctif ci-dessous, sur le test "Information"). */
+async function lireCompteurArchives(page) {
+  const texte = (await page.locator("#bureau-archived-btn").textContent()) || "";
+  const correspondance = texte.match(/\((\d+)\)/);
+  return correspondance ? Number(correspondance[1]) : 0;
+}
+
 async function createNoteAndLocate(page) {
   const idsBefore = await page.locator(".pinned-float-note").evaluateAll((els) => els.map((e) => e.dataset.id));
   await page.click("#bureau-new-note-btn");
@@ -245,6 +254,7 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     const title = `Test LOT 13 — conversion information ${Date.now()}`;
     const content = `Contenu qui devient le rawContent de l'Information — ${Date.now()}`;
     await loginAndGoToDashboard(page);
+    const compteArchivesAvant = await lireCompteurArchives(page);
 
     const note = await createNoteAndLocate(page);
     await note.el.locator(".sticky-note-title-input").fill(title);
@@ -261,7 +271,7 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await openWholeNoteConvertMenu(page, note.id, "Information");
     await expect(page.locator(".modal-body", { hasText: content })).toBeVisible({ timeout: 10_000 });
 
-    // CORRECTIF (28/09/2026, premier passage réel de ce fichier en CI — timeout de 30s sur le
+    // CORRECTIF #1 (28/09/2026, premier passage réel de ce fichier en CI — timeout de 30s sur le
     // clic `#bureau-archived-btn` ci-dessous, plusieurs éléments de la modale "🧠 Information"
     // ("🔁 Changer de type", "🗒️ Notes", "🏷️ Tags") interceptant le clic) : contrairement aux 4
     // autres tests de ce describe (Tâche/Ressource/Décision/Suivi), qui cliquent tous
@@ -274,6 +284,26 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await page.getByRole("button", { name: "Fermer", exact: true }).click();
 
     await expect(page.locator(`.sticky-note[data-id="${note.id}"]`)).toHaveCount(0, { timeout: 5_000 });
+
+    // CORRECTIF #2 (28/09/2026, deuxième passage réel en CI après le correctif #1 ci-dessus —
+    // cette fois `deleteArchivedNoteByTitle` ne trouvait plus AUCUNE ligne du tout dans "🗄️ Post-it
+    // archivés", trace Playwright à l'appui : au moment du clic, `#bureau-archived-btn` affichait
+    // "🗄️ Archivés" SANS compteur du tout, alors que le compte de test partagé en avait déjà au
+    // moins un avant même ce test — le widget de l'Accueil n'avait donc pas encore reçu, à cet
+    // instant précis, l'écho de l'archivage qui vient de se produire (`stickyNotesApi.setArchived`
+    // → `storage.js#setFields`, écriture Firestore réelle relue via `subscribe()`/`onSnapshot`,
+    // jamais instantanée). `openArchivedNotesModal()` construit sa liste UNE SEULE FOIS au moment
+    // du clic (pas de rafraîchissement réactif une fois ouverte, voir js/components/bureau.js) —
+    // cliquer avant que l'écho soit arrivé ouvre donc une modale vide pour de bon, qu'aucune
+    // nouvelle tentative de lecture de la ligne ne peut plus rattraper. Une attente FIXE s'est déjà
+    // montrée peu fiable ailleurs dans cette suite (voir lotG5-gamification-series.spec.js) —
+    // remplacé ici par une assertion Playwright auto-réessayée sur le compteur affiché lui-même
+    // (meilleure pratique : attendre la condition observable réelle, jamais une durée arbitraire).
+    const compteArchivesApres = compteArchivesAvant + 1;
+    await expect(page.locator("#bureau-archived-btn")).toHaveText(new RegExp(`\\(${compteArchivesApres}\\)`), {
+      timeout: 10_000,
+    });
+
     await deleteArchivedNoteByTitle(page, title);
   });
 });
