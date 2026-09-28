@@ -42,7 +42,14 @@ import * as gamification from "./gamification.js";
 
 const COLLECTION = "stickyNotes";
 
-export const COLORS = ["yellow", "blue", "green", "pink", "purple", "gray"];
+// "ocean"/"aurore" (LOT G7, TODO_GAMIFICATION.md §6 Table A, roadmap gamification INDÉPENDANTE
+// de TODO_TECHNIQUE.md, 25/09/2026) — deux couleurs SUPPLÉMENTAIRES débloquées par la
+// gamification (niveaux 5 et 25, js/domain/gamification.js#DEBLOCAGES, catégorie "palette"),
+// jamais retirées une fois débloquées (§6). Ajoutées ici pour que `setColor()` ci-dessous les
+// accepte comme valeurs valides — le sélecteur de couleur (js/components/stickyNoteShared.js)
+// reste, lui, responsable de ne les PROPOSER que si le déblocage correspondant est acquis :
+// cette liste ne fait que dire "couleur valide", pas "couleur actuellement offerte à ce compte".
+export const COLORS = ["yellow", "blue", "green", "pink", "purple", "gray", "ocean", "aurore"];
 export const DEFAULT_COLOR = "yellow";
 
 export const DEFAULT_WIDTH = 220;
