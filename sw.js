@@ -385,7 +385,15 @@
 // classes `.badge-tuile*`/`.badges-grid`) et `js/views/more.js` (nouvelle entrée) sont déjà
 // précachés par ailleurs, aucun ajout de ligne nécessaire pour eux ici. `CACHE_NAME` incrémenté
 // en conséquence.
-const CACHE_NAME = "pilotage-cache-v79";
+//
+// LOT G7 (Déblocages, TODO_GAMIFICATION.md §6, 28/09/2026) — mêmes remarques : AUCUN nouveau
+// fichier, uniquement du contenu modifié dans des fichiers déjà précachés (`js/domain/
+// gamification.js` — toujours l'oubli historique ci-dessus, non corrigé ici non plus —,
+// `js/domain/preferences.js`, `js/domain/stickyNotes.js`, `js/components/stickyNoteShared.js`,
+// `styles/components.css`, `js/views/dashboard.js`, `js/views/gamification.js`,
+// `js/views/whatsnew.js` — nouvelle entrée). `CACHE_NAME` incrémenté en conséquence pour que ce
+// contenu modifié soit effectivement resservi.
+const CACHE_NAME = "pilotage-cache-v80";
 const APP_SHELL = [
   "./",
   "./index.html",
