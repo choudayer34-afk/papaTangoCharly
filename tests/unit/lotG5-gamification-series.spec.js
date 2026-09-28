@@ -279,14 +279,33 @@ test.describe("LOT G5 — Séries (TODO_GAMIFICATION.md §5.3), jours ouvrés co
     const result = await page.evaluate(async () => {
       const { objectivesApi, storageApi, gamificationApi } = window.__pilotageTestApi;
 
+      // CORRECTIF (28/09/2026, DEUX passages réels en CI successifs, DEUX symptômes différents
+      // avec une attente fixe de 500ms puis 300ms — d'abord `longueur` reçu 9 (valeur semée,
+      // inchangée) au lieu de 1, puis `semaineCouranteReelle` reçu `null` juste après l'amorce
+      // elle-même) : ce test enchaîne plusieurs écritures fire-and-forget
+      // (`recordObjectiveReviewAdded`/`storageApi.setFields`, voir js/domain/gamification.js) sur
+      // le MÊME document `gamification/state`, chacune suivie d'une lecture qui doit voir le
+      // résultat de la précédente. Une attente FIXE reste un pari sur la latence réelle de
+      // l'émulateur/CI à cet instant précis (déjà montré peu fiable deux fois de suite) — remplacé
+      // par un polling qui attend la condition réellement recherchée plutôt qu'une durée arbitraire
+      // (meilleure pratique Playwright : `expect.poll`-like retry plutôt qu'un délai fixe).
+      async function attendreEtat(estPret, { intervalMs = 150, timeoutMs = 8000 } = {}) {
+        const debut = Date.now();
+        let etat = await gamificationApi.getGamificationState();
+        while (!estPret(etat) && Date.now() - debut < timeoutMs) {
+          await new Promise((r) => setTimeout(r, intervalMs));
+          etat = await gamificationApi.getGamificationState();
+        }
+        return etat;
+      }
+
       const objective = await objectivesApi.createObjective({ personId: null, title: `Test LOT G5 — hebdo écriture ${Date.now()}` });
 
       // Continuité : dernière semaine = "2026-W20" pour l'instant arbitraire, remplacée juste
       // après par une vraie valeur relative à "aujourd'hui" — voir plus bas. On sème d'abord un
       // enregistrement pour connaître la semaine ISO courante réelle via une première Revue.
       await objectivesApi.addEntry(objective.id, { note: `Test LOT G5 — amorce semaine courante ${Date.now()}` });
-      await new Promise((r) => setTimeout(r, 500));
-      const amorce = await gamificationApi.getGamificationState();
+      const amorce = await attendreEtat((etat) => etat.series.revueHebdo.derniereSemaine !== null);
       const semaineCouranteReelle = amorce.series.revueHebdo.derniereSemaine;
 
       // Sème une "cassure certaine" : une semaine ISO totalement arbitraire et déjà passée
@@ -299,20 +318,11 @@ test.describe("LOT G5 — Séries (TODO_GAMIFICATION.md §5.3), jours ouvrés co
           revueHebdo: { longueur: 9, record: 9, derniereSemaine: "2020-W01" },
         },
       });
-      // CORRECTIF (28/09/2026, premier passage réel en CI — `longueur` reçu : 9, c'est-à-dire la
-      // valeur semée ci-dessus, INCHANGÉE, au lieu de 1) : contrairement au test "Cassure" juste
-      // au-dessus (qui enchaîne sur un `tasksApi.createTask()` + `updateTask()`, deux allers-retours
-      // réseau bien plus longs qu'une simple écriture directe), rien ici ne laisse le temps à
-      // l'écriture `storageApi.setFields()` ci-dessus de se propager avant l'appel `addEntry()`
-      // suivant — `recordObjectiveReviewAdded` → `enregistrerSerieHebdomadaire()` a donc pu lire un
-      // état encore antérieur au seed (celui de l'"amorce" plus haut, où `derniereSemaine` valait
-      // déjà `semaineCouranteReelle`), conclure à tort "déjà enregistré cette semaine" et ne rien
-      // réécrire — d'où le "2020-W01"/9 semé qui ressort tel quel. Attente courte ajoutée ici,
-      // même principe que le reste de ce fichier.
-      await new Promise((r) => setTimeout(r, 300));
+      const apresSeed = await attendreEtat((etat) => etat.series.revueHebdo.derniereSemaine === "2020-W01");
+      void apresSeed; // confirme juste que le seed a bien été relu avant de poursuivre
+
       await objectivesApi.addEntry(objective.id, { note: `Test LOT G5 — après cassure ${Date.now()}` });
-      await new Promise((r) => setTimeout(r, 500));
-      const apresCassure = await gamificationApi.getGamificationState();
+      const apresCassure = await attendreEtat((etat) => etat.series.revueHebdo.derniereSemaine !== "2020-W01");
 
       return {
         semaineCouranteReelle,
