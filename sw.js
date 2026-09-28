@@ -399,7 +399,12 @@
 // import ajouté de `js/components/modal.js`, déjà précaché lui aussi — aucun ajout de ligne
 // nécessaire) + `styles/components.css` (curseur cliquable) + `js/views/whatsnew.js` (nouvelle
 // entrée). `CACHE_NAME` incrémenté à nouveau pour ce contenu modifié.
-const CACHE_NAME = "pilotage-cache-v81";
+// LOT G8 (28/09/2026, TODO_GAMIFICATION.md §9) — écran "📊 Progression" : `js/views/gamification.js`
+// (nouvel export `renderGamificationProgression`, déjà précaché) + `js/domain/gamification.js`
+// (déjà précaché) + `js/app.js`/`js/views/more.js` (route + entrée de nav, déjà précachés) +
+// `styles/components.css` (déjà précaché) — aucun nouveau fichier, uniquement du contenu modifié
+// dans des fichiers déjà listés ci-dessous : `CACHE_NAME` incrémenté pour qu'il soit resservi.
+const CACHE_NAME = "pilotage-cache-v82";
 const APP_SHELL = [
   "./",
   "./index.html",
