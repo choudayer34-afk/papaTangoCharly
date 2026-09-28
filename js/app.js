@@ -16,6 +16,7 @@ import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
 import { renderMemoryTraining } from "./views/memory.js";
 import { renderGamificationGallery, renderGamificationProgression } from "./views/gamification.js";
+import { renderRecompensesCentre } from "./views/recompenses.js";
 import { renderLogin, renderRestricted, renderAuthError } from "./views/login.js";
 import { renderPrepMask } from "./views/prepMask.js";
 import { openModal } from "./components/modal.js";
@@ -30,6 +31,10 @@ import { mountPomodoroWidget, unmountPomodoroWidget } from "./components/pomodor
 // le mini-minuteur Pomodoro ci-dessus : montés une seule fois pour toute la session, visibles
 // quel que soit l'écran ouvert. Voir js/components/pinnedNotesOverlay.js.
 import { mountPinnedNotesOverlay, unmountPinnedNotesOverlay } from "./components/pinnedNotesOverlay.js";
+// Écrans de récompense (LOT G10, TODO_GAMIFICATION.md §13.2, 28/09/2026) — même principe que les
+// deux widgets ci-dessus : monté une seule fois pour toute la session, visible quel que soit
+// l'écran ouvert. Voir js/components/rewardOrchestrator.js pour le mécanisme complet.
+import { mountRewardOrchestrator } from "./components/rewardOrchestrator.js";
 import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcuts.js";
 import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
 import { logView, logLogin } from "./services/usageTracking.js";
@@ -109,12 +114,23 @@ const HIDDEN_ROUTES = {
   // hors de ROUTES/NAV_ITEMS (pas d'icône dans la barre du bas). Accessible depuis ☰ Plus, voir
   // js/views/more.js.
   "#/progression": { render: renderGamificationProgression, label: "Progression" },
+  // Centre de récompenses (LOT G10, TODO_GAMIFICATION.md §13.6, 28/09/2026) — même principe que
+  // les deux lignes ci-dessus : une page de consultation ponctuelle, pas un écran de travail, donc
+  // hors de ROUTES/NAV_ITEMS. Accessible depuis ☰ Plus (js/views/more.js), l'Accueil
+  // (js/components/progressionCard.js) et les topbars Galerie/Progression (js/views/gamification.js).
+  "#/recompenses": { render: renderRecompensesCentre, label: "Récompenses" },
 };
 
 const appRoot = document.getElementById("app");
 let currentCleanup = null;
 let nav = null;
 let appMounted = false;
+// LOT G10 (28/09/2026) — cleanup de mountRewardOrchestrator(), même principe que
+// unsubOnlineBanner ci-dessous : tenu à ce niveau plutôt que dans mountApp()/unmountApp()
+// directement, car mountPomodoroWidget/mountPinnedNotesOverlay n'exposent pas de handle de
+// nettoyage (ils gèrent leur propre montage unique en interne) — celui-ci en expose un, à ne pas
+// perdre entre mountApp() et unmountApp().
+let unmountRewardOrchestrator = null;
 
 // Ouverture à "quelques personnes précises que je choisis" (retour de Charles-Henri) : mémorise
 // l'email d'une personne qu'on vient de refuser (liste blanche `allowedUsers`, voir
@@ -272,6 +288,7 @@ async function mountApp() {
   mountWhatsNewBadge(nav);
   mountPomodoroWidget();
   mountPinnedNotesOverlay();
+  unmountRewardOrchestrator = mountRewardOrchestrator();
   // Raccourcis clavier (vague 20, retour de Charles-Henri : "je marche aussi beaucoup au
   // raccourci clavier") — un seul écouteur pour toute la session, voir js/services/
   // shortcuts.js. Depuis la vague 24 (barre du bas réduite à 5 icônes), Alt+1…Alt+5 pointent
@@ -404,6 +421,8 @@ function unmountApp() {
   unmountWhatsNewBadge();
   unmountPomodoroWidget();
   unmountPinnedNotesOverlay();
+  unmountRewardOrchestrator?.();
+  unmountRewardOrchestrator = null;
   teardownGlobalShortcuts();
   window.removeEventListener("hashchange", renderRoute);
 }
