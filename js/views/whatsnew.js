@@ -73,6 +73,13 @@ const WHATS_NEW = [
         howTo: "Sur n'importe quel journal \"Notes & repères\" : survole une note pour voir apparaître ✏️ Modifier et ✕ Supprimer.",
         gain: "Pouvoir corriger une erreur ou une note devenue obsolète sans devoir la laisser telle quelle indéfiniment.",
       },
+      {
+        type: "add",
+        title: "📌 Post-it épinglés redimensionnables",
+        text: "Un post-it épinglé (widget flottant, visible partout dans l'app) peut maintenant être agrandi ou réduit par une poignée en bas à droite, comme sur le plan de travail \"Tout voir\" — l'aperçu affiché dessus n'est plus tronqué et défile pour montrer tout son contenu réel à mesure qu'il grandit. Son édition rapide (au clic sur la carte) s'ouvre en plus dans une fenêtre plus large, avec un champ de description que tu peux toi-même agrandir verticalement pour voir l'intégralité d'un texte long ; cocher, ajouter ou modifier une ligne de checklist et taper ou corriger du texte libre s'y font déjà directement, sans étape supplémentaire.",
+        howTo: "Sur un post-it épinglé : glisse la petite poignée en bas à droite de la carte pour la redimensionner ; clique ailleurs sur la carte pour l'ouvrir en édition, où le champ de texte a lui-même une poignée en bas.",
+        gain: "Voir et modifier tout le contenu d'un post-it épinglé, même long, sans devoir rouvrir \"🔍 Tout voir\" à chaque fois.",
+      },
     ],
   },
   {
