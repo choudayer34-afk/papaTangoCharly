@@ -2111,3 +2111,61 @@ tbody.drag-over-group {
 .badge-tuile--verrouille .badge-tuile-rarete,
 .badge-tuile--verrouille .badge-tuile-nom { color: var(--color-text-muted); }
 .badge-tuile--verrouille .badge-tuile-emoji { filter: grayscale(1); }
+
+/* ---------- Écran Progression (LOT G8, js/views/gamification.js#renderGamificationProgression) ----------
+   Réutilise volontairement `.stat-grid`/`.stat-tile` (déjà l'Accueil) et `.notes-entry` (déjà le
+   journal de notes horodaté) pour ce qui reste, au fond, des chiffres-clés et une liste
+   chronologique — seuls la barre de progression et le calendrier-heatmap sont des composants
+   réellement nouveaux (§9 : "prochain niveau" et "même principe visuel qu'un calendrier de
+   contributions"), et l'un et l'autre servent aussi à "Répartition des XP" (la même barre) et à
+   "Activité mensuelle" (la même grille). */
+.progression-bar-track {
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  overflow: hidden;
+  margin-top: var(--space-2);
+}
+.progression-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: var(--radius-sm);
+}
+.progression-repartition-ligne { margin-bottom: var(--space-3); }
+.progression-repartition-ligne:last-child { margin-bottom: 0; }
+.progression-repartition-tete {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+}
+
+/* Calendrier-heatmap des jours ouvrés du mois (§9 "Activité mensuelle") — une case par jour ouvré,
+   jamais les week-ends (§2.1, ignorés partout ailleurs dans le moteur, cohérent ici). */
+.progression-heatmap {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+  gap: 4px;
+}
+.progression-heatmap-jour {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+}
+.progression-heatmap-jour--actif { background: var(--color-primary); border-color: var(--color-primary); }
+.progression-heatmap-jour--futur { opacity: 0.4; }
+
+/* Badges mensuels — état courant (jours/seuil) et historique des mois précédents (§9), une ligne
+   par badge ou par mois selon la section. */
+.progression-mois-historique-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.progression-mois-historique-ligne:last-child { border-bottom: none; }
+.progression-mois-historique-label { flex: 1; font-size: var(--font-size-sm); }
+.progression-mois-historique-badge { opacity: 0.3; font-size: 1.1rem; }
+.progression-mois-historique-badge--obtenu { opacity: 1; }
