@@ -28,17 +28,21 @@
 //
 // Déblocages (LOT G7, TODO_GAMIFICATION.md §6) — les 34 déblocages (Tables A/B/C, catalogue et
 // moteur d'attribution dans js/domain/gamification.js#DEBLOCAGES/verifierDeblocages), groupés
-// par catégorie (`CATEGORIES_DEBLOCAGES`, ordre d'affichage stable). Deux arbitrages
-// AskUserQuestion du 25/09/2026 (détaillés dans js/domain/gamification.js) limitent ce qui est
-// réellement APPLIQUÉ dans ce lot :
-//  - Palette (2) et Icône (14) sont appliquées (voir js/components/stickyNoteShared.js pour la
-//    Palette, js/views/dashboard.js pour l'Icône) — seule Icône est "équipable" (un déblocage
-//    actif à la fois, voir CATEGORIES_DEBLOCAGES#equipable), câblée ici sur
-//    preferencesApi.setGamificationIconeEquipee().
-//  - Thème (2), Fond (2) et Ruban (14) sont détectés/acquis mais SANS application visuelle
-//    (`valeur: null` dans le catalogue, même philosophie que Régularité/Documentation
-//    ci-dessus : "acquis" reste vrai et se voit ici, sans travail de reprise nécessaire plus
-//    tard) — renderNoteCategorieDifferee() rend cette limite explicite, jamais silencieuse.
+// par catégorie (`CATEGORIES_DEBLOCAGES`, ordre d'affichage stable).
+//
+// **Mise à jour du 28/09/2026 (ad hoc, suite directe de LOT G7/LOT G8, retour de Charles-Henri
+// "on fait")** : les 5 catégories sont désormais TOUTES appliquées visuellement (Palette et
+// Icône depuis LOT G7 ; Thème, Fond et Ruban depuis cet ajout — voir le commentaire détaillé sur
+// `DEBLOCAGES` dans js/domain/gamification.js pour les 2 arbitrages AskUserQuestion tranchés
+// avant de coder) : Palette (post-it, js/components/stickyNoteShared.js), Icône (Accueil,
+// js/views/dashboard.js), Thème (toute l'app, js/services/gamificationThemeStore.js), Fond et
+// Ruban (écran Progression, js/views/gamification.js#renderGamificationProgression plus bas).
+// **4 des 5 catégories sont "équipables"** (un déblocage actif à la fois par catégorie, §10
+// point 4, voir CATEGORIES_DEBLOCAGES#equipable) — Icône, Thème, Fond, Ruban partagent tous le
+// même bouton "Équiper" générique ci-dessous (`equipements`/`SETTERS_EQUIPEMENT`), Palette restant
+// seule à part (pas de notion d'équipement séparée, réutilise directement le sélecteur de couleur
+// de post-it existant, jugement fait sans consultation lors de LOT G7 — détail d'implémentation
+// qui ne change ni le périmètre ni le comportement visible du §6).
 
 // Détail au clic (retour direct de Charles-Henri, 28/09/2026, hors numérotation LOT — ajout
 // ad hoc à la Galerie, pas une entrée de TODO_GAMIFICATION.md) : chaque tuile de badge est
@@ -50,6 +54,9 @@ import { openModal } from "../components/modal.js";
 import * as gamificationApi from "../domain/gamification.js";
 import * as objectivesApi from "../domain/objectives.js";
 import * as preferencesApi from "../domain/preferences.js";
+// Application immédiate du Thème équipé (28/09/2026, ad hoc) — même module que js/app.js#mountApp,
+// voir son en-tête pour le détail de la décision (portée toute l'app, superposé au clair/sombre).
+import { applyGamificationTheme } from "../services/gamificationThemeStore.js";
 
 const RARETES = [
   { key: "toutes", label: "Toutes les raretés" },
@@ -86,14 +93,29 @@ export function renderGamificationGallery(container) {
   let state = null;
   let collaborateursDistincts = 0;
   let activeRarete = "toutes";
-  // Icône équipée (LOT G7) — lue une seule fois au montage (préférences.js n'a pas d'abonnement
-  // temps réel, voir js/views/dashboard.js#refreshGamificationIcon pour la même limite côté
-  // Accueil) puis tenue à jour localement à chaque clic "Équiper" ci-dessous, qui écrit ET met
-  // à jour cette variable dans la foulée pour un retour visuel immédiat sans réaller-retour
-  // Firestore avant de rafraîchir l'écran.
-  let iconeEquipeeId = null;
+  // Déblocages équipés, une clé par catégorie "équipable" (LOT G7 pour Icône ; Thème/Fond/Ruban
+  // ajoutés le 28/09/2026, ad hoc) — lus une seule fois au montage (préférences.js n'a pas
+  // d'abonnement temps réel, même limite que js/views/dashboard.js#refreshGamificationIcon côté
+  // Accueil) puis tenus à jour localement à chaque clic "Équiper" ci-dessous (`renderTuileDeblocage`),
+  // qui écrit ET met à jour cet objet dans la foulée pour un retour visuel immédiat sans
+  // aller-retour Firestore avant de rafraîchir l'écran. Palette n'y figure pas (pas de notion
+  // d'équipement séparée, voir le commentaire d'en-tête).
+  let equipements = { icone: null, theme: null, fond: null, ruban: null };
+  // Une seule fonction de préférences par catégorie équipable — mappée sur `deblocage.categorie`
+  // dans `renderTuileDeblocage` ci-dessous, plutôt que 4 boutons "Équiper" écrits séparément.
+  const SETTERS_EQUIPEMENT = {
+    icone: preferencesApi.setGamificationIconeEquipee,
+    theme: preferencesApi.setGamificationThemeEquipee,
+    fond: preferencesApi.setGamificationFondEquipee,
+    ruban: preferencesApi.setGamificationRubanEquipee,
+  };
   preferencesApi.getPreferences().then((prefs) => {
-    iconeEquipeeId = prefs.gamificationIconeEquipeeId || null;
+    equipements = {
+      icone: prefs.gamificationIconeEquipeeId || null,
+      theme: prefs.gamificationThemeEquipeId || null,
+      fond: prefs.gamificationFondEquipeId || null,
+      ruban: prefs.gamificationRubanEquipeId || null,
+    };
     render();
   });
 
@@ -166,32 +188,11 @@ export function renderGamificationGallery(container) {
       header.textContent = categorie.label;
       deblocagesEl.appendChild(header);
 
-      const noteDifferee = renderNoteCategorieDifferee(categorie.id);
-      if (noteDifferee) deblocagesEl.appendChild(noteDifferee);
-
       const grid = document.createElement("div");
       grid.className = "badges-grid";
       deblocagesCategorie.forEach((deblocage) => grid.appendChild(renderTuileDeblocage(deblocage, categorie)));
       deblocagesEl.appendChild(grid);
     });
-  }
-
-  /** Note explicative pour Thème/Fond/Ruban (18 des 34 déblocages, arbitrage AskUserQuestion du
-   *  25/09/2026 — voir le commentaire en tête de ce fichier) : "acquis" est réel et daté, mais
-   *  aucune application visuelle n'existe encore, jamais un silence qui laisserait croire à un
-   *  oubli. */
-  function renderNoteCategorieDifferee(categorieId) {
-    if (categorieId !== "theme" && categorieId !== "fond" && categorieId !== "ruban") return null;
-    const note = document.createElement("div");
-    note.className = "empty-state";
-    note.style.textAlign = "left";
-    note.style.padding = "0 0 12px";
-    note.style.margin = "0";
-    note.textContent =
-      categorieId === "ruban"
-        ? "Ces déblocages sont détectés et acquis dès leur condition remplie, mais leur affichage (carte de progression) n'existe pas encore — écran Progression, LOT G8."
-        : "Ces déblocages sont détectés et acquis dès leur condition remplie, mais leur application visuelle n'existe pas encore — infrastructure de thème nommé à construire.";
-    return note;
   }
 
   /** Libellé de la condition d'un déblocage — dérivé des mêmes données que
@@ -213,10 +214,17 @@ export function renderGamificationGallery(container) {
     tile.title = deblocage.nom;
 
     // L'emoji de la catégorie sert d'illustration par défaut (même stand-in que
-    // FAMILLES_BADGES/LOT G6) ; la catégorie Icône fait exception, `deblocage.valeur` porte déjà
-    // l'emoji réellement affiché sur l'Accueil une fois équipé — plus parlant qu'un emoji
-    // générique de catégorie.
-    const emoji = deblocage.categorie === "icone" ? deblocage.valeur : categorie.label.split(" ")[0];
+    // FAMILLES_BADGES/LOT G6) ; deux catégories font exception : Icône, dont `deblocage.valeur`
+    // porte déjà l'emoji réellement affiché sur l'Accueil une fois équipée (plus parlant qu'un
+    // emoji générique de catégorie) ; Ruban (28/09/2026, ad hoc), dont `deblocage.valeur` est une
+    // couleur hexadécimale, pas un emoji — rendue comme une pastille de couleur pleine
+    // (`.ruban-pastille`, styles/components.css) plutôt que du texte brut affiché tel quel.
+    const emojiHtml =
+      deblocage.categorie === "icone"
+        ? deblocage.valeur
+        : deblocage.categorie === "ruban"
+          ? `<span class="ruban-pastille" style="background:${deblocage.valeur}"></span>`
+          : categorie.label.split(" ")[0];
 
     let etatHtml;
     if (!locked) {
@@ -227,16 +235,17 @@ export function renderGamificationGallery(container) {
     }
 
     tile.innerHTML = `
-      <div class="badge-tuile-emoji">${emoji}</div>
+      <div class="badge-tuile-emoji">${emojiHtml}</div>
       <div class="badge-tuile-nom">${escapeHtml(deblocage.nom)}</div>
       <div class="badge-tuile-condition">${escapeHtml(conditionDeblocage(deblocage))}</div>
       ${etatHtml}
     `;
 
-    // Contrôle "Équiper" — uniquement la catégorie Icône (seule `equipable: true`), et
+    // Contrôle "Équiper" — générique par catégorie (28/09/2026, ad hoc : Icône, Thème, Fond,
+    // Ruban partagent désormais toutes `equipable: true`, voir CATEGORIES_DEBLOCAGES), et
     // uniquement une fois le déblocage acquis (jamais équipable avant).
     if (!locked && categorie.equipable) {
-      const equipe = iconeEquipeeId === deblocage.id;
+      const equipe = equipements[deblocage.categorie] === deblocage.id;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-secondary btn-sm";
@@ -244,8 +253,17 @@ export function renderGamificationGallery(container) {
       btn.textContent = equipe ? "✓ Équipée" : "Équiper";
       btn.addEventListener("click", async () => {
         const nouvelleValeur = equipe ? null : deblocage.id;
-        await preferencesApi.setGamificationIconeEquipee(nouvelleValeur);
-        iconeEquipeeId = nouvelleValeur;
+        const setter = SETTERS_EQUIPEMENT[deblocage.categorie];
+        await setter(nouvelleValeur);
+        equipements = { ...equipements, [deblocage.categorie]: nouvelleValeur };
+        // Retour visuel immédiat pour le Thème (app entière, voir js/services/
+        // gamificationThemeStore.js) — Icône/Fond/Ruban n'ont besoin que de renderDeblocages()
+        // ci-dessous, leur affichage vivant respectivement dans dashboard.js et l'écran
+        // Progression, pas ici.
+        if (deblocage.categorie === "theme") {
+          const nouveauDeblocage = nouvelleValeur ? gamificationApi.DEBLOCAGES.find((d) => d.id === nouvelleValeur) : null;
+          applyGamificationTheme(nouveauDeblocage ? nouveauDeblocage.valeur : null);
+        }
         renderDeblocages();
       });
       tile.appendChild(btn);
@@ -356,7 +374,7 @@ export function renderGamificationGallery(container) {
     } else if (deblocageRuban) {
       deblocagesHtml = `<p>Combiné au niveau 15, débloque le « ${escapeHtml(
         deblocageRuban.nom
-      )} » — détecté et acquis dès que les deux conditions sont réunies, mais pas encore affiché à l'écran (dépend de l'écran Progression, LOT G8, pas encore construit).</p>`;
+      )} », à équiper depuis la section « 🔓 Déblocages » ci-dessous puis affiché sur la carte « Prochain niveau » de l'écran 📊 Progression (☰ Plus → 📊 Progression).</p>`;
     } else {
       deblocagesHtml = `<p>Aucun déblocage cosmétique n'est associé à ce badge précis (seuls un badge Or et un badge Bronze par famille en déclenchent un, voir la section « 🔓 Déblocages » ci-dessous) — juste le bonus XP.</p>`;
     }
@@ -483,9 +501,12 @@ export function renderGamificationProgression(container) {
         <div class="subtitle" id="progression-subtitle">—</div>
       </div>
     </div>
-    <div class="view">
+    <div class="view" id="progression-view">
       <div class="stat-grid" id="progression-stats"></div>
-      <div class="card" id="progression-niveau-suivant"></div>
+      <div class="card" id="progression-niveau-suivant">
+        <div id="progression-ruban"></div>
+        <div id="progression-niveau-suivant-contenu"></div>
+      </div>
 
       <div class="section-title">🔥 Séries</div>
       <div class="stat-grid" id="progression-series"></div>
@@ -508,9 +529,11 @@ export function renderGamificationProgression(container) {
   `;
 
   const els = {
+    view: container.querySelector("#progression-view"),
     subtitle: container.querySelector("#progression-subtitle"),
     stats: container.querySelector("#progression-stats"),
-    niveauSuivant: container.querySelector("#progression-niveau-suivant"),
+    ruban: container.querySelector("#progression-ruban"),
+    niveauSuivant: container.querySelector("#progression-niveau-suivant-contenu"),
     series: container.querySelector("#progression-series"),
     heatmap: container.querySelector("#progression-heatmap"),
     badgesMensuelsCourant: container.querySelector("#progression-badges-mensuels-courant"),
@@ -520,6 +543,20 @@ export function renderGamificationProgression(container) {
   };
 
   let state = null;
+  // Fond/Ruban équipés (28/09/2026, ad hoc — voir js/domain/preferences.js#
+  // gamificationFondEquipeId/gamificationRubanEquipeId) — lus une seule fois au montage, même
+  // limite documentée que l'Icône équipée de la Galerie (pas d'abonnement temps réel sur
+  // préférences.js). Contrairement au Thème (js/services/gamificationThemeStore.js, appliqué
+  // globalement dès js/app.js#mountApp), Fond et Ruban ne concernent QUE cet écran : lus ici,
+  // jamais ailleurs.
+  let fondEquipeId = null;
+  let rubanEquipeId = null;
+  preferencesApi.getPreferences().then((prefs) => {
+    fondEquipeId = prefs.gamificationFondEquipeId || null;
+    rubanEquipeId = prefs.gamificationRubanEquipeId || null;
+    renderFond();
+    renderRuban();
+  });
 
   function render() {
     if (!state) {
@@ -558,6 +595,40 @@ export function renderGamificationProgression(container) {
     renderBadgesMensuels();
     renderRepartition();
     renderHistorique();
+    // Fond/Ruban dépendent aussi de `state.deblocagesAcquis` (jamais affichés si le déblocage
+    // équipé n'est plus réellement acquis) — rappelés ici en plus du chargement des préférences
+    // ci-dessus, pour couvrir l'ordre d'arrivée quel qu'il soit (état de gamification vs.
+    // préférences, deux lectures asynchrones indépendantes).
+    renderFond();
+    renderRuban();
+  }
+
+  /** Fond cosmétique équipé (§6 Table A, "fond discret" de CET écran uniquement, 28/09/2026 ad
+   *  hoc — voir js/domain/gamification.js#DEBLOCAGES catégorie "fond") — un simple dégradé
+   *  discret en arrière-plan de la vue entière (aucune illustration réelle, LOT G9 non démarré,
+   *  même stand-in swappable que la Galerie, §8), jamais un fond qui gênerait la lecture du
+   *  contenu au premier plan. Aucun fond équipé (ou non acquis) : l'écran garde son fond neutre
+   *  habituel. */
+  function renderFond() {
+    els.view.classList.remove("progression-fond--horizon", "progression-fond--sommet");
+    const deblocage = fondEquipeId ? gamificationApi.DEBLOCAGES.find((d) => d.id === fondEquipeId) : null;
+    if (deblocage && state?.deblocagesAcquis[deblocage.id]) {
+      els.view.classList.add(`progression-fond--${deblocage.valeur}`);
+    }
+  }
+
+  /** Ruban cosmétique équipé (§6 Table C, "affiché sur la carte de progression" — la carte
+   *  "Prochain niveau" ci-dessus, 28/09/2026 ad hoc) — ajout d'une 9ᵉ section à cet écran, non
+   *  listée par les 8 éléments du §9 lui-même (contradiction §6/§9 signalée à Charles-Henri, qui a
+   *  choisi cette option). Aucun ruban équipé (ou non acquis) : rien ne s'affiche, jamais un
+   *  espace vide qui laisserait deviner un oubli. */
+  function renderRuban() {
+    const deblocage = rubanEquipeId ? gamificationApi.DEBLOCAGES.find((d) => d.id === rubanEquipeId) : null;
+    if (!deblocage || !state?.deblocagesAcquis[deblocage.id]) {
+      els.ruban.innerHTML = "";
+      return;
+    }
+    els.ruban.innerHTML = `<span class="progression-ruban" style="background:${deblocage.valeur}">🎗️ ${escapeHtml(deblocage.nom)}</span>`;
   }
 
   function renderSeries() {
