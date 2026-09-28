@@ -463,7 +463,23 @@
 // devenue sans appelant), `js/components/modal.js` (nouvelle primitive `subscribeModalState`),
 // `js/components/checklist.js` (classe `checklist-line-menu-btn`), `styles/components.css`
 // (en-tête flottant devenu la seule zone de glisser), `js/views/whatsnew.js`.
-const CACHE_NAME = "pilotage-cache-v87";
+//
+// Complément du 28/09/2026 (retour direct de Charles-Henri : "les 🧩 Sous-parties dans un projet
+// doivent s'ordonner avec les mêmes règles que les checklist") — tri (non "Terminé" en tête dans
+// leur ordre manuel, "Terminé" en bas trié par date de passage la plus récente), réordonnancement
+// ▲/▼ et édition en place du libellé via "✏️", même principe que `js/components/checklist.js`.
+// Aucun nouveau fichier (`CACHE_NAME` incrémenté uniquement pour que les fichiers déjà précachés
+// ci-dessous soient resservis) : `js/domain/projects.js` (`sortPartsForDisplay`/`editPart`/
+// `reorderParts`, `doneAt` désormais horodaté par `updatePartStatus`), `js/views/projects.js`
+// (rendu trié + boutons ▲/▼/✏️ sur la fiche Projet), `js/views/whatsnew.js`.
+//
+// LOT 14 (TODO-029, TODO-030, 28/09/2026, TODO_TECHNIQUE.md) — traçabilité des actions rapides et
+// confort de saisie des dates sur le Suivi. Aucun nouveau fichier (`CACHE_NAME` incrémenté
+// uniquement pour que les fichiers déjà précachés ci-dessous soient resservis) :
+// `js/domain/followups.js` (`setStatus` ajoute désormais une note automatique horodatée sur
+// relance/règlement rapide), `js/views/people.js` (boutons "+1 j"/"+7 j" sur les 4 champs date du
+// formulaire Suivi, création et édition), `js/views/whatsnew.js`.
+const CACHE_NAME = "pilotage-cache-v89";
 const APP_SHELL = [
   "./",
   "./index.html",
