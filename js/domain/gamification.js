@@ -77,6 +77,24 @@
 //    (`FAMILLES_BADGES` ci-dessous) avec un traitement CSS par RARETÉ (grisé si verrouillé,
 //    halo/bordure/dégradé croissant du Bronze au Légendaire, §8), swappable pour une vraie
 //    illustration SVG plus tard sans restructurer l'écran.
+//
+// Portée EXACTE de LOT G7 (voir TODO_GAMIFICATION.md → §11, LOT G7) : les 34 déblocages du §6
+// (Tables A/B/C — voir la section "Déblocages (LOT G7)" plus bas pour le catalogue complet et
+// le moteur d'attribution `verifierDeblocages()`, revérifié à chaque gain d'XP et à chaque
+// attribution de badge, exactement comme l'exige le §6). DEUX arbitrages actés avec
+// Charles-Henri (AskUserQuestion, 25/09/2026) avant tout développement :
+//  - Thème (2 déblocages), Fond (2) et Ruban (14) — soit 18 des 34 — sont détectés et marqués
+//    "acquis" au bon moment, mais leur APPLICATION VISUELLE reste différée : aucun thème nommé
+//    n'existe encore (js/services/themeStore.js reste un simple interrupteur clair/sombre) et
+//    l'écran Progression qui afficherait Fond/Ruban est LOT G8, pas construit. À appliquer plus
+//    tard sans retoucher ce qui est construit ici.
+//  - Icône (14 déblocages) — faute d'un "nom" d'utilisateur affiché sur l'Accueil auquel
+//    accrocher ces icônes (contrairement à ce que suggère le §6), Charles-Henri a choisi de les
+//    afficher à côté du titre "Mon pilotage" à la place (js/views/dashboard.js).
+// Palette (2 déblocages) est la seule catégorie appliquée sans réserve : ajoutée au sélecteur de
+// couleur des post-it existant (js/components/stickyNoteShared.js).
+// L'"équipement" (§10 point 4, un déblocage actif par catégorie) est stocké dans
+// js/domain/preferences.js, PAS ici — voir son commentaire dédié.
 
 import * as storage from "../services/storage.js";
 
@@ -129,6 +147,13 @@ function withDefaults(raw) {
       taches: { longueur: 0, record: 0, dernierJour: null },
       revueHebdo: { longueur: 0, record: 0, derniereSemaine: null },
     },
+    // Déblocages acquis (§6, §10 point 4, LOT G7) — `{ [deblocageId]: dateObtentionMs }`, jamais
+    // retirée après coup (§6 : "un déblocage obtenu n'est jamais retiré"). Distincte des
+    // PRÉFÉRENCES VISUELLES ("équipé" par catégorie, un par catégorie) qui vivent dans
+    // js/domain/preferences.js plutôt qu'ici (§10 point 4 : "même principe que les préférences
+    // déjà existantes"), pour la même raison que le reste de ce document sépare toujours l'état
+    // OBJECTIF (obtenu ou non, ici) du CHOIX de l'utilisateur (préférence d'affichage, ailleurs).
+    deblocagesAcquis: {},
     ...raw,
   };
 }
@@ -158,9 +183,16 @@ function localDateKey(date = new Date()) {
  * (sérialisé par document, voir storage.js) : deux appels concurrents pour la MÊME clé ne
  * peuvent donc jamais créditer l'XP deux fois, y compris si l'événement déclencheur se produit
  * deux fois de suite très rapidement (ex. double clic).
+ *
+ * LOT G7 (§6) : tout gain d'XP peut faire franchir un seuil de NIVEAU (Table A/C, §6) — la
+ * roadmap exige explicitement de revérifier les déblocages "à chaque changement de niveau
+ * (après tout gain d'XP)". Plutôt que d'ajouter cet appel à chacun des 10 `recordXxx()` du
+ * barème (répétition, risque d'oubli sur un futur onzième événement), il est centralisé ICI,
+ * seul point par lequel tout gain d'XP de base transite — voir aussi `awardBadgeOnce()`
+ * ci-dessous pour le second moment exigé par la roadmap ("à chaque attribution de badge").
  */
 async function awardXpOnce(key, xp) {
-  return storage.update(COLLECTION, DOC_ID, (raw) => {
+  const result = await storage.update(COLLECTION, DOC_ID, (raw) => {
     const current = withDefaults(raw);
     if (current.rewardedKeys[key]) return undefined; // déjà récompensé — aucune écriture
     return {
@@ -168,6 +200,8 @@ async function awardXpOnce(key, xp) {
       rewardedKeys: { ...current.rewardedKeys, [key]: true },
     };
   });
+  await verifierDeblocages();
+  return result;
 }
 
 // --- Badges mensuels (LOT G4, §5.2) — helpers utilisés uniquement par le barème XP ci-dessous
@@ -294,10 +328,16 @@ async function marquerEvenementCompte(key) {
  * Crédite le bonus XP d'un badge et l'enregistre comme obtenu, UNE SEULE FOIS (§2.3) — même
  * garantie et même primitive sérialisée que `awardXpOnce`, mais écrit aussi `badgesObtained`
  * (§10 point 2 : date d'obtention, jamais recalculée après coup).
+ *
+ * LOT G7 (§6) : second des deux moments où la roadmap exige de revérifier les déblocages ("à
+ * chaque attribution de badge", Table B/C) — voir `verifierDeblocages()` et le commentaire sur
+ * `awardXpOnce()` ci-dessus pour le premier moment (tout gain d'XP, donc tout changement de
+ * niveau). Le bonus XP crédité ici passe PAR CE CHEMIN (pas par `awardXpOnce`), d'où la
+ * nécessité d'un second appel explicite plutôt que de compter sur celui d'`awardXpOnce` seul.
  */
 async function awardBadgeOnce(badgeId, xp) {
   const key = `badge:${badgeId}`;
-  return storage.update(COLLECTION, DOC_ID, (raw) => {
+  const result = await storage.update(COLLECTION, DOC_ID, (raw) => {
     const current = withDefaults(raw);
     if (current.rewardedKeys[key]) return undefined;
     return {
@@ -306,6 +346,8 @@ async function awardBadgeOnce(badgeId, xp) {
       badgesObtained: { ...current.badgesObtained, [badgeId]: Date.now() },
     };
   });
+  await verifierDeblocages();
+  return result;
 }
 
 /**
@@ -342,6 +384,142 @@ async function evaluerFamille(familleId, valeurCourante) {
     const state = await getGamificationState();
     await evaluerFamille("expert", state.xpTotal);
   }
+}
+
+// --- Déblocages (LOT G7, §6) — catalogue COMPLET des 34 déblocages, transcrit tel quel depuis
+// les Tables A/B/C figées de la roadmap (décision actée le 24/09/2026). Chaque déblocage porte
+// exactement une des 3 règles du §6 (`type` : "niveau" seul, "badge" seul, ou "niveauEtBadge"
+// combinant les deux) — jamais une quatrième combinaison. `categorie` (une des 5 : "palette",
+// "theme", "fond", "icone", "ruban") sert à regrouper l'affichage et à limiter l'"équipement" à
+// un par catégorie (§6, §10 point 4). `valeur` est la donnée technique consommée par le point
+// d'application réel du déblocage quand il en a un (ex. le nom de couleur ajouté à
+// js/domain/stickyNotes.js#COLORS pour une Palette, l'emoji affiché sur l'Accueil pour une
+// Icône) — `null` pour les déblocages dont l'application reste DIFFÉRÉE dans ce lot (voir
+// juste en dessous).
+//
+// ARBITRAGE (AskUserQuestion, 25/09/2026) : l'ATTRIBUTION des 34 déblocages est complète dans ce
+// lot (chacun devient "acquis" au bon moment, quelle que soit sa catégorie), mais l'APPLICATION
+// VISUELLE réelle ne couvre que 2 des 5 catégories :
+//  - **Palette** (2 déblocages) — appliquée : ajoute une couleur de post-it supplémentaire au
+//    sélecteur de couleur existant (js/components/stickyNoteShared.js), visible dès que le
+//    déblocage est acquis.
+//  - **Icône** (14 déblocages) — appliquée : une icône "équipée" (au plus une à la fois, voir
+//    js/domain/preferences.js#gamificationIconeEquipeeId) s'affiche à côté du titre "Mon
+//    pilotage" sur l'Accueil (choix explicite de Charles-Henri : l'app n'affiche aujourd'hui
+//    aucun "nom" d'utilisateur auquel accrocher ces icônes littéralement, comme le suggère le
+//    libellé du §6).
+//  - **Thème** (2 déblocages), **Fond** (2) et **Ruban** (14) — NON appliqués (18 déblocages au
+//    total) : `valeur: null` pour ces 18 entrées. Thème suppose plusieurs thèmes NOMMÉS alors
+//    que l'app n'a aujourd'hui qu'un interrupteur binaire clair/sombre (js/services/
+//    themeStore.js, aucune notion de thème "Ardoise"/"Nuit profonde") ; Fond et Ruban ciblent
+//    l'écran Progression (§9), qui est LOT G8 et n'existe pas encore. Ces 18 déblocages restent
+//    correctement détectés et listés comme "acquis" (Galerie, §7 — section Déblocages), mais
+//    sans aucun effet visuel ni écran d'équipement tant que leur infrastructure n'existe pas —
+//    à ajouter plus tard sans retoucher ce qui est construit ici, même philosophie que
+//    Régularité/Documentation (LOT G3) et Déblocages/Illustrations (LOT G6).
+//
+// Deux badges Or/Bronze requis par cette table restent eux-mêmes BLOQUÉS depuis LOT G3
+// (Régularité, Documentation — voir le commentaire détaillé sur `BADGES` plus bas) : les
+// déblocages `icone-documentation`, `icone-regularite`, `ruban-documentation` et
+// `ruban-regularite` ne pourront donc jamais être acquis tant que cet arbitrage n'est pas
+// rouvert — décision de LOT G3, non reprise par ce lot, mêmes 4 entrées déjà "condamnées" que
+// les 4 badges dont elles dépendent.
+export const DEBLOCAGES = [
+  // Table A — liés uniquement au niveau (6 déblocages, un par palier).
+  { id: "palette-ocean", categorie: "palette", nom: "Palette Océan", type: "niveau", niveau: 5, valeur: "ocean" },
+  { id: "theme-ardoise", categorie: "theme", nom: "Thème Ardoise", type: "niveau", niveau: 10, valeur: null },
+  { id: "fond-horizon", categorie: "fond", nom: "Fond Horizon", type: "niveau", niveau: 15, valeur: null },
+  { id: "theme-nuit-profonde", categorie: "theme", nom: "Thème Nuit profonde", type: "niveau", niveau: 20, valeur: null },
+  { id: "palette-aurore", categorie: "palette", nom: "Palette Aurore", type: "niveau", niveau: 25, valeur: "aurore" },
+  { id: "fond-sommet", categorie: "fond", nom: "Fond Sommet", type: "niveau", niveau: 30, valeur: null },
+
+  // Table B — liés uniquement à un badge Or (14 déblocages, un par famille) : icônes cosmétiques
+  // affichées à côté du titre "Mon pilotage" sur l'Accueil (arbitrage ci-dessus). `valeur`
+  // porte l'emoji réellement affiché — un STAND-IN, comme les emojis de FAMILLES_BADGES (LOT
+  // G6) : le vrai jeu d'icônes cosmétiques dédiées reste un travail de production graphique
+  // (LOT G9), pas encore fait.
+  { id: "icone-productivite", categorie: "icone", nom: "Icône Marteau", type: "badge", badgeId: "productivite-100-taches", famille: "productivite", valeur: "🔨" },
+  { id: "icone-delivery", categorie: "icone", nom: "Icône Fusée", type: "badge", badgeId: "delivery-15-projets", famille: "delivery", valeur: "🚀" },
+  { id: "icone-collaboration", categorie: "icone", nom: "Icône Maillon", type: "badge", badgeId: "collaboration-75-liens", famille: "collaboration", valeur: "🔗" },
+  { id: "icone-management", categorie: "icone", nom: "Icône Boussole", type: "badge", badgeId: "management-6-collaborateurs", famille: "management", valeur: "🧭" },
+  { id: "icone-objectifs", categorie: "icone", nom: "Icône Cible", type: "badge", badgeId: "objectifs-25-revues", famille: "objectifs", valeur: "🎯" },
+  { id: "icone-documentation", categorie: "icone", nom: "Icône Plume", type: "badge", badgeId: "documentation-25-modeles", famille: "documentation", valeur: "🖋️" },
+  { id: "icone-organisation", categorie: "icone", nom: "Icône Post-it doré", type: "badge", badgeId: "organisation-75-postits", famille: "organisation", valeur: "📌" },
+  { id: "icone-decisions", categorie: "icone", nom: "Icône Balance", type: "badge", badgeId: "decisions-25-decisions", famille: "decisions", valeur: "⚖️" },
+  { id: "icone-reunions", categorie: "icone", nom: "Icône Table ronde", type: "badge", badgeId: "reunions-60-reunions", famille: "reunions", valeur: "🍽️" },
+  { id: "icone-inbox", categorie: "icone", nom: "Icône Entonnoir", type: "badge", badgeId: "inbox-150-qualifications", famille: "inbox", valeur: "📥" },
+  { id: "icone-ressources", categorie: "icone", nom: "Icône Trombone", type: "badge", badgeId: "ressources-40-ressources", famille: "ressources", valeur: "📎" },
+  { id: "icone-prompts", categorie: "icone", nom: "Icône Éclair", type: "badge", badgeId: "prompts-40-prompts", famille: "prompts", valeur: "⚡" },
+  { id: "icone-regularite", categorie: "icone", nom: "Icône Flamme", type: "badge", badgeId: "regularite-serie-20j", famille: "regularite", valeur: "🔥" },
+  { id: "icone-expert", categorie: "icone", nom: "Icône Étoile", type: "badge", badgeId: "expert-5000-xp", famille: "expert", valeur: "⭐" },
+
+  // Table C — liés à un niveau ET un badge Bronze (14 déblocages, un par famille) : rubans pour
+  // la carte de progression (écran Progression, §9 — LOT G8, pas construit). `valeur: null`,
+  // non appliqués dans ce lot (arbitrage ci-dessus).
+  { id: "ruban-productivite", categorie: "ruban", nom: "Ruban Productivité", type: "niveauEtBadge", niveau: 15, badgeId: "productivite-1-tache", famille: "productivite", valeur: null },
+  { id: "ruban-delivery", categorie: "ruban", nom: "Ruban Delivery", type: "niveauEtBadge", niveau: 15, badgeId: "delivery-1-projet", famille: "delivery", valeur: null },
+  { id: "ruban-collaboration", categorie: "ruban", nom: "Ruban Collaboration", type: "niveauEtBadge", niveau: 15, badgeId: "collaboration-1-lien", famille: "collaboration", valeur: null },
+  { id: "ruban-management", categorie: "ruban", nom: "Ruban Manager", type: "niveauEtBadge", niveau: 15, badgeId: "management-1-collaborateur", famille: "management", valeur: null },
+  { id: "ruban-objectifs", categorie: "ruban", nom: "Ruban Objectifs", type: "niveauEtBadge", niveau: 15, badgeId: "objectifs-1-revue", famille: "objectifs", valeur: null },
+  { id: "ruban-documentation", categorie: "ruban", nom: "Ruban Documentation", type: "niveauEtBadge", niveau: 15, badgeId: "documentation-1-modele", famille: "documentation", valeur: null },
+  { id: "ruban-organisation", categorie: "ruban", nom: "Ruban Organisation", type: "niveauEtBadge", niveau: 15, badgeId: "organisation-1-postit", famille: "organisation", valeur: null },
+  { id: "ruban-decisions", categorie: "ruban", nom: "Ruban Décisions", type: "niveauEtBadge", niveau: 15, badgeId: "decisions-1-decision", famille: "decisions", valeur: null },
+  { id: "ruban-reunions", categorie: "ruban", nom: "Ruban Réunions", type: "niveauEtBadge", niveau: 15, badgeId: "reunions-1-reunion", famille: "reunions", valeur: null },
+  { id: "ruban-inbox", categorie: "ruban", nom: "Ruban Inbox", type: "niveauEtBadge", niveau: 15, badgeId: "inbox-1-qualification", famille: "inbox", valeur: null },
+  { id: "ruban-ressources", categorie: "ruban", nom: "Ruban Ressources", type: "niveauEtBadge", niveau: 15, badgeId: "ressources-1-ressource", famille: "ressources", valeur: null },
+  { id: "ruban-prompts", categorie: "ruban", nom: "Ruban Prompts", type: "niveauEtBadge", niveau: 15, badgeId: "prompts-1-prompt", famille: "prompts", valeur: null },
+  { id: "ruban-regularite", categorie: "ruban", nom: "Ruban Régularité", type: "niveauEtBadge", niveau: 15, badgeId: "regularite-serie-5j", famille: "regularite", valeur: null },
+  { id: "ruban-expert", categorie: "ruban", nom: "Ruban Expert", type: "niveauEtBadge", niveau: 15, badgeId: "expert-500-xp", famille: "expert", valeur: null },
+];
+
+/** Les 5 catégories de déblocages (§6, §10 point 4), dans un ordre d'affichage stable — un
+ *  déblocage "équipé" au plus par catégorie. Exportée pour que la Galerie (LOT G6) puisse
+ *  grouper sa nouvelle section Déblocages sans avoir à redéduire cette liste depuis le
+ *  catalogue. `equipable` distingue les 2 catégories réellement appliquées dans ce lot
+ *  (arbitrage ci-dessus) des 3 différées, pour que l'écran sache si un contrôle d'équipement a
+ *  un sens ou si le déblocage doit rester purement informatif pour l'instant. */
+export const CATEGORIES_DEBLOCAGES = [
+  { id: "palette", label: "🎨 Palette (post-it)", equipable: false },
+  { id: "theme", label: "🌓 Thème", equipable: false },
+  { id: "fond", label: "🖼️ Fond (écran Progression)", equipable: false },
+  { id: "icone", label: "🏷️ Icône (Accueil)", equipable: true },
+  { id: "ruban", label: "🎗️ Ruban (carte de progression)", equipable: false },
+];
+
+/**
+ * Vérifie si un déblocage donné est atteint pour un `niveau`/`state` donnés — une des 3 règles
+ * exactes du §6, jamais une quatrième. Fonction pure, pas d'accès storage : `niveau` et `state`
+ * (pour `badgesObtained`) sont fournis par l'appelant, qui les a déjà lus une seule fois plutôt
+ * que de les relire par déblocage.
+ */
+function deblocageAtteint(deblocage, state, niveau) {
+  if (deblocage.type === "niveau") return niveau >= deblocage.niveau;
+  if (deblocage.type === "badge") return !!state.badgesObtained[deblocage.badgeId];
+  if (deblocage.type === "niveauEtBadge") return niveau >= deblocage.niveau && !!state.badgesObtained[deblocage.badgeId];
+  return false;
+}
+
+/**
+ * Revérifie les 34 déblocages et attribue tous ceux dont la condition est déjà remplie mais pas
+ * encore marquée "acquise" (§10 point 4) — jamais un seul à la fois, même principe que
+ * `evaluerFamille()` (un rattrapage peut franchir plusieurs conditions d'un coup). Appelée aux
+ * deux seuls moments exigés par la roadmap (§6) : à la fin d'`awardXpOnce()` (tout gain d'XP,
+ * donc tout changement de niveau possible) et à la fin d'`awardBadgeOnce()` (toute attribution
+ * de badge) — jamais appelée directement par un `recordXxx()` du barème, pour ne pas dupliquer
+ * cette exigence sur 10 points d'écoute différents.
+ */
+async function verifierDeblocages() {
+  return storage.update(COLLECTION, DOC_ID, (raw) => {
+    const current = withDefaults(raw);
+    const niveau = niveauDepuisXP(current.xpTotal);
+    const aAjouter = {};
+    for (const deblocage of DEBLOCAGES) {
+      if (current.deblocagesAcquis[deblocage.id]) continue;
+      if (deblocageAtteint(deblocage, current, niveau)) aAjouter[deblocage.id] = Date.now();
+    }
+    if (!Object.keys(aAjouter).length) return undefined;
+    return { deblocagesAcquis: { ...current.deblocagesAcquis, ...aAjouter } };
+  });
 }
 
 // --- Séries (LOT G5, §5.3) — helpers utilisés uniquement par le barème XP ci-dessous (les 10
