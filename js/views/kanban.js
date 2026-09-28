@@ -1764,6 +1764,16 @@ export async function openTaskDetail(task, projects, { onClose } = {}) {
       task.notesLog = updated;
       return updated;
     },
+    onUpdate: async (noteId, text) => {
+      const updated = await tasksApi.updateNote(task.id, noteId, text);
+      task.notesLog = updated;
+      return updated;
+    },
+    onDelete: async (noteId) => {
+      const updated = await tasksApi.removeNote(task.id, noteId);
+      task.notesLog = updated;
+      return updated;
+    },
   });
   body.querySelector("#copy-meeting-title-btn").addEventListener("click", () => {
     copyMeetingTitle(meetingTitle);
