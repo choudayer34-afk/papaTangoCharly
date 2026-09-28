@@ -393,7 +393,13 @@
 // `styles/components.css`, `js/views/dashboard.js`, `js/views/gamification.js`,
 // `js/views/whatsnew.js` — nouvelle entrée). `CACHE_NAME` incrémenté en conséquence pour que ce
 // contenu modifié soit effectivement resservi.
-const CACHE_NAME = "pilotage-cache-v80";
+//
+// Ajout ad hoc du 28/09/2026 (retour direct de Charles-Henri, hors numérotation LOT) : fiche
+// détaillée au clic sur un badge de la Galerie (`js/views/gamification.js`, déjà précaché,
+// import ajouté de `js/components/modal.js`, déjà précaché lui aussi — aucun ajout de ligne
+// nécessaire) + `styles/components.css` (curseur cliquable) + `js/views/whatsnew.js` (nouvelle
+// entrée). `CACHE_NAME` incrémenté à nouveau pour ce contenu modifié.
+const CACHE_NAME = "pilotage-cache-v81";
 const APP_SHELL = [
   "./",
   "./index.html",
