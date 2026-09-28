@@ -203,7 +203,7 @@ test.describe("LOT G4 — Badges mensuels (TODO_GAMIFICATION.md §5.2), jours ou
       const apresSuivi = await gamificationApi.getGamificationState();
       const livreurApresSuivi = apresSuivi.badgesMensuelsCourant.jours.livreur.length;
 
-      const project = await projectsApi.createProject({ title: `Test LOT G4 — livreur projet ${Date.now()}` });
+      const project = await projectsApi.createProject({ name: `Test LOT G4 — livreur projet ${Date.now()}` });
       await projectsApi.closeProject(project.id);
       await new Promise((r) => setTimeout(r, 500));
       const apresProjet = await gamificationApi.getGamificationState();
