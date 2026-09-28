@@ -1873,25 +1873,20 @@ tbody.drag-over-group {
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-md);
   overflow: hidden;
-  cursor: grab;
 }
-.pinned-float-note:active { cursor: grabbing; }
+/* Édition en place (complément du 28/09/2026, voir js/components/pinnedNotesOverlay.js#buildFloatingNote) :
+   le corps de la carte contient désormais de vrais champs de saisie (titre, textarea, checklist,
+   réutilisant tels quels .sticky-note-mode-row/.sticky-note-body/.sticky-note-textarea du plan de
+   travail complet, plus haut dans ce fichier) — seul l'EN-TÊTE reste la zone de glisser, "grab"
+   n'est donc plus posé sur toute la carte mais seulement ici, comme .sticky-note-header ci-dessus. */
 .pinned-float-note-header {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 6px 6px 2px;
+  cursor: grab;
 }
-.pinned-float-note-title {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  font-size: var(--font-size-sm);
-  padding: 2px 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.pinned-float-note-header:active { cursor: grabbing; }
 .pinned-float-unpin-btn,
 .pinned-float-note .sticky-note-menu-btn {
   flex: 0 0 auto;
@@ -1902,19 +1897,6 @@ tbody.drag-over-group {
   line-height: 1;
   padding: 2px 6px;
   color: inherit;
-}
-.pinned-float-note-preview {
-  /* Avant le 28/09/2026 : extrait fixe (80 caractères, plafonné à 4.5em) — un post-it flottant
-     n'avait alors aucune taille propre à remplir. Remplit désormais tout l'espace restant de la
-     carte et défile au besoin (`min-height: 0` indispensable pour qu'un enfant flex avec overflow
-     accepte de rétrécir sous sa taille de contenu naturelle) : agrandir la carte
-     (.sticky-note-resize-handle, voir plus haut) montre directement plus de contenu réel. */
-  flex: 1 1 auto;
-  min-height: 0;
-  padding: 0 8px 8px;
-  font-size: var(--font-size-sm);
-  white-space: pre-wrap;
-  overflow-y: auto;
 }
 
 .sticky-color-swatch {
