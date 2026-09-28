@@ -2366,6 +2366,41 @@ async function openPrepareEadpModal(person, { onDone } = {}) {
   });
 }
 
+// TODO-030 (LOT 14, 28/09/2026, retour direct de Charles-Henri après livraison de TODO-003 —
+// BESOIN-007 : "ce serait utile aussi devant les champs date des fiches de Suivi") — périmètre
+// resté non traité par TODO-039 (voir le commentaire au-dessus de `appendFollowUpRows` plus haut :
+// la mutualisation "+1j/+7j" avait été posée sur les LIGNES de Suivi déjà affichées, pas sur CE
+// formulaire de création/édition, `#fu-due`/`#fu-control`/`#fu-edit-due`/`#fu-edit-control`).
+// Deux boutons compacts "+1 j"/"+7 j" (même classe visuelle `.kanban-postpone-btn` que partout
+// ailleurs dans l'app, même calcul `dateUtils.addDaysToIsoDate` déjà partagé — voir son
+// commentaire dans js/services/dateUtils.js) juste après le champ : mettent à jour directement la
+// VALEUR du champ, sans écriture Firestore (le formulaire n'est pas encore soumis) —
+// contrairement à la version déjà existante sur les lignes de Suivi, qui persiste immédiatement.
+// Pas de bouton "date libre" dédié ici : le champ date natif juste à côté EST déjà la saisie
+// libre, contrairement au contexte d'affichage (lecture seule + panneau) où ce bouton a un sens.
+function attachQuickDateButtons(inputEl) {
+  if (!inputEl) return;
+  const wrap = document.createElement("div");
+  // Classe dédiée (comme `checklist-line-menu-btn` ailleurs dans l'app) pour permettre de cibler
+  // ce contrôle précis en test sans dépendre du texte des boutons.
+  wrap.className = "field-quick-dates";
+  wrap.style.display = "flex";
+  wrap.style.gap = "6px";
+  wrap.style.marginTop = "4px";
+  for (const days of [1, 7]) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "kanban-postpone-btn";
+    btn.textContent = `+${days} j`;
+    btn.setAttribute("aria-label", `Avancer cette date de ${days} jour${days > 1 ? "s" : ""}`);
+    btn.addEventListener("click", () => {
+      inputEl.value = dateUtils.addDaysToIsoDate(inputEl.value || null, days);
+    });
+    wrap.appendChild(btn);
+  }
+  inputEl.insertAdjacentElement("afterend", wrap);
+}
+
 /**
  * Créer un suivi. `person` est optionnel : appelée depuis une fiche personne, il est déjà
  * connu ; appelée depuis "+ Créer et lier" (fil conducteur, components/linkedItems.js) ou
@@ -2597,6 +2632,8 @@ export async function openCreateFollowUpModal({ person, projectId, defaultDirect
   };
   body.querySelectorAll('input[name="fu-direction"]').forEach((r) => r.addEventListener("change", () => applyDirection(r.value)));
   applyDirection(defaultDirection);
+  attachQuickDateButtons(body.querySelector("#fu-due"));
+  attachQuickDateButtons(body.querySelector("#fu-control"));
 
   // "En quoi c'est notable" (28/09/2026) — visible seulement si "Positif"/"Négatif" est choisi,
   // même principe que #fu-category-field ci-dessus pour "Sens".
@@ -2942,6 +2979,8 @@ export async function openEditFollowUpModal(followUp, { onDone } = {}) {
       body.querySelector("#fu-edit-control-label").textContent = isToTell ? "Avant quand dois-je lui en parler ?" : "Prochain contrôle";
     })
   );
+  attachQuickDateButtons(body.querySelector("#fu-edit-due"));
+  attachQuickDateButtons(body.querySelector("#fu-edit-control"));
   // "En quoi c'est notable" (28/09/2026) — visible seulement si "Positif"/"Négatif" est choisi.
   body.querySelectorAll('input[name="fu-edit-notable"]').forEach((r) =>
     r.addEventListener("change", () => {
