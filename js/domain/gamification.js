@@ -444,15 +444,31 @@ async function evaluerFamille(familleId, valeurCourante) {
 //    pilotage" sur l'Accueil (choix explicite de Charles-Henri : l'app n'affiche aujourd'hui
 //    aucun "nom" d'utilisateur auquel accrocher ces icônes littéralement, comme le suggère le
 //    libellé du §6).
-//  - **Thème** (2 déblocages), **Fond** (2) et **Ruban** (14) — NON appliqués (18 déblocages au
-//    total) : `valeur: null` pour ces 18 entrées. Thème suppose plusieurs thèmes NOMMÉS alors
-//    que l'app n'a aujourd'hui qu'un interrupteur binaire clair/sombre (js/services/
-//    themeStore.js, aucune notion de thème "Ardoise"/"Nuit profonde") ; Fond et Ruban ciblent
-//    l'écran Progression (§9), qui est LOT G8 et n'existe pas encore. Ces 18 déblocages restent
-//    correctement détectés et listés comme "acquis" (Galerie, §7 — section Déblocages), mais
-//    sans aucun effet visuel ni écran d'équipement tant que leur infrastructure n'existe pas —
-//    à ajouter plus tard sans retoucher ce qui est construit ici, même philosophie que
-//    Régularité/Documentation (LOT G3) et Déblocages/Illustrations (LOT G6).
+//  - **Thème** (2 déblocages), **Fond** (2) et **Ruban** (14) — au 25/09/2026 (LOT G7), NON
+//    appliqués (18 déblocages au total, `valeur: null`) : Thème supposait plusieurs thèmes NOMMÉS
+//    alors que l'app n'avait qu'un interrupteur binaire clair/sombre (js/services/themeStore.js,
+//    aucune notion de thème "Ardoise"/"Nuit profonde") ; Fond et Ruban ciblaient l'écran
+//    Progression (§9), qui était LOT G8, pas encore construit.
+//
+//    **Mise à jour du 28/09/2026 (ad hoc, suite directe de LOT G7/LOT G8, retour de Charles-Henri
+//    "on fait" — deux points d'ambiguïté clarifiés par AskUserQuestion avant tout développement,
+//    pas une réouverture unilatérale de LOT G7)** : les 18 déblocages restants sont désormais
+//    APPLIQUÉS, chacun avec sa propre `valeur` réelle (voir le catalogue `DEBLOCAGES` ci-dessous) :
+//     - **Thème** — recolore TOUTE l'app (décision de Charles-Henri), mais UNIQUEMENT l'accent
+//       (`--color-primary` et ses 2 dérivés, styles/tokens.css), jamais les surfaces/texte/
+//       couleurs sémantiques ; se superpose au mode clair/sombre existant plutôt que de le
+//       remplacer (attribut séparé `data-gamification-theme`, indépendant de `data-theme`) — voir
+//       js/services/gamificationThemeStore.js pour le détail complet de cette décision.
+//     - **Fond** — arrière-plan discret de l'écran Progression UNIQUEMENT (§9, comme prévu par la
+//       Table A), voir js/views/gamification.js#renderGamificationProgression.
+//     - **Ruban** — affiché sur la carte "Prochain niveau" de l'écran Progression (la "carte de
+//       progression" du §6) — ajout d'une 9ᵉ section à cet écran, non listée par les 8 éléments du
+//       §9 lui-même (contradiction §6/§9 signalée à Charles-Henri, qui a choisi cette option
+//       plutôt que de respecter le §9 à la lettre en confinant les Rubans à la Galerie).
+//    Les 3 catégories passent `equipable: true` dans `CATEGORIES_DEBLOCAGES` ci-dessous (un
+//    déblocage équipé par catégorie à la fois, §10 point 4 — même mécanique déjà en place pour
+//    Icône) : `js/views/gamification.js#renderTuileDeblocage` gère déjà ce bouton "Équiper" de
+//    façon générique par catégorie, aucun nouveau composant nécessaire dans la Galerie elle-même.
 //
 // Deux badges Or/Bronze requis par cette table restent eux-mêmes BLOQUÉS depuis LOT G3
 // (Régularité, Documentation — voir le commentaire détaillé sur `BADGES` plus bas) : les
@@ -463,11 +479,17 @@ async function evaluerFamille(familleId, valeurCourante) {
 export const DEBLOCAGES = [
   // Table A — liés uniquement au niveau (6 déblocages, un par palier).
   { id: "palette-ocean", categorie: "palette", nom: "Palette Océan", type: "niveau", niveau: 5, valeur: "ocean" },
-  { id: "theme-ardoise", categorie: "theme", nom: "Thème Ardoise", type: "niveau", niveau: 10, valeur: null },
-  { id: "fond-horizon", categorie: "fond", nom: "Fond Horizon", type: "niveau", niveau: 15, valeur: null },
-  { id: "theme-nuit-profonde", categorie: "theme", nom: "Thème Nuit profonde", type: "niveau", niveau: 20, valeur: null },
+  // `valeur` (28/09/2026, ad hoc) : même convention que Palette juste au-dessus, une clé courte
+  // distincte de l'id — consommée par js/services/gamificationThemeStore.js (attribut
+  // `data-gamification-theme`).
+  { id: "theme-ardoise", categorie: "theme", nom: "Thème Ardoise", type: "niveau", niveau: 10, valeur: "ardoise" },
+  // `valeur` (28/09/2026, ad hoc) : consommée par js/views/gamification.js#
+  // renderGamificationProgression (classe CSS `.progression-fond--${valeur}`, styles/
+  // components.css).
+  { id: "fond-horizon", categorie: "fond", nom: "Fond Horizon", type: "niveau", niveau: 15, valeur: "horizon" },
+  { id: "theme-nuit-profonde", categorie: "theme", nom: "Thème Nuit profonde", type: "niveau", niveau: 20, valeur: "nuit-profonde" },
   { id: "palette-aurore", categorie: "palette", nom: "Palette Aurore", type: "niveau", niveau: 25, valeur: "aurore" },
-  { id: "fond-sommet", categorie: "fond", nom: "Fond Sommet", type: "niveau", niveau: 30, valeur: null },
+  { id: "fond-sommet", categorie: "fond", nom: "Fond Sommet", type: "niveau", niveau: 30, valeur: "sommet" },
 
   // Table B — liés uniquement à un badge Or (14 déblocages, un par famille) : icônes cosmétiques
   // affichées à côté du titre "Mon pilotage" sur l'Accueil (arbitrage ci-dessus). `valeur`
@@ -492,20 +514,28 @@ export const DEBLOCAGES = [
   // Table C — liés à un niveau ET un badge Bronze (14 déblocages, un par famille) : rubans pour
   // la carte de progression (écran Progression, §9 — LOT G8, pas construit). `valeur: null`,
   // non appliqués dans ce lot (arbitrage ci-dessus).
-  { id: "ruban-productivite", categorie: "ruban", nom: "Ruban Productivité", type: "niveauEtBadge", niveau: 15, badgeId: "productivite-1-tache", famille: "productivite", valeur: null },
-  { id: "ruban-delivery", categorie: "ruban", nom: "Ruban Delivery", type: "niveauEtBadge", niveau: 15, badgeId: "delivery-1-projet", famille: "delivery", valeur: null },
-  { id: "ruban-collaboration", categorie: "ruban", nom: "Ruban Collaboration", type: "niveauEtBadge", niveau: 15, badgeId: "collaboration-1-lien", famille: "collaboration", valeur: null },
-  { id: "ruban-management", categorie: "ruban", nom: "Ruban Manager", type: "niveauEtBadge", niveau: 15, badgeId: "management-1-collaborateur", famille: "management", valeur: null },
-  { id: "ruban-objectifs", categorie: "ruban", nom: "Ruban Objectifs", type: "niveauEtBadge", niveau: 15, badgeId: "objectifs-1-revue", famille: "objectifs", valeur: null },
-  { id: "ruban-documentation", categorie: "ruban", nom: "Ruban Documentation", type: "niveauEtBadge", niveau: 15, badgeId: "documentation-1-modele", famille: "documentation", valeur: null },
-  { id: "ruban-organisation", categorie: "ruban", nom: "Ruban Organisation", type: "niveauEtBadge", niveau: 15, badgeId: "organisation-1-postit", famille: "organisation", valeur: null },
-  { id: "ruban-decisions", categorie: "ruban", nom: "Ruban Décisions", type: "niveauEtBadge", niveau: 15, badgeId: "decisions-1-decision", famille: "decisions", valeur: null },
-  { id: "ruban-reunions", categorie: "ruban", nom: "Ruban Réunions", type: "niveauEtBadge", niveau: 15, badgeId: "reunions-1-reunion", famille: "reunions", valeur: null },
-  { id: "ruban-inbox", categorie: "ruban", nom: "Ruban Inbox", type: "niveauEtBadge", niveau: 15, badgeId: "inbox-1-qualification", famille: "inbox", valeur: null },
-  { id: "ruban-ressources", categorie: "ruban", nom: "Ruban Ressources", type: "niveauEtBadge", niveau: 15, badgeId: "ressources-1-ressource", famille: "ressources", valeur: null },
-  { id: "ruban-prompts", categorie: "ruban", nom: "Ruban Prompts", type: "niveauEtBadge", niveau: 15, badgeId: "prompts-1-prompt", famille: "prompts", valeur: null },
-  { id: "ruban-regularite", categorie: "ruban", nom: "Ruban Régularité", type: "niveauEtBadge", niveau: 15, badgeId: "regularite-serie-5j", famille: "regularite", valeur: null },
-  { id: "ruban-expert", categorie: "ruban", nom: "Ruban Expert", type: "niveauEtBadge", niveau: 15, badgeId: "expert-500-xp", famille: "expert", valeur: null },
+  // `valeur` (28/09/2026, ad hoc) : une couleur hexadécimale par famille, consommée directement
+  // par js/views/gamification.js#renderGamificationProgression (fond du ruban affiché). 14
+  // teintes choisies pour rester visuellement DISTINCTES les unes des autres ET des jetons
+  // sémantiques existants (`--color-success`/`-warning`/`-danger`/`-info`/`-waiting`,
+  // styles/tokens.css) — jamais réutilisées telles quelles, pour qu'un ruban ne soit jamais
+  // confondu avec un statut (retard/attention/succès) ailleurs dans l'app. Fixes dans les deux
+  // thèmes clair/sombre (comme les jetons `-bg` existants) : un ruban est une petite pastille de
+  // couleur pleine avec texte blanc, pas une surface de page qui doit s'adapter au thème.
+  { id: "ruban-productivite", categorie: "ruban", nom: "Ruban Productivité", type: "niveauEtBadge", niveau: 15, badgeId: "productivite-1-tache", famille: "productivite", valeur: "#AC4E39" },
+  { id: "ruban-delivery", categorie: "ruban", nom: "Ruban Delivery", type: "niveauEtBadge", niveau: 15, badgeId: "delivery-1-projet", famille: "delivery", valeur: "#AC6B39" },
+  { id: "ruban-collaboration", categorie: "ruban", nom: "Ruban Collaboration", type: "niveauEtBadge", niveau: 15, badgeId: "collaboration-1-lien", famille: "collaboration", valeur: "#ACA439" },
+  { id: "ruban-management", categorie: "ruban", nom: "Ruban Manager", type: "niveauEtBadge", niveau: 15, badgeId: "management-1-collaborateur", famille: "management", valeur: "#97AC39" },
+  { id: "ruban-objectifs", categorie: "ruban", nom: "Ruban Objectifs", type: "niveauEtBadge", niveau: 15, badgeId: "objectifs-1-revue", famille: "objectifs", valeur: "#7AAC39" },
+  { id: "ruban-documentation", categorie: "ruban", nom: "Ruban Documentation", type: "niveauEtBadge", niveau: 15, badgeId: "documentation-1-modele", famille: "documentation", valeur: "#5EAC39" },
+  { id: "ruban-organisation", categorie: "ruban", nom: "Ruban Organisation", type: "niveauEtBadge", niveau: 15, badgeId: "organisation-1-postit", famille: "organisation", valeur: "#41AC39" },
+  { id: "ruban-decisions", categorie: "ruban", nom: "Ruban Décisions", type: "niveauEtBadge", niveau: 15, badgeId: "decisions-1-decision", famille: "decisions", valeur: "#39AC4E" },
+  { id: "ruban-reunions", categorie: "ruban", nom: "Ruban Réunions", type: "niveauEtBadge", niveau: 15, badgeId: "reunions-1-reunion", famille: "reunions", valeur: "#39AC93" },
+  { id: "ruban-inbox", categorie: "ruban", nom: "Ruban Inbox", type: "niveauEtBadge", niveau: 15, badgeId: "inbox-1-qualification", famille: "inbox", valeur: "#39A8AC" },
+  { id: "ruban-ressources", categorie: "ruban", nom: "Ruban Ressources", type: "niveauEtBadge", niveau: 15, badgeId: "ressources-1-ressource", famille: "ressources", valeur: "#398CAC" },
+  { id: "ruban-prompts", categorie: "ruban", nom: "Ruban Prompts", type: "niveauEtBadge", niveau: 15, badgeId: "prompts-1-prompt", famille: "prompts", valeur: "#6539AC" },
+  { id: "ruban-regularite", categorie: "ruban", nom: "Ruban Régularité", type: "niveauEtBadge", niveau: 15, badgeId: "regularite-serie-5j", famille: "regularite", valeur: "#8239AC" },
+  { id: "ruban-expert", categorie: "ruban", nom: "Ruban Expert", type: "niveauEtBadge", niveau: 15, badgeId: "expert-500-xp", famille: "expert", valeur: "#9F39AC" },
 ];
 
 /** Les 5 catégories de déblocages (§6, §10 point 4), dans un ordre d'affichage stable — un
@@ -516,10 +546,12 @@ export const DEBLOCAGES = [
  *  un sens ou si le déblocage doit rester purement informatif pour l'instant. */
 export const CATEGORIES_DEBLOCAGES = [
   { id: "palette", label: "🎨 Palette (post-it)", equipable: false },
-  { id: "theme", label: "🌓 Thème", equipable: false },
-  { id: "fond", label: "🖼️ Fond (écran Progression)", equipable: false },
+  // Thème/Fond/Ruban passés à `equipable: true` le 28/09/2026 (ad hoc, voir le commentaire détaillé
+  // sur `DEBLOCAGES` ci-dessus) — auparavant `false` faute d'application visuelle (LOT G7).
+  { id: "theme", label: "🌓 Thème", equipable: true },
+  { id: "fond", label: "🖼️ Fond (écran Progression)", equipable: true },
   { id: "icone", label: "🏷️ Icône (Accueil)", equipable: true },
-  { id: "ruban", label: "🎗️ Ruban (carte de progression)", equipable: false },
+  { id: "ruban", label: "🎗️ Ruban (carte de progression)", equipable: true },
 ];
 
 /**
