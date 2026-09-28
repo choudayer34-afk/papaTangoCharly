@@ -81,6 +81,28 @@ export async function addNote(id, text) {
   return updated.notesLog;
 }
 
+// `updateNote`/`removeNote` (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
+// pour toutes les notes, les modifier si besoin") — la règle "additif seulement" documentée
+// dans js/components/notesBlock.js est levée sur les 8 fiches qui partagent ce journal, celle-ci
+// (la Ressource) comprise.
+export async function updateNote(id, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Ressource introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) };
+  });
+  return updated.notesLog;
+}
+
+export async function removeNote(id, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Ressource introuvable : " + id);
+    return { notesLog: (current.notesLog || []).filter((n) => n.id !== noteId) };
+  });
+  return updated.notesLog;
+}
+
 export async function updateResource(id, patch) {
   const updated = await storage.update(COLLECTION, id, (current) => {
     if (!current) throw new Error("Ressource introuvable : " + id);
