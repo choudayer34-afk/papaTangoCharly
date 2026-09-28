@@ -57,6 +57,11 @@
     // "icone" des déblocages) sans passer par l'écran Galerie. Aucun changement à ce fichier
     // lui-même au-delà de son ajout ici.
     import * as preferencesApi from "/js/domain/preferences.js";
+    // Ajouté le 28/09/2026 (ad hoc, application visuelle de Thème/Fond/Ruban, suite directe de
+    // LOT G7/LOT G8) : nécessaire pour tester applyGamificationTheme() (attribut DOM
+    // `data-gamification-theme`) sans passer par l'écran Galerie ni js/app.js. Aucun changement à
+    // ce fichier lui-même au-delà de son ajout ici.
+    import * as gamificationThemeStore from "/js/services/gamificationThemeStore.js";
 
     window.__pilotageTestApi = {
       firebaseApi,
@@ -75,6 +80,7 @@
       promptsApi,
       gamificationApi,
       preferencesApi,
+      gamificationThemeStore,
     };
     window.__pilotageTestApiReady = true;
   </script>
