@@ -47,6 +47,10 @@ import { MODULE_CATALOG, DEFAULT_NAV_MAIN, notifyNavChanged } from "../services/
 // détaillé de HOME_ORDER_LABELS/DASHBOARD_SECTIONS plus bas et js/components/bureau.js).
 import * as stickyNotesApi from "../domain/stickyNotes.js";
 import { mountBureau } from "../components/bureau.js";
+// LOT G10 (TODO_GAMIFICATION.md §13.1, 28/09/2026) — carte "Progression", en plus (jamais à la
+// place) de l'icône équipée ci-dessus. Voir js/components/progressionCard.js pour le détail
+// complet : toujours visible, hors du système de sections réordonnables/masquables ci-dessous.
+import { mountProgressionCard } from "../components/progressionCard.js";
 
 // TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
 // (décision produit du 15/09/2026, voir js/views/inbox.js) : un seul libellé affiché désormais,
@@ -145,6 +149,11 @@ export function renderDashboard(container) {
       <div id="capture-draft-banner"></div>
       <div id="review-reminder"></div>
       <div id="notif-optin"></div>
+      <!-- Carte "Progression" (LOT G10, §13.1) — position FIXE, volontairement hors du bloc
+           réordonnable ci-dessous (§13.1 : "toujours visible [...] jamais masquée en dessous d'un
+           seuil d'activité minimal"), donc jamais une entrée de HOME_ORDER_KEYS que Charles-Henri
+           pourrait décocher ou déplacer comme les rubriques qui suivent. -->
+      <div id="progression-card-section"></div>
       <!-- Bloc réordonnable (retour de Charles-Henri, 13/09/2026 : "positionner, organiser des
            rubriques comme je l'entends") — un simple conteneur flex-colonne dont chaque enfant
            reçoit un ordre CSS (propriété "order") calculé par applyHomeOrder() ; le HTML garde
@@ -236,6 +245,10 @@ export function renderDashboard(container) {
   // de cet Accueil, mise à jour via `bureauHandle.update(stickyNotes)` (voir l'abonnement
   // Firestore plus bas) plutôt que reconstruite.
   const bureauHandle = mountBureau(bureauSection);
+  // Carte "Progression" (LOT G10, §13.1) — même principe de montage unique que "Mon bureau"
+  // ci-dessus (un composant à ses propres abonnements temps réel, jamais reconstruit à chaque
+  // changement), voir js/components/progressionCard.js.
+  const progressionCardCleanup = mountProgressionCard(container.querySelector("#progression-card-section"));
   const recentViewedSection = container.querySelector("#recent-viewed-section");
   const focusSection = container.querySelector("#focus-section");
   const focusQueueSection = container.querySelector("#focus-queue-section");
@@ -2263,6 +2276,7 @@ export function renderDashboard(container) {
     unsubTags();
     unsubStickyNotes();
     unsubGamification();
+    progressionCardCleanup();
   };
 }
 
