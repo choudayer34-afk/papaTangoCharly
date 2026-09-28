@@ -38,7 +38,26 @@ rules_version = '2';
 // de fichier n'est donc pas théorique. `allow get` et `allow read` sont fusionnés en un seul
 // `allow read` ci-dessous (strictement équivalent, `read` recouvrant déjà `get`), sans aucun
 // changement de permission réelle par rapport à ce que Charles-Henri a déployé.
-
+//
+// TROISIÈME CORRECTIF DU 28/09/2026 (première exécution réelle de `npm run test:rules` en CI,
+// retour de Charles-Henri — 11 tests sur 12 passent, 1 échec sur le test LE PLUS BASIQUE :
+// "le propriétaire d'un compte autorisé peut lire/écrire son propre espace",
+// tests/rules/firestore.rules.test.js:47). Erreur : `PERMISSION_DENIED` / "Property disabled is
+// undefined on object", évaluation en échec aux DEUX blocs `allow read, write` de
+// `match /users/{uid}/...` ci-dessous (celui-ci, et le bloc admin juste après — voir le détail
+// sur ce dernier). Bug introduit PAR CE CORRECTIF-CI (pas par le deuxième correctif ci-dessus) :
+// `.data.disabled` (accès direct au champ par point) lève une erreur d'évaluation dès que le
+// document `allowedUsers/{email}` EXISTE mais ne contient PAS le champ `disabled` — ce qui est
+// le cas normal de tout compte jamais fermé (`disabled` absent = compte autorisé, voir
+// tests/support/seed.js : le compte de test "alice" est semé avec un document VIDE `{}`).
+// C'est un bug différent du premier correctif du 28/09/2026 ci-dessus : celui-là protégeait
+// contre un DOCUMENT absent (`get()` sur un chemin inexistant lève une erreur — réglé par
+// `exists() &&` en court-circuit) ; celui-ci concerne un CHAMP absent sur un document qui existe
+// bien (`.data.disabled` lève aussi une erreur dans ce cas, `exists()` ne protège pas contre
+// ça). Remplacé `.data.disabled` par `.data.get('disabled', false)`, l'idiome Firestore pour un
+// accès à un champ de map AVEC valeur par défaut : renvoie `false` au lieu de lever une erreur
+// quand la clé `disabled` est absente — comportement identique à celui voulu, mais qui ne casse
+// plus l'évaluation pour tous les comptes normaux (non fermés).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -108,10 +127,23 @@ service cloud.firestore {
       // règles Firestore) — si le document n'existe pas, on s'arrête là, refus propre, sans
       // jamais appeler `get()` sur un chemin absent ; s'il existe, `disabled` est ensuite
       // réellement vérifié, donc un compte fermé reste bloqué.
+      //
+      // TROISIÈME CORRECTIF DU 28/09/2026 (voir le commentaire détaillé en tête de fichier) :
+      // `exists()` protège contre un DOCUMENT absent, mais pas contre un CHAMP absent sur un
+      // document qui existe bien — `.data.disabled` (accès par point) lève aussi une erreur
+      // d'évaluation dans ce second cas, qui est pourtant le cas normal de tout compte jamais
+      // fermé (`disabled` absent = compte autorisé). Confirmé par le premier passage réel de
+      // `npm run test:rules` : le test le plus basique ("le propriétaire d'un compte autorisé
+      // peut lire/écrire son propre espace", tests/rules/firestore.rules.test.js:47, compte
+      // "alice" semé avec un document `allowedUsers` VIDE `{}`) échouait avec exactement cette
+      // erreur ("Property disabled is undefined on object"). Remplacé `.data.disabled` par
+      // `.data.get('disabled', false)` : renvoie `false` par défaut si la clé est absente, au
+      // lieu de lever une erreur — un compte fermé (`disabled: true` réellement présent) reste
+      // bloqué à l'identique.
       allow read, write: if request.auth != null
                            && request.auth.uid == uid
                            && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower()))
-                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.disabled != true;
+                           && get(/databases/$(database)/documents/allowedUsers/$(request.auth.token.email.lower())).data.get('disabled', false) != true;
 
       // SEC-002 : accès administrateur large à TOUTES les données de tous les utilisateurs,
       // nécessaire à l'export/suppression de compte depuis "👥 Comptes"
@@ -121,6 +153,11 @@ service cloud.firestore {
       // Une Cloud Function avec Admin SDK (bypass des règles côté serveur) reste une
       // alternative théorique, non retenue — elle représenterait un changement d'architecture
       // hors périmètre de cette roadmap.
+      // (Ce bloc n'était pas en cause dans le TROISIÈME CORRECTIF ci-dessus — il ne lit aucun
+      // champ `disabled` — mais son numéro de ligne apparaissait dans le rapport de test (L124)
+      // car le moteur de règles évalue TOUS les blocs `allow` correspondants avant de refuser :
+      // celui-ci s'évaluait proprement à `false` pour "alice", pendant que le bloc ci-dessus
+      // levait son erreur.)
       allow read, write: if request.auth != null
                            && request.auth.token.email.lower() == "ch-houdayer@hotmail.fr";
     }
