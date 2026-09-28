@@ -1820,6 +1820,14 @@ tbody.drag-over-group {
 .sticky-note--purple { background: #E6DBFB; color: #3A215C; }
 .sticky-note--gray   { background: #E4E4E9; color: #33333B; }
 
+/* "Océan"/"Aurore" (LOT G7, TODO_GAMIFICATION.md §6 Table A, 25/09/2026) — 2 couleurs
+   supplémentaires débloquées par la gamification (js/domain/gamification.js#DEBLOCAGES,
+   catégorie "palette"), même traitement flat pastel + texte sombre que les 6 couleurs fixes
+   ci-dessus, jamais proposées tant que le déblocage correspondant n'est pas acquis (voir
+   js/components/stickyNoteShared.js#COULEURS_DEBLOCABLES). */
+.sticky-note--ocean   { background: #C7EDEA; color: #0D4A48; }
+.sticky-note--aurore  { background: #FBDCEF; color: #5C1A4A; }
+
 /* ---------- Post-it flottants (LOT 13, complément du 23/09/2026, retour direct de Charles-Henri :
    "je dois pouvoir [mettre un post-it épinglé] n'importe où dans l'écran même en dehors du
    bureau [...] il [ne doit pas passer] au dessous de toutes les autres modales") — voir
@@ -2071,6 +2079,15 @@ tbody.drag-over-group {
   box-shadow: 0 0 0 3px var(--color-waiting-bg), var(--shadow-md);
 }
 .badge-tuile--legendaire .badge-tuile-rarete { color: var(--color-waiting); }
+
+/* Déblocages (LOT G7, js/views/gamification.js#renderTuileDeblocage) — pas de notion de rareté
+   ici (contrairement aux badges ci-dessus, qui réutilisent .badge-tuile telle quelle), un seul
+   traitement "acquis" neutre suffit à distinguer une tuile acquise d'une tuile verrouillée
+   (déjà couverte par `.badge-tuile--verrouille` ci-dessous, générique et indépendant de la
+   rareté). DOIT rester déclaré AVANT ce bloc `--verrouille`, même règle de cascade que les 5
+   modificateurs de rareté au-dessus : sinon une tuile de déblocage verrouillée réafficherait la
+   bordure "acquis". */
+.badge-tuile--deblocage { border-color: var(--color-success); }
 
 /* Verrouillé — DOIT rester déclaré après les 5 modificateurs de rareté ci-dessus : à
    spécificité CSS égale (une seule classe), c'est l'ORDRE dans cette feuille qui tranche, donc
