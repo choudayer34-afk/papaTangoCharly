@@ -346,6 +346,50 @@ Charles-Henri avant de démarrer LOT G2 de `TODO_GAMIFICATION.md` — 3 échecs,
 exécutée dans l'environnement où elle a été rédigée (registre npm bloqué, émulateur Firebase non
 disponible ici). À reconfirmer au premier lancement réel qui suit ce correctif.
 
+## "Petite parenthèse" Objectifs/EADP — ajoutée le 28/09/2026, hors numérotation LOT
+
+Retour direct de Charles-Henri (suivi consolidé par indicateur avec édition/suppression d'un
+suivi, notes du journal "Notes & repères" modifiables/supprimables sur les 8 fiches qui le
+partagent, tag EADP positif/négatif/neutre sur les notes de Personne, `notableReason` sur un Suivi
+notable, et exports PDF/Excel des Objectifs) — voir les commentaires en tête de
+`js/domain/objectives.js`, `js/domain/people.js`, `js/domain/followups.js`,
+`js/domain/objectivesExport.js`, `js/services/pdfWriter.js` et `js/services/xlsxWriter.js` pour le
+détail complet des arbitrages. Trois nouveaux fichiers de test, `support/harness.html` complété
+avec `peopleApi` (absent jusqu'ici).
+
+- **`unit/objectifs-eadp-suivi.spec.js`** — vérification directe des données :
+  `objectivesApi.updateEntry` (édition en place d'un suivi existant, sans jamais créer de doublon
+  ni toucher `id`/`createdAt`), `removeEntry` (suppression ciblée, sans cascade sur les autres
+  suivis), `consolidateIndicatorTracking` (historique décroissant, "réalisé" croissant et
+  note-only, "dernier prévu" strictement limité au suivi le plus récent — jamais un cumul des
+  anciens "prévu"), et `previousStepOutcome` (persistance d'une valeur valide, repli sûr à `null`
+  pour une valeur invalide ou absente).
+- **`unit/objectifs-eadp-notes.spec.js`** — parité stricte `addNote`/`updateNote`/`removeNote` sur
+  les 8 fiches qui partagent `js/components/notesBlock.js` (Tâche, Suivi, Projet ET son
+  sous-niveau Volet séparément, Ressource, Réunion, Décision, Inbox "Gardés", Personne), chacune
+  vérifiée sans cascade sur une deuxième note témoin ; le tag EADP de Personne
+  (`setNoteEadpFlag`, valeur par défaut `null` à la création, jamais touché par une simple édition
+  de texte) ; et `notableReason` sur un Suivi notable (absent → chaîne vide, jamais confondu avec
+  la valeur "neutre" qui n'existe que côté Personne).
+
+**AVERTISSEMENT (28/09/2026)** : comme le reste de ce dossier `unit/`+`e2e/` (émulateur Firebase),
+ces deux fichiers ont été écrits et relus manuellement à partir du code réel, mais jamais exécutés
+dans cet environnement (registre npm bloqué). À reconfirmer au premier lancement réel.
+
+**Cas particulier, RÉELLEMENT EXÉCUTÉ dans cet environnement** —
+**`unit/pdfWriter-xlsxWriter-structure.spec.js`** : `js/services/pdfWriter.js` et
+`js/services/xlsxWriter.js` (les deux générateurs PDF/XLSX vanilla sans dépendance introduits pour
+cette parenthèse — voir leur commentaire en tête de fichier) sont des fonctions PURES, sans DOM ni
+Firebase, contrairement à tout le reste de ce dossier. Ce fichier n'utilise donc PAS
+`@playwright/test` ni l'émulateur : `node:test`/`node:assert`/`node:zlib`, tous intégrés à Node,
+suffisent, et il a réellement tourné (`node --test tests/unit/pdfWriter-xlsxWriter-structure.spec.js`,
+7/7 verts) : en-tête/trailer PDF, offsets de la table xref vérifiés un par un contre la position
+réelle de chaque objet, pagination multi-pages, annotation de lien cliquable, CRC32 de chaque
+partie du ZIP cross-vérifié contre `zlib.crc32` (implémentation indépendante de Node), table
+centrale du ZIP marchant bien vers les bons en-têtes locaux, XML de la feuille bien formé et
+échappé. Seule l'OUVERTURE RÉELLE des fichiers produits dans un lecteur PDF / un tableur reste hors
+de portée (aucun des deux disponible ici) et à faire par Charles-Henri avant validation complète.
+
 ## ⚠️ État au 21/09/2026 : passages GitHub Actions en cours de correction
 
 **5ᵉ correction du 21/09/2026 (test:rules 12/12 ✅, test:e2e 7/9 → corrections apportées)** :
