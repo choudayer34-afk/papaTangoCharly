@@ -34,7 +34,7 @@ const WHATS_NEW = [
       {
         type: "add",
         title: "🔓 Déblocages",
-        text: "La Galerie des badges (☰ Plus → 🏅 Galerie des badges) affiche maintenant aussi les récompenses cosmétiques débloquées en progressant : 2 couleurs de post-it (Océan, Aurore) et 14 icônes à afficher à côté du titre \"Mon pilotage\" — une seule équipée à la fois, avec un bouton \"Équiper\" sur chaque icône déjà débloquée. D'autres récompenses (thèmes, fonds d'écran, rubans) sont déjà suivies en coulisses mais pas encore visibles à l'écran — la Galerie l'indique clairement plutôt que de les cacher.",
+        text: "La Galerie des badges (☰ Plus → 🏅 Galerie des badges) affiche maintenant aussi les récompenses cosmétiques débloquées en progressant : 2 couleurs de post-it (Océan, Aurore), 2 thèmes de couleur, 2 fonds d'écran et 14 icônes/rubans à équiper (un par catégorie), avec un bouton \"Équiper\" sur chaque récompense déjà débloquée.",
         howTo: "☰ Plus → 🏅 Galerie des badges → section \"🔓 Déblocages\" ; pour la couleur d'un post-it, ouvre son menu \"⋯\" → 🎨 Couleur.",
         gain: "Une raison concrète de continuer à progresser, au-delà des badges eux-mêmes : de nouvelles options d'apparence à débloquer.",
       },
@@ -51,6 +51,13 @@ const WHATS_NEW = [
         text: "Un nouvel écran regroupe tout le pilotage de ton activité, distinct de la Galerie des badges : ton niveau et ta progression vers le suivant, ton XP total, tes 4 séries (Pilotage, Inbox, Tâches, Revue hebdo) avec leur record personnel, un calendrier de ton activité du mois, l'historique de tes derniers gains d'XP (action, montant, date), la répartition de ton XP total par type d'action, et l'état des 5 badges mensuels du mois en cours avec un bref historique des mois précédents.",
         howTo: "☰ Plus → 📊 Progression.",
         gain: "Comprendre d'où vient ta progression et où tu en es, sans avoir à recouper toi-même plusieurs écrans ni à te souvenir de tes derniers gains d'XP.",
+      },
+      {
+        type: "add",
+        title: "🎨 Thèmes, fonds et rubans à équiper",
+        text: "Les récompenses cosmétiques Thème (Ardoise, Nuit profonde), Fond et Ruban, débloquées en progressant mais jusqu'ici invisibles, sont maintenant applicables : un Thème recolore l'accent de toute l'app (boutons, mises en avant) par-dessus ton mode clair/sombre habituel ; un Fond habille discrètement l'écran Progression ; un Ruban de couleur (un par famille de badge) s'affiche sur la carte \"Prochain niveau\" de ce même écran.",
+        howTo: "☰ Plus → 🏅 Galerie des badges → section \"🔓 Déblocages\" → \"Équiper\" sur un Thème, un Fond ou un Ruban déjà débloqué.",
+        gain: "Profiter enfin visuellement de récompenses obtenues en progressant, sans qu'elles restent invisibles en coulisses.",
       },
     ],
   },
