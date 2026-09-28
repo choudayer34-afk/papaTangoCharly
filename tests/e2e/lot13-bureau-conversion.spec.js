@@ -261,6 +261,18 @@ test.describe.serial("LOT 13 — Mon bureau : conversion intelligente (post-it e
     await openWholeNoteConvertMenu(page, note.id, "Information");
     await expect(page.locator(".modal-body", { hasText: content })).toBeVisible({ timeout: 10_000 });
 
+    // CORRECTIF (28/09/2026, premier passage réel de ce fichier en CI — timeout de 30s sur le
+    // clic `#bureau-archived-btn` ci-dessous, plusieurs éléments de la modale "🧠 Information"
+    // ("🔁 Changer de type", "🗒️ Notes", "🏷️ Tags") interceptant le clic) : contrairement aux 4
+    // autres tests de ce describe (Tâche/Ressource/Décision/Suivi), qui cliquent tous
+    // "Créer"/"Terminé" pour valider puis FERMENT implicitement leur modale respective, la fiche
+    // "Information" s'ouvre directement en lecture (pas de formulaire à valider, voir le
+    // commentaire ci-dessus) et ce test ne la refermait jamais avant d'appeler
+    // `deleteArchivedNoteByTitle`, qui clique `#bureau-archived-btn` SUR L'ACCUEIL, juste derrière
+    // — la modale "🧠 Information" toujours ouverte (une seule modale active à la fois, voir
+    // TEST-010) interceptait donc ce clic indéfiniment. Fermeture explicite ajoutée ici.
+    await page.getByRole("button", { name: "Fermer", exact: true }).click();
+
     await expect(page.locator(`.sticky-note[data-id="${note.id}"]`)).toHaveCount(0, { timeout: 5_000 });
     await deleteArchivedNoteByTitle(page, title);
   });
