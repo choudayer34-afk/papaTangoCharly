@@ -168,3 +168,39 @@
 :root[data-theme="light"] {
   color-scheme: light;
 }
+
+/* ---------- Thème cosmétique équipé (TODO_GAMIFICATION.md §6/§10 point 4, ad hoc du 28/09/2026,
+   voir js/services/gamificationThemeStore.js pour la décision complète) ----------
+   Recolore UNIQUEMENT l'accent (--color-primary et ses 2 dérivés) — jamais les surfaces, le
+   texte ni les jetons sémantiques (succès/attention/danger/info/attente juste au-dessus), qui ne
+   doivent jamais changer de sens. Se superpose au mode clair/sombre plutôt que de le remplacer :
+   même structure en 3 blocs que le mode sombre ci-dessus (:root -> media dark -> data-theme=
+   "dark"), dupliquée ici pour l'accent seul, sous un attribut SÉPARÉ (`data-gamification-theme`)
+   qui reste indépendant et combinable avec `data-theme` dans les deux sens. */
+:root[data-gamification-theme="ardoise"] {
+  --color-primary: #47586B;
+  --color-primary-dark: #33414F;
+  --color-primary-light: #E4E8ED;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-gamification-theme="ardoise"] {
+    --color-primary-light: #2B3540;
+  }
+}
+:root[data-theme="dark"][data-gamification-theme="ardoise"] {
+  --color-primary-light: #2B3540;
+}
+
+:root[data-gamification-theme="nuit-profonde"] {
+  --color-primary: #1F2A44;
+  --color-primary-dark: #141B2C;
+  --color-primary-light: #DCE1EE;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-gamification-theme="nuit-profonde"] {
+    --color-primary-light: #1A2133;
+  }
+}
+:root[data-theme="dark"][data-gamification-theme="nuit-profonde"] {
+  --color-primary-light: #1A2133;
+}
