@@ -2030,6 +2030,12 @@ tbody.drag-over-group {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
 }
+/* Cliquable (28/09/2026, fiche détaillée au clic — js/views/gamification.js#openBadgeDetailModal) —
+   uniquement les tuiles de BADGE, jamais les tuiles de déblocage (LOT G7, `.badge-tuile--deblocage`)
+   qui ne sont pas cliquables : un curseur main sur `.badge-tuile` seule (base commune aux deux)
+   laisserait croire à tort qu'un déblocage l'est aussi. `:not()` plutôt qu'une classe dédiée, pour
+   ne jamais avoir à se souvenir d'ajouter cette classe à une future tuile de badge. */
+.badge-tuile:not(.badge-tuile--deblocage) { cursor: pointer; }
 .badge-tuile-emoji { font-size: 1.8rem; line-height: 1; }
 .badge-tuile-nom { font-weight: 600; font-size: var(--font-size-sm); }
 .badge-tuile-rarete { font-size: var(--font-size-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
