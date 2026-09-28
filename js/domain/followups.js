@@ -84,6 +84,13 @@ export const CATEGORY_LABELS = {
 export const NOTABLE_VALUES = ["positive", "negative"];
 export const NOTABLE_LABELS = { positive: "👍 Notable positif", negative: "👎 Notable négatif" };
 
+// `notableReason` (ajout du 28/09/2026, retour de Charles-Henri : "quand sur un collaborateur
+// j'indique un élément comme notable positif ou négatif, je dois indiquer en quoi cet élément
+// est notable et pouvoir visualiser en plus du titre dans 'préparer l'EADP' voir en quoi cet
+// élément est notable") — texte libre, optionnel, n'a de sens qu'accompagné d'un `notable` non
+// nul mais n'est jamais forcé à vide s'il change (arbitrage identique à `category`, voir plus
+// bas dans createFollowUp/updateFollowUp qui restent des patchs génériques).
+
 // Règle métier (retour de Charles-Henri, 06/09/2026 : "quand je mets une date d'échéance [...]
 // si la date de contrôle n'est pas saisie ou est [postérieure] à la date d'échéance saisie ça
 // doit mettre la date de contrôle à la date d'échéance") — la date de contrôle ne doit jamais
@@ -124,6 +131,7 @@ export async function createFollowUp(data) {
     direction: DIRECTIONS.includes(data.direction) ? data.direction : "waiting_on",
     category: data.category || null,
     notable: NOTABLE_VALUES.includes(data.notable) ? data.notable : null,
+    notableReason: data.notableReason || "", // voir NOTABLE_VALUES ci-dessus
     expectedResult: data.expectedResult || "",
     description: data.description || "", // contexte libre non daté (retour de Charles-Henri, vague 21)
     dueDate: data.dueDate || null, // échéance de la personne (direction "waiting_on")
@@ -226,6 +234,29 @@ export async function addNote(id, text) {
   await storage.appendToArray(COLLECTION, id, "notesLog", note);
   await storage.logHistory("FollowUp", id, "note_added", { text: trimmed });
   return note;
+}
+
+// `updateNote`/`removeNote` (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
+// pour toutes les notes, les modifier si besoin") — la règle "additif seulement" documentée
+// dans js/components/notesBlock.js est levée sur les 8 fiches qui partagent ce journal, celle-ci
+// comprise. `storage.update()` (comme `toggleChecklistItem`/`removeChecklistItem` ci-dessus),
+// jamais `storage.appendToArray()` : doivent localiser un élément EXISTANT par son id.
+export async function updateNote(id, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) };
+  });
+  return updated.notesLog;
+}
+
+export async function removeNote(id, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Suivi introuvable : " + id);
+    return { notesLog: (current.notesLog || []).filter((n) => n.id !== noteId) };
+  });
+  return updated.notesLog;
 }
 
 export async function updateFollowUp(id, patch) {
