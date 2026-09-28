@@ -23,6 +23,21 @@ rules_version = '2';
 // restauré l'accès, mais rouvrait au passage la faille FIREBASE-001 (un compte fermé via
 // "👥 Comptes" retrouvait un accès Firestore direct, `disabled` n'étant plus vérifié par
 // aucun des deux blocs OR-és). Remplacé ici par une seule règle qui garde les deux propriétés.
+//
+// SECOND CORRECTIF DU 28/09/2026 (retour de Charles-Henri : "les utilisateurs n'arrivaient même
+// pas à s'identifier", soit AVANT même le problème ci-dessus — `isEmailAllowed()`,
+// js/services/firebase.js, appelée juste après la connexion Firebase Auth, doit réussir pour
+// que l'app laisse entrer quelqu'un). Charles-Henri a ajouté un `allow read` sur
+// `allowedUsers/{email}`, en plus de l'`allow get` déjà présent — voir le commentaire sur
+// `match /allowedUsers/{email}` ci-dessous : les deux ont EXACTEMENT la même condition, ce qui
+// signifie que cet ajout ne change rien pour un appel `getDoc()` (celui utilisé par
+// `isEmailAllowed()`, confirmé dans le code) SI le texte déployé dans la console correspondait
+// bien à celui de ce fichier. Que l'ajout ait quand même réglé le problème indique que le
+// texte réellement déployé dans la console, à ce moment-là, ne correspondait PAS à celui-ci
+// (déjà le cas constaté une fois sur `allow write`, voir plus bas) — cette IMPORTANCE en tête
+// de fichier n'est donc pas théorique. `allow get` et `allow read` sont fusionnés en un seul
+// `allow read` ci-dessous (strictement équivalent, `read` recouvrant déjà `get`), sans aucun
+// changement de permission réelle par rapport à ce que Charles-Henri a déployé.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -39,8 +54,14 @@ service cloud.firestore {
       // isEmailAllowed(), qui n'interroge jamais que l'email de l'utilisateur courant, voir
       // js/app.js) ; seul l'administrateur peut lister l'ensemble de la collection (panneau
       // "👥 Comptes", js/services/accountAdmin.js#listAccounts).
-      allow get: if request.auth != null
-                  && request.auth.token.email.lower() == email;
+      // Écrit directement en `allow read` (plutôt que `allow get`, voir le correctif du
+      // 28/09/2026 en tête de fichier) : `read` recouvre `get` avec exactement la même
+      // condition ci-dessous, donc `isEmailAllowed()` (un simple `getDoc()`, jamais une requête
+      // de liste) reste couvert à l'identique — seule la présence explicite de `list`,
+      // réservée à l'admin juste en dessous, change quelque chose pour une VRAIE requête de
+      // liste.
+      allow read: if request.auth != null
+                   && request.auth.token.email.lower() == email;
       allow list: if request.auth != null
                    && request.auth.token.email.lower() == "ch-houdayer@hotmail.fr";
 
