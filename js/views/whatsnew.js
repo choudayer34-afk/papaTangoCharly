@@ -75,10 +75,10 @@ const WHATS_NEW = [
       },
       {
         type: "add",
-        title: "📌 Post-it épinglés redimensionnables",
-        text: "Un post-it épinglé (widget flottant, visible partout dans l'app) peut maintenant être agrandi ou réduit par une poignée en bas à droite, comme sur le plan de travail \"Tout voir\" — l'aperçu affiché dessus n'est plus tronqué et défile pour montrer tout son contenu réel à mesure qu'il grandit. Son édition rapide (au clic sur la carte) s'ouvre en plus dans une fenêtre plus large, avec un champ de description que tu peux toi-même agrandir verticalement pour voir l'intégralité d'un texte long ; cocher, ajouter ou modifier une ligne de checklist et taper ou corriger du texte libre s'y font déjà directement, sans étape supplémentaire.",
-        howTo: "Sur un post-it épinglé : glisse la petite poignée en bas à droite de la carte pour la redimensionner ; clique ailleurs sur la carte pour l'ouvrir en édition, où le champ de texte a lui-même une poignée en bas.",
-        gain: "Voir et modifier tout le contenu d'un post-it épinglé, même long, sans devoir rouvrir \"🔍 Tout voir\" à chaque fois.",
+        title: "📌 Post-it épinglés : redimensionnables et édités directement sur la carte",
+        text: "Un post-it épinglé (widget flottant, visible partout dans l'app) peut maintenant être agrandi ou réduit par une poignée en bas à droite, comme sur le plan de travail \"Tout voir\". Son titre, son texte libre ou sa checklist (cocher, ajouter, modifier une ligne) se modifient désormais directement sur la carte elle-même, sans ouvrir aucune fenêtre — exactement comme sur le plan de travail \"Tout voir\".",
+        howTo: "Sur un post-it épinglé : glisse la petite poignée en bas à droite de la carte pour la redimensionner ; tape directement dans le titre, le texte ou la checklist affichés sur la carte.",
+        gain: "Voir et modifier tout le contenu d'un post-it épinglé, même long, sans devoir rouvrir \"🔍 Tout voir\" ni passer par une fenêtre d'édition à chaque fois.",
       },
       {
         type: "add",
