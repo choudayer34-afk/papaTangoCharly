@@ -119,6 +119,29 @@ export async function addNote(id, text) {
   return note;
 }
 
+// `updateNote`/`removeNote` (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
+// pour toutes les notes, les modifier si besoin") — la règle "additif seulement" documentée
+// dans js/components/notesBlock.js est levée sur les 8 fiches qui partagent ce journal, celle-ci
+// (le projet) comprise. `storage.update()`, jamais `storage.appendToArray()` : doivent localiser
+// un élément EXISTANT par son id.
+export async function updateNote(id, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { notesLog: (current.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) };
+  });
+  return updated.notesLog;
+}
+
+export async function removeNote(id, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { notesLog: (current.notesLog || []).filter((n) => n.id !== noteId) };
+  });
+  return updated.notesLog;
+}
+
 /**
  * Journal de notes horodaté d'une SOUS-PARTIE (retour de Charles-Henri, 01/09/2026 : pouvoir
  * suivre "où en est l'équipe" sur un bloc avec un complément daté, pas juste un statut à trois
@@ -136,6 +159,36 @@ export async function addPartNote(id, partId, text) {
     return {
       parts: (current.parts || []).map((p) =>
         p.id === partId ? { ...p, notesLog: [...(p.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now() }] } : p
+      ),
+    };
+  });
+  return updated.parts.find((p) => p.id === partId)?.notesLog || [];
+}
+
+// `updatePartNote`/`removePartNote` (ajout du 28/09/2026, même besoin que updateNote/removeNote
+// ci-dessus, appliqué au journal d'une sous-partie plutôt qu'à celui du projet lui-même).
+export async function updatePartNote(id, partId, noteId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return {
+      parts: (current.parts || []).map((p) =>
+        p.id === partId
+          ? { ...p, notesLog: (p.notesLog || []).map((n) => (n.id === noteId ? { ...n, text: trimmed } : n)) }
+          : p
+      ),
+    };
+  });
+  return updated.parts.find((p) => p.id === partId)?.notesLog || [];
+}
+
+export async function removePartNote(id, partId, noteId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return {
+      parts: (current.parts || []).map((p) =>
+        p.id === partId ? { ...p, notesLog: (p.notesLog || []).filter((n) => n.id !== noteId) } : p
       ),
     };
   });
