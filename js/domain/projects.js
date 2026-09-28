@@ -33,6 +33,24 @@ export const PART_STATUSES = ["not_started", "in_progress", "done"];
 export const PART_STATUS_ICONS = { not_started: "◻️", in_progress: "🔶", done: "✅" };
 export const PART_STATUS_LABELS = { not_started: "Pas commencé", in_progress: "En cours", done: "Terminé" };
 
+// `sortPartsForDisplay`/`editPart`/`reorderParts` (28/09/2026, retour direct de Charles-Henri :
+// "les 🧩 Sous-parties dans un projet doivent s'ordonner avec les mêmes règles que les
+// checklist") — même principe exactement que `js/components/checklist.js#sortChecklistForDisplay`
+// et `editChecklistItem`/`reorderChecklist` (js/domain/tasks.js, js/domain/followups.js), adapté
+// au statut à trois états d'une Sous-partie plutôt qu'au booléen `done` d'une checklist : seul
+// l'état "done" (🟢 Terminé) est assimilé au "coché" qui descend en bas de la liste, triés entre
+// eux par date de passage à "Terminé" la plus récente en premier (`doneAt`, désormais horodaté par
+// `updatePartStatus` ci-dessous — absent avant ce complément, jamais renseigné). Les deux autres
+// états ("not_started"/"in_progress") sont tous deux traités comme "non coché" : ils restent en
+// tête dans leur ordre manuel (ajustable via `reorderParts`), sans distinction entre eux — une
+// Sous-partie "En cours" n'a pas vocation à descendre sous les autres non terminées, seul le
+// passage à "Terminé" a ce sens-là dans le besoin exprimé.
+export function sortPartsForDisplay(parts) {
+  const notDone = parts.filter((p) => p.status !== "done");
+  const done = [...parts.filter((p) => p.status === "done")].sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  return [...notDone, ...done];
+}
+
 export async function createProject(data) {
   const project = await storage.put(COLLECTION, {
     name: data.name,
@@ -83,14 +101,59 @@ export async function addPart(id, label) {
   return part;
 }
 
+// `doneAt` (28/09/2026, voir le commentaire de `sortPartsForDisplay` plus haut) : horodate le
+// passage à "Terminé", remis à `null` sur tout autre statut (même principe que `toggleStep`
+// plus haut) — permet de trier entre elles les Sous-parties terminées par récence, exactement
+// comme une checklist trie ses éléments cochés.
 export async function updatePartStatus(id, partId, status) {
   const updated = await storage.update(COLLECTION, id, (current) => {
     if (!current) throw new Error("Projet introuvable : " + id);
-    return { parts: (current.parts || []).map((p) => (p.id === partId ? { ...p, status } : p)) };
+    return {
+      parts: (current.parts || []).map((p) =>
+        p.id === partId ? { ...p, status, doneAt: status === "done" ? Date.now() : null } : p
+      ),
+    };
   });
   const part = (updated.parts || []).find((p) => p.id === partId);
   await storage.logHistory("Project", id, "part_status_changed", { label: part?.label, status });
   return updated;
+}
+
+// `editPart` (28/09/2026, même besoin que `editChecklistItem` — voir le commentaire de
+// `sortPartsForDisplay` plus haut) : édition en place du libellé d'une Sous-partie, jamais de
+// modale dédiée pour un simple texte.
+export async function editPart(id, partId, label) {
+  const trimmed = (label || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    return { parts: (current.parts || []).map((p) => (p.id === partId ? { ...p, label: trimmed } : p)) };
+  });
+  return updated.parts;
+}
+
+/**
+ * `reorderParts` (28/09/2026, même principe que `reorderChecklist` — voir le commentaire de
+ * `sortPartsForDisplay` plus haut) : `orderedIds` sont les identifiants des Sous-parties NON
+ * "Terminé" dans le nouvel ordre voulu (jamais celles déjà "Terminé", reclassées automatiquement
+ * par date — voir `sortPartsForDisplay`). Reconstitue le tableau complet en respectant cet ordre
+ * pour les non-terminées, puis en conservant les terminées à la suite dans leur ordre de stockage
+ * actuel (sans conséquence sur leur affichage, déjà retrié par `sortPartsForDisplay`). Défensif :
+ * un id non couvert par `orderedIds` (désync improbable UI/serveur) est ajouté à la fin plutôt que
+ * perdu.
+ */
+export async function reorderParts(id, orderedIds) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Projet introuvable : " + id);
+    const list = current.parts || [];
+    const byId = new Map(list.map((p) => [p.id, p]));
+    const notDoneReordered = orderedIds.map((pid) => byId.get(pid)).filter(Boolean);
+    const covered = new Set(orderedIds);
+    const notDoneUncovered = list.filter((p) => p.status !== "done" && !covered.has(p.id));
+    const done = list.filter((p) => p.status === "done");
+    return { parts: [...notDoneReordered, ...notDoneUncovered, ...done] };
+  });
+  return updated.parts;
 }
 
 export async function removePart(id, partId) {
