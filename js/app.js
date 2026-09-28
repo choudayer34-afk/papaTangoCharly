@@ -43,6 +43,9 @@ import * as tasksApi from "./domain/tasks.js";
 import * as followUpsApi from "./domain/followups.js";
 import * as preferencesApi from "./domain/preferences.js";
 import { buildNavItems, subscribeNavChange } from "./services/navConfig.js";
+// Thème cosmétique équipé (TODO_GAMIFICATION.md §6/§10 point 4, 28/09/2026 ad hoc) — voir l'en-tête
+// de ce module pour la décision complète (portée toute l'app, superposé au mode clair/sombre).
+import { applyGamificationTheme } from "./services/gamificationThemeStore.js";
 
 // ROUTES reste la table de dispatch COMPLÈTE — toute route qui y figure fonctionne par hash,
 // que son icône apparaisse ou non dans la barre du bas. Distinct de NAV_ITEMS ci-dessous
@@ -246,6 +249,13 @@ async function mountApp() {
   appMounted = true;
   NAV_ITEMS = await loadNavItems();
   nav = mountNav();
+  // Thème cosmétique équipé (28/09/2026, ad hoc) — jamais bloquant pour l'ouverture de l'app
+  // (aucun `await`, contrairement à `loadNavItems()` juste au-dessus qui conditionne la barre du
+  // bas) : le premier rendu peut brièvement montrer l'accent par défaut, exactement comme
+  // l'Icône équipée (LOT G7) dans ses propres écrans.
+  preferencesApi.getPreferences().then((prefs) => {
+    applyGamificationTheme(prefs.gamificationThemeEquipeId);
+  });
   mountOfflineBanner();
   mountCaptureFab();
   mountHelpButton();
