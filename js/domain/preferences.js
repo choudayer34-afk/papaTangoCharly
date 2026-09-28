@@ -169,6 +169,16 @@ function withDefaults(raw) {
     // qu'elle reprend directement, `dashboardOrder` juste au-dessus (même convention : tableau
     // vide = pas de choix explicite).
     navigationMain: [],
+    // LOT G7 (TODO_GAMIFICATION.md §6/§10 point 4, roadmap gamification INDÉPENDANTE de
+    // TODO_TECHNIQUE.md, 25/09/2026) — l'icône cosmétique "équipée" parmi les déblocages Table B
+    // déjà acquis (js/domain/gamification.js#DEBLOCAGES, catégorie "icone"), au plus une à la
+    // fois (§6 : "un par catégorie"). `null` tant qu'aucune n'est équipée, ou si le déblocage
+    // équipé est un id qui n'existe pas/plus dans le catalogue (jamais bloquant, voir
+    // js/views/dashboard.js qui vérifie l'acquisition réelle avant d'afficher quoi que ce soit).
+    // Distincte de `deblocagesAcquis` (js/domain/gamification.js) : ici, un simple CHOIX
+    // d'affichage de l'utilisateur, pas l'état objectif "obtenu ou non" — même séparation que
+    // pour toutes les autres préférences de ce document.
+    gamificationIconeEquipeeId: null,
     ...raw,
   };
 }
@@ -471,4 +481,18 @@ export async function setDisabledTags(list) {
  */
 export async function markPersonalObjectivesMigratedV1() {
   return storage.update(COLLECTION, DOC_ID, () => ({ personalObjectivesMigratedV1: true }));
+}
+
+/**
+ * Équipe (ou déséquipe, avec `null`) l'icône cosmétique affichée sur l'Accueil (LOT G7,
+ * TODO_GAMIFICATION.md §6/§10 point 4) — voir le commentaire sur `gamificationIconeEquipeeId`
+ * dans `withDefaults()` ci-dessus. Aucune vérification ici que le déblocage est réellement
+ * acquis : cette fonction ne fait qu'enregistrer un CHOIX, la vérification d'acquisition (ne
+ * jamais laisser équiper un déblocage non obtenu, §6) est la responsabilité de l'écran appelant
+ * au moment de proposer le choix (js/views/gamification.js), exactement comme les autres
+ * préférences de ce document ne valident jamais elles-mêmes les données métier qu'elles
+ * référencent (ex. `focusOverride.addedTaskIds` ne vérifie pas que la Tâche existe encore).
+ */
+export async function setGamificationIconeEquipee(deblocageId) {
+  return storage.update(COLLECTION, DOC_ID, () => ({ gamificationIconeEquipeeId: deblocageId || null }));
 }
