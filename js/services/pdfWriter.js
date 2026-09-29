@@ -47,14 +47,62 @@ function escapePdfString(s) {
   return s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-// Toute chaîne manipulée ici doit rester "1 caractère JS = 1 octet" (code point <= 255) pour que
-// la conversion finale en Buffer ('latin1') préserve les octets tels quels — les accents
-// français usuels sont dans cette plage (WinAnsiEncoding ≈ Latin-1 pour ces caractères-là).
+// BUG corrigé (29/09/2026, retour de Charles-Henri : "j'ai des ? [...] dans le document PDF")
+// : la plage d'octets 0x80-0x9F de WinAnsiEncoding (utilisée ici, /Encoding /WinAnsiEncoding sur
+// les 2 polices, voir buildPdfBytes) N'EST PAS Latin-1 — c'est Windows-1252, qui y loge des
+// caractères typographiques usuels (tiret cadratin, guillemets courbes, points de suspension...)
+// à des OCTETS différents de leur point de code Unicode. `toLatin1Safe` ci-dessous ne gardait
+// jusqu'ici que les points de code <= 255 tels quels (vrai Latin-1 strict), donc un tiret
+// cadratin « — » (U+2014, code 8212) — utilisé PARTOUT dans les exports Objectifs/EADP entre
+// chaque date et son texte, js/domain/objectivesExport.js — se retrouvait bêtement remplacé par
+// "?" alors qu'il a une place parfaitement valide en WinAnsiEncoding (octet 0x97). Table de
+// correspondance Unicode → octet WinAnsi pour les caractères typographiques courants (source :
+// spec PDF 1.7 Annexe D / Windows-1252) — tout code point absent de cette table ET hors de la
+// plage Latin-1 stricte reste remplacé par "?" (cas des emojis, qu'aucune police Helvetica de
+// base ne sait dessiner de toute façon — voir le commentaire sur les émojis plus bas dans
+// js/domain/objectivesExport.js).
+const WINANSI_EXTRA_BYTES = {
+  0x20ac: 0x80, // €
+  0x201a: 0x82, // ‚
+  0x0192: 0x83, // ƒ
+  0x201e: 0x84, // „
+  0x2026: 0x85, // …
+  0x2020: 0x86, // †
+  0x2021: 0x87, // ‡
+  0x02c6: 0x88, // ˆ
+  0x2030: 0x89, // ‰
+  0x0160: 0x8a, // Š
+  0x2039: 0x8b, // ‹
+  0x0152: 0x8c, // Œ
+  0x017d: 0x8e, // Ž
+  0x2018: 0x91, // ' (apostrophe/guillemet simple ouvrant)
+  0x2019: 0x92, // ' (apostrophe/guillemet simple fermant — très fréquent en français)
+  0x201c: 0x93, // "
+  0x201d: 0x94, // "
+  0x2022: 0x95, // •
+  0x2013: 0x96, // – (tiret demi-cadratin)
+  0x2014: 0x97, // — (tiret cadratin)
+  0x02dc: 0x98, // ˜
+  0x2122: 0x99, // ™
+  0x0161: 0x9a, // š
+  0x203a: 0x9b, // ›
+  0x0153: 0x9c, // œ (cœur, œuvre...)
+  0x017e: 0x9e, // ž
+  0x0178: 0x9f, // Ÿ
+};
+
+// Toute chaîne manipulée ici doit rester "1 caractère JS = 1 octet" pour que la conversion finale
+// en octets (voir buildPdfBytes) préserve les valeurs telles quelles.
 function toLatin1Safe(s) {
   return (s || "")
     .normalize("NFC")
     .split("")
-    .map((ch) => (ch.charCodeAt(0) <= 255 ? ch : "?"))
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      if (code <= 255) return ch;
+      const mapped = WINANSI_EXTRA_BYTES[code];
+      return mapped !== undefined ? String.fromCharCode(mapped) : "?";
+    })
     .join("");
 }
 
@@ -98,19 +146,34 @@ export function createPdfDoc({ title = "" } = {}) {
     if (cursorY - neededHeight < MARGIN) newPage();
   }
 
-  function drawLine(text, { size = 10, bold = false, x = MARGIN, color = null } = {}) {
+  function drawLine(text, { size = 10, bold = false, italic = false, x = MARGIN, color = null } = {}) {
     const safe = escapePdfString(toLatin1Safe(text));
-    const font = bold ? "/F2" : "/F1";
+    const font = bold && italic ? "/F4" : italic ? "/F3" : bold ? "/F2" : "/F1";
     const colorOp = color ? `${color[0]} ${color[1]} ${color[2]} rg\n` : "0 0 0 rg\n";
     currentPage.ops.push(`BT\n${colorOp}${font} ${size} Tf\n${x} ${cursorY} Td\n(${safe}) Tj\nET`);
   }
 
   const doc = {
-    heading(text, { size = 14 } = {}) {
-      ensureSpace(size * 1.6);
-      cursorY -= size;
-      drawLine(text, { size, bold: true });
-      cursorY -= size * 0.6;
+    // Réécrit le 29/09/2026 (retour de Charles-Henri : "phrases tronquées" + nouvelle maquette
+    // EADP demandant titre centré/orange, sous-titres gris foncé, indicateurs italique bleu) :
+    // avant cette réécriture, heading() dessinait TOUJOURS le texte complet sur une seule ligne,
+    // sans jamais appeler wrapText — un titre d'objectif un peu long partait donc au-delà de la
+    // marge droite de la page et se retrouvait tronqué visuellement (le texte existait bien dans
+    // le flux PDF, mais hors de la zone visible). heading() appelle maintenant wrapText comme le
+    // fait déjà paragraph(), et gère en plus la couleur, l'italique et le centrage (nécessaires
+    // pour le titre "EADP [Nom]" centré en orange et les sous-titres gris foncé).
+    heading(text, { size = 14, bold = true, italic = false, color = null, align = "left" } = {}) {
+      const lineHeight = size * 1.3;
+      const lines = wrapText(text || "", CONTENT_WIDTH, size, bold);
+      for (const line of lines) {
+        ensureSpace(lineHeight);
+        cursorY -= lineHeight;
+        if (line) {
+          const x = align === "center" ? MARGIN + (CONTENT_WIDTH - textWidth(line, size, bold)) / 2 : MARGIN;
+          drawLine(line, { size, bold, italic, color, x });
+        }
+      }
+      cursorY -= size * 0.4;
     },
     paragraph(text, { size = 10, bold = false, gapAfter = 8 } = {}) {
       const lineHeight = size * 1.35;
@@ -199,6 +262,12 @@ function buildPdfBytes(pages, title) {
 
   const fontRegularNum = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
   const fontBoldNum = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  // Ajoutés le 29/09/2026 pour la maquette EADP (indicateurs "en italique bleu") — Helvetica-Oblique
+  // et Helvetica-BoldOblique font partie des 14 polices de base PDF (comme Helvetica/Helvetica-Bold),
+  // donc toujours disponibles sans embarquement, avec les mêmes largeurs AFM que leurs variantes
+  // droites (seul le rendu penché change) : charWidth1000 n'a donc pas besoin d'être modifié.
+  const fontItalicNum = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Oblique /Encoding /WinAnsiEncoding >>");
+  const fontBoldItalicNum = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-BoldOblique /Encoding /WinAnsiEncoding >>");
 
   const pageNums = [];
   const pagesRootNum = objects.length + 1 + pages.length * 2; // réservé, calculé après (voir plus bas)
@@ -219,7 +288,7 @@ function buildPdfBytes(pages, title) {
   for (const p of pendingPages) {
     const annots = p.annotNums.length ? ` /Annots [${p.annotNums.map((n) => n + " 0 R").join(" ")}]` : "";
     const pageNum = addObject(
-      `<< /Type /Page /Parent ${pagesNodeNum} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${fontRegularNum} 0 R /F2 ${fontBoldNum} 0 R >> >> /Contents ${p.contentNum} 0 R${annots} >>`
+      `<< /Type /Page /Parent ${pagesNodeNum} 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 ${fontRegularNum} 0 R /F2 ${fontBoldNum} 0 R /F3 ${fontItalicNum} 0 R /F4 ${fontBoldItalicNum} 0 R >> >> /Contents ${p.contentNum} 0 R${annots} >>`
     );
     pageNums.push(pageNum);
   }
