@@ -19,6 +19,9 @@ import { openModal, isModalOpen } from "./modal.js";
 import * as gamificationApi from "../domain/gamification.js";
 import * as preferencesApi from "../domain/preferences.js";
 import { applyGamificationTheme } from "../services/gamificationThemeStore.js";
+// Illustration réelle LOT G9 (29/09/2026, retour de Charles-Henri « on fait la détection
+// automatique ») — voir l'en-tête de js/services/illustrations.js pour le principe.
+import { badgeIllustrationUrl, iconeIllustrationUrl, upgradeToIllustration } from "../services/illustrations.js";
 
 const INTERVALLE_VERIFICATION_MS = 400;
 
@@ -176,6 +179,9 @@ export function mountRewardOrchestrator() {
       ],
       onClose: onDone,
     });
+    // Illustration réelle LOT G9 (29/09/2026, Section A, 70 fichiers) — voir js/services/
+    // illustrations.js.
+    upgradeToIllustration(body.querySelector(".reward-illustration"), badgeIllustrationUrl(badge.id), badge.nom);
   }
 
   function afficherEcranDeblocage(evenement, onDone) {
@@ -216,6 +222,12 @@ export function mountRewardOrchestrator() {
       onClose: onDone,
     });
     if (!estPalette) attacherBoutonEquiper(body, deblocage);
+    // Illustration réelle LOT G9 (29/09/2026, Section B, 14 fichiers) — uniquement catégorie
+    // "icone" (Ruban/Thème/Fond/Palette ont déjà leur rendu définitif, voir le commentaire sur
+    // `emoji` ci-dessus). Voir js/services/illustrations.js.
+    if (deblocage.categorie === "icone") {
+      upgradeToIllustration(body.querySelector(".reward-illustration"), iconeIllustrationUrl(deblocage.id), deblocage.nom);
+    }
   }
 
   return function cleanup() {
