@@ -479,7 +479,20 @@
 // `js/domain/followups.js` (`setStatus` ajoute désormais une note automatique horodatée sur
 // relance/règlement rapide), `js/views/people.js` (boutons "+1 j"/"+7 j" sur les 4 champs date du
 // formulaire Suivi, création et édition), `js/views/whatsnew.js`.
-const CACHE_NAME = "pilotage-cache-v89";
+//
+// Correctif/refonte export PDF EADP (29/09/2026, retour de Charles-Henri : "j'ai des ? et des
+// phrases tronqués [...]" + maquette détaillée + complément "par objectif [...] tableau de
+// ressource"). Aucun nouveau fichier (`CACHE_NAME` incrémenté uniquement pour que les fichiers
+// déjà précachés ci-dessous soient resservis) : `js/services/pdfWriter.js` (table WinAnsi
+// complète pour les caractères typographiques — l'ancienne confusion Latin-1/WinAnsi
+// transformait un tiret cadratin en "?" ; `heading()` découpe désormais le texte au lieu de le
+// laisser filer hors marge ; ajout des polices italique/gras-italique et des options
+// couleur/alignement), `js/domain/objectivesExport.js` (PDF EADP entièrement restylé : titre
+// centré en orange, sous-titres gris foncé, objectifs numérotés en gras bleu avec bloc
+// campagne/statut/type/description, indicateurs numérotés en italique bleu toujours affichés même
+// sans suivi, notables triés chronologiquement avec symboles +/-/= à la place des émojis, tableau
+// de ressources par objectif), `js/views/whatsnew.js`.
+const CACHE_NAME = "pilotage-cache-v90";
 const APP_SHELL = [
   "./",
   "./index.html",
