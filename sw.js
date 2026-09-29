@@ -509,7 +509,19 @@
 // active — bug présent depuis la création du sélecteur, révélé par le déblocage d'Océan/Aurore
 // mais touchant déjà les 6 couleurs fixes), `js/components/stickyNoteShared.js` (espace élargi
 // avant "Transformer en" pour laisser de la place à l'infobulle native du navigateur).
-const CACHE_NAME = "pilotage-cache-v92";
+//
+// LOT G9 — détection automatique des illustrations réelles (29/09/2026, retour de Charles-Henri
+// « on fait la détection automatique », suite de claude/lotg9-prompts-chatgpt-illustrations-
+// 28-09-2026.md). Nouveau fichier `js/services/illustrations.js` (ajouté à APP_SHELL ci-dessous,
+// même règle que tous les fichiers précédents). Fichiers modifiés : `js/views/gamification.js`
+// (tuiles Galerie badges + déblocages Icône, fond de l'écran Progression), `js/views/dashboard.js`
+// (icône équipée à côté de "Mon pilotage"), `js/components/rewardOrchestrator.js` (écrans de
+// récompense badge/déblocage), `styles/components.css` (taille de l'image dans chacun de ces
+// contextes). Volontairement PAS d'ajout des 86 chemins `illustrations/**/*.png` eux-mêmes à
+// APP_SHELL : ils n'existent pas tous encore (livraison progressive en cours), et le mécanisme ne
+// dépend d'aucune précache — chaque image est chargée à la demande, avec repli automatique sur
+// l'emoji/CSS existant si le fichier n'est pas encore là (voir le module ci-dessus pour le détail).
+const CACHE_NAME = "pilotage-cache-v93";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -547,6 +559,10 @@ const APP_SHELL = [
   // juste au-dessus de CACHE_NAME) : générateurs PDF/XLSX vanilla sans dépendance.
   "./js/services/pdfWriter.js",
   "./js/services/xlsxWriter.js",
+  // Nouveau fichier (29/09/2026, LOT G9 — détection automatique des illustrations réelles, voir
+  // le commentaire daté juste au-dessus de CACHE_NAME) : ajouté à APP_SHELL dès sa création, même
+  // règle que tous les nouveaux fichiers précédents de ce document.
+  "./js/services/illustrations.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
