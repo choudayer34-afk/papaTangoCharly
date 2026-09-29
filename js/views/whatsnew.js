@@ -33,6 +33,13 @@ const WHATS_NEW = [
     items: [
       {
         type: "fix",
+        title: "🎨 Post-it : couleur débloquée mal affichée dans le menu \"⋯\"",
+        text: "Dans le sélecteur de couleur d'un post-it, la pastille correspondant à la couleur actuelle du post-it s'affichait en bleu foncé au lieu de sa vraie teinte (visible dès qu'une couleur débloquée comme \"Océan\" apparaissait dans la liste, mais le défaut touchait en réalité les 6 couleurs de base). La pastille active affiche maintenant sa vraie couleur, avec juste un contour pour indiquer la sélection.",
+        howTo: "Rien à faire, c'est automatique : post-it → menu \"⋯\" → \"🎨 Couleur\".",
+        gain: "La couleur choisie se reconnaît enfin correctement dans le sélecteur, sans confusion avec un bleu générique.",
+      },
+      {
+        type: "fix",
         title: "📄 Export PDF de l'EADP : caractères \"?\", titres tronqués et indicateurs manquants corrigés",
         text: "Le PDF \"Préparer l'EADP\" affichait des \"?\" à la place de certains caractères (tirets, guillemets...) et pouvait couper un titre trop long en plein milieu ; un indicateur sans aucun suivi saisi n'apparaissait pas du tout dans le document. Les trois sont corrigés : plus de \"?\" pour ces caractères usuels, un titre long revient désormais à la ligne au lieu d'être tronqué, et chaque indicateur d'un objectif s'affiche toujours (titre et cible), même sans suivi.",
         howTo: "Rien à faire, c'est automatique dès le prochain export : fiche d'un collaborateur → \"Préparer l'EADP\" → \"📄 Export PDF\".",
