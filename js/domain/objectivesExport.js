@@ -59,39 +59,80 @@ export async function collectObjectiveResources(objective) {
   return resolved;
 }
 
-/** Un bloc "titre + réalisé consolidé + dernier prévu" pour un indicateur (ou le suivi général
- *  si `indicator` est `null`) — partagé par le PDF par objectif et le PDF EADP global. */
-function writeIndicatorBlock(doc, objective, indicator) {
-  const tracking = objectivesApi.consolidateIndicatorTracking(objective, indicator ? indicator.id : null);
-  if (!tracking.realise.length && !tracking.dernierPrevu) return;
-  const label = indicator ? `📊 ${indicator.label || "(indicateur)"}${indicator.target ? " — Cible : " + indicator.target : ""}` : "Suivi général";
-  doc.heading(label, { size: 12 });
+// Couleurs demandées par Charles-Henri pour la maquette EADP du 29/09/2026 ("Titre [...] centrée
+// en orange", "Sous titre [...] en Gris foncé", "Objectif [...] en gras bleu", "Indicateur [...]
+// en italique bleu") — dérivées de styles/tokens.css plutôt qu'une palette inventée : BLEU
+// reprend --color-primary (#4C56C4 → 0.298/0.337/0.769) ; aucun jeton "orange" n'existe dans
+// tokens.css, ORANGE est donc un choix éditorial ponctuel pour ce seul titre ; GRIS_FONCE est un
+// gris neutre foncé pour les sous-titres (distinct du gris 0.7/0.7/0.7 déjà utilisé par les
+// filets `doc.rule()`).
+const ORANGE = [0.85, 0.42, 0.09];
+const GRIS_FONCE = [0.27, 0.27, 0.29];
+const BLEU = [0.298, 0.337, 0.769];
+
+/** Calcule le suivi consolidé (réalisé + dernier prévu) d'un indicateur, ou du suivi général si
+ *  `indicator` est `null` — seule source, jamais une logique dupliquée (voir consolidateIndicatorTracking). */
+function computeTrackingBody(objective, indicator) {
+  return objectivesApi.consolidateIndicatorTracking(objective, indicator ? indicator.id : null);
+}
+
+/** Écrit le corps consolidé (jamais "X suivis distincts" — un seul paragraphe réalisé, un seul
+ *  "prévu avant le prochain point", retour de Charles-Henri : "je ne dois pas voir X suivi
+ *  distinct les uns des autres pour cette entité objectif globale"). */
+function writeTrackingParagraphs(doc, tracking) {
   doc.paragraph(tracking.realise.length ? tracking.realise.map((r) => `${r.date} — ${r.text}`).join("\n") : "Rien de réalisé enregistré.");
   if (tracking.dernierPrevu) doc.paragraph(`Prévu avant le prochain point : ${tracking.dernierPrevu.text}`);
 }
 
-/**
- * PDF d'un seul Objectif (retour de Charles-Henri : "je dois pouvoir éditer la fiche de cet
- * objectif et que ça me ressorte en PDF [...] campagne, titre, statut, type, description avec
- * les retours à la ligne [...] suivis groupés et consolidés [...] pour chaque indicateur [...]
- * tableau de ressources"). Aucun filtre de période ici : la fiche d'un objectif montre tout son
- * historique, comme l'écran.
- */
-export async function downloadObjectivePdf(objective) {
-  const doc = createPdfDoc({ title: objective.title });
-  doc.heading(objective.title);
+/** Un bloc "titre + réalisé consolidé + dernier prévu" pour un indicateur (ou le suivi général
+ *  si `indicator` est `null`) — utilisé par le PDF par objectif (indicateurs ET suivi général) et,
+ *  dans le PDF EADP/global, uniquement pour le suivi général (voir writeNumberedIndicatorBlock
+ *  ci-dessous pour les indicateurs de ce second export, qui ne doivent eux jamais disparaître
+ *  même sans aucun suivi saisi). Note 29/09/2026 : le préfixe "📊 " a été retiré — un émoji, hors
+ *  de la table WINANSI_EXTRA_BYTES (pdfWriter.js), se traduisait par des "?" dans le PDF, exactement
+ *  le bug rapporté par Charles-Henri, ici présent dans une zone du code qu'il n'avait pas signalée
+ *  mais touchée par la même cause racine. */
+function writeIndicatorBlock(doc, objective, indicator) {
+  const tracking = computeTrackingBody(objective, indicator);
+  if (!tracking.realise.length && !tracking.dernierPrevu) return;
+  const label = indicator ? `${indicator.label || "(indicateur)"}${indicator.target ? " — Cible : " + indicator.target : ""}` : "Suivi général";
+  doc.heading(label, { size: 12 });
+  writeTrackingParagraphs(doc, tracking);
+}
+
+// BUG corrigé (29/09/2026, retour de Charles-Henri : "les indicateurs ne sont pas présents tant
+// qu'il n'ont pas de suivi" + confirmation dans le message suivant : "je dois voir POUR CHAQUE
+// indicateur - son titre, sa cible [...]") : contrairement à writeIndicatorBlock ci-dessus (qui
+// masque un indicateur sans aucun suivi — comportement conservé tel quel pour downloadObjectivePdf,
+// non remis en cause pour cet export-là, périmètre non demandé), cette variante NE fait jamais de
+// retour anticipé : titre + cible s'affichent toujours pour chaque indicateur de l'objectif, que
+// des suivis existent ou non ("Rien de réalisé enregistré." sinon, comme déjà prévu).
+function writeNumberedIndicatorBlock(doc, objective, indicator, index) {
+  const tracking = computeTrackingBody(objective, indicator);
+  const label = `Indicateur ${index} : ${indicator.label || "(indicateur)"}${indicator.target ? " — Cible : " + indicator.target : ""}`;
+  doc.heading(label, { size: 11, bold: false, italic: true, color: BLEU });
+  writeTrackingParagraphs(doc, tracking);
+}
+
+/** Bloc "campagne / titre / statut / type / description" d'un Objectif — partagé par
+ *  downloadObjectivePdf et, depuis le 29/09/2026, downloadObjectivesOverviewPdf (retour de
+ *  Charles-Henri : "sur le PDF je dois avoir comme j'avais demandé par objectif - la campagne, le
+ *  titre, son statut, le type, la description avec les retours à la ligne"). */
+function writeObjectiveMetaBlock(doc, objective) {
   doc.paragraph(`Campagne : ${objective.period || "—"}`);
   doc.paragraph(`Statut : ${objective.status === "done" ? "Atteint" : "En cours"}`);
   doc.paragraph(`Type : ${objective.scope ? objectivesApi.SCOPE_LABELS[objective.scope] : "—"}`);
   if (objective.description) doc.paragraph(`Description :\n${objective.description}`);
-  doc.rule();
+}
 
-  writeIndicatorBlock(doc, objective, null);
-  for (const ind of objective.indicators || []) writeIndicatorBlock(doc, objective, ind);
-
-  doc.rule();
+/** Tableau de ressources (3 colonnes indicateur/ressource/lien, trié par indicateur puis nom de
+ *  ressource — voir collectObjectiveResources) — partagé par downloadObjectivePdf et, depuis le
+ *  29/09/2026, downloadObjectivesOverviewPdf (un tableau par Objectif : les 3 colonnes demandées
+ *  par Charles-Henri ne comportent aucune colonne "objectif", ce qui n'aurait de sens que si ce
+ *  tableau reste scopé à un seul Objectif à la fois — voir le bilan livré pour le détail de ce
+ *  raisonnement). */
+function writeResourcesTable(doc, resources) {
   doc.heading("Ressources", { size: 12 });
-  const resources = await collectObjectiveResources(objective);
   if (resources.length) {
     doc.table(
       [
@@ -104,6 +145,27 @@ export async function downloadObjectivePdf(objective) {
   } else {
     doc.paragraph("Aucune ressource liée.");
   }
+}
+
+/**
+ * PDF d'un seul Objectif (retour de Charles-Henri : "je dois pouvoir éditer la fiche de cet
+ * objectif et que ça me ressorte en PDF [...] campagne, titre, statut, type, description avec
+ * les retours à la ligne [...] suivis groupés et consolidés [...] pour chaque indicateur [...]
+ * tableau de ressources"). Aucun filtre de période ici : la fiche d'un objectif montre tout son
+ * historique, comme l'écran.
+ */
+export async function downloadObjectivePdf(objective) {
+  const doc = createPdfDoc({ title: objective.title });
+  doc.heading(objective.title);
+  writeObjectiveMetaBlock(doc, objective);
+  doc.rule();
+
+  writeIndicatorBlock(doc, objective, null);
+  for (const ind of objective.indicators || []) writeIndicatorBlock(doc, objective, ind);
+
+  doc.rule();
+  const resources = await collectObjectiveResources(objective);
+  writeResourcesTable(doc, resources);
 
   downloadPdfBytes(doc.save(), `objectif-${slug(objective.title)}.pdf`);
 }
@@ -121,37 +183,80 @@ export async function downloadObjectivePdf(objective) {
  * js/domain/objectives.js) : "tous les objectifs non archivés" est donc interprété ici comme
  * "tous les objectifs" — à corriger si Charles-Henri introduit un jour un statut d'archivage.
  */
-export async function downloadObjectivesOverviewPdf({ heading, filename, objectives, notableItems = null, range = null }) {
+// Réécrit intégralement le 29/09/2026 (retour de Charles-Henri, maquette précise du PDF EADP +
+// message complémentaire "par objectif" — voir les deux commentaires détaillés ci-dessous pour
+// chaque partie de la mise en page). `titleStyle` (nouveau) laisse downloadEadpPdf demander un
+// titre centré en orange sans imposer ce même style à downloadPersonalObjectivesPdf ("Mes
+// objectifs"), qui n'a pas été concerné par la demande de maquette.
+export async function downloadObjectivesOverviewPdf({ heading, filename, objectives, notableItems = null, range = null, titleStyle = {} }) {
   const doc = createPdfDoc({ title: heading });
-  doc.heading(heading);
+  // "Titre : EADP [Nom] / format : centrée en orange / Ligne complète en dessous"
+  doc.heading(heading, { size: 18, align: "left", color: null, ...titleStyle });
   doc.rule();
+  doc.spacer(10);
 
   if (notableItems) {
-    for (const [label, list] of [
-      ["👍 Notables positifs", notableItems.positive],
-      ["👎 Notables négatifs", notableItems.negative],
-      ["⚪ Notables neutres", notableItems.neutral],
+    // "Sous titre : 'éléments notables de l'année' aligné gauche et en Gris foncé"
+    doc.heading("Éléments notables de l'année", { size: 12, bold: false, color: GRIS_FONCE });
+    doc.spacer(4);
+    // Émojis (👍/👎/⚪) remplacés par des symboles simples +/-/= (choix de Charles-Henri, réponse à
+    // la question posée avant développement : ce moteur PDF n'embarque aucune police capable de
+    // dessiner un émoji — voir le commentaire sur WINANSI_EXTRA_BYTES dans pdfWriter.js — les
+    // émojis littéraux redonnent exactement le bug des "?" signalé).
+    for (const [symbole, label, list] of [
+      ["+", "Notables positifs", notableItems.positive],
+      ["-", "Notables négatifs", notableItems.negative],
+      ["=", "Notables neutres", notableItems.neutral],
     ]) {
-      doc.heading(`${label} (${list.length})`, { size: 12 });
-      if (!list.length) {
+      // Tri chronologique croissant demandé explicitement "pour le PDF" (plus ancien → plus
+      // récent) — appliqué ICI seulement : collectEadpNotableItems (js/views/people.js) ne trie
+      // pas et reste inchangé, pour ne pas modifier l'ordre de l'écran "Préparer l'EADP" qui n'a
+      // pas été mis en cause (portée strictement limitée à cette demande PDF).
+      const sorted = [...list].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      doc.heading(`${symbole} ${label} (${sorted.length})`, { size: 11 });
+      if (!sorted.length) {
         doc.paragraph("Rien sur cette période.");
       } else {
-        for (const item of list) {
+        for (const item of sorted) {
           doc.paragraph(item.title, { bold: true, gapAfter: item.reason ? 2 : 6 });
           if (item.reason) doc.paragraph(item.reason);
         }
       }
+      doc.spacer(6);
     }
     doc.rule();
+    doc.spacer(10);
   }
 
-  doc.heading(`Objectifs (${objectives.length})`, { size: 14 });
+  // "Sous titre : Objectifs (nombre d'objectif) aligné gauche et en Gris foncé"
+  doc.heading(`Objectifs (${objectives.length})`, { size: 12, bold: false, color: GRIS_FONCE });
+  doc.spacer(6);
+
+  let index = 0;
   for (const o of objectives) {
+    index += 1;
     const scoped = range ? { ...o, entries: (o.entries || []).filter((e) => e.createdAt >= range.from && e.createdAt <= range.to) } : o;
-    doc.heading(`${o.status === "done" ? "✅ " : "🎯 "}${o.title}`, { size: 12 });
+    // "Objectif 1 : Titre en gras bleu" (le statut ✅/🎯 précédemment en préfixe est retiré : il
+    // apparaît maintenant en toutes lettres dans writeObjectiveMetaBlock, "Statut : Atteint/En cours")
+    doc.heading(`Objectif ${index} : ${o.title}`, { size: 13, color: BLEU });
+    // Complément de Charles-Henri : "je dois avoir comme j'avais demandé par objectif - la
+    // campagne, le titre, son statut, le type, la description avec les retours à la ligne"
+    writeObjectiveMetaBlock(doc, scoped);
+    doc.spacer(4);
+    // Suivi de l'objectif global — consolidé, jamais "X suivis distincts" (inchangé)
     writeIndicatorBlock(doc, scoped, null);
-    for (const ind of o.indicators || []) writeIndicatorBlock(doc, scoped, ind);
-    doc.spacer(6);
+    // "Indicateur 1 en italique bleu : Titre [...] Indicateur 2 : etc." — toujours affiché, même
+    // sans aucun suivi saisi (corrige "les indicateurs ne sont pas présents tant qu'ils n'ont pas
+    // de suivi")
+    (scoped.indicators || []).forEach((ind, indIndex) => writeNumberedIndicatorBlock(doc, scoped, ind, indIndex + 1));
+    doc.spacer(4);
+    // "à la fin il me faut un tableau de ressource [...] trié par indicateurs, puis par nom de
+    // ressource" — un tableau par Objectif (les 3 colonnes demandées, sans colonne "objectif",
+    // n'ont de sens que scopées à un seul Objectif à la fois — voir collectObjectiveResources,
+    // déjà bâtie objectif par objectif ; raisonnement détaillé dans le bilan livré avec ce patch).
+    const resources = await collectObjectiveResources(scoped);
+    writeResourcesTable(doc, resources);
+    doc.spacer(10);
   }
 
   downloadPdfBytes(doc.save(), filename);
@@ -159,17 +264,18 @@ export async function downloadObjectivesOverviewPdf({ heading, filename, objecti
 
 export async function downloadEadpPdf(person, objectives, notableItems, range) {
   await downloadObjectivesOverviewPdf({
-    heading: `Préparation EADP — ${person.name}`,
+    heading: `EADP ${person.name}`,
     filename: `eadp-${slug(person.name)}.pdf`,
     objectives,
     notableItems,
     range,
+    titleStyle: { align: "center", color: ORANGE },
   });
 }
 
 export async function downloadPersonalObjectivesPdf(objectives) {
   await downloadObjectivesOverviewPdf({
-    heading: "🎯 Mes objectifs",
+    heading: "Mes objectifs",
     filename: "mes-objectifs.pdf",
     objectives,
     notableItems: null,
