@@ -20,6 +20,9 @@ import * as projectHealthApi from "../domain/projectHealth.js";
 // pour l'accueillir "à côté du nom" comme le prévoyait littéralement le §6). Voir
 // refreshGamificationIcon() plus bas.
 import * as gamificationApi from "../domain/gamification.js";
+// Illustration réelle LOT G9 (29/09/2026, retour de Charles-Henri « on fait la détection
+// automatique ») — voir l'en-tête de js/services/illustrations.js pour le principe.
+import { iconeIllustrationUrl, upgradeToIllustration } from "../services/illustrations.js";
 import { openModal, closeModal, confirmDelete } from "../components/modal.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
@@ -224,6 +227,9 @@ export function renderDashboard(container) {
     const iconeId = prefs.gamificationIconeEquipeeId;
     const deblocage = iconeId && state.deblocagesAcquis[iconeId] ? gamificationApi.DEBLOCAGES.find((d) => d.id === iconeId) : null;
     gamificationIconEl.textContent = deblocage ? deblocage.valeur : "";
+    // Illustration réelle LOT G9 (29/09/2026) — ne remplace le repli emoji ci-dessus que si le
+    // fichier existe déjà, voir js/services/illustrations.js.
+    if (deblocage) upgradeToIllustration(gamificationIconEl, iconeIllustrationUrl(deblocage.id), deblocage.nom);
   }
   refreshGamificationIcon();
 
