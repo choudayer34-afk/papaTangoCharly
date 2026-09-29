@@ -29,6 +29,25 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "29 septembre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "📄 Export PDF de l'EADP : caractères \"?\", titres tronqués et indicateurs manquants corrigés",
+        text: "Le PDF \"Préparer l'EADP\" affichait des \"?\" à la place de certains caractères (tirets, guillemets...) et pouvait couper un titre trop long en plein milieu ; un indicateur sans aucun suivi saisi n'apparaissait pas du tout dans le document. Les trois sont corrigés : plus de \"?\" pour ces caractères usuels, un titre long revient désormais à la ligne au lieu d'être tronqué, et chaque indicateur d'un objectif s'affiche toujours (titre et cible), même sans suivi.",
+        howTo: "Rien à faire, c'est automatique dès le prochain export : fiche d'un collaborateur → \"Préparer l'EADP\" → \"📄 Export PDF\".",
+        gain: "Un document EADP fiable et complet à chaque export, sans caractère illisible ni contenu manquant à corriger à la main.",
+      },
+      {
+        type: "change",
+        title: "📄 Export PDF de l'EADP : nouvelle mise en page",
+        text: "Le PDF \"Préparer l'EADP\" reprend une présentation plus lisible : titre \"EADP [Nom]\" centré en orange, sous-titres \"Éléments notables de l'année\" et \"Objectifs\" en gris foncé, éléments notables classés du plus ancien au plus récent, objectifs numérotés en gras bleu (avec campagne/statut/type/description) et leurs indicateurs numérotés en italique bleu (cible, réalisé consolidé, dernier prévu), et un tableau de ressources par objectif (indicateur ou suivi global, nom de la ressource, lien) trié par indicateur puis par nom de ressource.",
+        howTo: "Rien à faire, c'est automatique dès le prochain export : fiche d'un collaborateur → \"Préparer l'EADP\" → \"📄 Export PDF\".",
+        gain: "Un document EADP prêt à relire ou à transmettre tel quel, avec toute l'information par objectif regroupée au même endroit (y compris les ressources associées) plutôt qu'éclatée.",
+      },
+    ],
+  },
+  {
     date: "28 septembre 2026",
     items: [
       {
