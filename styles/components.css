@@ -47,6 +47,11 @@ a { color: inherit; }
   font-size: var(--font-size-xl);
   margin: 0;
 }
+/* Illustration réelle LOT G9 (29/09/2026, js/services/illustrations.js#upgradeToIllustration) —
+   icône équipée à côté de "Mon pilotage" (js/views/dashboard.js#refreshGamificationIcon),
+   affichage en ligne dans le titre : taille relative à la police plutôt qu'un pixel fixe, pour
+   rester proportionnée si la taille de police système change. */
+#gamification-icon .illustration-image { width: 1.2em; height: 1.2em; object-fit: contain; vertical-align: middle; }
 .topbar .subtitle {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
@@ -2068,6 +2073,13 @@ tbody.drag-over-group {
    ne jamais avoir à se souvenir d'ajouter cette classe à une future tuile de badge. */
 .badge-tuile:not(.badge-tuile--deblocage) { cursor: pointer; }
 .badge-tuile-emoji { font-size: 1.8rem; line-height: 1; }
+/* Illustration réelle LOT G9 (29/09/2026, js/services/illustrations.js#upgradeToIllustration) —
+   ne s'affiche QUE si le fichier existe déjà, à la place de l'emoji de repli ci-dessus (jamais les
+   deux en même temps : le contenu du conteneur est remplacé, pas complété). Taille fixe plutôt que
+   `font-size` hérité, qui ne s'applique pas à une image ; `.badge-tuile--verrouille .badge-tuile-
+   emoji { filter: grayscale(1) }` ci-dessous s'applique à cette image comme à l'emoji, sans rien
+   changer à cette règle. */
+.badge-tuile-emoji .illustration-image { width: 40px; height: 40px; object-fit: contain; }
 .badge-tuile-nom { font-weight: 600; font-size: var(--font-size-sm); }
 .badge-tuile-rarete { font-size: var(--font-size-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
 .badge-tuile-condition { font-size: var(--font-size-xs); color: var(--color-text-muted); }
@@ -2338,6 +2350,11 @@ tbody.drag-over-group {
   background-clip: padding-box, border-box;
   box-shadow: 0 0 0 5px var(--color-waiting-bg), var(--shadow-md);
 }
+/* Illustration réelle LOT G9 (29/09/2026, js/services/illustrations.js#upgradeToIllustration) —
+   ne s'affiche QUE si le fichier existe déjà, à la place de l'emoji de repli (`font-size` ci-
+   dessus, qui ne s'applique pas à une image) ; remplit exactement le rond de 96px déjà défini par
+   `.reward-illustration`, avec le même arrondi. */
+.reward-illustration .illustration-image { width: 100%; height: 100%; object-fit: contain; border-radius: 50%; }
 @keyframes rewardScaleIn {
   0% { transform: scale(0.6); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
