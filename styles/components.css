@@ -2229,6 +2229,34 @@ tbody.drag-over-group {
   border-radius: 50%;
 }
 
+/* Carte "Progression" de l'Accueil, réduite par défaut (retour de Charles-Henri, 29/09/2026 :
+   "je dois voir la rubrique niveau d'avancement Xp en mode réduit par défaut [...] ça doit rester
+   discret par rapport au reste") — js/components/progressionCard.js bascule cette classe au
+   dépli/repli du <details> qu'elle contient : tant que replié, la carte perd le fond/bordure/ombre
+   d'une .card normale (elle redevient une simple ligne de texte discrète) ; dépliée, elle retrouve
+   l'apparence normale d'une .card (voir la règle `.card` plus haut) sans qu'aucune règle ici ne
+   doive dupliquer ses valeurs. Margin-bottom TOUJOURS présente (repliée ou non) : retour explicite
+   de Charles-Henri, "il doit y avoir un espace entre ce bloc et les indicateurs" (#stat-grid,
+   juste en dessous dans js/views/dashboard.js). */
+#progression-card {
+  margin-bottom: var(--space-4);
+}
+#progression-card.progression-card--reduced {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  padding: var(--space-1) 0;
+}
+.progression-card-summary {
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+#progression-card:not(.progression-card--reduced) .progression-card-summary {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
 /* ---------- Écrans de récompense (LOT G10, js/components/rewardOrchestrator.js, §13.3/§13.4/
    §13.5) ---------- Contenu centré, sobre (§14 : "ton sobre, pas de mécanique de manipulation
    agressive") — aucune animation permanente, seule l'apparition du badge (§13.3) est animée, et
