@@ -492,7 +492,16 @@
 // campagne/statut/type/description, indicateurs numérotés en italique bleu toujours affichés même
 // sans suivi, notables triés chronologiquement avec symboles +/-/= à la place des émojis, tableau
 // de ressources par objectif), `js/views/whatsnew.js`.
-const CACHE_NAME = "pilotage-cache-v90";
+//
+// Carte "Progression" de l'Accueil réduite par défaut (29/09/2026, retour de Charles-Henri : "je
+// dois voir la rubrique niveau d'avancement Xp en mode réduit par défaut [...] ça doit rester
+// discret [...] je peux déplier pour voir l'état actuel [...] espace entre ce bloc et les
+// indicateurs"). Aucun nouveau fichier (`CACHE_NAME` incrémenté uniquement pour que les fichiers
+// déjà précachés ci-dessous soient resservis) : `js/components/progressionCard.js` (résumé d'une
+// ligne dans un `<summary>`, replié par défaut — seul le résumé niveau/XP/XP restant reste visible
+// tant que non déplié), `styles/components.css` (apparence discrète en mode réduit + marge fixe
+// avant `#stat-grid`), `js/views/whatsnew.js`.
+const CACHE_NAME = "pilotage-cache-v91";
 const APP_SHELL = [
   "./",
   "./index.html",
