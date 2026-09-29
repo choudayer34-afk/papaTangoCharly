@@ -1119,7 +1119,20 @@ tbody.drag-over-group {
   cursor: pointer;
   white-space: nowrap;
 }
-.chip.active {
+/* BUG corrigé (29/09/2026, retour de Charles-Henri : couleur débloquée "Océan" mal affichée dans
+   le menu "⋯" d'un post-it) : les pastilles de couleur du sélecteur (`.sticky-color-swatch`, voir
+   plus bas) cumulent les classes `chip` + `sticky-note--{couleur}` + `active` (celle-ci ajoutée
+   sur la pastille correspondant à la couleur ACTUELLE du post-it). `.chip.active` ci-dessous (2
+   classes, spécificité plus élevée que le seul `.sticky-note--{couleur}`) écrasait alors
+   systématiquement la teinte pastel de la pastille active par le bleu/indigo générique des
+   filtres actifs — la pastille sélectionnée ne ressemblait donc JAMAIS à sa propre couleur
+   (ex. la pastille "Jaune" active s'affichait en bleu foncé), quelle que soit la couleur en
+   cause : un post-it par défaut (jaune) montrait déjà ce problème avant même qu'Océan/Aurore
+   n'existent. `:not(.sticky-color-swatch)` exclut ces pastilles de cette règle, qui ne doit
+   continuer à s'appliquer QUE sur les vrais chips de filtre (Calendrier, Kanban...) — la bordure
+   colorée distinctive de la pastille active reste inchangée (`.sticky-color-swatch.active`,
+   plus bas, ne touche jamais au fond). */
+.chip.active:not(.sticky-color-swatch) {
   background: var(--color-primary);
   color: var(--color-text-inverse);
   border-color: var(--color-primary);
