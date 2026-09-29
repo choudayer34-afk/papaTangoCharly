@@ -57,6 +57,11 @@ import * as preferencesApi from "../domain/preferences.js";
 // Application immédiate du Thème équipé (28/09/2026, ad hoc) — même module que js/app.js#mountApp,
 // voir son en-tête pour le détail de la décision (portée toute l'app, superposé au clair/sombre).
 import { applyGamificationTheme } from "../services/gamificationThemeStore.js";
+// Illustrations réelles LOT G9 — détection automatique de disponibilité (29/09/2026, retour de
+// Charles-Henri « on fait la détection automatique »), voir l'en-tête de ce module pour le
+// principe : le repli emoji/CSS ci-dessous reste écrit tel quel, ce module tente juste de le
+// remplacer par la vraie image APRÈS coup, si le fichier existe déjà.
+import { badgeIllustrationUrl, iconeIllustrationUrl, fondIllustrationUrl, upgradeToIllustration, upgradeFondIllustration } from "../services/illustrations.js";
 
 const RARETES = [
   { key: "toutes", label: "Toutes les raretés" },
@@ -248,6 +253,14 @@ export function renderGamificationGallery(container) {
       ${etatHtml}
     `;
 
+    // Illustration réelle LOT G9 (29/09/2026) — uniquement catégorie "icone" (Section B du
+    // document de prompts, 14 fichiers) : Ruban/Thème/Fond/Palette ont déjà leur rendu définitif
+    // (pastille de couleur pleine, recolorage réel, dégradé — voir le commentaire sur
+    // `emojiHtml` ci-dessus), aucune illustration ne leur manque.
+    if (deblocage.categorie === "icone") {
+      upgradeToIllustration(tile.querySelector(".badge-tuile-emoji"), iconeIllustrationUrl(deblocage.id), deblocage.nom);
+    }
+
     // Contrôle "Équiper" — générique par catégorie (28/09/2026, ad hoc : Icône, Thème, Fond,
     // Ruban partagent désormais toutes `equipable: true`, voir CATEGORIES_DEBLOCAGES), et
     // uniquement une fois le déblocage acquis (jamais équipable avant).
@@ -324,6 +337,10 @@ export function renderGamificationGallery(container) {
       <div class="badge-tuile-condition">${escapeHtml(badge.condition)}</div>
       ${progressionHtml}
     `;
+
+    // Illustration réelle LOT G9 (29/09/2026, Section A du document de prompts, 70 fichiers, un
+    // par badge/rareté) — voir l'en-tête de ce fichier.
+    upgradeToIllustration(tile.querySelector(".badge-tuile-emoji"), badgeIllustrationUrl(badge.id), badge.nom);
 
     // Fiche détaillée au clic (28/09/2026, voir le commentaire sur l'import d'openModal en tête
     // de fichier) — le `title` HTML ci-dessus reste en place comme repli natif (survol souris),
@@ -624,9 +641,18 @@ export function renderGamificationProgression(container) {
    *  habituel. */
   function renderFond() {
     els.view.classList.remove("progression-fond--horizon", "progression-fond--sommet");
+    els.view.style.backgroundImage = "";
+    els.view.style.backgroundRepeat = "";
+    els.view.style.backgroundPosition = "";
+    els.view.style.backgroundSize = "";
     const deblocage = fondEquipeId ? gamificationApi.DEBLOCAGES.find((d) => d.id === fondEquipeId) : null;
     if (deblocage && state?.deblocagesAcquis[deblocage.id]) {
       els.view.classList.add(`progression-fond--${deblocage.valeur}`);
+      // Illustration réelle LOT G9 (29/09/2026, Section C, 2 fichiers) — une image posée en ligne
+      // l'emporte de toute façon sur le dégradé de la classe ci-dessus (spécificité), pas besoin
+      // de la retirer ; `upgradeFondIllustration` remet `backgroundImage` à vide toute seule si
+      // le fichier n'est (plus) pas disponible, pour que le dégradé de repli reste visible.
+      upgradeFondIllustration(els.view, fondIllustrationUrl(deblocage.valeur));
     }
   }
 
