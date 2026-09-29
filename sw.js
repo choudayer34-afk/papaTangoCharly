@@ -501,7 +501,15 @@
 // ligne dans un `<summary>`, replié par défaut — seul le résumé niveau/XP/XP restant reste visible
 // tant que non déplié), `styles/components.css` (apparence discrète en mode réduit + marge fixe
 // avant `#stat-grid`), `js/views/whatsnew.js`.
-const CACHE_NAME = "pilotage-cache-v91";
+//
+// BUG corrigé (29/09/2026, retour de Charles-Henri : couleur "Océan" mal affichée dans le menu
+// "⋯" d'un post-it + infobulle chevauchant "Transformer en"). Aucun nouveau fichier (`CACHE_NAME`
+// incrémenté uniquement pour que les fichiers déjà précachés ci-dessous soient resservis) :
+// `styles/components.css` (`.chip.active` n'écrase plus le fond pastel d'une pastille de couleur
+// active — bug présent depuis la création du sélecteur, révélé par le déblocage d'Océan/Aurore
+// mais touchant déjà les 6 couleurs fixes), `js/components/stickyNoteShared.js` (espace élargi
+// avant "Transformer en" pour laisser de la place à l'infobulle native du navigateur).
+const CACHE_NAME = "pilotage-cache-v92";
 const APP_SHELL = [
   "./",
   "./index.html",
