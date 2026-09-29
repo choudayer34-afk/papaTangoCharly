@@ -45,6 +45,13 @@ const WHATS_NEW = [
         howTo: "Rien à faire, c'est automatique dès le prochain export : fiche d'un collaborateur → \"Préparer l'EADP\" → \"📄 Export PDF\".",
         gain: "Un document EADP prêt à relire ou à transmettre tel quel, avec toute l'information par objectif regroupée au même endroit (y compris les ressources associées) plutôt qu'éclatée.",
       },
+      {
+        type: "change",
+        title: "📊 Carte \"Progression\" de l'Accueil : réduite par défaut",
+        text: "La carte \"Progression\" en haut de l'Accueil s'affiche maintenant repliée par défaut, réduite à une seule ligne discrète (\"Niveau 5 · 🥉 Bronze · 422 XP · 78 XP avant le niveau 6\") au lieu de la carte complète. Un clic sur cette ligne la déplie pour retrouver la barre de progression, les séries, l'XP du jour et le prochain badge, exactement comme avant.",
+        howTo: "Accueil → clique sur la ligne de résumé de la carte \"Progression\" pour la déplier ou la replier.",
+        gain: "Le niveau d'avancement reste visible d'un coup d'œil sans prendre toute la place ni attirer l'attention avant le reste de l'Accueil.",
+      },
     ],
   },
   {
