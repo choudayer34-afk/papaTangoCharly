@@ -26,24 +26,38 @@ function escapeHtml(str) {
  * global de renderDashboard() comme les autres abonnements de cette vue.
  */
 export function mountProgressionCard(container) {
+  // Réduite par défaut (retour de Charles-Henri, 29/09/2026 : "je dois voir la rubrique niveau
+  // d'avancement Xp en mode réduit par défaut [...] ça doit rester discret par rapport au reste
+  // [...] je peux déplier pour voir l'état actuel") : `<details>` SANS `open` (contrairement à
+  // "Mon bureau"/renderKeptSection, qui restent ouverts par défaut — ici la demande explicite est
+  // l'inverse). Le résumé d'une ligne (niveau, XP total, XP avant le niveau suivant) reste visible
+  // même replié ; tout le reste (barre, séries/XP du jour, prochain badge, boutons) n'apparaît
+  // qu'une fois déplié. État de repli/dépli volontairement NON mémorisé d'une session à l'autre
+  // (même choix que "Mon bureau", js/components/bureau.js) : rien de demandé sur ce point.
   container.innerHTML = `
-    <div class="card" id="progression-card">
-      <div class="progression-repartition-tete">
-        <strong id="progression-card-niveau">—</strong>
-        <span id="progression-card-xp-total"></span>
-      </div>
-      <div class="progression-bar-track"><div class="progression-bar-fill" id="progression-card-bar" style="width:0%"></div></div>
-      <div style="color: var(--color-text-muted); font-size: var(--font-size-xs); margin-top: 4px;" id="progression-card-xp-restant"></div>
-      <div class="stat-grid" id="progression-card-stats" style="margin-top: var(--space-3);"></div>
-      <div id="progression-card-prochain-badge"></div>
-      <div style="display:flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3);">
-        <button type="button" class="btn btn-secondary btn-sm" id="progression-card-voir">📊 Voir ma progression</button>
-        <button type="button" class="btn btn-secondary btn-sm" id="progression-card-recompenses">🎁 Voir mes récompenses</button>
-      </div>
+    <div class="card progression-card--reduced" id="progression-card">
+      <details id="progression-card-details">
+        <summary class="progression-card-summary" id="progression-card-resume">—</summary>
+        <div id="progression-card-detail" style="margin-top: var(--space-3);">
+          <div class="progression-repartition-tete">
+            <strong id="progression-card-niveau">—</strong>
+            <span id="progression-card-xp-total"></span>
+          </div>
+          <div class="progression-bar-track"><div class="progression-bar-fill" id="progression-card-bar" style="width:0%"></div></div>
+          <div style="color: var(--color-text-muted); font-size: var(--font-size-xs); margin-top: 4px;" id="progression-card-xp-restant"></div>
+          <div class="stat-grid" id="progression-card-stats" style="margin-top: var(--space-3);"></div>
+          <div id="progression-card-prochain-badge"></div>
+          <div style="display:flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3);">
+            <button type="button" class="btn btn-secondary btn-sm" id="progression-card-voir">📊 Voir ma progression</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="progression-card-recompenses">🎁 Voir mes récompenses</button>
+          </div>
+        </div>
+      </details>
     </div>
   `;
 
   const els = {
+    resume: container.querySelector("#progression-card-resume"),
     niveau: container.querySelector("#progression-card-niveau"),
     xpTotal: container.querySelector("#progression-card-xp-total"),
     bar: container.querySelector("#progression-card-bar"),
@@ -51,6 +65,15 @@ export function mountProgressionCard(container) {
     stats: container.querySelector("#progression-card-stats"),
     prochainBadge: container.querySelector("#progression-card-prochain-badge"),
   };
+
+  // La carte perd son apparence "discrète" (fond transparent, sans bordure/ombre — voir
+  // styles/components.css) dès qu'elle est dépliée, pour redevenir une .card normale le temps de
+  // la consultation détaillée.
+  const cardEl = container.querySelector("#progression-card");
+  const detailsEl = container.querySelector("#progression-card-details");
+  detailsEl.addEventListener("toggle", () => {
+    cardEl.classList.toggle("progression-card--reduced", !detailsEl.open);
+  });
 
   container.querySelector("#progression-card-voir").addEventListener("click", () => {
     location.hash = "#/progression";
@@ -69,6 +92,10 @@ export function mountProgressionCard(container) {
     if (!state) return;
 
     const progression = gamificationApi.progressionNiveau(state.xpTotal);
+    // Résumé affiché même repliée (retour de Charles-Henri : "Niveau 5 · 🥉 Bronze — 422 XP — 78
+    // XP avant le niveau 6") — les 3 mêmes informations que les lignes détaillées ci-dessous,
+    // recomposées sur une seule ligne, jamais un calcul distinct.
+    els.resume.textContent = `Niveau ${progression.niveau} · ${progression.palier} · ${state.xpTotal} XP · ${progression.xpRestantAvantNiveauSuivant} XP avant le niveau ${progression.niveau + 1}`;
     els.niveau.textContent = `Niveau ${progression.niveau} · ${progression.palier}`;
     els.xpTotal.textContent = `${state.xpTotal} XP`;
     const pourcent = Math.max(0, Math.min(1, progression.progressionRatio)) * 100;
