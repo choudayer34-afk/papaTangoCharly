@@ -131,6 +131,13 @@ export function renderNoteBody(bodyEl, note, { onLineConvertClose } = {}) {
  *  flottants. `onClose` (optionnel) — l'appelant flottant (pinnedNotesOverlay.js) l'utilise pour
  *  réafficher sa carte, masquée le temps que ce menu reste ouvert (voir le commentaire en tête de
  *  pinnedNotesOverlay.js sur le conflit de superposition avec .modal-overlay). */
+// margin-bottom de #note-menu-colors relevée de 16px à 28px plus bas (retour de Charles-Henri,
+// 29/09/2026 : "problème d'affichage de légende") : l'infobulle native du navigateur (attribut
+// title="Jaune"/"Océan"... posé sur chaque pastille) s'affiche sous la pastille survolée — avec
+// seulement 16px d'écart, elle chevauchait le sous-titre "Transformer en" juste en dessous. Ce
+// fichier ne définit aucune infobulle personnalisée (uniquement l'attribut natif title) : ce n'est
+// pas une infobulle mal positionnée par notre CSS, seulement pas assez d'espace pour celle, native,
+// du navigateur.
 export function openStickyNoteMenu(note, { onClose } = {}) {
   const body = document.createElement("div");
   // Couleurs affichées immédiatement : toutes les couleurs fixes, plus les couleurs débloquées
@@ -145,7 +152,7 @@ export function openStickyNoteMenu(note, { onClose } = {}) {
       <button type="button" id="note-menu-delete" class="btn btn-danger btn-sm">🗑️ Supprimer</button>
     </div>
     <div class="section-title" style="margin-top:0;">🎨 Couleur</div>
-    <div class="chip-row" id="note-menu-colors" style="margin-bottom:16px;">
+    <div class="chip-row" id="note-menu-colors" style="margin-bottom:28px;">
       ${couleursInitiales
         .map(
           (c) =>
