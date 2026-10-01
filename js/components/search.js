@@ -40,6 +40,7 @@ import { openPersonDetail, openEditFollowUpModal, openObjectiveDetail } from "..
 import { openResourceDetail } from "../views/resources.js";
 import { openRecentDetail } from "../views/dashboard.js";
 import { openKeptItemDetail } from "../views/inbox.js";
+import { attachAutocomplete } from "./autocomplete.js";
 
 // Ordre = celui des chips affichées et des touches Alt+1…Alt+9 qui leur correspondent.
 // TODO-021 (LOT 9, 21/09/2026) : "Information/Idée" renommé "Information" (fusion des libellés,
@@ -256,8 +257,7 @@ export function openSearchModal() {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <input id="global-search-input" type="text" placeholder="Rechercher un mot, ou #tag pour cibler un tag..." list="global-search-tag-options" />
-      <datalist id="global-search-tag-options"></datalist>
+      <input id="global-search-input" type="text" placeholder="Rechercher un mot, ou #tag pour cibler un tag..." />
     </div>
     <div class="chip-row" id="search-type-filter" style="margin-bottom:8px;"></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-bottom:8px;">
@@ -286,16 +286,25 @@ export function openSearchModal() {
   ).join("");
 
   // Autocomplétion "#" (retour de Charles-Henri, 13/09/2026 : "l'auto complession dans le
-  // recherche peut se faire après # et proposer tout les tags dispo en auto compression") — la
-  // <datalist> natif du champ propose tous les tags existants dès que Charles-Henri tape "#"
-  // (le navigateur filtre lui-même les options selon ce qui est déjà tapé, aucun JS de plus
-  // nécessaire ici). Chargée une fois à l'ouverture de la modale, pas à chaque frappe.
-  const tagOptionsEl = body.querySelector("#global-search-tag-options");
+  // recherche peut se faire après # et proposer tout les tags dispo en auto compression") —
+  // chargée une fois à l'ouverture de la modale, pas à chaque frappe. Remplace le <datalist>
+  // natif (TODO-031, 29/09/2026 : n'affichait jamais rien sur Safari iOS) par le composant
+  // partagé (js/components/autocomplete.js) — filtrage par PRÉFIXE de la saisie ENTIÈRE
+  // uniquement, comme le faisait le <datalist> natif ici (contrairement à tagsEditor.js/
+  // projects.js/kanban.js, où le filtrage est par sous-chaîne) : le "#" fait partie à la fois de
+  // la saisie et des options, donc chercher un mot ordinaire qui ressemblerait au milieu d'un nom
+  // de tag ne doit jamais faire apparaître une suggestion hors de propos — seul un champ qui
+  // COMMENCE par "#" déclenche l'autocomplétion de tag.
+  let tagOptions = [];
   Promise.all([tagsApi.listAll(), preferencesApi.getPreferences()]).then(([allTags, prefs]) => {
-    tagOptionsEl.innerHTML = tagsApi
-      .visibleTagNames(allTags, prefs.disabledTags)
-      .map((t) => `<option value="#${escapeHtml(t)}"></option>`)
-      .join("");
+    tagOptions = tagsApi.visibleTagNames(allTags, prefs.disabledTags).map((t) => `#${t}`);
+  });
+  attachAutocomplete(inputEl, {
+    getSuggestions: (query) => {
+      if (!query.startsWith("#")) return [];
+      const q = query.toLowerCase();
+      return tagOptions.filter((t) => t.toLowerCase().startsWith(q));
+    },
   });
 
   function updateFilterChips() {
