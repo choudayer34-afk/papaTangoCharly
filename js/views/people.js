@@ -483,7 +483,11 @@ export async function openPersonDetail(person, allFollowUps, { initialTab = "fol
   // js/domain/people.js#EADP_FLAG_VALUES et js/components/notesBlock.js).
   renderNotesBlock(body.querySelector("#detail-notes"), person.notesLog || [], {
     onAdd: async (text) => {
-      const updated = await peopleApi.addNote(person.id, text);
+      // TODO-037 (29/09/2026) : peopleApi.addNote() renvoie désormais la note ajoutée seule
+      // (écriture ciblée, plus de relecture du tableau complet) — même principe que
+      // js/views/kanban.js#openTaskDetail pour tasksApi.addNote (TODO-010).
+      const note = await peopleApi.addNote(person.id, text);
+      const updated = note ? [...(person.notesLog || []), note] : person.notesLog;
       person.notesLog = updated;
       return updated;
     },
