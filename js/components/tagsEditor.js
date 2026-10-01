@@ -14,14 +14,20 @@
 // se tape SANS "#" (le "#" n'est ajouté qu'à l'affichage des chips, voir ci-dessus) : la plupart
 // des navigateurs ne filtrent une <datalist> que par préfixe du texte déjà tapé, donc taper "urg"
 // ne faisait jamais correspondre l'option "#urgent" (qui commence par "#", pas par "u") — la
-// suggestion n'apparaissait jamais. Les options portent maintenant le nom du tag tel qu'il se
-// tape, sans "#" (contrairement à js/components/search.js, où le "#" fait partie de la saisie
-// elle-même et doit donc y rester).
+// suggestion n'apparaissait jamais. Les options portent le nom du tag tel qu'il se tape, sans "#"
+// (contrairement à js/components/search.js, où le "#" fait partie de la saisie elle-même et doit
+// donc y rester).
+//
+// Remplacé le 29/09/2026 (TODO-031) : <datalist> ne s'affichait jamais du tout sur Safari iOS,
+// quel que soit le préfixe — voir js/components/autocomplete.js pour le composant partagé qui la
+// remplace ici. Filtrage par SOUS-CHAÎNE (pas seulement préfixe, cette fois assumé explicitement
+// plutôt que subi comme la limitation native ci-dessus) : taper "gent" propose "urgent" en plus de
+// "urgent" par préfixe — plus permissif, jamais moins, donc aucune régression possible par rapport
+// à l'ancien comportement corrigé ci-dessus.
 
 import * as tagsApi from "../domain/tags.js";
 import * as preferencesApi from "../domain/preferences.js";
-
-let uidCounter = 0;
+import { attachAutocomplete } from "./autocomplete.js";
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -31,19 +37,16 @@ function escapeHtml(str) {
 
 /** Rend l'éditeur de tags dans `container` pour la fiche {type, id}. */
 export async function renderTagsEditor(container, type, id) {
-  const datalistId = `tags-editor-options-${++uidCounter}`;
   container.innerHTML = `
     <div class="tags-editor-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;">
-      <input type="text" class="tags-editor-input" placeholder="Ajouter un tag..." list="${datalistId}"
+      <input type="text" class="tags-editor-input" placeholder="Ajouter un tag..."
              style="flex:1;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-      <datalist id="${datalistId}"></datalist>
       <button type="button" class="btn btn-secondary btn-sm tags-editor-add-btn">+ Tag</button>
     </div>
   `;
   const listEl = container.querySelector(".tags-editor-list");
   const inputEl = container.querySelector(".tags-editor-input");
-  const datalistEl = container.querySelector(`#${datalistId}`);
 
   function renderList(mine) {
     listEl.innerHTML = "";
@@ -65,11 +68,19 @@ export async function renderTagsEditor(container, type, id) {
 
   const [allTags, prefs] = await Promise.all([tagsApi.listAll(), preferencesApi.getPreferences()]);
   let mine = tagsApi.tagsFor(allTags, type, id);
-  datalistEl.innerHTML = tagsApi
-    .visibleTagNames(allTags, prefs.disabledTags)
-    .map((t) => `<option value="${escapeHtml(t)}"></option>`)
-    .join("");
+  const allTagNames = tagsApi.visibleTagNames(allTags, prefs.disabledTags);
   renderList(mine);
+
+  // TODO-031 : attachée AVANT le gestionnaire "Entrée ajoute le tag tapé" plus bas, pour que la
+  // sienne s'exécute en premier (voir js/components/autocomplete.js — une suggestion surlignée
+  // choisie à l'Entrée bloque cette même frappe via `stopImmediatePropagation`, exactement comme
+  // le ferait un <datalist> natif à deux temps).
+  attachAutocomplete(inputEl, {
+    // Pas de garde sur une saisie vide : `"x".includes("")` vaut toujours `true`, donc un champ
+    // encore vide affiche déjà tous les tags disponibles au focus — comme le ferait un
+    // <datalist> natif avant toute frappe.
+    getSuggestions: (query) => allTagNames.filter((t) => t.toLowerCase().includes(query.trim().toLowerCase())),
+  });
 
   const addTag = async () => {
     const value = inputEl.value.trim();
