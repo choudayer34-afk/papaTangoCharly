@@ -45,6 +45,7 @@ import * as stickyNotesApi from "../domain/stickyNotes.js";
 import { openStickyNoteMenu, renderNoteBody, escapeHtml, escapeAttr } from "./stickyNoteShared.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "./modal.js";
 import { showToast } from "./toast.js";
+import { startScan } from "./ocrScan.js";
 
 /**
  * Monte la section "Mon bureau" dans `container` (vide au départ, voir js/views/dashboard.js).
@@ -143,6 +144,7 @@ export function mountBureau(container) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button type="button" id="bureau-archived-btn" class="btn btn-ghost btn-sm">🗄️ Archivés</button>
           <button type="button" id="bureau-see-all-btn" class="btn btn-ghost btn-sm">🔍 Tout voir</button>
+          <button type="button" id="bureau-scan-note-btn" class="btn btn-secondary btn-sm">📷 Scanner</button>
           <button type="button" id="bureau-new-note-btn" class="btn btn-secondary btn-sm">+ Nouveau post-it</button>
         </div>
       </div>
@@ -150,6 +152,7 @@ export function mountBureau(container) {
   `;
   const archivedBtn = container.querySelector("#bureau-archived-btn");
   const seeAllBtn = container.querySelector("#bureau-see-all-btn");
+  const scanNoteBtn = container.querySelector("#bureau-scan-note-btn");
   const newNoteBtn = container.querySelector("#bureau-new-note-btn");
 
   attachFocusTracking(container);
@@ -171,6 +174,22 @@ export function mountBureau(container) {
   );
   archivedBtn.addEventListener("click", () => openArchivedNotesModal());
   seeAllBtn.addEventListener("click", () => openFullCanvasModal());
+  // "📷 Scanner" (01/10/2026) — crée directement un nouveau post-it à partir d'une photo, sans
+  // passer par l'étape "+ Nouveau post-it" vide puis taper le texte. Pas de guardClick ici : à la
+  // différence de newNoteBtn ci-dessus, aucune écriture Firestore ne part depuis CE clic — il ne
+  // fait qu'ouvrir le sélecteur de photo (voir js/components/ocrScan.js#startScan) ; la seule
+  // écriture réelle (`createStickyNote` ci-dessous) n'a lieu qu'après la relecture obligatoire,
+  // elle-même déjà protégée contre le double-clic par openModal() (`closesModal: false`).
+  scanNoteBtn.addEventListener("click", () => {
+    startScan({
+      onConfirm: async (text) => {
+        const maxZ = currentNotes.reduce((max, n) => Math.max(max, n.zIndex || 0), 0);
+        const offset = (currentNotes.filter((n) => !n.archived).length % 6) * 24;
+        await stickyNotesApi.createStickyNote({ content: text, x: 16 + offset, y: 16 + offset, zIndex: maxZ + 1, pinned: true });
+        showToast("Post-it créé depuis le scan");
+      },
+    });
+  });
 
   /**
    * "🔍 Tout voir" — modale reprenant l'ancien comportement plein du Bureau (tous les post-it non
