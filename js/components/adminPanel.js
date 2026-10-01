@@ -12,13 +12,16 @@
 // Ce n'est volontairement PAS un mécanisme de sécurité — juste un bouton masqué pour les autres
 // — la vraie protection des données reste les règles Firestore, indépendantes de cette UI.
 
-import { openModal, confirmDelete } from "./modal.js";
+import { openModal, confirmDelete, guardClick } from "./modal.js";
 import { showToast } from "./toast.js";
 import { getCurrentUser, ADMIN_EMAIL } from "../services/firebase.js";
 import * as usageTrackingApi from "../services/usageTracking.js";
 import * as accountAdminApi from "../services/accountAdmin.js";
 import * as tagsApi from "../domain/tags.js";
 import * as preferencesApi from "../domain/preferences.js";
+// Purge assistée (TODO-011/TODO-036, 29/09/2026) — voir openPurgeModal() plus bas.
+import * as historyApi from "../domain/history.js";
+import * as inboxApi from "../domain/inbox.js";
 
 // Une entrée par application tierce. `tutorialHtml` répond à un besoin concret et récurrent
 // pour CETTE application précise plutôt qu'à une checklist générique — pour Firebase, c'est la
@@ -163,6 +166,10 @@ function openAdminPanel() {
       <label>Tags</label>
       <button type="button" id="admin-tags-btn" class="btn btn-secondary">🏷️ Gérer les tags</button>
     </div>
+    <div class="field">
+      <label>Rétention des données</label>
+      <button type="button" id="admin-purge-btn" class="btn btn-secondary">🧹 Purge assistée</button>
+    </div>
   `;
 
   const listEl = body.querySelector("#admin-apps-list");
@@ -222,6 +229,9 @@ function openAdminPanel() {
   });
   bodyEl.querySelector("#admin-tags-btn").addEventListener("click", () => {
     openTagsAdminModal();
+  });
+  bodyEl.querySelector("#admin-purge-btn").addEventListener("click", () => {
+    openPurgeModal();
   });
 }
 
@@ -463,6 +473,128 @@ async function openTagsAdminModal() {
   }
 
   render();
+}
+
+/**
+ * Purge assistée (TODO-011/TODO-036, 29/09/2026) — implémente la politique de rétention actée le
+ * 15/09/2026 (voir le détail par collection dans js/domain/history.js et js/domain/inbox.js) :
+ * conservation cible de 24 à 36 mois, purge JAMAIS automatique ni silencieuse. Toujours en deux
+ * temps, comme "🗑️ Supprimer" sur un tag ci-dessus : "Calculer" (lecture seule, ne supprime rien)
+ * pour voir combien d'entrées seraient touchées, puis une confirmation explicite (`confirmDelete`)
+ * avant toute suppression réelle. `usageEvents` reste affiché mais non actionnable : une règle
+ * Firestore posée le 20/09/2026 (`allow update, delete: if false`, voir js/services/
+ * usageTracking.js) interdit aujourd'hui toute suppression sur cette collection — la lever est un
+ * changement de règle de sécurité distinct, à traiter avec la même prudence que SEC-011/TODO-028,
+ * pas décidé depuis cet écran.
+ */
+function openPurgeModal() {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <p class="item-meta" style="margin-bottom:16px;">
+      Conservation cible : 24 à 36 mois. Rien n'est jamais supprimé automatiquement — choisis une
+      date, clique <strong>Calculer</strong> pour voir combien d'entrées seraient touchées, puis
+      confirme explicitement si tu veux vraiment les supprimer (irréversible).
+    </p>
+    <div id="admin-purge-sections"></div>
+  `;
+  const { bodyEl } = openModal({
+    title: "🧹 Purge assistée",
+    body,
+    dismissible: true,
+    actions: [{ label: "← Retour", variant: "ghost", onClick: () => openAdminPanel() }],
+  });
+
+  const sectionsEl = bodyEl.querySelector("#admin-purge-sections");
+
+  renderPurgeSection(sectionsEl, {
+    label: "🧾 Historique",
+    description: "Le journal « qu'est-ce qui a été fait, quand » de toutes les fiches.",
+    listFn: historyApi.listOlderThan,
+    purgeFn: historyApi.purgeOlderThan,
+  });
+
+  renderPurgeSection(sectionsEl, {
+    label: "📥 Inbox archivée",
+    description: "Éléments classés sans suite, et Informations/Idées auto-archivées après 15 jours (date d'archivage approximative, voir js/domain/inbox.js).",
+    listFn: inboxApi.listArchivedOlderThan,
+    purgeFn: inboxApi.purgeArchivedOlderThan,
+  });
+
+  const blockedRow = document.createElement("div");
+  blockedRow.className = "card";
+  blockedRow.style.marginBottom = "10px";
+  blockedRow.innerHTML = `
+    <div style="font-weight:600;color:var(--color-text-muted);">📊 Suivi d'usage (usageEvents)</div>
+    <div class="item-meta">Purge non disponible : une règle Firestore interdit aujourd'hui toute
+      suppression sur cette collection, posée volontairement pour garantir l'intégrité de ce
+      journal d'audit. La lever est un changement de sécurité à part (voir TODO-036 dans
+      TODO_TECHNIQUE.md), pas fait depuis cet écran.</div>
+  `;
+  sectionsEl.appendChild(blockedRow);
+}
+
+function renderPurgeSection(container, { label, description, listFn, purgeFn }) {
+  const row = document.createElement("div");
+  row.className = "card";
+  row.style.marginBottom = "10px";
+  const defaultCutoff = new Date();
+  defaultCutoff.setMonth(defaultCutoff.getMonth() - 36);
+  const defaultCutoffStr = defaultCutoff.toISOString().slice(0, 10);
+  const uid = Math.random().toString(36).slice(2, 8);
+  row.innerHTML = `
+    <div style="font-weight:600;">${label}</div>
+    <div class="item-meta" style="margin-bottom:8px;">${description}</div>
+    <div class="field" style="margin-bottom:8px;">
+      <label for="purge-date-${uid}">Supprimer ce qui est antérieur au</label>
+      <input id="purge-date-${uid}" type="date" value="${defaultCutoffStr}" />
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button type="button" class="btn btn-secondary btn-sm purge-calc">Calculer</button>
+      <span class="purge-result item-meta"></span>
+    </div>
+  `;
+  container.appendChild(row);
+
+  const dateInput = row.querySelector(`#purge-date-${uid}`);
+  const resultEl = row.querySelector(".purge-result");
+  const calcBtn = row.querySelector(".purge-calc");
+
+  calcBtn.addEventListener(
+    "click",
+    guardClick(calcBtn, async () => {
+      resultEl.textContent = "Calcul en cours…";
+      const cutoff = new Date(dateInput.value + "T00:00:00").getTime();
+      if (!dateInput.value || Number.isNaN(cutoff)) {
+        resultEl.textContent = "Date invalide.";
+        calcBtn.disabled = false;
+        return;
+      }
+      const stale = await listFn(cutoff);
+      calcBtn.disabled = false;
+      if (!stale.length) {
+        resultEl.textContent = "Aucune entrée antérieure à cette date.";
+        return;
+      }
+      const plural = stale.length > 1;
+      resultEl.textContent = `${stale.length} entrée${plural ? "s" : ""} antérieure${plural ? "s" : ""} à cette date. `;
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn btn-ghost btn-sm";
+      delBtn.textContent = "🗑️ Supprimer définitivement";
+      delBtn.addEventListener("click", () => {
+        confirmDelete({
+          title: "Supprimer définitivement ?",
+          message: `${stale.length} entrée${plural ? "s" : ""} antérieure${plural ? "s" : ""} au ${formatDate(cutoff)} ${plural ? "seront supprimées" : "sera supprimée"} définitivement. Cette action est irréversible.`,
+          onConfirm: async () => {
+            const count = await purgeFn(cutoff);
+            showToast(`${count} entrée${count > 1 ? "s" : ""} supprimée${count > 1 ? "s" : ""}`);
+            openPurgeModal();
+          },
+        });
+      });
+      resultEl.appendChild(delBtn);
+    })
+  );
 }
 
 // Suivi d'usage superadmin (retour de Charles-Henri, 06/09/2026 : "est-ce que je peux avoir un
