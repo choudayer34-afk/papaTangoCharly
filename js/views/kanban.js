@@ -36,6 +36,7 @@ import { copyEntityLink } from "../components/copyLink.js";
 import { renderPilotageSubNav } from "../components/pilotageSubNav.js";
 import { openDuplicateTaskModal } from "../components/duplicateTask.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
+import { attachAutocomplete } from "../components/autocomplete.js";
 import * as tagsApi from "../domain/tags.js";
 import * as dateUtils from "../services/dateUtils.js";
 
@@ -969,14 +970,12 @@ async function openBulkEditModal(tasks, projects, onDone) {
     tagsApi.listAll(),
     preferencesApi.getPreferences(),
   ]);
-  // Datalist d'autocomplétion (retour de Charles-Henri, 13/09/2026 : "il faut que ce soit le cas
-  // partout") — mêmes tags visibles que sur une fiche individuelle (js/components/tagsEditor.js),
-  // les tags désactivés en administration exclus (voir js/components/adminPanel.js).
-  const bulkTagDatalistId = "bulk-tag-options";
-  const bulkTagOptionsHtml = tagsApi
-    .visibleTagNames(allTags, prefs.disabledTags)
-    .map((t) => `<option value="${escapeHtml(t)}"></option>`)
-    .join("");
+  // Autocomplétion (retour de Charles-Henri, 13/09/2026 : "il faut que ce soit le cas partout") —
+  // mêmes tags visibles que sur une fiche individuelle (js/components/tagsEditor.js), les tags
+  // désactivés en administration exclus (voir js/components/adminPanel.js). TODO-031 (29/09/2026) :
+  // liste brute conservée (`bulkTagNames`), la construction d'un <datalist> HTML a été retirée —
+  // voir attachAutocomplete() plus bas, après l'ouverture de la modale.
+  const bulkTagNames = tagsApi.visibleTagNames(allTags, prefs.disabledTags);
 
   // Ressource/Prompt en autocomplétion + tri alphabétique, sur le même principe que le champ Tag
   // juste en dessous (retour de Charles-Henri, 14/09/2026 : "j'ai une liste déroulante à
@@ -990,10 +989,6 @@ async function openBulkEditModal(tasks, projects, onDone) {
   const sortedPrompts = [...prompts].sort((a, b) => a.title.localeCompare(b.title, "fr"));
   const resourceIdByTitle = new Map(sortedResources.map((r) => [r.title.trim().toLowerCase(), r.id]));
   const promptIdByTitle = new Map(sortedPrompts.map((p) => [p.title.trim().toLowerCase(), p.id]));
-  const bulkResourceDatalistId = "bulk-resource-options";
-  const bulkPromptDatalistId = "bulk-prompt-options";
-  const bulkResourceOptionsHtml = sortedResources.map((r) => `<option value="${escapeHtml(r.title)}"></option>`).join("");
-  const bulkPromptOptionsHtml = sortedPrompts.map((p) => `<option value="${escapeHtml(p.title)}"></option>`).join("");
 
   // Projet trié par ordre alphabétique (retour de Charles-Henri : "les projets doivent aussi
   // être triés par ordre alphabétique mais pas en autocomplétion [...] je dois tout voir au
@@ -1052,8 +1047,7 @@ async function openBulkEditModal(tasks, projects, onDone) {
       "Ressource",
       `<div style="display:flex;gap:8px;">
         <select id="bulk-resource-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-resource-value" type="text" placeholder="Titre de la ressource" list="${bulkResourceDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <datalist id="${bulkResourceDatalistId}">${bulkResourceOptionsHtml}</datalist>
+        <input id="bulk-resource-value" type="text" placeholder="Titre de la ressource" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       </div>`
     )}
     ${toggleRow(
@@ -1061,8 +1055,7 @@ async function openBulkEditModal(tasks, projects, onDone) {
       "Prompt",
       `<div style="display:flex;gap:8px;">
         <select id="bulk-prompt-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-prompt-value" type="text" placeholder="Titre du prompt" list="${bulkPromptDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <datalist id="${bulkPromptDatalistId}">${bulkPromptOptionsHtml}</datalist>
+        <input id="bulk-prompt-value" type="text" placeholder="Titre du prompt" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       </div>`
     )}
     ${toggleRow(
@@ -1070,8 +1063,7 @@ async function openBulkEditModal(tasks, projects, onDone) {
       "Tag",
       `<div style="display:flex;gap:8px;">
         <select id="bulk-tags-mode" style="flex:none;width:auto;"><option value="add">+ Ajouter</option><option value="remove">− Retirer</option></select>
-        <input id="bulk-tags-value" type="text" placeholder="Nom du tag (sans #)" list="${bulkTagDatalistId}" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
-        <datalist id="${bulkTagDatalistId}">${bulkTagOptionsHtml}</datalist>
+        <input id="bulk-tags-value" type="text" placeholder="Nom du tag (sans #)" style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
       </div>`
     )}
     ${toggleRow("bulk-notes", "Ajouter une note (à toutes)", `<textarea id="bulk-notes" placeholder="Cette note s'ajoute au journal de chaque tâche, sans rien remplacer"></textarea>`)}
@@ -1095,6 +1087,29 @@ async function openBulkEditModal(tasks, projects, onDone) {
     body.querySelector("#bulk-prompt-on").disabled = true;
     body.querySelector("#bulk-prompt-on").nextElementSibling.textContent += " (aucun prompt pour l'instant)";
   }
+
+  // TODO-031 (29/09/2026) : <datalist> natif remplacé par le composant partagé sur les 3 champs
+  // Ressource/Prompt/Tag — voir js/components/autocomplete.js (bug remonté par Charles-Henri :
+  // aucune suggestion ne s'affichait jamais sur Safari iOS). Filtrage par sous-chaîne, comme
+  // tagsEditor.js/projects.js.
+  attachAutocomplete(body.querySelector("#bulk-resource-value"), {
+    getSuggestions: (query) => {
+      const q = query.trim().toLowerCase();
+      return sortedResources.map((r) => r.title).filter((t) => t.toLowerCase().includes(q));
+    },
+  });
+  attachAutocomplete(body.querySelector("#bulk-prompt-value"), {
+    getSuggestions: (query) => {
+      const q = query.trim().toLowerCase();
+      return sortedPrompts.map((p) => p.title).filter((t) => t.toLowerCase().includes(q));
+    },
+  });
+  attachAutocomplete(body.querySelector("#bulk-tags-value"), {
+    getSuggestions: (query) => {
+      const q = query.trim().toLowerCase();
+      return bulkTagNames.filter((t) => t.toLowerCase().includes(q));
+    },
+  });
 
   const { bodyEl, close } = openModal({
     title: `✏️ Modifier ${tasks.length} tâche${tasks.length > 1 ? "s" : ""} en masse`,
