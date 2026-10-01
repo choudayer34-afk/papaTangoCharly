@@ -160,19 +160,40 @@ export async function autoArchiveStaleKept() {
   return stale.length;
 }
 
-// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation uniquement, aucune purge
-// implémentée à ce stade) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section 1) —
-// conservation cible de 24 à 36 mois pour l'Inbox archivée (`status: "archived"`, y compris les
-// Informations/Idées auto-archivées ci-dessus après 15 jours). Au-delà de cette fenêtre, toute
-// purge ou anonymisation ne pourra intervenir qu'après une confirmation explicite de
-// l'utilisateur — jamais une suppression automatique ou silencieuse. Point important à ne pas
-// confondre : `autoArchiveStaleKept()` ci-dessus ne fait que CHANGER LE STATUT d'un élément
-// ("kept" → "archived") après 15 jours, il ne le supprime jamais — la politique de rétention
-// documentée ici porte sur une éventuelle suppression DÉFINITIVE, bien plus tard (24-36 mois), des
-// éléments déjà archivés, distincte et non encore implémentée. Comme pour `history`
-// (js/domain/history.js), rien dans les règles Firestore n'empêche techniquement une suppression
-// ici — seule l'implémentation de l'écran de purge assistée reste à faire, voir TODO-036 (section
-// 5, TODO_TECHNIQUE.md).
+// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation ; TODO-036, 29/09/2026 —
+// implémentation de la purge) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section
+// 1) — conservation cible de 24 à 36 mois pour l'Inbox archivée (`status: "archived"`, y compris
+// les Informations/Idées auto-archivées ci-dessus après 15 jours). Au-delà de cette fenêtre, toute
+// purge ou anonymisation ne peut intervenir qu'après une confirmation explicite de l'utilisateur —
+// jamais une suppression automatique ou silencieuse. Point important à ne pas confondre :
+// `autoArchiveStaleKept()` ci-dessus ne fait que CHANGER LE STATUT d'un élément ("kept" →
+// "archived") après 15 jours, il ne le supprime jamais — la politique de rétention ci-dessous
+// porte sur une éventuelle suppression DÉFINITIVE, bien plus tard (24-36 mois), des éléments déjà
+// archivés. Comme pour `history` (js/domain/history.js), rien dans les règles Firestore n'empêche
+// techniquement une suppression ici — voir `listArchivedOlderThan`/`purgeArchivedOlderThan` plus
+// bas, appelées uniquement depuis 🔧 Administration → 🧹 Purge assistée (js/components/
+// adminPanel.js), jamais au chargement normal de l'app.
+//
+// Ajouté le 29/09/2026 (TODO-036) : `updatedAt` (posé par storage.put() à CHAQUE écriture, y
+// compris celle de qualify() qui fait passer le statut à "archived") sert de proxy à "depuis
+// quand c'est archivé" — le champ le plus proche disponible sans ajouter un `archivedAt` dédié
+// qui, de toute façon, ne s'appliquerait pas rétroactivement aux éléments déjà archivés avant ce
+// lot. `listArchivedOlderThan` repose sur `listAll()` plutôt que `storage.listWhere()`, pour la
+// même raison que `history.js#listOlderThan` (action manuelle et rare, pas un chemin de lecture
+// fréquent) — voir son commentaire pour le détail.
+export async function listArchivedOlderThan(cutoffDate) {
+  const all = await storage.listAll(COLLECTION);
+  return all.filter((item) => item.status === "archived" && (item.updatedAt || item.createdAt || 0) < cutoffDate);
+}
+
+/** Supprime définitivement les éléments Inbox archivés antérieurs à `cutoffDate` — jamais appelée
+ *  sans confirmation explicite de l'utilisateur (voir adminPanel.js#openPurgeModal). Renvoie le
+ *  nombre d'éléments effectivement supprimés. */
+export async function purgeArchivedOlderThan(cutoffDate) {
+  const stale = await listArchivedOlderThan(cutoffDate);
+  await Promise.all(stale.map((item) => storage.remove(COLLECTION, item.id)));
+  return stale.length;
+}
 
 /**
  * Corrige le texte brut d'une capture encore en attente (retour de Charles-Henri, 06/09/2026 :
