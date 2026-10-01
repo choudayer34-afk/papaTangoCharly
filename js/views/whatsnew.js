@@ -59,6 +59,20 @@ const WHATS_NEW = [
         howTo: "Accueil → clique sur la ligne de résumé de la carte \"Progression\" pour la déplier ou la replier.",
         gain: "Le niveau d'avancement reste visible d'un coup d'œil sans prendre toute la place ni attirer l'attention avant le reste de l'Accueil.",
       },
+      {
+        type: "fix",
+        title: "⌨️ Autocomplétion (catégorie, tags, recherche, saisie en masse) : ne s'affichait jamais sur iPhone",
+        text: "Sur Safari iOS, aucune suggestion ne s'affichait jamais à la frappe dans le champ Catégorie d'un projet, l'éditeur de tags, le filtre \"#tag\" de la recherche globale, et les 3 champs Ressource/Prompt/Tag de la modification en masse du Kanban — une limitation du navigateur, pas un réglage particulier à l'un de ces champs. Remplacé par une liste de suggestions propre à l'application, identique sur tous les navigateurs y compris iPhone, avec la même navigation flèches/Entrée qu'avant.",
+        howTo: "Rien à faire, c'est automatique : tape dans un de ces champs pour voir les suggestions, y compris sur iPhone.",
+        gain: "Les suggestions déjà utilisées (catégories, tags, ressources, prompts) redeviennent trouvables à la frappe depuis un iPhone, comme c'était déjà le cas sur ordinateur.",
+      },
+      {
+        type: "add",
+        title: "🧹 Administration : purge assistée de l'historique et de l'Inbox archivée",
+        text: "Dans 🔧 Administration, un nouvel écran \"🧹 Purge assistée\" permet de supprimer définitivement les entrées d'Historique et les éléments Inbox archivés antérieurs à une date choisie — jamais automatique ni silencieux : un premier clic sur \"Calculer\" affiche seulement combien d'entrées seraient concernées, une confirmation explicite est ensuite nécessaire avant toute suppression réelle. Le suivi d'usage (\"👥 Comptes\") reste affiché mais non actionnable pour l'instant, une règle de sécurité dédiée protégeant ce journal contre toute suppression.",
+        howTo: "🔧 Administration → \"🧹 Purge assistée\" → choisir une date par collection → \"Calculer\" → \"🗑️ Supprimer définitivement\" si le nombre affiché convient.",
+        gain: "Un moyen de garder Historique et Inbox archivée à une taille raisonnable sur la durée, sans jamais risquer de perdre quelque chose sans l'avoir explicitement décidé.",
+      },
     ],
   },
   {
