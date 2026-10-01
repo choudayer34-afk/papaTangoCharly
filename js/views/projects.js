@@ -14,6 +14,7 @@ import * as preferencesApi from "../domain/preferences.js";
 import * as pilotageView from "../services/pilotageViewStore.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
 import { validateRequiredFields, clearFieldErrorOnInput } from "../components/formValidation.js";
+import { attachAutocomplete } from "../components/autocomplete.js";
 import { showToast } from "../components/toast.js";
 import { suggestNextStep } from "../components/suggestNextStep.js";
 import { openCreateResourceModal, renderResourceList, openResourcePickerModal } from "./resources.js";
@@ -638,10 +639,7 @@ export async function openCreateProjectModal(prefill = {}) {
     </div>
     <div class="field">
       <label for="project-category">Catégorie (optionnel — CSE, Modernisation...)</label>
-      <input id="project-category" type="text" list="project-category-options" value="${escapeAttr(prefill.category || "")}" placeholder="Choisir ou créer une catégorie" />
-      <datalist id="project-category-options">
-        ${categoryNames.map((c) => `<option value="${escapeAttr(c)}"></option>`).join("")}
-      </datalist>
+      <input id="project-category" type="text" value="${escapeAttr(prefill.category || "")}" placeholder="Choisir ou créer une catégorie" />
     </div>
     <div class="field">
       <label for="project-objective">Objectif (optionnel)</label>
@@ -654,6 +652,12 @@ export async function openCreateProjectModal(prefill = {}) {
     <div>${guideLinkHtml("usecase-nouveau-projet", "📖 Par où commencer sur un nouveau projet")}</div>
   `;
   clearFieldErrorOnInput(body, ["#project-name"]);
+  // TODO-031 (29/09/2026) : <datalist> natif remplacé par le composant partagé — voir
+  // js/components/autocomplete.js et son en-tête pour le détail (bug remonté par Charles-Henri :
+  // aucune suggestion ne s'affichait jamais sur Safari iOS).
+  attachAutocomplete(body.querySelector("#project-category"), {
+    getSuggestions: (query) => categoryNames.filter((c) => c.toLowerCase().includes(query.trim().toLowerCase())),
+  });
   const { bodyEl, close } = openModal({
     title: "Nouveau projet",
     body,
@@ -782,10 +786,7 @@ export async function openProjectDetail(project, tasks) {
     </div>
     <div class="field">
       <label for="detail-category">Catégorie (optionnel)</label>
-      <input id="detail-category" type="text" list="detail-category-options" value="${escapeAttr(project.category || "")}" placeholder="Choisir ou créer une catégorie" />
-      <datalist id="detail-category-options">
-        ${Object.keys(prefs.categories || {}).map((c) => `<option value="${escapeAttr(c)}"></option>`).join("")}
-      </datalist>
+      <input id="detail-category" type="text" value="${escapeAttr(project.category || "")}" placeholder="Choisir ou créer une catégorie" />
     </div>
     <div class="item-meta" style="margin-bottom:12px;">${isArchived ? "🗄️ Fermé" : "🟢 Actif"}</div>
     ${health ? `
@@ -890,6 +891,11 @@ export async function openProjectDetail(project, tasks) {
   `;
 
   clearFieldErrorOnInput(body, ["#detail-name"]);
+  // TODO-031 (29/09/2026) : <datalist> natif remplacé par le composant partagé, voir
+  // js/components/autocomplete.js et openCreateProjectModal ci-dessus pour le détail.
+  attachAutocomplete(body.querySelector("#detail-category"), {
+    getSuggestions: (query) => Object.keys(prefs.categories || {}).filter((c) => c.toLowerCase().includes(query.trim().toLowerCase())),
+  });
 
   // Bascule d'onglet — même mécanique que la fiche Tâche (voir js/views/kanban.js#openTaskDetail) :
   // chaque panneau existe en permanence, seul l'attribut `hidden` change.
