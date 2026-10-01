@@ -521,7 +521,15 @@
 // APP_SHELL : ils n'existent pas tous encore (livraison progressive en cours), et le mécanisme ne
 // dépend d'aucune précache — chaque image est chargée à la demande, avec repli automatique sur
 // l'emoji/CSS existant si le fichier n'est pas encore là (voir le module ci-dessus pour le détail).
-const CACHE_NAME = "pilotage-cache-v93";
+// CACHE_NAME v93 → v94 (29/09/2026, TODO-031/TODO-036/TODO-037) : contenu modifié de 11 fichiers
+// déjà précachés (js/domain/history.js, js/domain/inbox.js, js/services/usageTracking.js,
+// js/components/adminPanel.js — purge assistée, TODO-036 ; js/domain/people.js/resources.js/
+// meetings.js/decisions.js, js/views/people.js/resources.js/dashboard.js — écritures ciblées
+// addNote(), TODO-037 ; js/components/tagsEditor.js/search.js, js/views/projects.js/kanban.js —
+// <datalist> natif remplacé par le composant d'autocomplétion partagé, TODO-031 ; styles/
+// components.css — style de la liste de suggestions ; js/views/whatsnew.js — nouvelles entrées)
+// et UN fichier nouveau ajouté ci-dessous (js/components/autocomplete.js).
+const CACHE_NAME = "pilotage-cache-v94";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -609,6 +617,9 @@ const APP_SHELL = [
   "./js/components/search.js",
   "./js/components/linkedItems.js",
   "./js/components/tagsEditor.js",
+  // Ajouté le 29/09/2026 (TODO-031) : composant d'autocomplétion partagé qui remplace le
+  // <datalist> natif aux 4 endroits qui l'utilisaient — voir son en-tête pour le détail.
+  "./js/components/autocomplete.js",
   "./js/components/canevas.js",
   "./js/components/weeklyReview.js",
   "./js/components/pomodoroWidget.js",
