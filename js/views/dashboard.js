@@ -2609,7 +2609,11 @@ export function openRecentDetail(item, projects, { onClose } = {}) {
 
   renderNotesBlock(body.querySelector("#detail-notes"), data.notesLog || [], {
     onAdd: async (text) => {
-      const updated = isMeeting ? await meetingsApi.addNote(data.id, text) : await decisionsApi.addNote(data.id, text);
+      // TODO-037 (29/09/2026) : meetingsApi.addNote()/decisionsApi.addNote() renvoient désormais
+      // la note ajoutée seule (écriture ciblée, plus de relecture du tableau complet) — même
+      // principe que js/views/kanban.js#openTaskDetail pour tasksApi.addNote (TODO-010).
+      const note = isMeeting ? await meetingsApi.addNote(data.id, text) : await decisionsApi.addNote(data.id, text);
+      const updated = note ? [...(data.notesLog || []), note] : data.notesLog;
       data.notesLog = updated;
       return updated;
     },
