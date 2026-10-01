@@ -1795,7 +1795,33 @@ tbody.drag-over-group {
   min-height: 0;
   overflow-y: auto;
   padding: 0 8px 8px;
+  /* `position: relative` (01/10/2026, scan de post-it) — uniquement pour positionner
+     `.sticky-note-scan-btn` ci-dessous ; sans effet sur la disposition existante (checklist en
+     flux normal, textarea toujours en height: 100%, voir js/components/stickyNoteShared.js). */
+  position: relative;
 }
+/* Bouton "📷" de scan (01/10/2026, js/components/ocrScan.js) — superposé en haut à droite de la
+   zone de texte plutôt qu'une rangée d'outils séparée, voir le commentaire de
+   js/components/stickyNoteShared.js#renderNoteBody pour la raison (ne pas perturber le
+   height: 100% de .sticky-note-textarea juste en dessous). Fond semi-transparent pour rester
+   lisible sur les 8 couleurs de post-it (y compris les couleurs sombres de texte comme
+   .sticky-note--purple) sans dupliquer une règle par couleur. */
+.sticky-note-scan-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  border: none;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+}
+.sticky-note-scan-btn:hover { background: rgba(255, 255, 255, 0.85); }
 .sticky-note-textarea {
   width: 100%;
   height: 100%;
