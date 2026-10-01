@@ -1,326 +1,251 @@
-// Logique de post-it PARTAGÉE entre js/components/bureau.js (plan de travail "Tout voir") et
-// js/components/pinnedNotesOverlay.js (widgets flottants "toujours visibles") — extraite de
-// bureau.js le 23/09/2026 (même jour que la livraison initiale du lot), au moment où le besoin de
-// Charles-Henri ("je dois pouvoir [épingler] n'importe où dans l'écran [...] au-dessus des autres
-// modales") a fait naître un DEUXIÈME endroit dans l'app qui doit ouvrir le même menu "⋯"
-// (couleur/épingle/archive/suppression/transformation) et éditer le même contenu (titre,
-// texte/checklist) qu'un post-it du plan de travail. Aucune de ces fonctions ne dépendait de
-// l'état interne de mountBureau() (glisser en cours, notes courantes, etc.) — extraction directe,
-// sans changement de comportement pour le plan de travail existant.
+// "🧠 Mon bureau" — post-it libres de l'Accueil (LOT 13, TODO-027, besoin du 22/09/2026 transmis
+// par Charles-Henri : "je veux disposer de plusieurs post-it libres sur mon écran d'accueil afin
+// de capturer rapidement des notes pendant une réunion [...] et transformer ensuite ces notes en
+// objets de Pilotage").
 //
-// `openStickyNoteEditor` (édition rapide en modale, ajoutée le 23/09/2026 pour la carte flottante,
-// SEUL appelant qu'elle ait jamais eu) a été RETIRÉE le 28/09/2026 : retour direct de
-// Charles-Henri sur le complément de redimensionnement livré ce même jour ("je voulais bien
-// l'édition rapide donc que tu repasses dessus") confirmant la lecture alternative qui avait été
-// explicitement proposée sans être retenue à ce moment-là — rendre le contenu (titre, type,
-// checklist/texte) éditable DIRECTEMENT sur la carte flottante, à la manière du plan de travail
-// "Tout voir", sans plus jamais passer par une modale dédiée. Voir
-// js/components/pinnedNotesOverlay.js#buildFloatingNote, qui reproduit désormais la même
-// structure (en-tête avec titre éditable, bascule texte/checklist, corps via renderNoteBody
-// ci-dessous) que js/components/bureau.js#buildNoteEl.
-import * as stickyNotesApi from "../domain/stickyNotes.js";
-import * as inboxApi from "../domain/inbox.js";
-import * as peopleApi from "../domain/people.js";
-import * as gamificationApi from "../domain/gamification.js";
-import { openCreateTaskModal } from "../views/kanban.js";
-import { openCreateResourceModal } from "../views/resources.js";
-import { openCreateFollowUpModal } from "../views/people.js";
-import { openCreateDecisionModal } from "../views/dashboard.js";
-import { openKeptItemDetail } from "../views/inbox.js";
-import { renderChecklist } from "./checklist.js";
-import { openModal, closeModal, confirmDelete } from "./modal.js";
-import { showToast } from "./toast.js";
-import { startScan } from "./ocrScan.js";
+// Remplace l'ancien "📌 Pense-bête" (un post-it UNIQUE stocké dans js/domain/preferences.js) —
+// arbitrage explicite de Charles-Henri (AskUserQuestion, 22/09/2026, "Mon bureau remplace le
+// Pense-bête (Recommandé)") : une vraie collection Firestore cette fois (chaque post-it est une
+// fiche à part entière, position/taille/couleur/z-index comprises), pour permettre un nombre
+// illimité de post-it librement positionnés — ce qu'un simple champ de préférence ne pouvait pas
+// représenter. La migration du contenu existant du Pense-bête vers le premier post-it se fait
+// côté js/views/dashboard.js (voir son commentaire de migration, même principe que
+// `postitMigratedV1`).
+//
+// Modèle de données (repris tel quel de la spec transmise par Charles-Henri) :
+//   StickyNote { id, title, type ("text"|"checklist"), color, content, checklist[], x, y, width,
+//                height, zIndex, pinned, archived, createdAt, updatedAt, floatX, floatY,
+//                floatWidth, floatHeight }
+//   ChecklistItem { id, text, done, doneAt }
+//
+// `floatX`/`floatY` (complément du 23/09/2026, retour direct de Charles-Henri le même jour que la
+// livraison initiale : "je dois pouvoir [mettre un post-it épinglé] n'importe où dans l'écran
+// même en dehors du bureau [...] il ne doit pas passer en dessous des autres modales") — position
+// à L'ÉCRAN (coordonnées viewport), TOTALEMENT INDÉPENDANTE de `x`/`y` (position dans le plan de
+// travail "Tout voir", coordonnées relatives à `#bureau-full-canvas`, voir js/components/
+// bureau.js) : un même post-it épinglé a donc deux positions qui ne se mélangent jamais. Absents
+// (`undefined`) tant que le post-it flottant n'a jamais été glissé — voir js/components/
+// pinnedNotesOverlay.js#fallbackPosition, qui calcule une position de repli côté client sans
+// jamais l'écrire en base tant qu'aucun glisser n'a eu lieu.
+//
+// `floatWidth`/`floatHeight` (complément du 28/09/2026, retour direct de Charles-Henri : "pouvoir
+// agrandir ou réduire un post-it en dimension qui serait épinglé") — taille du même widget
+// flottant, même indépendance totale vis-à-vis de `width`/`height` (plan de travail) que
+// `floatX`/`floatY` vis-à-vis de `x`/`y` ci-dessus. Réutilisent DEFAULT_WIDTH/DEFAULT_HEIGHT/
+// MIN_WIDTH/MIN_HEIGHT plus bas plutôt qu'une deuxième paire de constantes dédiée — voir
+// setFloatSize() plus bas. Absents tant que le widget flottant n'a jamais été redimensionné.
+// Écart assumé avec la spec (à documenter dans le rapport de fin de lot) : le champ `checked` du
+// modèle ChecklistItem de la spec devient `done`/`doneAt` ici, pour rester au même format que
+// TOUTES les autres checklists de l'app (js/domain/tasks.js, js/domain/followups.js, l'ancien
+// Pense-bête) — ce même format est ce que js/components/checklist.js#renderChecklist attend déjà
+// en entrée, réutilisé tel quel plutôt que de lui apprendre un second format.
+//
+// `content` et `checklist` cohabitent TOUJOURS sur le même document, quel que soit `type` actif —
+// changer de type (`setType`) ne perd donc jamais ce qui a été tapé dans l'autre mode, exactement
+// le même principe que `postitMode`/`postitText`/`postitChecklist` avant cette vague.
 
-export const COLOR_LABELS = { yellow: "Jaune", blue: "Bleu", green: "Vert", pink: "Rose", purple: "Violet", gray: "Gris", ocean: "Océan", aurore: "Aurore" };
+import * as storage from "../services/storage.js";
+import { generateId } from "../services/id.js";
+import * as gamification from "./gamification.js";
 
-// "Océan"/"Aurore" (LOT G7, TODO_GAMIFICATION.md §6 Table A, 25/09/2026) — ces 2 couleurs de
-// stickyNotesApi.COLORS sont des déblocages de gamification (js/domain/gamification.js#DEBLOCAGES,
-// catégorie "palette") : jamais proposées dans le sélecteur tant que le déblocage correspondant
-// n'est pas acquis (voir openStickyNoteMenu ci-dessous, qui filtre puis complète après coup).
-const COULEURS_DEBLOCABLES = { ocean: "palette-ocean", aurore: "palette-aurore" };
+const COLLECTION = "stickyNotes";
 
-// Choix de conversion (post-it entier ET ligne de checklist) — un post-it n'est jamais "archivé
-// sans suite" par ce menu : l'action "🗄️ Archiver" existe séparément (voir openStickyNoteMenu).
-export const CONVERT_CHOICES = [
-  { key: "task", emoji: "✅", label: "Tâche" },
-  { key: "followup", emoji: "👀", label: "Suivi" },
-  { key: "resource", emoji: "📎", label: "Ressource" },
-  { key: "decision", emoji: "🗳️", label: "Décision" },
-  { key: "kept", emoji: "🧠", label: "Information" },
-];
+// "ocean"/"aurore" (LOT G7, TODO_GAMIFICATION.md §6 Table A, roadmap gamification INDÉPENDANTE
+// de TODO_TECHNIQUE.md, 25/09/2026) — deux couleurs SUPPLÉMENTAIRES débloquées par la
+// gamification (niveaux 5 et 25, js/domain/gamification.js#DEBLOCAGES, catégorie "palette"),
+// jamais retirées une fois débloquées (§6). Ajoutées ici pour que `setColor()` ci-dessous les
+// accepte comme valeurs valides — le sélecteur de couleur (js/components/stickyNoteShared.js)
+// reste, lui, responsable de ne les PROPOSER que si le déblocage correspondant est acquis :
+// cette liste ne fait que dire "couleur valide", pas "couleur actuellement offerte à ce compte".
+export const COLORS = ["yellow", "blue", "green", "pink", "purple", "gray", "ocean", "aurore"];
+export const DEFAULT_COLOR = "yellow";
 
-export function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str || "";
-  return div.innerHTML;
+export const DEFAULT_WIDTH = 220;
+export const DEFAULT_HEIGHT = 190;
+export const MIN_WIDTH = 160;
+export const MIN_HEIGHT = 120;
+
+export async function createStickyNote(data = {}) {
+  const note = await storage.put(COLLECTION, {
+    title: data.title || "",
+    type: data.type === "checklist" ? "checklist" : "text",
+    color: COLORS.includes(data.color) ? data.color : DEFAULT_COLOR,
+    content: data.content || "",
+    checklist: data.checklist || [],
+    x: Number.isFinite(data.x) ? data.x : 16,
+    y: Number.isFinite(data.y) ? data.y : 16,
+    width: Number.isFinite(data.width) ? data.width : DEFAULT_WIDTH,
+    height: Number.isFinite(data.height) ? data.height : DEFAULT_HEIGHT,
+    zIndex: Number.isFinite(data.zIndex) ? data.zIndex : 1,
+    // `pinned` (23/09/2026, retour direct de Charles-Henri : "je dois toujours pouvoir créer un
+    // post-it à la volée qui sera épinglé par défaut") — optionnel, `false` par défaut pour tout
+    // appelant qui ne le précise pas (migration Pense-bête notamment, voir js/views/dashboard.js).
+    pinned: !!data.pinned,
+    archived: false,
+  });
+  // Gamification (LOT G3, TODO_GAMIFICATION.md §5.1, famille "Organisation") : compte les
+  // post-it créés (clé de dédoublonnage dédiée, sans XP direct) puis réévalue les badges de la
+  // famille. Point d'attention pour le bilan : la migration unique Pense-bête → Bureau (voir
+  // js/views/dashboard.js) appelle cette même fonction pour créer le premier post-it migré —
+  // ce post-it comptera donc, une seule fois, comme un post-it "créé" au sens de ce badge, ce
+  // qui est un effet de bord mineur assumé plutôt que traité comme un cas spécial. Jamais
+  // bloquant pour l'écriture métier ci-dessus.
+  gamification.recordStickyNoteCreated(note.id).catch((err) => console.error("[gamification] Échec de la mise à jour des badges (Organisation) :", err));
+  return note;
 }
 
-export function escapeAttr(str) {
-  return escapeHtml(str).replace(/"/g, "&quot;");
+export function listAll() {
+  return storage.listAll(COLLECTION);
 }
 
-export function buildConvertChoiceGrid(onChoose) {
-  const grid = document.createElement("div");
-  grid.className = "choice-grid";
-  for (const choice of CONVERT_CHOICES) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "choice-btn";
-    btn.innerHTML = `<span class="emoji">${choice.emoji}</span> ${choice.label}`;
-    btn.addEventListener("click", () => onChoose(choice.key));
-    grid.appendChild(btn);
-  }
-  return grid;
+// `{ sort: false }` — l'ordre d'affichage sur le bureau vient de `x`/`y`/`zIndex`, jamais de
+// `updatedAt` (voir js/components/bureau.js) : un post-it qu'on vient de cocher/déplacer n'a
+// aucune raison de "sauter" en tête d'un tableau que l'app ne trie de toute façon jamais par cet
+// ordre-là à l'écran.
+export function subscribe(callback) {
+  return storage.subscribe(COLLECTION, callback, { sort: false });
 }
 
 /**
- * Contenu éditable d'un post-it (titre géré par l'appelant, ici seulement le corps
- * texte/checklist) — utilisé par le plan de travail complet (js/components/bureau.js#buildNoteEl)
- * ET par la carte flottante (js/components/pinnedNotesOverlay.js#buildFloatingNote), qui affiche
- * et édite désormais son contenu en place, exactement de la même façon.
- * `note.checklist` est mutée localement à chaque callback (même pattern que
- * js/views/kanban.js#openTaskDetail pour `task.checklist`) pour un réaffichage immédiat, sans
- * attendre le prochain aller-retour Firestore (qui finira de toute façon par recréer cet élément
- * avec la donnée serveur, via la resouscription de l'appelant).
+ * Position ET taille ET ordre de superposition, en UN seul appel (retour de Charles-Henri,
+ * §"Sauvegarde" : "toutes les modifications sont automatiques [...] position ; taille ; ordre
+ * d'affichage") — voir js/components/bureau.js : un déplacement ou un redimensionnement en cours
+ * ne réécrit jamais Firestore à chaque pixel, seulement une fois au relâchement, avec les 5
+ * champs à jour d'un coup (même préoccupation que le risque déjà noté dans TODO_TECHNIQUE.md
+ * pour ce lot : ne pas multiplier les écritures pendant le glisser). `storage.setFields()` — pas
+ * `update()` — puisque la nouvelle valeur ne dépend jamais de l'ancienne.
  */
-export function renderNoteBody(bodyEl, note, { onLineConvertClose } = {}) {
+export async function setLayout(id, { x, y, width, height, zIndex }) {
+  const fields = {};
+  if (Number.isFinite(x)) fields.x = x;
+  if (Number.isFinite(y)) fields.y = y;
+  if (Number.isFinite(width)) fields.width = width;
+  if (Number.isFinite(height)) fields.height = height;
+  if (Number.isFinite(zIndex)) fields.zIndex = zIndex;
+  return storage.setFields(COLLECTION, id, fields);
+}
+
+/**
+ * Position du post-it FLOTTANT (widget "toujours visible", js/components/pinnedNotesOverlay.js) —
+ * jamais confondue avec `setLayout` ci-dessus, qui pilote le plan de travail "Tout voir". Même
+ * principe d'écriture qu'un glisser dans le plan de travail : la position suit le pointeur en
+ * direct côté client, l'écriture Firestore n'a lieu qu'au relâchement.
+ */
+export async function setFloatPosition(id, { x, y }) {
+  const fields = {};
+  if (Number.isFinite(x)) fields.floatX = x;
+  if (Number.isFinite(y)) fields.floatY = y;
+  return storage.setFields(COLLECTION, id, fields);
+}
+
+/**
+ * Taille du post-it FLOTTANT (28/09/2026, voir le commentaire "floatWidth/floatHeight" en tête de
+ * fichier) — jamais confondue avec setLayout ci-dessus, qui pilote le plan de travail "Tout voir".
+ * Même principe d'écriture qu'un glisser/redimensionnement : la taille suit le pointeur en direct
+ * côté client (js/components/pinnedNotesOverlay.js#attachFloatResize), l'écriture Firestore n'a
+ * lieu qu'au relâchement.
+ */
+export async function setFloatSize(id, { width, height }) {
+  const fields = {};
+  if (Number.isFinite(width)) fields.floatWidth = width;
+  if (Number.isFinite(height)) fields.floatHeight = height;
+  return storage.setFields(COLLECTION, id, fields);
+}
+
+export async function setTitle(id, title) {
+  return storage.setFields(COLLECTION, id, { title: title || "" });
+}
+
+export async function setContent(id, content) {
+  return storage.setFields(COLLECTION, id, { content: content || "" });
+}
+
+export async function setColor(id, color) {
+  return storage.setFields(COLLECTION, id, { color: COLORS.includes(color) ? color : DEFAULT_COLOR });
+}
+
+/** Change de type SANS jamais effacer `content`/`checklist` — voir le commentaire en tête de
+ *  fichier, même principe que l'ancien `postitMode`. */
+export async function setType(id, type) {
+  return storage.setFields(COLLECTION, id, { type: type === "checklist" ? "checklist" : "text" });
+}
+
+export async function togglePin(id, pinned) {
+  return storage.setFields(COLLECTION, id, { pinned: !!pinned });
+}
+
+export async function setArchived(id, archived) {
+  return storage.setFields(COLLECTION, id, { archived: !!archived });
+}
+
+export async function removeStickyNote(id) {
+  return storage.remove(COLLECTION, id);
+}
+
+// ---------- Checklist (post-it de type "checklist") — mêmes callbacks, même forme d'élément
+// ({id, text, done, doneAt}) et même mécanique d'écriture que js/domain/tasks.js, pour que
+// js/components/checklist.js#renderChecklist se comporte à l'identique ici. ----------
+
+export async function addChecklistItem(id, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const item = { id: generateId(), text: trimmed, done: false, doneAt: null };
+  await storage.appendToArray(COLLECTION, id, "checklist", item);
+  return item;
+}
+
+export async function toggleChecklistItem(id, itemId, done) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Post-it introuvable : " + id);
+    return {
+      checklist: (current.checklist || []).map((c) => (c.id === itemId ? { ...c, done, doneAt: done ? Date.now() : null } : c)),
+    };
+  });
+  return updated.checklist;
+}
+
+export async function removeChecklistItem(id, itemId) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Post-it introuvable : " + id);
+    return { checklist: (current.checklist || []).filter((c) => c.id !== itemId) };
+  });
+  return updated.checklist;
+}
+
+export async function editChecklistItem(id, itemId, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return null;
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Post-it introuvable : " + id);
+    return { checklist: (current.checklist || []).map((c) => (c.id === itemId ? { ...c, text: trimmed } : c)) };
+  });
+  return updated.checklist;
+}
+
+export async function reorderChecklist(id, orderedIds) {
+  const updated = await storage.update(COLLECTION, id, (current) => {
+    if (!current) throw new Error("Post-it introuvable : " + id);
+    const list = current.checklist || [];
+    const byId = new Map(list.map((c) => [c.id, c]));
+    const notDoneReordered = orderedIds.map((cid) => byId.get(cid)).filter(Boolean);
+    const covered = new Set(orderedIds);
+    const notDoneUncovered = list.filter((c) => !c.done && !covered.has(c.id));
+    const done = list.filter((c) => c.done);
+    return { checklist: [...notDoneReordered, ...notDoneUncovered, ...done] };
+  });
+  return updated.checklist;
+}
+
+/**
+ * Contenu textuel équivalent d'un post-it, tous types confondus — utilisé pour préremplir les
+ * formulaires de conversion (§"Conversion intelligente") : un post-it Texte donne directement son
+ * `content`, un post-it Checklist énumère chaque ligne (cochée ou non) sous forme de texte lisible,
+ * puisqu'aucun des formulaires cibles (Tâche/Suivi/Ressource/Décision) ne sait afficher une vraie
+ * checklist dans son champ description.
+ */
+export function stickyNoteToText(note) {
   if (note.type === "checklist") {
-    renderChecklist(bodyEl, note.checklist || [], {
-      emptyLabel: "Rien de noté pour l'instant.",
-      sortDoneToBottom: true,
-      onAdd: async (text) => {
-        const item = await stickyNotesApi.addChecklistItem(note.id, text);
-        note.checklist = item ? [...(note.checklist || []), item] : note.checklist;
-        return note.checklist;
-      },
-      onToggle: async (itemId, done) => {
-        note.checklist = await stickyNotesApi.toggleChecklistItem(note.id, itemId, done);
-        return note.checklist;
-      },
-      onRemove: async (itemId) => {
-        note.checklist = await stickyNotesApi.removeChecklistItem(note.id, itemId);
-        return note.checklist;
-      },
-      onEdit: async (itemId, text) => {
-        note.checklist = (await stickyNotesApi.editChecklistItem(note.id, itemId, text)) || note.checklist;
-        return note.checklist;
-      },
-      onReorder: async (orderedIds) => {
-        note.checklist = await stickyNotesApi.reorderChecklist(note.id, orderedIds);
-        return note.checklist;
-      },
-      onLineMenu: (item) => openLineConvertModal(note, item, { onClose: onLineConvertClose }),
-    });
-  } else {
-    // Bouton "📷" (scan, 01/10/2026 — voir js/components/ocrScan.js) superposé en haut à droite de
-    // la zone de texte plutôt qu'une rangée d'outils séparée : `.sticky-note-body` n'est pas un
-    // conteneur flex (voir styles/components.css), et la textarea ci-dessous compte sur son
-    // `height: 100%` pour remplir toute la carte — un élément frère ajouté AVANT elle dans le flux
-    // normal aurait réduit d'autant la hauteur disponible. Un bouton `position: absolute` (voir
-    // `.sticky-note-scan-btn`, qui ajoute `position: relative` à `.sticky-note-body` pour le
-    // positionner) n'a aucun effet sur cette disposition existante, pour le texte comme pour la
-    // checklist ci-dessus qui partage le même conteneur.
-    bodyEl.innerHTML = `
-      <button type="button" class="sticky-note-scan-btn" title="Scanner du texte avec l'appareil photo" aria-label="Scanner du texte avec l'appareil photo">📷</button>
-      <textarea class="sticky-note-textarea" placeholder="Écris ici...">${escapeHtml(note.content)}</textarea>`;
-    const textarea = bodyEl.querySelector(".sticky-note-textarea");
-    let contentSaveTimer = null;
-    textarea.addEventListener("input", () => {
-      clearTimeout(contentSaveTimer);
-      contentSaveTimer = setTimeout(() => stickyNotesApi.setContent(note.id, textarea.value), 500);
-    });
-    textarea.addEventListener("blur", () => {
-      clearTimeout(contentSaveTimer);
-      stickyNotesApi.setContent(note.id, textarea.value);
-    });
-    bodyEl.querySelector(".sticky-note-scan-btn").addEventListener("click", () => {
-      startScan({
-        initialText: textarea.value,
-        onConfirm: async (finalText) => {
-          clearTimeout(contentSaveTimer);
-          textarea.value = finalText;
-          note.content = finalText;
-          await stickyNotesApi.setContent(note.id, finalText);
-          showToast("Texte scanné ajouté au post-it");
-        },
-      });
-    });
+    return (note.checklist || []).map((it) => `${it.done ? "☑" : "☐"} ${it.text}`).join("\n");
   }
-}
-
-/** Menu "⋯" d'un post-it — Épingler/Désépingler, couleur, Archiver, Supprimer, "Transformer en"
- *  (post-it ENTIER, voir CONVERT_CHOICES). Commun au plan de travail complet et aux widgets
- *  flottants. `onClose` (optionnel) — l'appelant flottant (pinnedNotesOverlay.js) l'utilise pour
- *  réafficher sa carte, masquée le temps que ce menu reste ouvert (voir le commentaire en tête de
- *  pinnedNotesOverlay.js sur le conflit de superposition avec .modal-overlay). */
-// margin-bottom de #note-menu-colors relevée de 16px à 28px plus bas (retour de Charles-Henri,
-// 29/09/2026 : "problème d'affichage de légende") : l'infobulle native du navigateur (attribut
-// title="Jaune"/"Océan"... posé sur chaque pastille) s'affiche sous la pastille survolée — avec
-// seulement 16px d'écart, elle chevauchait le sous-titre "Transformer en" juste en dessous. Ce
-// fichier ne définit aucune infobulle personnalisée (uniquement l'attribut natif title) : ce n'est
-// pas une infobulle mal positionnée par notre CSS, seulement pas assez d'espace pour celle, native,
-// du navigateur.
-export function openStickyNoteMenu(note, { onClose } = {}) {
-  const body = document.createElement("div");
-  // Couleurs affichées immédiatement : toutes les couleurs fixes, plus les couleurs débloquées
-  // (LOT G7) uniquement si déjà acquises, plus la couleur courante de la note (même si son
-  // déblocage venait à être perdu, on ne cache jamais la couleur active). Les couleurs débloquées
-  // pas encore acquises sont ajoutées dynamiquement plus bas, après vérification asynchrone.
-  const couleursInitiales = stickyNotesApi.COLORS.filter((c) => !COULEURS_DEBLOCABLES[c] || c === note.color);
-  body.innerHTML = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
-      <button type="button" id="note-menu-pin" class="btn btn-secondary btn-sm">${note.pinned ? "📌 Désépingler" : "📌 Épingler"}</button>
-      <button type="button" id="note-menu-archive" class="btn btn-secondary btn-sm">🗄️ Archiver</button>
-      <button type="button" id="note-menu-delete" class="btn btn-danger btn-sm">🗑️ Supprimer</button>
-    </div>
-    <div class="section-title" style="margin-top:0;">🎨 Couleur</div>
-    <div class="chip-row" id="note-menu-colors" style="margin-bottom:28px;">
-      ${couleursInitiales
-        .map(
-          (c) =>
-            `<button type="button" class="chip sticky-color-swatch sticky-note--${c}${c === note.color ? " active" : ""}" data-color="${c}" aria-label="${COLOR_LABELS[c]}" title="${COLOR_LABELS[c]}"></button>`
-        )
-        .join("")}
-    </div>
-    <div class="section-title">🔀 Transformer en</div>
-    <div class="choice-grid" id="note-menu-convert"></div>
-  `;
-  body.querySelector("#note-menu-pin").addEventListener("click", async () => {
-    await stickyNotesApi.togglePin(note.id, !note.pinned);
-    closeModal();
-  });
-  body.querySelector("#note-menu-archive").addEventListener("click", async () => {
-    await stickyNotesApi.setArchived(note.id, true);
-    closeModal();
-    showToast("Post-it archivé");
-  });
-  body.querySelector("#note-menu-delete").addEventListener("click", () => {
-    closeModal();
-    confirmDelete({
-      title: "Supprimer ce post-it ?",
-      message: `« ${note.title || "Post-it sans titre"} » sera définitivement supprimé.`,
-      onConfirm: async () => {
-        await stickyNotesApi.removeStickyNote(note.id);
-        showToast("Post-it supprimé");
-      },
-    });
-  });
-  // Câblage du clic pour une pastille de couleur, factorisé pour être réutilisé à la fois sur les
-  // pastilles initiales et sur celles ajoutées dynamiquement ci-dessous (LOT G7).
-  function wireColorSwatch(btn) {
-    btn.addEventListener("click", async () => {
-      await stickyNotesApi.setColor(note.id, btn.dataset.color);
-      closeModal();
-    });
-  }
-  body.querySelectorAll("#note-menu-colors .sticky-color-swatch").forEach(wireColorSwatch);
-  body.querySelector("#note-menu-convert").appendChild(
-    buildConvertChoiceGrid((key) => {
-      closeModal();
-      convertWholeNote(note, key);
-    })
-  );
-  openModal({ title: note.title || "📝 Post-it", body, actions: [{ label: "Fermer", variant: "ghost" }], onClose });
-
-  // Complète la palette avec les couleurs débloquées (LOT G7) une fois l'état de gamification lu —
-  // asynchrone car storage.get() ne peut pas être attendu avant l'ouverture du menu (le menu doit
-  // rester réactif immédiatement). Sans effet si la modale a déjà été fermée entre-temps (le
-  // conteneur n'existe alors plus dans le DOM détaché).
-  gamificationApi.getGamificationState().then((state) => {
-    const container = body.querySelector("#note-menu-colors");
-    if (!container) return;
-    for (const [color, deblocageId] of Object.entries(COULEURS_DEBLOCABLES)) {
-      if (color === note.color) continue;
-      if (!state.deblocagesAcquis[deblocageId]) continue;
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = `chip sticky-color-swatch sticky-note--${color}`;
-      btn.dataset.color = color;
-      btn.setAttribute("aria-label", COLOR_LABELS[color]);
-      btn.title = COLOR_LABELS[color];
-      wireColorSwatch(btn);
-      container.appendChild(btn);
-    }
-  });
-}
-
-/**
- * Conversion du post-it ENTIER — préremplit le formulaire cible avec le titre du post-it et son
- * contenu. Le post-it source est ARCHIVÉ (pas supprimé) une fois la fiche cible créée — jamais
- * perdu, retrouvable dans "🗄️ Post-it archivés" (Règle 3 de l'app : "ne jamais perdre une
- * capture").
- */
-async function convertWholeNote(note, key) {
-  const title = note.title || "Post-it";
-  const text = stickyNotesApi.stickyNoteToText(note);
-  const afterCreate = () => stickyNotesApi.setArchived(note.id, true);
-  if (key === "task") {
-    openCreateTaskModal({ title, description: text, createdToast: "Tâche créée", onCreated: afterCreate });
-  } else if (key === "followup") {
-    const people = await peopleApi.listAll();
-    if (!people.length) {
-      showToast("Ajoute d'abord une personne dans l'onglet Équipe pour créer un suivi");
-      return;
-    }
-    openCreateFollowUpModal({ defaultTitle: title, defaultDescription: text, onCreated: afterCreate });
-  } else if (key === "resource") {
-    openCreateResourceModal({ title, description: text, onCreated: afterCreate });
-  } else if (key === "decision") {
-    // Écart assumé (pas de champ "description" générique côté Décision) : le contenu du post-it
-    // part dans "Contexte", "Ce qui a été décidé" reste vide.
-    openCreateDecisionModal({ title, context: text, onCreated: afterCreate });
-  } else if (key === "kept") {
-    await convertToInformation(title, text, afterCreate);
-  }
-}
-
-/**
- * Conversion d'une SEULE ligne de checklist — seule cette ligne alimente le formulaire, le reste
- * de la checklist n'est jamais touché tant que la fiche n'est pas créée ; une fois créée, SEULE
- * cette ligne est retirée (jamais tout le post-it).
- */
-function openLineConvertModal(note, item, { onClose } = {}) {
-  const body = document.createElement("div");
-  body.appendChild(
-    buildConvertChoiceGrid((key) => {
-      closeModal();
-      convertLine(note, item, key);
-    })
-  );
-  openModal({ title: "Créer depuis cette ligne", body, actions: [{ label: "Annuler", variant: "ghost" }], onClose });
-}
-
-async function convertLine(note, item, key) {
-  const text = item.text;
-  const afterCreate = () => stickyNotesApi.removeChecklistItem(note.id, item.id);
-  if (key === "task") {
-    openCreateTaskModal({ title: text, createdToast: "Tâche créée", onCreated: afterCreate });
-  } else if (key === "followup") {
-    const people = await peopleApi.listAll();
-    if (!people.length) {
-      showToast("Ajoute d'abord une personne dans l'onglet Équipe pour créer un suivi");
-      return;
-    }
-    openCreateFollowUpModal({ defaultTitle: text, onCreated: afterCreate });
-  } else if (key === "resource") {
-    openCreateResourceModal({ title: text, onCreated: afterCreate });
-  } else if (key === "decision") {
-    openCreateDecisionModal({ title: text, onCreated: afterCreate });
-  } else if (key === "kept") {
-    await convertToInformation(text, "", afterCreate);
-  }
-}
-
-/**
- * "Information" n'a jamais de formulaire de création dédié nulle part dans l'app (une
- * Information/Idée est structurellement un InboxItem qualifié "kept") — capture directe puis
- * qualification immédiate, la fiche complète s'ouvre ensuite plutôt qu'un simple toast.
- */
-async function convertToInformation(title, text, afterCreate) {
-  const content = text && text.trim() ? text : title;
-  const item = await inboxApi.capture(content, "post-it");
-  await inboxApi.qualify(item.id, "kept");
-  await afterCreate();
-  openKeptItemDetail({ ...item, status: "kept", keptAsType: "kept" });
+  return note.content || "";
 }
