@@ -529,7 +529,25 @@
 // <datalist> natif remplacé par le composant d'autocomplétion partagé, TODO-031 ; styles/
 // components.css — style de la liste de suggestions ; js/views/whatsnew.js — nouvelles entrées)
 // et UN fichier nouveau ajouté ci-dessous (js/components/autocomplete.js).
-const CACHE_NAME = "pilotage-cache-v94";
+//
+// 📷 Scan de post-it par appareil photo (01/10/2026, besoin direct de Charles-Henri hors roadmap
+// TODO_TECHNIQUE.md — voir js/components/ocrScan.js pour le détail produit complet). DEUX nouveaux
+// fichiers ajoutés à APP_SHELL ci-dessous : `js/services/ocr.js` (wrapper Tesseract.js) et
+// `js/components/ocrScan.js` (capture photo + relecture obligatoire avant enregistrement).
+// Fichiers modifiés : `js/components/stickyNoteShared.js` (bouton "📷" sur un post-it existant),
+// `js/components/bureau.js` (bouton "📷 Scanner" à côté de "+ Nouveau post-it"), `styles/
+// components.css` (bouton de scan superposé sur la zone de texte).
+// Volontairement PAS d'ajout de `vendor/tesseract/**` à APP_SHELL — même principe que
+// `illustrations/**/*.png` (LOT G9 ci-dessus) : plusieurs dizaines de Mo au total (moteur wasm en
+// 4 variantes + données de langue française), jamais précachés d'office pour un utilisateur qui ne
+// scannera peut-être jamais de post-it ; mis en cache par la stratégie générique cache-first de ce
+// fichier (voir "fetch" plus bas) dès le premier scan réussi. Ces fichiers ne sont d'ailleurs pas
+// encore présents dans ce dépôt au moment de cette livraison — à ajouter manuellement par
+// Charles-Henri (voir claude/vendor-tesseract-instructions-01-10-2026.md), le bac à sable utilisé
+// pour écrire ce code n'ayant pas d'accès réseau vers npm/les CDN publics pour les récupérer lui-
+// même. Tant qu'ils ne sont pas en place, le bouton de scan échoue proprement avec un message
+// d'erreur explicite plutôt qu'un plantage silencieux (voir js/services/ocr.js).
+const CACHE_NAME = "pilotage-cache-v95";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -571,6 +589,10 @@ const APP_SHELL = [
   // le commentaire daté juste au-dessus de CACHE_NAME) : ajouté à APP_SHELL dès sa création, même
   // règle que tous les nouveaux fichiers précédents de ce document.
   "./js/services/illustrations.js",
+  // Nouveau fichier (01/10/2026, scan de post-it par appareil photo, voir le commentaire daté
+  // juste au-dessus de CACHE_NAME) : ajouté à APP_SHELL dès sa création, même règle que tous les
+  // nouveaux fichiers précédents de ce document.
+  "./js/services/ocr.js",
   "./js/domain/inbox.js",
   "./js/domain/tasks.js",
   "./js/domain/projects.js",
@@ -620,6 +642,10 @@ const APP_SHELL = [
   // Ajouté le 29/09/2026 (TODO-031) : composant d'autocomplétion partagé qui remplace le
   // <datalist> natif aux 4 endroits qui l'utilisaient — voir son en-tête pour le détail.
   "./js/components/autocomplete.js",
+  // Nouveau fichier (01/10/2026, scan de post-it par appareil photo, voir le commentaire daté
+  // juste au-dessus de CACHE_NAME) : ajouté à APP_SHELL dès sa création, même règle que tous les
+  // nouveaux fichiers précédents de ce document.
+  "./js/components/ocrScan.js",
   "./js/components/canevas.js",
   "./js/components/weeklyReview.js",
   "./js/components/pomodoroWidget.js",
