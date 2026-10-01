@@ -33,16 +33,23 @@ export async function reorderPeople(orderedIds) {
 }
 
 /** Journal de notes horodaté (retour de Charles-Henri, 01/09/2026) — voir addNote() dans
- *  domain/tasks.js pour le principe complet (additif uniquement). */
+ *  domain/tasks.js pour le principe complet (additif uniquement).
+ *
+ *  Converti le 29/09/2026 (TODO-037, même conversion que TODO-010 sur tasks.js/projects.js/
+ *  followups.js) vers `storage.appendToArray()` : écriture ATOMIQUE ciblée sur `notesLog`, sans
+ *  relire ni retransmettre le reste du document. Ne renvoie plus que la note ajoutée seule
+ *  (jamais le tableau complet, qui n'est jamais relu ici) — à l'appelant de reconstruire sa
+ *  propre copie locale, voir js/views/people.js#openPersonDetail (même principe que
+ *  js/views/kanban.js#openTaskDetail pour tasksApi.addNote). `eadpFlag: null` reste posé dès la
+ *  création de la note (SEUL le journal d'une Personne porte ce tag, voir EADP_FLAG_VALUES
+ *  plus bas) — inchangé par cette conversion. */
 export async function addNote(id, text) {
   const trimmed = (text || "").trim();
   if (!trimmed) return null;
-  const updated = await storage.update(COLLECTION, id, (current) => {
-    if (!current) throw new Error("Personne introuvable : " + id);
-    return { notesLog: [...(current.notesLog || []), { id: generateId(), text: trimmed, createdAt: Date.now(), eadpFlag: null }] };
-  });
+  const note = { id: generateId(), text: trimmed, createdAt: Date.now(), eadpFlag: null };
+  await storage.appendToArray(COLLECTION, id, "notesLog", note);
   await storage.logHistory("Person", id, "note_added", { text: trimmed });
-  return updated.notesLog;
+  return note;
 }
 
 // `EADP_FLAG_VALUES` (ajout du 28/09/2026, retour de Charles-Henri : "je dois pouvoir
