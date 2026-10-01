@@ -30,6 +30,7 @@ import { openKeptItemDetail } from "../views/inbox.js";
 import { renderChecklist } from "./checklist.js";
 import { openModal, closeModal, confirmDelete } from "./modal.js";
 import { showToast } from "./toast.js";
+import { startScan } from "./ocrScan.js";
 
 export const COLOR_LABELS = { yellow: "Jaune", blue: "Bleu", green: "Vert", pink: "Rose", purple: "Violet", gray: "Gris", ocean: "Océan", aurore: "Aurore" };
 
@@ -112,7 +113,17 @@ export function renderNoteBody(bodyEl, note, { onLineConvertClose } = {}) {
       onLineMenu: (item) => openLineConvertModal(note, item, { onClose: onLineConvertClose }),
     });
   } else {
-    bodyEl.innerHTML = `<textarea class="sticky-note-textarea" placeholder="Écris ici...">${escapeHtml(note.content)}</textarea>`;
+    // Bouton "📷" (scan, 01/10/2026 — voir js/components/ocrScan.js) superposé en haut à droite de
+    // la zone de texte plutôt qu'une rangée d'outils séparée : `.sticky-note-body` n'est pas un
+    // conteneur flex (voir styles/components.css), et la textarea ci-dessous compte sur son
+    // `height: 100%` pour remplir toute la carte — un élément frère ajouté AVANT elle dans le flux
+    // normal aurait réduit d'autant la hauteur disponible. Un bouton `position: absolute` (voir
+    // `.sticky-note-scan-btn`, qui ajoute `position: relative` à `.sticky-note-body` pour le
+    // positionner) n'a aucun effet sur cette disposition existante, pour le texte comme pour la
+    // checklist ci-dessus qui partage le même conteneur.
+    bodyEl.innerHTML = `
+      <button type="button" class="sticky-note-scan-btn" title="Scanner du texte avec l'appareil photo" aria-label="Scanner du texte avec l'appareil photo">📷</button>
+      <textarea class="sticky-note-textarea" placeholder="Écris ici...">${escapeHtml(note.content)}</textarea>`;
     const textarea = bodyEl.querySelector(".sticky-note-textarea");
     let contentSaveTimer = null;
     textarea.addEventListener("input", () => {
@@ -122,6 +133,18 @@ export function renderNoteBody(bodyEl, note, { onLineConvertClose } = {}) {
     textarea.addEventListener("blur", () => {
       clearTimeout(contentSaveTimer);
       stickyNotesApi.setContent(note.id, textarea.value);
+    });
+    bodyEl.querySelector(".sticky-note-scan-btn").addEventListener("click", () => {
+      startScan({
+        initialText: textarea.value,
+        onConfirm: async (finalText) => {
+          clearTimeout(contentSaveTimer);
+          textarea.value = finalText;
+          note.content = finalText;
+          await stickyNotesApi.setContent(note.id, finalText);
+          showToast("Texte scanné ajouté au post-it");
+        },
+      });
     });
   }
 }
