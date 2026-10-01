@@ -305,7 +305,11 @@ export async function openResourceDetail(resource, projects, tasks) {
   renderHistoryTimeline(body.querySelector("#res-history"), resourceHistory);
   renderNotesBlock(body.querySelector("#detail-notes"), resource.notesLog || [], {
     onAdd: async (text) => {
-      const updated = await resourcesApi.addNote(resource.id, text);
+      // TODO-037 (29/09/2026) : resourcesApi.addNote() renvoie désormais la note ajoutée seule
+      // (écriture ciblée, plus de relecture du tableau complet) — même principe que
+      // js/views/kanban.js#openTaskDetail pour tasksApi.addNote (TODO-010).
+      const note = await resourcesApi.addNote(resource.id, text);
+      const updated = note ? [...(resource.notesLog || []), note] : resource.notesLog;
       resource.notesLog = updated;
       return updated;
     },
