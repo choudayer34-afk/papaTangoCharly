@@ -8,17 +8,16 @@ import * as storage from "../services/storage.js";
 
 const COLLECTION = "history";
 
-// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation uniquement, aucune purge
-// implémentée à ce stade) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section 1) —
-// conservation cible de 24 à 36 mois pour cette collection. Au-delà de cette fenêtre, toute purge
-// ou anonymisation ne pourra intervenir qu'après une confirmation explicite de l'utilisateur —
+// Politique de rétention (TODO-011, LOT 4B, 21/09/2026 — documentation ; TODO-036, 29/09/2026 —
+// implémentation de la purge) : décision produit du 15/09/2026 (voir TODO_TECHNIQUE.md, section
+// 1) — conservation cible de 24 à 36 mois pour cette collection. Au-delà de cette fenêtre, toute
+// purge ou anonymisation ne peut intervenir qu'après une confirmation explicite de l'utilisateur —
 // jamais une suppression automatique ou silencieuse, cohérent avec la promesse produit "ne rien
 // perdre silencieusement". Contrairement à `usageEvents` (js/services/usageTracking.js), rien
 // dans les règles Firestore n'empêche techniquement une suppression ici (`history` vit sous
-// `users/{uid}/{document=**}`, en écriture complète pour son propriétaire) — seule
-// l'IMPLÉMENTATION de l'écran de purge assistée avec confirmation reste à faire, voir TODO-036
-// (section 5, TODO_TECHNIQUE.md). Cette collection grandit aujourd'hui sans aucune purge
-// (`storage.logHistory()` n'écrit jamais que de nouvelles entrées, jamais de suppression).
+// `users/{uid}/{document=**}`, en écriture complète pour son propriétaire) — voir
+// `listOlderThan`/`purgeOlderThan` plus bas, appelées uniquement depuis 🔧 Administration →
+// 🧹 Purge assistée (js/components/adminPanel.js), jamais au chargement normal de l'app.
 
 const ACTION_META = {
   "InboxItem:captured": { emoji: "📥", label: "Capture reçue" },
@@ -140,6 +139,28 @@ export function listRecent(limitCount) {
 
 export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback);
+}
+
+// Ajouté le 29/09/2026 (TODO-036, implémentation de la purge assistée annoncée par TODO-011) —
+// voir le commentaire de politique de rétention en tête de fichier. `listOlderThan` repose sur
+// `listAll()` (déjà existant plus haut) plutôt que `storage.listWhere()` : celle-ci est
+// volontairement limitée aux filtres d'ÉGALITÉ (voir son commentaire dans storage.js) — une
+// inégalité sur `date` demanderait un index composite Firestore jamais posé. Acceptable ici
+// puisque cette purge est une action manuelle et rare, déclenchée à la demande depuis
+// l'administration — contrairement à `listForEntity`/`listRecent` ci-dessus, optimisées elles
+// pour un chemin de lecture fréquent (chaque ouverture de fiche, chaque affichage du Dashboard).
+export async function listOlderThan(cutoffDate) {
+  const all = await storage.listAll(COLLECTION);
+  return all.filter((entry) => (entry.date || 0) < cutoffDate);
+}
+
+/** Supprime définitivement les entrées d'historique antérieures à `cutoffDate` — jamais appelée
+ *  sans confirmation explicite de l'utilisateur (voir adminPanel.js#openPurgeModal). Renvoie le
+ *  nombre d'entrées effectivement supprimées. */
+export async function purgeOlderThan(cutoffDate) {
+  const stale = await listOlderThan(cutoffDate);
+  await Promise.all(stale.map((entry) => storage.remove(COLLECTION, entry.id)));
+  return stale.length;
 }
 
 /**
