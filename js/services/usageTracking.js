@@ -40,14 +40,18 @@
 // collection grandit aujourd'hui SANS AUCUNE purge (`logView`/`recordUsageEvent` ci-dessous
 // n'écrivent jamais rien d'autre qu'un nouvel événement).
 //
-// Point bloquant technique constaté en préparant cette documentation : la règle Firestore
+// Point bloquant technique (toujours d'actualité au 29/09/2026, TODO-036) : la règle Firestore
 // ci-dessus interdit EXPLICITEMENT toute suppression (`allow update, delete: if false`), posée
 // volontairement le 20/09/2026 pour garantir l'intégrité de ce journal d'audit. Une purge réelle
 // nécessiterait donc de modifier `firestore.rules` (autoriser une suppression par
 // l'administrateur, potentiellement bornée dans le temps) — un changement de règle de sécurité
-// sensible, hors périmètre de cette simple documentation. Voir TODO-036 (section 5,
-// TODO_TECHNIQUE.md) pour l'implémentation différée de la purge assistée, pour cette collection
-// comme pour `history`/Inbox archivé (js/domain/history.js, js/domain/inbox.js).
+// sensible, à traiter avec la même prudence que SEC-011/TODO-028 (déploiement réel et
+// vérification en console hors de cet environnement), pas décidé unilatéralement ici. C'est la
+// SEULE des 3 collections visées par TODO-011/TODO-036 encore sans purge assistée : `history`
+// (js/domain/history.js#purgeOlderThan) et l'Inbox archivée (js/domain/inbox.js#
+// purgeArchivedOlderThan) l'ont, elles, depuis le 29/09/2026 — voir js/components/adminPanel.js
+// (🔧 Administration → 🧹 Purge assistée), qui affiche cette collection comme non disponible tant
+// que la règle ci-dessus n'a pas été revue.
 
 import { recordUsageEvent, listUsageEvents, getCurrentUser, ADMIN_EMAIL } from "./firebase.js";
 
