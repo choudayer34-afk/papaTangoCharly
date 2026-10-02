@@ -578,7 +578,12 @@
 // de ce qui a été tenté (`lastCheckDetail`) pour que l'échec reste diagnosticable, affiché par
 // `js/views/veille.js` à côté du message d'erreur existant. `CACHE_NAME` incrémenté en
 // conséquence.
-const CACHE_NAME = "pilotage-cache-v98";
+//
+// 3e proxy ajouté (02/10/2026, même jour) : confirmé par le retour détaillé de Charles-Henri
+// (erreur Cloudflare 522 sur allorigins — vraie panne du service, pas un blocage réseau) que les 2
+// proxys précédents peuvent tomber en même temps. `corsproxy.io` ajouté en secours dans
+// `js/domain/veille.js`. `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v99";
 const APP_SHELL = [
   "./",
   "./index.html",
