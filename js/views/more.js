@@ -34,6 +34,9 @@ const ITEMS = [
   { hash: "#/whatsnew", emoji: "🆕", title: "Nouveautés", subtitle: "Ce qui a été ajouté à l'app, du plus récent au plus ancien", group: "Aide" },
   { hash: "#/resources", emoji: "📎", title: "Ressources", subtitle: "Bibliothèque de liens et documents, sans duplication", group: "Bibliothèques" },
   { hash: "#/prompts", emoji: "🤖", title: "Prompts", subtitle: "Bibliothèque de prompts IA, copiables en un clic", group: "Bibliothèques" },
+  // 📡 Veille (01-02/10/2026, besoin direct de Charles-Henri) — même groupe que Ressources/
+  // Prompts ci-dessus : une bibliothèque, pas de l'aide ni une pause.
+  { hash: "#/veille", emoji: "📡", title: "Veille", subtitle: "Tes sources à consulter par sujet — le point de départ de ta ronde du matin", group: "Bibliothèques" },
   { hash: "#/memory", emoji: "🧠", title: "Mémoire & TDAH", subtitle: "Pause mémoire : jeu des paires, respiration, séquence, Pomodoro", group: "Pause" },
   // Galerie des badges (LOT G6, TODO_GAMIFICATION.md §7) — premier écran de la roadmap
   // gamification (js/domain/gamification.js), placée hors de ROUTES/NAV_ITEMS comme les 3
