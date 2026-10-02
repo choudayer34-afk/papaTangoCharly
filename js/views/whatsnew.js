@@ -45,6 +45,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → \"📡 Veille\" → ✏️ sur une source → dérouler \"🔍 Détection de nouveautés\" → activer, tester, enregistrer, puis \"🔍 Vérifier\" en haut de l'écran pour lancer une vérification.",
         gain: "Un moyen gratuit de savoir qu'une page a changé sans avoir à la rouvrir chaque jour pour comparer à l'œil, même sur les sites sans flux RSS.",
       },
+      {
+        type: "add",
+        title: "🛠️ Guide : mettre en place sa veille externe (Feedly, Google Alertes, dossier mail)",
+        text: "Une nouvelle rubrique du Guide détaille, pas à pas, la mise en place des trois outils qui complètent la Veille (en dehors de Pilotage, aucun compte ne pouvant être créé depuis l'app) : un agrégateur RSS type Feedly pour les sites qui ont un flux, des alertes Google sur des mots-clés précis par sujet, et un dossier mail dédié pour regrouper newsletters et alertes reçues par e-mail.",
+        howTo: "☰ Plus → \"📖 Guide\" → rubrique \"🛠️ Mettre en place sa veille externe\".",
+        gain: "Un seul geste quotidien (Feedly + dossier mail + badges 🆕 de l'écran Veille) plutôt qu'une tournée d'onglets, avec la marche à suivre pour y arriver détaillée une bonne fois pour toutes.",
+      },
     ],
   },
   {
