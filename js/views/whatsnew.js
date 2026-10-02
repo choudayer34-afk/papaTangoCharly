@@ -73,6 +73,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → ✏️ sur un concurrent → \"📋 Générer la demande de recherche (CA, fiche, actus...)\".",
         gain: "Une seule demande à préparer et un seul résultat à coller pour mettre à jour toute la fiche d'un concurrent, plutôt que de refaire la recherche séparément pour chaque champ.",
       },
+      {
+        type: "add",
+        title: "🪪 Fiche visuelle et 📊 Benchmark visuel pour chaque concurrent",
+        text: "La fiche d'un concurrent propose un vrai SWOT à 4 cases (Forces, Faiblesses, Opportunités, Menaces — les 2 dernières s'ajoutent à Forces/Faiblesses déjà en place) et 2 curseurs de positionnement (Spécialisation, Visibilité de leur roadmap). Un nouveau bouton \"🪪 Voir la fiche visuelle\" affiche tout ça mis en forme (SWOT en 4 cases colorées + encart \"Force d'Agreo\"), pour n'importe quel concurrent y compris ceux ajoutés plus tard. Le \"📊 Benchmark visuel\" affiche en plus une carte de positionnement (tous les concurrents positionnés d'un coup d'œil) au-dessus du tableau comparatif déjà existant, et un bouton \"🪪 Fiche\" sur chaque ligne pour ouvrir sa fiche visuelle directement.",
+        howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → ✏️ sur un concurrent pour renseigner le SWOT et les 2 curseurs, \"🪪 Voir la fiche visuelle\" pour la voir mise en forme ; \"📊 Benchmark visuel\" en haut de la section pour la carte de positionnement et le tableau.",
+        gain: "La même mise en forme visuelle qu'un document externe, mais générée automatiquement depuis Pilotage et à jour pour tout concurrent ajouté — pas besoin de refaire un document à part à chaque fois.",
+      },
     ],
   },
   {
