@@ -106,9 +106,17 @@ export function subscribe(callback) {
 // site donné. Le premier qui répond est utilisé ; `detail` (voir `previewWatch()`) garde la trace
 // de ce qui a été essayé, pour que l'échec reste diagnosticable plutôt qu'un simple "ça ne marche
 // pas" sans piste.
+//
+// 3e proxy ajouté (02/10/2026, même jour) : le tout premier test réel a vu allorigins ET codetabs
+// échouer EN MÊME TEMPS (confirmé par Charles-Henri via l'erreur Cloudflare 522 "Connection timed
+// out" sur allorigins — une vraie panne côté service, pas un blocage réseau de son côté). Une
+// coïncidence malheureuse plutôt qu'un problème de fond, mais qui montre que 2 services gratuits
+// et non garantis peuvent très bien tomber ensemble : un 3e en secours augmente les chances qu'au
+// moins un réponde.
 const PROXIES = [
   { name: "allorigins", build: (target) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(target) },
   { name: "codetabs", build: (target) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(target) },
+  { name: "corsproxy.io", build: (target) => "https://corsproxy.io/?url=" + encodeURIComponent(target) },
 ];
 const PROXY_TIMEOUT_MS = 15000;
 
