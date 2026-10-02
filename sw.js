@@ -686,7 +686,21 @@
 // `.swot-*`/`.agreo-callout`/`.position-chart-wrap`, réutilisant les jetons de couleur existants)
 // et `js/views/whatsnew.js` (nouvelle entrée) modifiés, aucun nouveau fichier. `CACHE_NAME`
 // incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v107";
+//
+// 3 ajustements (02/10/2026, même jour, retour direct après la livraison ci-dessus) : (1) "la
+// fiche doit être consultable dans la partie veille" — bouton "🪪" ajouté directement sur chaque
+// ligne de la liste (js/views/veille.js#renderSections), plus besoin de passer par ✏️ pour une
+// simple consultation ; (2) "une date de dernière mise à jour" — nouveau champ `ficheUpdatedAt`
+// (js/domain/veille.js), DÉDIÉ plutôt que le `updatedAt` générique de storage.js (qui bouge aussi
+// sur un simple "🔍 Vérifier" ou un clic sur le lien, sans rapport avec le contenu de la fiche —
+// voir le commentaire détaillé dans js/views/veille.js#openSourceModal) ; (3) "le prompt renvoi
+// également les notes qu'il faut saisir" — `competitorResearchPrompt()` demande maintenant
+// explicitement une note courte (mot-clé d'alerte/point de vigilance) en plus du résumé, et le
+// lien de chaque source trouvée (utile avec n'importe quel outil, en particulier avec Perplexity
+// que Charles-Henri utilise). `js/domain/veille.js`, `js/views/veille.js` et `js/views/whatsnew.js`
+// (entrée précédente amendée plutôt que dupliquée, livrée le même jour) modifiés, aucun nouveau
+// fichier. `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v108";
 const APP_SHELL = [
   "./",
   "./index.html",
