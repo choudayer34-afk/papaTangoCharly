@@ -82,6 +82,122 @@ function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
 }
 
+// Valeur affichée par les 2 curseurs de positionnement (02/10/2026, Benchmark visuel) : 5 par
+// défaut (neutre) tant que la fiche n'a jamais été enregistrée depuis l'ajout de ces champs — pas
+// "non positionné" dans le FORMULAIRE (le curseur doit bien avoir une position de départ), mais
+// bien "non positionné" sur la carte tant qu'aucun enregistrement n'a eu lieu (voir
+// js/domain/veille.js#hasPositioning, qui distingue les deux).
+function specializationValue(existing) {
+  return typeof existing?.specializationScore === "number" ? existing.specializationScore : 5;
+}
+function roadmapVisibilityValue(existing) {
+  return typeof existing?.roadmapVisibilityScore === "number" ? existing.roadmapVisibilityScore : 5;
+}
+
+// Fiche visuelle d'UN concurrent (02/10/2026, retour direct de Charles-Henri après avoir vu la
+// page statique livrée à part : "ça doit être réalisable dans pilote et même pour tout les
+// nouveaux que je rajouterai"). Construite UNIQUEMENT à partir des champs déjà stockés sur la
+// source — aucun contenu écrit en dur comme sur la page statique à 3 concurrents fixes — donc
+// disponible pour n'importe quel concurrent, y compris ceux ajoutés après coup. `swotCell()`
+// factorise les 4 cases Forces/Faiblesses/Opportunités/Menaces, identiques à la mise en forme
+// près (texte libre affiché tel quel, sauts de ligne conservés, placeholder si vide).
+function swotCell(kind, label, text) {
+  const value = (text || "").trim();
+  return `
+    <div class="swot-cell swot-${kind}">
+      <span class="swot-cell-label">${label}</span>
+      <p>${value ? escapeHtml(value).replace(/\n/g, "<br>") : "<em>— à compléter —</em>"}</p>
+    </div>
+  `;
+}
+
+function competitorFicheHTML(source) {
+  const links = [
+    source.url ? `<a href="${escapeAttr(source.url)}" target="_blank" rel="noopener">Site</a>` : "",
+    source.linkedinUrl ? `<a href="${escapeAttr(source.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : "",
+    source.pappersUrl ? `<a href="${escapeAttr(source.pappersUrl)}" target="_blank" rel="noopener">Pappers</a>` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const summary = (source.profileSummary || "").trim();
+  const agreoStrengths = (source.agreoStrengths || "").trim();
+  return `
+    <div class="fiche-visual">
+      <div class="fiche-visual-head">
+        ${source.ca ? `<span class="badge badge-new">CA : ${escapeHtml(source.ca)}</span>` : ""}
+        ${links ? `<div class="item-meta">${links}</div>` : ""}
+      </div>
+      <p class="fiche-visual-summary">${summary ? escapeHtml(summary).replace(/\n/g, "<br>") : "<em>Résumé non renseigné — à compléter dans la fiche.</em>"}</p>
+      <div class="swot-grid">
+        ${swotCell("good", "Forces", source.competitorStrengths)}
+        ${swotCell("bad", "Faiblesses", source.competitorWeaknesses)}
+        ${swotCell("info", "Opportunités", source.opportunities)}
+        ${swotCell("warn", "Menaces", source.threats)}
+      </div>
+      <div class="agreo-callout">
+        <span class="agreo-callout-label">🎯 Force d'Agreo face à ce concurrent</span>
+        <p>${agreoStrengths ? escapeHtml(agreoStrengths).replace(/\n/g, "<br>") : "<em>— à compléter —</em>"}</p>
+        <div class="item-meta">Basé uniquement sur des informations publiques sur Agreo — à corriger avec ta propre connaissance du produit.</div>
+      </div>
+    </div>
+  `;
+}
+
+function openCompetitorFicheModal(source) {
+  const body = document.createElement("div");
+  body.innerHTML = competitorFicheHTML(source);
+  openModal({ title: `🪪 ${source.title || "Fiche concurrent"}`, body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true });
+}
+
+// Carte de positionnement du Benchmark visuel (02/10/2026) — SVG dessiné à la main (pas de
+// librairie de graphique : seul point de l'app qui en aurait l'usage, pas justifié d'en ajouter
+// une pour ça seul, cohérent avec "pas de dépendance" de tout le reste du projet). Couleur des
+// points et des axes puisée dans les jetons CSS existants (var(--color-...), styles/tokens.css)
+// plutôt qu'une palette codée en dur : suit donc le thème clair/sombre de l'app automatiquement,
+// sans media query ici. Un seul point par concurrent, étiquette TOUJOURS affichée (jamais
+// sélective) et couleur UNIFORME (pas une teinte par concurrent) : le nombre de concurrents n'est
+// pas borné (Charles-Henri peut en ajouter indéfiniment), donc l'identité repose sur le texte de
+// l'étiquette plutôt que sur une palette catégorielle qui ne passerait plus au-delà de quelques
+// entrées (voir la skill dataviz sur ce point). Les étiquettes alternent au-dessus/en-dessous du
+// point selon la parité de l'index pour limiter les recouvrements les plus évidents — pas un vrai
+// anti-collision, suffisant pour le nombre de concurrents attendu ici.
+function renderPositionChartSVG(items) {
+  const W = 560,
+    H = 360,
+    padL = 50,
+    padR = 16,
+    padT = 16,
+    padB = 42;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+  const x = (v) => padL + (v / 10) * plotW;
+  const y = (v) => padT + plotH - (v / 10) * plotH;
+  const points = items
+    .map((s, i) => {
+      const px = x(s.specializationScore);
+      const py = y(s.roadmapVisibilityScore);
+      const labelY = i % 2 === 0 ? py - 14 : py + 22;
+      return `
+        <g>
+          <circle cx="${px}" cy="${py}" r="7" fill="var(--color-primary)" stroke="var(--color-surface)" stroke-width="2"/>
+          <text x="${px}" y="${labelY}" text-anchor="middle" font-size="12" font-weight="600" fill="var(--color-text)">${escapeHtml(s.title)}</text>
+        </g>
+      `;
+    })
+    .join("");
+  return `
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Carte de positionnement : spécialisation semences en abscisse, visibilité publique de la roadmap en ordonnée." style="width:100%;max-width:560px;height:auto;display:block;">
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="var(--color-border)" />
+      <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--color-border)" />
+      <line x1="${padL + plotW / 2}" y1="${padT}" x2="${padL + plotW / 2}" y2="${H - padB}" stroke="var(--color-border)" stroke-dasharray="3 5"/>
+      <line x1="${padL}" y1="${padT + plotH / 2}" x2="${W - padR}" y2="${padT + plotH / 2}" stroke="var(--color-border)" stroke-dasharray="3 5"/>
+      <text x="${padL + plotW / 2}" y="${H - 8}" text-anchor="middle" font-size="10" fill="var(--color-text-muted)" letter-spacing="0.03em">GÉNÉRALISTE ← SPÉCIALISATION SEMENCES → SPÉCIALISTE</text>
+      <text x="12" y="${padT + plotH / 2}" text-anchor="middle" font-size="10" fill="var(--color-text-muted)" letter-spacing="0.03em" transform="rotate(-90 12 ${padT + plotH / 2})">OPAQUE ← VISIBILITÉ ROADMAP → PUBLIQUE</text>
+      ${points}
+    </svg>
+  `;
+}
+
 // Modale "demande à coller à Claude" (02/10/2026, veille concurrentielle enrichie — voir le
 // commentaire d'en-tête de js/domain/veille.js#competitorResearchPrompt pour le pourquoi).
 // Partagée par les deux usages (mise à jour d'une fiche existante, découverte de nouveaux
@@ -243,7 +359,7 @@ export function renderVeille(container) {
           <span>${cat.emoji} ${cat.label}${items.length ? ` (${items.length})` : ""}</span>
           <span style="display:flex;gap:6px;flex-wrap:wrap;">
             <button type="button" id="veille-competitor-discover-btn" class="btn btn-ghost btn-sm">🔎 Chercher de nouveaux concurrents</button>
-            ${items.length ? `<button type="button" id="veille-competitor-benchmark-btn" class="btn btn-ghost btn-sm">📊 Benchmark</button>` : ""}
+            ${items.length ? `<button type="button" id="veille-competitor-benchmark-btn" class="btn btn-ghost btn-sm">📊 Benchmark visuel</button>` : ""}
           </span>
         `;
       } else {
@@ -338,10 +454,12 @@ export function renderVeille(container) {
   // tel quel (styles/components.css) — même langage visuel que la vue Tableau du Kanban plutôt
   // qu'un nouveau composant pour ce seul usage.
   function openBenchmarkModal(items) {
-    const rows = items
-      .slice()
-      .sort((a, b) => a.title.localeCompare(b.title, "fr"))
-      .map((s) => {
+    const sorted = items.slice().sort((a, b) => a.title.localeCompare(b.title, "fr"));
+    const positioned = sorted.filter(veilleApi.hasPositioning);
+    const unpositioned = sorted.filter((s) => !veilleApi.hasPositioning(s));
+
+    const rows = sorted
+      .map((s, i) => {
         const links =
           [
             s.url ? `<a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">Site</a>` : "",
@@ -361,19 +479,41 @@ export function renderVeille(container) {
             <td>${profilePreview}</td>
             <td>${notesPreview}</td>
             <td>${links}</td>
+            <td><button type="button" class="btn btn-ghost btn-sm" data-benchmark-fiche-idx="${i}">🪪 Fiche</button></td>
           </tr>
         `;
       })
       .join("");
+
+    const chartSection = positioned.length
+      ? `
+        <div class="position-chart-wrap">
+          ${renderPositionChartSVG(positioned)}
+          ${
+            unpositioned.length
+              ? `<p class="item-meta">Non positionnés (curseurs jamais réglés) : ${unpositioned.map((s) => escapeHtml(s.title)).join(", ")} — ouvre leur fiche (✏️) pour les régler.</p>`
+              : ""
+          }
+        </div>
+      `
+      : `
+        <div class="empty-state">
+          <span class="emoji">📍</span>
+          Aucun concurrent positionné pour l'instant. Ouvre la fiche d'un concurrent (✏️), dérouler "🎯 Fiche
+          comparative face à Agreo" et régler les 2 curseurs en bas (Spécialisation, Visibilité de leur
+          roadmap) pour qu'il apparaisse ici.
+        </div>
+      `;
 
     const body = document.createElement("div");
     body.innerHTML = `
       <p class="item-meta" style="margin-top:0;">
         Construit à partir des fiches déjà enregistrées. Pour le mettre à jour : édite chaque fiche (✏️) ou
         utilise "📋 Générer la demande de recherche" depuis sa fiche, puis colle le résultat dans ses champs.
-        Le détail complet (forces, faiblesses, face à Agreo) est dans la fiche de chaque concurrent — "🎯 Fiche
-        comparative face à Agreo" — ce tableau n'en montre qu'un résumé court pour comparer d'un coup d'œil.
+        Le détail complet (SWOT, face à Agreo) est dans la fiche visuelle de chaque concurrent ("🪪 Fiche" sur
+        sa ligne ci-dessous) — ce tableau n'en montre qu'un résumé court pour comparer d'un coup d'œil.
       </p>
+      ${chartSection}
       <div class="pilotage-table-wrap">
         <table class="pilotage-table">
           <thead>
@@ -383,13 +523,17 @@ export function renderVeille(container) {
               <th>Positionnement</th>
               <th>Dernière note / évolution</th>
               <th>Liens</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     `;
-    openModal({ title: "📊 Benchmark concurrents", body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true });
+    body.querySelectorAll("[data-benchmark-fiche-idx]").forEach((btn) => {
+      btn.addEventListener("click", () => openCompetitorFicheModal(sorted[Number(btn.dataset.benchmarkFicheIdx)]));
+    });
+    openModal({ title: "📊 Benchmark visuel concurrents", body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true });
   }
 
   function openSourceModal(existing = null) {
@@ -431,23 +575,31 @@ export function renderVeille(container) {
         <button type="button" id="veille-competitor-prompt-btn" class="btn btn-secondary btn-sm">📋 Générer la demande de recherche (CA, fiche, actus...)</button>
         <div class="item-meta">
           Pilotage ne peut pas interroger LinkedIn ou Pappers tout seul (pas de compte, pas de clé API) — ce bouton
-          prépare le texte à coller dans une conversation avec Claude, qui fait la recherche (y compris les 4
+          prépare le texte à coller dans une conversation avec Claude, qui fait la recherche (y compris les
           champs de la fiche "face à Agreo" ci-dessous) ; reporte ensuite son résultat dans les champs
           correspondants.
         </div>
         <details>
-          <summary>🎯 Fiche comparative face à Agreo</summary>
+          <summary>🎯 Fiche comparative face à Agreo (SWOT)</summary>
           <div class="field">
             <label for="veille-profile">Résumé (qui ils sont, positionnement, marché)</label>
             <textarea id="veille-profile" placeholder="Ex. Suite logicielle spécialisée semences, SaaS, positionnement...">${escapeHtml(existing?.profileSummary || "")}</textarea>
           </div>
           <div class="field">
-            <label for="veille-their-strengths">Leurs forces</label>
+            <label for="veille-their-strengths">Forces</label>
             <textarea id="veille-their-strengths" placeholder="Ce qu'ils font mieux ou différemment">${escapeHtml(existing?.competitorStrengths || "")}</textarea>
           </div>
           <div class="field">
-            <label for="veille-their-weaknesses">Leurs faiblesses</label>
+            <label for="veille-their-weaknesses">Faiblesses</label>
             <textarea id="veille-their-weaknesses" placeholder="Limites, angles morts, retours clients négatifs trouvés">${escapeHtml(existing?.competitorWeaknesses || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="veille-opportunities">Opportunités</label>
+            <textarea id="veille-opportunities" placeholder="Ce qui pourrait les faire progresser sur leur marché">${escapeHtml(existing?.opportunities || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="veille-threats">Menaces</label>
+            <textarea id="veille-threats" placeholder="Ce qui pourrait les freiner ou les fragiliser (hors de leur contrôle)">${escapeHtml(existing?.threats || "")}</textarea>
           </div>
           <div class="field">
             <label for="veille-agreo-strengths">Force d'Agreo face à eux</label>
@@ -458,6 +610,17 @@ export function renderVeille(container) {
             avis en ligne) — à corriger ou compléter avec ta propre connaissance du produit, des retours
             clients et de la roadmap réelle, que Pilotage n'a aucun moyen de connaître de lui-même.
           </div>
+          <div class="field">
+            <label for="veille-specialization">Spécialisation — <span id="veille-specialization-value">${specializationValue(existing)}</span>/10</label>
+            <input id="veille-specialization" type="range" min="0" max="10" step="1" value="${specializationValue(existing)}" style="width:100%;" />
+            <div class="item-meta">0 = généraliste, 10 = spécialiste pur de la production de semences. Réglé à la main — alimente la carte de positionnement du Benchmark visuel.</div>
+          </div>
+          <div class="field">
+            <label for="veille-roadmap-visibility">Visibilité de leur roadmap — <span id="veille-roadmap-visibility-value">${roadmapVisibilityValue(existing)}</span>/10</label>
+            <input id="veille-roadmap-visibility" type="range" min="0" max="10" step="1" value="${roadmapVisibilityValue(existing)}" style="width:100%;" />
+            <div class="item-meta">0 = aucune visibilité publique sur leurs évolutions, 10 = feuille de route et retours clients entièrement publics.</div>
+          </div>
+          <button type="button" id="veille-competitor-fiche-btn" class="btn btn-secondary btn-sm">🪪 Voir la fiche visuelle</button>
         </details>
       </div>
       <details>
@@ -519,6 +682,41 @@ export function renderVeille(container) {
       );
     });
 
+    // Curseurs de positionnement (02/10/2026, Benchmark visuel) : valeur affichée à côté du
+    // libellé mise à jour en direct, même principe que js/views/priorisation.js#openWeightsModal
+    // (seul autre endroit de l'app avec un <input type="range">) — repris pour cohérence plutôt
+    // que réinventé.
+    const specializationInput = body.querySelector("#veille-specialization");
+    const specializationValueEl = body.querySelector("#veille-specialization-value");
+    specializationInput.addEventListener("input", () => {
+      specializationValueEl.textContent = specializationInput.value;
+    });
+    const roadmapVisibilityInput = body.querySelector("#veille-roadmap-visibility");
+    const roadmapVisibilityValueEl = body.querySelector("#veille-roadmap-visibility-value");
+    roadmapVisibilityInput.addEventListener("input", () => {
+      roadmapVisibilityValueEl.textContent = roadmapVisibilityInput.value;
+    });
+
+    // "Voir la fiche visuelle" (02/10/2026) : construit à partir des champs du FORMULAIRE en
+    // cours de saisie, pas de la source déjà enregistrée — même principe que le bouton
+    // "📋 Générer la demande" ci-dessus, pour prévisualiser avant même d'avoir cliqué "Enregistrer".
+    const competitorFicheBtn = body.querySelector("#veille-competitor-fiche-btn");
+    competitorFicheBtn.addEventListener("click", () => {
+      openCompetitorFicheModal({
+        title: body.querySelector("#veille-title").value.trim(),
+        url: body.querySelector("#veille-url").value.trim(),
+        ca: body.querySelector("#veille-ca").value.trim(),
+        linkedinUrl: body.querySelector("#veille-linkedin").value.trim(),
+        pappersUrl: body.querySelector("#veille-pappers").value.trim(),
+        profileSummary: body.querySelector("#veille-profile").value.trim(),
+        competitorStrengths: body.querySelector("#veille-their-strengths").value.trim(),
+        competitorWeaknesses: body.querySelector("#veille-their-weaknesses").value.trim(),
+        opportunities: body.querySelector("#veille-opportunities").value.trim(),
+        threats: body.querySelector("#veille-threats").value.trim(),
+        agreoStrengths: body.querySelector("#veille-agreo-strengths").value.trim(),
+      });
+    });
+
     const testBtn = body.querySelector("#veille-watch-test-btn");
     const testResultEl = body.querySelector("#veille-watch-test-result");
     testBtn.addEventListener(
@@ -556,7 +754,11 @@ export function renderVeille(container) {
             profileSummary: bodyEl.querySelector("#veille-profile").value.trim(),
             competitorStrengths: bodyEl.querySelector("#veille-their-strengths").value.trim(),
             competitorWeaknesses: bodyEl.querySelector("#veille-their-weaknesses").value.trim(),
+            opportunities: bodyEl.querySelector("#veille-opportunities").value.trim(),
+            threats: bodyEl.querySelector("#veille-threats").value.trim(),
             agreoStrengths: bodyEl.querySelector("#veille-agreo-strengths").value.trim(),
+            specializationScore: Number(bodyEl.querySelector("#veille-specialization").value),
+            roadmapVisibilityScore: Number(bodyEl.querySelector("#veille-roadmap-visibility").value),
             watchEnabled: bodyEl.querySelector("#veille-watch-enabled").checked,
             watchUrl: bodyEl.querySelector("#veille-watch-url").value.trim(),
             watchSelector: bodyEl.querySelector("#veille-watch-selector").value.trim(),
