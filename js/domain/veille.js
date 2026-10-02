@@ -90,15 +90,26 @@ export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback, { sort: false });
 }
 
-// Proxy CORS public, gratuit, sans inscription ni clé API — nécessaire car la quasi-totalité des
-// sites de veille ciblés ne renvoient pas d'en-tête CORS autorisant un fetch() direct depuis le
-// navigateur. Choisi pour rester à coût et configuration nuls (contrainte explicite de
+// Proxies CORS publics, gratuits, sans inscription ni clé API — nécessaire car la quasi-totalité
+// des sites de veille ciblés ne renvoient pas d'en-tête CORS autorisant un fetch() direct depuis
+// le navigateur. Choisi pour rester à coût et configuration nuls (contrainte explicite de
 // Charles-Henri : "je veux rester gratuit") plutôt qu'un service avec compte/clé API (rss2json...)
 // ou une fonction serverless (Firebase Cloud Functions, qui imposerait le plan payant à l'usage).
 // Contrepartie assumée : ressource communautaire sans garantie de disponibilité — un échec
 // (`error: "fetch_failed"`) est une situation normale et prévue, jamais traitée comme "rien n'a
 // changé".
-const PROXY_URL = "https://api.allorigins.win/raw?url=";
+//
+// PLUSIEURS proxies, essayés dans l'ordre (02/10/2026, retour de Charles-Henri après un premier
+// test réel sur SEMAE : "Échec de récupération") — un service public gratuit seul n'offre aucune
+// garantie de disponibilité, et certains sites bloquent carrément les adresses IP des proxys les
+// plus connus (protection anti-robot) : aucun moyen de savoir à l'avance lequel passera pour un
+// site donné. Le premier qui répond est utilisé ; `detail` (voir `previewWatch()`) garde la trace
+// de ce qui a été essayé, pour que l'échec reste diagnosticable plutôt qu'un simple "ça ne marche
+// pas" sans piste.
+const PROXIES = [
+  { name: "allorigins", build: (target) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(target) },
+  { name: "codetabs", build: (target) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(target) },
+];
 const PROXY_TIMEOUT_MS = 15000;
 
 /** Empreinte simple (non cryptographique, suffisante pour détecter un changement) d'une chaîne. */
@@ -146,25 +157,36 @@ export const WATCH_ERROR_LABELS = {
 /**
  * Récupère et analyse une page SANS rien écrire — utilisé par le bouton "🔍 Tester" de la modale
  * (contre les valeurs de champs en cours de saisie, pas encore enregistrées) et en interne par
- * `checkSourceForChanges()`.
+ * `checkSourceForChanges()`. Essaie chaque proxy de `PROXIES` dans l'ordre jusqu'à ce que l'un
+ * réponde — `detail` résume ce qui a été tenté (utile seulement quand `ok` est `false`).
  * @param {{url?:string, watchUrl?:string, watchSelector?:string}} fields
- * @returns {Promise<{ok:boolean, error?:string, text?:string, hash?:string, preview?:string}>}
+ * @returns {Promise<{ok:boolean, error?:string, detail?:string, text?:string, hash?:string, preview?:string}>}
  */
 export async function previewWatch({ url, watchUrl, watchSelector } = {}) {
   const target = (watchUrl || url || "").trim();
   if (!target) return { ok: false, error: "no_url" };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
-  let html;
-  try {
-    const res = await fetch(PROXY_URL + encodeURIComponent(target), { signal: controller.signal });
-    if (!res.ok) return { ok: false, error: "fetch_failed" };
-    html = await res.text();
-  } catch {
-    return { ok: false, error: "fetch_failed" };
-  } finally {
-    clearTimeout(timer);
+  let html = null;
+  const attempts = [];
+  for (const proxy of PROXIES) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+    try {
+      const res = await fetch(proxy.build(target), { signal: controller.signal });
+      if (!res.ok) {
+        attempts.push(`${proxy.name} : HTTP ${res.status}`);
+        continue;
+      }
+      html = await res.text();
+      break;
+    } catch (e) {
+      attempts.push(`${proxy.name} : ${e?.name === "AbortError" ? "délai dépassé" : "injoignable"}`);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (html === null) {
+    return { ok: false, error: "fetch_failed", detail: attempts.join(" · ") };
   }
 
   const { text, error } = extractTextForWatch(html, (watchSelector || "").trim());
@@ -181,11 +203,11 @@ export async function checkSourceForChanges(source) {
   const result = await previewWatch({ url: source.url, watchUrl: source.watchUrl, watchSelector: source.watchSelector });
   const now = Date.now();
   if (!result.ok) {
-    await updateSource(source.id, { lastCheckedAt: now, lastCheckError: result.error });
+    await updateSource(source.id, { lastCheckedAt: now, lastCheckError: result.error, lastCheckDetail: result.detail || "" });
     return result;
   }
   const changed = !!source.lastContentHash && result.hash !== source.lastContentHash;
-  const patch = { lastContentHash: result.hash, lastCheckedAt: now, lastCheckError: "" };
+  const patch = { lastContentHash: result.hash, lastCheckedAt: now, lastCheckError: "", lastCheckDetail: "" };
   if (changed) patch.lastChangedAt = now;
   await updateSource(source.id, patch);
   return { ...result, changed };
