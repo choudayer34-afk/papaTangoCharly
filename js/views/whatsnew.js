@@ -38,6 +38,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → \"📡 Veille\" pour consulter ou ajouter une source ; \"📖 Voir la méthode complète dans le guide\" en haut de l'écran pour la méthode de veille.",
         gain: "Fini la tournée d'onglets épars pour savoir où regarder : un seul point de départ pour la ronde de veille quotidienne, avec les sources déjà qualifiées par sujet.",
       },
+      {
+        type: "add",
+        title: "🔍 Veille : détection de nouveautés, site par site",
+        text: "Sur une source précise (pas de flux RSS exploitable pour la plupart d'entre elles — vérifié un par un), la fiche d'édition propose une section \"🔍 Détection de nouveautés (expérimental)\" : une fois activée, un bouton \"🔍 Vérifier\" sur l'écran Veille va chercher la page et compare son contenu à la dernière vérification, avec un badge \"🆕 Nouveau\" si ça a changé (effacé dès qu'on suit le lien). Chaque site ayant sa propre structure, deux réglages par source (URL à surveiller si différente, sélecteur CSS de la zone à comparer) peuvent être ajustés et testés contre la vraie page avant d'être enregistrés, via le bouton \"🔍 Tester maintenant\" de la même fiche. SEMAE et UFS l'ont déjà activée dans la liste proposée.",
+        howTo: "☰ Plus → \"📡 Veille\" → ✏️ sur une source → dérouler \"🔍 Détection de nouveautés\" → activer, tester, enregistrer, puis \"🔍 Vérifier\" en haut de l'écran pour lancer une vérification.",
+        gain: "Un moyen gratuit de savoir qu'une page a changé sans avoir à la rouvrir chaque jour pour comparer à l'œil, même sur les sites sans flux RSS.",
+      },
     ],
   },
   {
