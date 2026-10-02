@@ -2424,3 +2424,96 @@ tbody.drag-over-group {
 .autocomplete-option--active {
   background: var(--color-primary-light);
 }
+
+/* Fiche visuelle concurrent + carte de positionnement (02/10/2026, js/views/veille.js) — retour
+   direct de Charles-Henri après avoir vu une page externe mise en forme : "ça doit être réalisable
+   dans pilote et même pour tout les nouveaux que je rajouterai". Jetons de couleur EXISTANTS
+   réutilisés (var(--color-success/-danger/-info/-warning) ci-dessous) plutôt qu'une palette
+   propre à cet écran : Forces/Faiblesses/Opportunités/Menaces correspondent assez naturellement
+   aux 4 couleurs sémantiques déjà en place pour les statuts ailleurs dans l'app (succès/danger/
+   info/avertissement), pas de nouveau jeton introduit pour ça. Suit donc le mode sombre
+   automatiquement, comme le reste de la feuille. */
+.fiche-visual-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+.fiche-visual-summary {
+  color: var(--color-text);
+  font-size: var(--font-size-md);
+  margin: 0 0 var(--space-4);
+}
+.swot-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+@media (max-width: 560px) {
+  .swot-grid { grid-template-columns: 1fr; }
+}
+.swot-cell {
+  background: var(--color-surface);
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+.swot-cell-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-1);
+}
+.swot-cell p { margin: 0; font-size: var(--font-size-sm); }
+/* `em` (placeholder "— à compléter —") repasse en texte neutre atténué — spécificité
+   `.swot-cell p em` (0,1,2) plus élevée que `.swot-good p` etc. (0,1,1) ci-dessous, donc cette
+   règle l'emporte malgré l'ordre d'écriture. */
+.swot-cell p em { color: var(--color-text-muted); font-style: italic; }
+/* Couleur posée sur la CELLULE elle-même (pas seulement le label) : `color` est hérité, donc le
+   texte du paragraphe suit automatiquement — erreur déjà documentée plus haut dans ce fichier
+   (voir styles/tokens.css, correctif TODO-023) à ne pas reproduire : un fond `-bg` (toujours clair,
+   y compris en mode sombre) ne s'utilise JAMAIS avec `--color-text` neutre (quasi blanc en mode
+   sombre → texte illisible sur fond pastel clair), toujours avec sa couleur sémantique associée. */
+.swot-good { background: var(--color-success-bg); color: var(--color-success); }
+.swot-bad { background: var(--color-danger-bg); color: var(--color-danger); }
+.swot-info { background: var(--color-info-bg); color: var(--color-info); }
+.swot-warn { background: var(--color-warning-bg); color: var(--color-warning); }
+
+.agreo-callout {
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+}
+.agreo-callout-label {
+  display: block;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-primary-dark);
+  margin-bottom: var(--space-1);
+}
+.agreo-callout p { margin: 0 0 var(--space-2); font-size: var(--font-size-sm); color: var(--color-text); }
+.agreo-callout p em { color: var(--color-text-muted); }
+
+.position-chart-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
