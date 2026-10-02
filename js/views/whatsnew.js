@@ -66,6 +66,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → ✏️ sur un concurrent → dérouler \"🎯 Fiche comparative face à Agreo\".",
         gain: "De quoi garder, directement dans Pilotage, une vraie analyse par concurrent (pas juste un lien et une note) : ce qui les différencie d'Agreo, leurs points forts et leurs limites, retrouvable à tout moment sans ressortir un document séparé.",
       },
+      {
+        type: "add",
+        title: "📋 La demande de recherche remplit aussi la fiche \"face à Agreo\"",
+        text: "Le bouton \"📋 Générer la demande de recherche\" d'une fiche concurrent (déjà en place pour CA/LinkedIn/Pappers) demande désormais aussi, dans le même texte à coller : un résumé de positionnement, leurs forces, leurs faiblesses, et la force d'Agreo face à ce concurrent précis — en comparant explicitement à Agreo Seeds. Un seul copier-coller dans une conversation avec Claude suffit maintenant à remplir les 7 champs de la fiche au lieu de 3.",
+        howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → ✏️ sur un concurrent → \"📋 Générer la demande de recherche (CA, fiche, actus...)\".",
+        gain: "Une seule demande à préparer et un seul résultat à coller pour mettre à jour toute la fiche d'un concurrent, plutôt que de refaire la recherche séparément pour chaque champ.",
+      },
     ],
   },
   {
