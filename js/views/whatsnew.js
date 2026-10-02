@@ -59,6 +59,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → \"🔎 Chercher de nouveaux concurrents\" ou \"📊 Benchmark\" en haut de la section, et \"📋 Générer la demande de recherche\" dans la fiche ✏️ d'un concurrent.",
         gain: "Un point d'entrée unique pour la veille concurrentielle (CA, actualités, évolutions), sans avoir à rouvrir LinkedIn/Pappers à chaque fois pour s'en souvenir soi-même, et une vue d'ensemble pour comparer les concurrents entre eux d'un coup d'œil.",
       },
+      {
+        type: "add",
+        title: "🎯 Veille concurrence : fiche \"face à Agreo\" par concurrent",
+        text: "La fiche d'un concurrent (catégorie \"🏢 Marché / concurrence\") propose désormais une section dépliable \"🎯 Fiche comparative face à Agreo\" avec 4 champs texte libre : résumé / positionnement, leurs forces, leurs faiblesses, et la force d'Agreo face à ce concurrent précis. Le tableau \"📊 Benchmark\" affiche maintenant aussi un résumé court du positionnement de chacun, en plus du CA et des liens déjà présents.",
+        howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → ✏️ sur un concurrent → dérouler \"🎯 Fiche comparative face à Agreo\".",
+        gain: "De quoi garder, directement dans Pilotage, une vraie analyse par concurrent (pas juste un lien et une note) : ce qui les différencie d'Agreo, leurs points forts et leurs limites, retrouvable à tout moment sans ressortir un document séparé.",
+      },
     ],
   },
   {
