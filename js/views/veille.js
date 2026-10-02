@@ -37,17 +37,30 @@ import { renderInfoTip } from "../components/infoTip.js";
 // correspond à PLUSIEURS endroits de la page ne cible pas forcément le bon, puisque Pilotage (comme
 // `document.querySelector()`) ne regarde que le premier trouvé.
 const WATCH_SELECTOR_HELP_HTML = `
-  <p style="margin-top:0;">Pour trouver le bon sélecteur avec les outils de développement du navigateur (F12) :</p>
+  <p style="margin-top:0;">Méthode simplifiée : un seul script à coller dans la Console, qui remonte tout seul dans la page et te dit où t'arrêter.</p>
   <ol style="padding-left:20px;margin:8px 0;">
-    <li>Clic droit sur un titre DANS la liste d'actualités de la page → <strong>Inspecter</strong> (ou touche F12).</li>
-    <li>Dans le panneau qui s'ouvre, clique l'icône de sélection (flèche, en haut à gauche), puis clique un élément de la liste d'actualités — le HTML correspondant se surligne dans l'onglet "Elements".</li>
-    <li>Remonte dans l'arborescence (clique les balises parentes juste au-dessus) jusqu'au plus petit conteneur qui englobe TOUTE la liste — pas un seul article, pas toute la page.</li>
-    <li>Bascule sur l'onglet <strong>Console</strong> et tape <code>$0.className</code> — ça affiche les classes CSS de l'élément sélectionné à l'étape précédente (<code>$0</code> = dernier élément inspecté).</li>
-    <li>Vérifie que c'est unique sur la page : <code>document.querySelectorAll('.ta-classe-ici').length</code>. Résultat <strong>1</strong> → c'est bon. Résultat supérieur à 1 (fréquent avec un nom de bloc générique type "section", réutilisé plusieurs fois sur une page construite par blocs) → ce sélecteur seul ne suffit pas, Pilotage ne regarde que LE PREMIER trouvé.</li>
-    <li>Si ambigu : remonte/descends dans l'arborescence pour trouver un identifiant ou une classe propre à cet endroit précis, ou ajoute <code>:nth-of-type(n)</code> pour viser la Nième occurrence (moins solide si l'ordre des sections change un jour).</li>
-    <li>Avant de coller le sélecteur ici : vérifie ce qu'il donnerait vraiment avec <code>document.querySelector('TON-SÉLECTEUR')?.textContent</code> dans la Console. Si ça commence par un vrai titre d'actualité (pas un menu, pas un bandeau de cookies), c'est gagné — confirme ensuite avec "🔍 Tester maintenant" ci-dessous.</li>
+    <li>Clic droit sur <strong>un titre d'actualité</strong> dans la liste de la page → <strong>Inspecter</strong> (ou touche F12). Ça sélectionne l'élément cliqué comme <code>$0</code>.</li>
+    <li>Bascule sur l'onglet <strong>Console</strong>, colle ce script entier et valide (Entrée) :
+      <pre style="white-space:pre-wrap;word-break:break-word;background:#1e1e1e;color:#ddd;padding:8px;border-radius:4px;font-size:12px;overflow-x:auto;margin:6px 0;">(() =&gt; {
+  let el = $0;
+  let level = 0;
+  while (el &amp;&amp; el.tagName !== "BODY") {
+    const cls = typeof el.className === "string" ? el.className : "";
+    const idPart = el.id ? \` id="\${el.id}"\` : "";
+    const clsPart = cls ? \` class="\${cls}"\` : "";
+    const len = el.textContent.trim().length;
+    const preview = el.textContent.trim().replace(/\\s+/g, " ").slice(0, 150);
+    console.log(\`[\${level}] &lt;\${el.tagName.toLowerCase()}\${idPart}\${clsPart}&gt; — \${len} caractères — "\${preview}"\`);
+    el = el.parentElement;
+    level++;
+  }
+})();</pre>
+    </li>
+    <li>Ça affiche une ligne par niveau, du titre cliqué (<code>[0]</code>) jusqu'au bas de la page. Lis la colonne "caractères" : elle reste petite tant que c'est UN SEUL article, puis fait un saut quand plusieurs articles se retrouvent regroupés ensemble — arrête-toi à ce niveau-là (ni un seul article, ni toute la page).</li>
+    <li>Note la classe ou l'<code>id</code> affiché à ce niveau, puis vérifie son unicité sur la page : <code>document.querySelectorAll('TON-SÉLECTEUR').length</code>. Résultat <strong>1</strong> → tu peux l'utiliser. Résultat supérieur à 1 (fréquent avec un nom de bloc générique type "section", réutilisé plusieurs fois sur une page construite par blocs) → remonte encore d'un cran dans le résultat du script, ou essaie une combinaison plus spécifique.</li>
+    <li>Avant de coller le sélecteur dans le champ ci-dessous : vérifie ce qu'il donnerait vraiment avec <code>document.querySelector('TON-SÉLECTEUR')?.textContent.slice(0, 200)</code> dans la Console. Si ça commence par un vrai titre d'actualité (pas un menu, pas un bandeau de cookies), c'est gagné — confirme ensuite avec "🔍 Tester maintenant" ci-dessous.</li>
   </ol>
-  <p style="margin-bottom:0;">Exemple réel : une classe comme <code>.hpo-acf-section.section-classic.container-fluid.dark</code> ressemble à un nom de bloc générique réutilisé par plusieurs sections de la page — vérifie son nombre d'occurrences (étape 5) avant de t'y fier telle quelle.</p>
+  <p style="margin-bottom:0;">Exemple réel (site SEMAE) : en remontant depuis le titre d'un article avec ce script, chaque actualité était déjà isolée dans son propre bloc de page (classes génériques type <code>.hpo-acf-section.section-classic.container-fluid.dark</code>, réutilisées ailleurs sur le site — donc <code>querySelectorAll(...).length</code> bien supérieur à 1, écarté). En continuant à remonter, le premier conteneur réellement unique rencontré était <code>&lt;article id="contents"&gt;</code>, confirmé par <code>document.querySelectorAll('#contents').length</code> égal à <strong>1</strong>. Sélecteur à coller dans le champ "Sélecteur CSS" dans ce cas précis : <code>#contents</code> (un <code>id</code> précédé d'un <code>#</code>). C'est plus large qu'un seul article (ça couvre toute la zone de contenu de la page), mais c'est le compromis à accepter quand le site ne propose aucun conteneur commun à toute la liste : mieux vaut un sélecteur unique un peu large qu'un sélecteur ambigu qui ne regarde que LE PREMIER des blocs trouvés.</p>
 `;
 
 function escapeHtml(str) {
