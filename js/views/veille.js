@@ -229,7 +229,7 @@ export function renderVeille(container) {
           existing?.watchEnabled
             ? `<div class="item-meta">
                 ${existing.lastCheckedAt ? `Dernière vérification : ${new Date(existing.lastCheckedAt).toLocaleString("fr-FR")}.` : "Jamais encore vérifiée."}
-                ${existing.lastCheckError ? ` ⚠️ ${escapeHtml(veilleApi.WATCH_ERROR_LABELS[existing.lastCheckError] || existing.lastCheckError)}` : ""}
+                ${existing.lastCheckError ? ` ⚠️ ${escapeHtml(veilleApi.WATCH_ERROR_LABELS[existing.lastCheckError] || existing.lastCheckError)}${existing.lastCheckDetail ? ` (${escapeHtml(existing.lastCheckDetail)})` : ""}` : ""}
                 ${veilleApi.hasNewContent(existing) ? ` 🆕 Nouveauté détectée le ${new Date(existing.lastChangedAt).toLocaleString("fr-FR")}.` : ""}
               </div>`
             : ""
@@ -251,7 +251,7 @@ export function renderVeille(container) {
         });
         testResultEl.textContent = result.ok
           ? `✅ Zone trouvée (${result.text.length} caractères) — aperçu : « ${result.preview}${result.text.length > result.preview.length ? "…" : ""} »`
-          : `⚠️ ${veilleApi.WATCH_ERROR_LABELS[result.error] || result.error}`;
+          : `⚠️ ${veilleApi.WATCH_ERROR_LABELS[result.error] || result.error}${result.detail ? ` (${result.detail})` : ""}`;
       })
     );
 
