@@ -643,7 +643,22 @@
 // (nouveaux champs + 2 fonctions de génération de texte), `js/views/veille.js` (champs, 2
 // nouvelles modales, boutons de section) et `js/views/whatsnew.js` (nouvelle entrée) modifiés,
 // aucun nouveau fichier. `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v104";
+//
+// Fiche concurrent "face à Agreo" (02/10/2026, même jour, suite directe de la veille
+// concurrentielle enrichie ci-dessus — demande directe de Charles-Henri : "une étude de leur
+// marché, un SWOT [...] pour chacun pouvoir éditer une fiche qui résume ce qu'ils sont et par
+// rapport a Agreo, la force d'Agreo et leur force a eux, faiblesses"). Quatre nouveaux champs
+// texte libre sur chaque source concurrence (`profileSummary`, `competitorStrengths`,
+// `competitorWeaknesses`, `agreoStrengths`), dans une section dépliable "🎯 Fiche comparative
+// face à Agreo" de la fiche d'édition existante — même emplacement que CA/LinkedIn/Pappers
+// ci-dessus, pas un nouvel écran. Benchmark complété d'une colonne "Positionnement" (résumé
+// court). L'analyse textuelle complète (étude de marché + SWOT + comparaison par concurrent)
+// livrée à part en tant que doc de référence, ces 4 champs servant à en garder une version
+// éditable et consultable directement dans Pilotage, comme demandé. `js/domain/veille.js`
+// (nouveaux champs), `js/views/veille.js` (section de fiche + colonne benchmark) et
+// `js/views/whatsnew.js` (nouvelle entrée) modifiés, aucun nouveau fichier. `CACHE_NAME`
+// incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v105";
 const APP_SHELL = [
   "./",
   "./index.html",
