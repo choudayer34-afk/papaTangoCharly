@@ -558,7 +558,19 @@
 // "Bibliothèques"), `js/views/guide.js` (nouvelle rubrique "📡 Comment faire sa veille" —
 // explique la méthode une seule fois, pendant que l'écran Veille ne porte que la liste de
 // sources elle-même, pour ne pas dupliquer le texte à deux endroits qui finiraient par diverger).
-const CACHE_NAME = "pilotage-cache-v96";
+//
+// 🔍 Détection de nouveautés par site (02/10/2026, suite directe du point ci-dessus — retour de
+// Charles-Henri : "comment rendre cette analyse paramétrable par site"). Aucun flux RSS
+// exploitable pour la plupart des sources (vérifié site par site, abandonné explicitement :
+// "Laisse tomber pour les flux") — remplacé par une détection de CHANGEMENT DE PAGE, paramétrable
+// par source (URL à surveiller, sélecteur CSS de la zone à comparer), testable avant
+// enregistrement, et toujours déclenchée manuellement. Aucun nouveau fichier : modifications dans
+// `js/domain/veille.js` (fonctions de vérification + proxy CORS gratuit), `js/views/veille.js`
+// (bouton "🔍 Vérifier", badge "🆕", section de configuration/test dans la fiche d'édition),
+// `styles/components.css` (`.badge-new`) et `js/views/guide.js` (explication ajoutée à la
+// rubrique "📡 Comment faire sa veille" existante). `CACHE_NAME` incrémenté car le contenu de ces
+// fichiers déjà précachés a changé, même si APP_SHELL lui-même ne gagne aucune nouvelle entrée.
+const CACHE_NAME = "pilotage-cache-v97";
 const APP_SHELL = [
   "./",
   "./index.html",
