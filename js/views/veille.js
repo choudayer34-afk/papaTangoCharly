@@ -82,6 +82,47 @@ function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
 }
 
+// Modale "demande à coller à Claude" (02/10/2026, veille concurrentielle enrichie — voir le
+// commentaire d'en-tête de js/domain/veille.js#competitorResearchPrompt pour le pourquoi).
+// Partagée par les deux usages (mise à jour d'une fiche existante, découverte de nouveaux
+// concurrents) plutôt que dupliquée : les deux ne font que générer un texte différent, l'affichage
+// est identique. Le texte est à la fois copiable automatiquement (bouton "📋 Copier") ET affiché/
+// sélectionné dans un textarea, pour rester utilisable même si `navigator.clipboard` échoue
+// (contexte non sécurisé, permission refusée...) plutôt que de dépendre uniquement de l'API.
+function openPromptModal(title, text) {
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <p class="item-meta" style="margin-top:0;">
+      Colle ce texte dans une conversation avec Claude (où qu'elle soit) — Pilotage ne peut pas
+      interroger LinkedIn ou Pappers tout seul, voir la note à côté du bouton qui a ouvert cette
+      fenêtre.
+    </p>
+    <textarea id="veille-prompt-text" readonly rows="10" style="width:100%;font-family:inherit;">${escapeHtml(text)}</textarea>
+  `;
+  const textarea = body.querySelector("#veille-prompt-text");
+  openModal({
+    title,
+    body,
+    actions: [
+      { label: "Fermer", variant: "ghost" },
+      {
+        label: "📋 Copier",
+        variant: "primary",
+        closesModal: false,
+        onClick: async () => {
+          textarea.select();
+          try {
+            await navigator.clipboard.writeText(text);
+            showToast("Copié — colle-le dans une conversation avec Claude");
+          } catch {
+            showToast("Copie automatique indisponible — le texte est sélectionné, copie-le avec Ctrl+C (ou Cmd+C)");
+          }
+        },
+      },
+    ],
+  });
+}
+
 export function renderVeille(container) {
   container.innerHTML = `
     <div class="topbar">
@@ -188,8 +229,31 @@ export function renderVeille(container) {
       const title = document.createElement("div");
       title.className = "section-title";
       title.style.marginTop = sectionsEl.children.length === 0 ? "0" : "";
-      title.textContent = `${cat.emoji} ${cat.label}${items.length ? ` (${items.length})` : ""}`;
+      // Boutons "🔎 Chercher de nouveaux concurrents" / "📊 Benchmark" réservés à la catégorie
+      // concurrence (02/10/2026, demande directe de Charles-Henri) — pas de sens pour
+      // réglementation/management, donc pas affichés là pour ne pas surcharger ces sections sans
+      // raison. "Benchmark" seulement s'il existe au moins un concurrent à comparer.
+      if (cat.key === "concurrence") {
+        title.style.display = "flex";
+        title.style.justifyContent = "space-between";
+        title.style.alignItems = "center";
+        title.style.gap = "8px";
+        title.style.flexWrap = "wrap";
+        title.innerHTML = `
+          <span>${cat.emoji} ${cat.label}${items.length ? ` (${items.length})` : ""}</span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button type="button" id="veille-competitor-discover-btn" class="btn btn-ghost btn-sm">🔎 Chercher de nouveaux concurrents</button>
+            ${items.length ? `<button type="button" id="veille-competitor-benchmark-btn" class="btn btn-ghost btn-sm">📊 Benchmark</button>` : ""}
+          </span>
+        `;
+      } else {
+        title.textContent = `${cat.emoji} ${cat.label}${items.length ? ` (${items.length})` : ""}`;
+      }
       sectionsEl.appendChild(title);
+      if (cat.key === "concurrence") {
+        title.querySelector("#veille-competitor-discover-btn").addEventListener("click", () => openDiscoverModal());
+        title.querySelector("#veille-competitor-benchmark-btn")?.addEventListener("click", () => openBenchmarkModal(items));
+      }
 
       if (!items.length) {
         const empty = document.createElement("div");
@@ -231,6 +295,96 @@ export function renderVeille(container) {
     }
   }
 
+  // Découverte de nouveaux concurrents par mot-clé (02/10/2026, demande directe de Charles-Henri :
+  // "je veux pouvoir en rechercher d'autres si besoin par rapport à des mots clé"). Même principe
+  // que la mise à jour d'une fiche : Pilotage prépare la demande, Charles-Henri la colle à Claude,
+  // et ajoute lui-même les candidats retenus via "+ Source" une fois la recherche faite — jamais
+  // d'ajout automatique à sa liste.
+  function openDiscoverModal() {
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <div class="field">
+        <label for="veille-discover-keywords">Mots-clés (marché, technologie, nom de concurrent déjà connu...)</label>
+        <input id="veille-discover-keywords" type="text" placeholder="Ex. ERP station semences France" />
+      </div>
+    `;
+    const { bodyEl, close } = openModal({
+      title: "🔎 Chercher de nouveaux concurrents",
+      body,
+      actions: [
+        { label: "Annuler", variant: "ghost" },
+        {
+          label: "📋 Générer la demande",
+          variant: "primary",
+          closesModal: false,
+          onClick: () => {
+            const keywords = bodyEl.querySelector("#veille-discover-keywords").value.trim();
+            if (!keywords) {
+              showToast("Indique au moins un mot-clé");
+              return;
+            }
+            close();
+            openPromptModal("🔎 Demande à coller à Claude", veilleApi.competitorDiscoveryPrompt(keywords));
+          },
+        },
+      ],
+    });
+  }
+
+  // Benchmark concurrents (02/10/2026, demande directe de Charles-Henri : "que ça me fasse un
+  // benchmark et une étude de concurrence [...] pour l'ensemble") — vue comparative construite
+  // uniquement à partir des fiches déjà enregistrées (aucune recherche déclenchée ici), toujours
+  // à jour avec leur contenu plutôt qu'un document séparé à régénérer. `.pilotage-table` réutilisé
+  // tel quel (styles/components.css) — même langage visuel que la vue Tableau du Kanban plutôt
+  // qu'un nouveau composant pour ce seul usage.
+  function openBenchmarkModal(items) {
+    const rows = items
+      .slice()
+      .sort((a, b) => a.title.localeCompare(b.title, "fr"))
+      .map((s) => {
+        const links =
+          [
+            s.url ? `<a href="${escapeAttr(s.url)}" target="_blank" rel="noopener">Site</a>` : "",
+            s.linkedinUrl ? `<a href="${escapeAttr(s.linkedinUrl)}" target="_blank" rel="noopener">LinkedIn</a>` : "",
+            s.pappersUrl ? `<a href="${escapeAttr(s.pappersUrl)}" target="_blank" rel="noopener">Pappers</a>` : "",
+          ]
+            .filter(Boolean)
+            .join(" · ") || "—";
+        const notesPreview = s.notes ? escapeHtml(s.notes.length > 140 ? `${s.notes.slice(0, 140)}…` : s.notes) : "—";
+        return `
+          <tr>
+            <td>${escapeHtml(s.title)}${veilleApi.hasNewContent(s) ? ` <span class="badge badge-new">🆕</span>` : ""}</td>
+            <td>${s.ca ? escapeHtml(s.ca) : "—"}</td>
+            <td>${notesPreview}</td>
+            <td>${links}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    const body = document.createElement("div");
+    body.innerHTML = `
+      <p class="item-meta" style="margin-top:0;">
+        Construit à partir des fiches déjà enregistrées. Pour le mettre à jour : édite chaque fiche (✏️) ou
+        utilise "📋 Générer la demande de recherche" depuis sa fiche, puis colle le résultat dans ses champs.
+      </p>
+      <div class="pilotage-table-wrap">
+        <table class="pilotage-table">
+          <thead>
+            <tr>
+              <th>Concurrent</th>
+              <th>CA</th>
+              <th>Dernière note / évolution</th>
+              <th>Liens</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+    openModal({ title: "📊 Benchmark concurrents", body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true });
+  }
+
   function openSourceModal(existing = null) {
     const body = document.createElement("div");
     body.innerHTML = `
@@ -253,6 +407,26 @@ export function renderVeille(container) {
       <div class="field">
         <label for="veille-notes">Note (optionnel)</label>
         <textarea id="veille-notes" placeholder="Ce que cette source apporte, mot-clé d'alerte à surveiller...">${escapeHtml(existing?.notes || "")}</textarea>
+      </div>
+      <div id="veille-competitor-fields" style="display:none;">
+        <div class="field">
+          <label for="veille-ca">Chiffre d'affaires (CA)</label>
+          <input id="veille-ca" type="text" placeholder="Ex. ~15M€ (2024, source Pappers)" value="${escapeAttr(existing?.ca || "")}" />
+        </div>
+        <div class="field">
+          <label for="veille-linkedin">LinkedIn (optionnel)</label>
+          <input id="veille-linkedin" type="url" placeholder="https://www.linkedin.com/company/..." value="${escapeAttr(existing?.linkedinUrl || "")}" />
+        </div>
+        <div class="field">
+          <label for="veille-pappers">Pappers (optionnel)</label>
+          <input id="veille-pappers" type="url" placeholder="https://www.pappers.fr/entreprise/..." value="${escapeAttr(existing?.pappersUrl || "")}" />
+        </div>
+        <button type="button" id="veille-competitor-prompt-btn" class="btn btn-secondary btn-sm">📋 Générer la demande de recherche (CA, actus...)</button>
+        <div class="item-meta">
+          Pilotage ne peut pas interroger LinkedIn ou Pappers tout seul (pas de compte, pas de clé API) — ce bouton
+          prépare le texte à coller dans une conversation avec Claude, qui fait la recherche ; reporte ensuite
+          son résultat dans les champs ci-dessus et dans la Note.
+        </div>
       </div>
       <details>
         <summary>🔍 Détection de nouveautés (expérimental)</summary>
@@ -288,6 +462,31 @@ export function renderVeille(container) {
     clearFieldErrorOnInput(body, ["#veille-title"]);
     renderInfoTip(body.querySelector("#veille-watch-selector-info"), WATCH_SELECTOR_HELP_HTML);
 
+    // Champs concurrent (CA, LinkedIn, Pappers) masqués tant que la catégorie choisie n'est pas
+    // "concurrence" (02/10/2026) — inutiles ailleurs, et les afficher partout aurait embrouillé la
+    // fiche d'une source réglementation/management. Valeurs déjà saisies jamais effacées par un
+    // changement de catégorie : seul l'AFFICHAGE change, pas ce qui est enregistré.
+    const categorySelect = body.querySelector("#veille-category");
+    const competitorFieldsEl = body.querySelector("#veille-competitor-fields");
+    function syncCompetitorFieldsVisibility() {
+      competitorFieldsEl.style.display = categorySelect.value === "concurrence" ? "" : "none";
+    }
+    syncCompetitorFieldsVisibility();
+    categorySelect.addEventListener("change", syncCompetitorFieldsVisibility);
+
+    const competitorPromptBtn = body.querySelector("#veille-competitor-prompt-btn");
+    competitorPromptBtn.addEventListener("click", () => {
+      openPromptModal(
+        "📋 Demande à coller à Claude",
+        veilleApi.competitorResearchPrompt({
+          title: body.querySelector("#veille-title").value.trim(),
+          url: body.querySelector("#veille-url").value.trim(),
+          linkedinUrl: body.querySelector("#veille-linkedin").value.trim(),
+          pappersUrl: body.querySelector("#veille-pappers").value.trim(),
+        })
+      );
+    });
+
     const testBtn = body.querySelector("#veille-watch-test-btn");
     const testResultEl = body.querySelector("#veille-watch-test-result");
     testBtn.addEventListener(
@@ -319,6 +518,9 @@ export function renderVeille(container) {
             url: bodyEl.querySelector("#veille-url").value.trim(),
             category: bodyEl.querySelector("#veille-category").value,
             notes: bodyEl.querySelector("#veille-notes").value.trim(),
+            ca: bodyEl.querySelector("#veille-ca").value.trim(),
+            linkedinUrl: bodyEl.querySelector("#veille-linkedin").value.trim(),
+            pappersUrl: bodyEl.querySelector("#veille-pappers").value.trim(),
             watchEnabled: bodyEl.querySelector("#veille-watch-enabled").checked,
             watchUrl: bodyEl.querySelector("#veille-watch-url").value.trim(),
             watchSelector: bodyEl.querySelector("#veille-watch-selector").value.trim(),
