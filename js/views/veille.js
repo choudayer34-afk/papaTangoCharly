@@ -351,10 +351,14 @@ export function renderVeille(container) {
             .filter(Boolean)
             .join(" · ") || "—";
         const notesPreview = s.notes ? escapeHtml(s.notes.length > 140 ? `${s.notes.slice(0, 140)}…` : s.notes) : "—";
+        const profilePreview = s.profileSummary
+          ? escapeHtml(s.profileSummary.length > 140 ? `${s.profileSummary.slice(0, 140)}…` : s.profileSummary)
+          : "—";
         return `
           <tr>
             <td>${escapeHtml(s.title)}${veilleApi.hasNewContent(s) ? ` <span class="badge badge-new">🆕</span>` : ""}</td>
             <td>${s.ca ? escapeHtml(s.ca) : "—"}</td>
+            <td>${profilePreview}</td>
             <td>${notesPreview}</td>
             <td>${links}</td>
           </tr>
@@ -367,6 +371,8 @@ export function renderVeille(container) {
       <p class="item-meta" style="margin-top:0;">
         Construit à partir des fiches déjà enregistrées. Pour le mettre à jour : édite chaque fiche (✏️) ou
         utilise "📋 Générer la demande de recherche" depuis sa fiche, puis colle le résultat dans ses champs.
+        Le détail complet (forces, faiblesses, face à Agreo) est dans la fiche de chaque concurrent — "🎯 Fiche
+        comparative face à Agreo" — ce tableau n'en montre qu'un résumé court pour comparer d'un coup d'œil.
       </p>
       <div class="pilotage-table-wrap">
         <table class="pilotage-table">
@@ -374,6 +380,7 @@ export function renderVeille(container) {
             <tr>
               <th>Concurrent</th>
               <th>CA</th>
+              <th>Positionnement</th>
               <th>Dernière note / évolution</th>
               <th>Liens</th>
             </tr>
@@ -427,6 +434,30 @@ export function renderVeille(container) {
           prépare le texte à coller dans une conversation avec Claude, qui fait la recherche ; reporte ensuite
           son résultat dans les champs ci-dessus et dans la Note.
         </div>
+        <details>
+          <summary>🎯 Fiche comparative face à Agreo</summary>
+          <div class="field">
+            <label for="veille-profile">Résumé (qui ils sont, positionnement, marché)</label>
+            <textarea id="veille-profile" placeholder="Ex. Suite logicielle spécialisée semences, SaaS, positionnement...">${escapeHtml(existing?.profileSummary || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="veille-their-strengths">Leurs forces</label>
+            <textarea id="veille-their-strengths" placeholder="Ce qu'ils font mieux ou différemment">${escapeHtml(existing?.competitorStrengths || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="veille-their-weaknesses">Leurs faiblesses</label>
+            <textarea id="veille-their-weaknesses" placeholder="Limites, angles morts, retours clients négatifs trouvés">${escapeHtml(existing?.competitorWeaknesses || "")}</textarea>
+          </div>
+          <div class="field">
+            <label for="veille-agreo-strengths">Force d'Agreo face à eux</label>
+            <textarea id="veille-agreo-strengths" placeholder="Ce qu'Agreo fait mieux face à ce concurrent précis">${escapeHtml(existing?.agreoStrengths || "")}</textarea>
+          </div>
+          <div class="item-meta">
+            Le champ "Force d'Agreo" est une analyse basée uniquement sur des informations publiques (sites,
+            avis en ligne) — à corriger ou compléter avec ta propre connaissance du produit, des retours
+            clients et de la roadmap réelle, que Pilotage n'a aucun moyen de connaître de lui-même.
+          </div>
+        </details>
       </div>
       <details>
         <summary>🔍 Détection de nouveautés (expérimental)</summary>
@@ -521,6 +552,10 @@ export function renderVeille(container) {
             ca: bodyEl.querySelector("#veille-ca").value.trim(),
             linkedinUrl: bodyEl.querySelector("#veille-linkedin").value.trim(),
             pappersUrl: bodyEl.querySelector("#veille-pappers").value.trim(),
+            profileSummary: bodyEl.querySelector("#veille-profile").value.trim(),
+            competitorStrengths: bodyEl.querySelector("#veille-their-strengths").value.trim(),
+            competitorWeaknesses: bodyEl.querySelector("#veille-their-weaknesses").value.trim(),
+            agreoStrengths: bodyEl.querySelector("#veille-agreo-strengths").value.trim(),
             watchEnabled: bodyEl.querySelector("#veille-watch-enabled").checked,
             watchUrl: bodyEl.querySelector("#veille-watch-url").value.trim(),
             watchSelector: bodyEl.querySelector("#veille-watch-selector").value.trim(),
