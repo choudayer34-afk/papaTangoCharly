@@ -35,6 +35,10 @@ export const MODULE_CATALOG = [
   { key: "team", hash: "#/people", label: "Équipe", icon: "👥" },
   { key: "resources", hash: "#/resources", label: "Ressources", icon: "📎" },
   { key: "prompts", hash: "#/prompts", label: "Prompts", icon: "🤖" },
+  // 📡 Veille (01-02/10/2026) — même traitement que Ressources/Prompts ci-dessus : une
+  // bibliothèque consultée régulièrement (quotidiennement, par choix explicite de Charles-Henri),
+  // donc pinnable dans la barre principale si besoin plutôt que réservée à ☰ Plus pour toujours.
+  { key: "veille", hash: "#/veille", label: "Veille", icon: "📡" },
   { key: "guide", hash: "#/guide", label: "Guide", icon: "📖" },
   { key: "whatsnew", hash: "#/whatsnew", label: "Nouveautés", icon: "🆕" },
   { key: "memory", hash: "#/memory", label: "Mémoire & TDAH", icon: "🧠" },
