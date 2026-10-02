@@ -67,6 +67,15 @@ export async function createSource(data) {
     watchEnabled: !!data.watchEnabled,
     watchUrl: (data.watchUrl || "").trim(),
     watchSelector: (data.watchSelector || "").trim(),
+    // Fiche concurrent enrichie (02/10/2026, demande directe de Charles-Henri) — seulement
+    // pertinents pour category:"concurrence" (js/views/veille.js masque ces champs pour les
+    // autres catégories), mais stockés sans condition ici : un simple changement de catégorie ne
+    // doit pas faire disparaître une info déjà saisie. CA en texte libre (jamais un nombre strict)
+    // car un chiffre d'affaires vient toujours avec un contexte (année, source) qu'il faut garder
+    // à côté, pas un montant nu invérifiable plus tard.
+    ca: (data.ca || "").trim(),
+    linkedinUrl: (data.linkedinUrl || "").trim(),
+    pappersUrl: (data.pappersUrl || "").trim(),
   });
 }
 
@@ -233,6 +242,58 @@ export async function checkSourceForChanges(source) {
 /** `true` si cette source est surveillée ET porte une nouveauté pas encore "vue" (lien cliqué). */
 export function hasNewContent(source) {
   return !!(source.watchEnabled && source.lastChangedAt && source.lastChangedAt > (source.lastAcknowledgedAt || 0));
+}
+
+// Veille concurrentielle enrichie (02/10/2026, demande directe de Charles-Henri : "je dois
+// pouvoir [...] retrouver [les concurrents] avec leur CA, évolutions, nouveautés [...] en se
+// basant sur différents site linkedin, pappers, le site officiel"). Contrainte actée avec lui
+// (question posée explicitement avant de coder) : Pilotage est une app 100% navigateur, sans
+// serveur — elle ne peut pas interroger LinkedIn (bloque le scraping, demande une connexion) ni
+// Pappers (API payante/avec clé) toute seule, contrairement aux sites officiels via `PROXIES`
+// ci-dessus. Choix retenu : Pilotage reste la MÉMOIRE structurée (champs `ca`/`linkedinUrl`/
+// `pappersUrl` sur la source, voir `createSource()`) ; la recherche elle-même passe par une
+// conversation avec Claude, à qui Charles-Henri colle une demande préparée ici — lui-même précise
+// vouloir "un prompt pour chercher et mettre à jour pilote" plutôt qu'une recherche automatique
+// dans l'app (de toute façon irréalisable sans compte/clé). Les deux fonctions ci-dessous ne
+// FONT pas la recherche, elles préparent seulement le texte à copier-coller — js/views/veille.js
+// l'affiche dans une petite modale avec un bouton "📋 Copier".
+
+/**
+ * Texte de la demande pour mettre à jour la fiche d'UN concurrent déjà suivi (CA, actualités,
+ * évolutions). `source` peut être un brouillon non encore enregistré (valeurs des champs de la
+ * modale en cours de saisie) — seuls `title`/`url`/`linkedinUrl`/`pappersUrl` sont utilisés.
+ */
+export function competitorResearchPrompt(source) {
+  const lines = [
+    `Recherche les informations suivantes sur le concurrent "${source.title || "(sans titre)"}", à partir de LinkedIn, Pappers, son site officiel et toute autre source fiable :`,
+    "",
+    source.url ? `- Site officiel : ${source.url}` : null,
+    source.linkedinUrl ? `- LinkedIn : ${source.linkedinUrl}` : null,
+    source.pappersUrl ? `- Pappers : ${source.pappersUrl}` : null,
+    "",
+    "Donne-moi :",
+    "- Le chiffre d'affaires (CA) le plus récent trouvé, avec l'année et la source",
+    "- Les actualités et évolutions récentes (produits, levées de fonds, recrutements clés, partenariats...)",
+    "- Toute autre info utile pour une veille concurrentielle (positionnement, effectifs, zone géographique...)",
+    "",
+    "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note).",
+  ].filter((l) => l !== null);
+  return lines.join("\n");
+}
+
+/**
+ * Texte de la demande pour découvrir de NOUVEAUX concurrents par mot-clé (ceux pas encore
+ * suivis). Charles-Henri choisit ensuite lui-même lesquels ajouter via "+ Source" — jamais
+ * d'ajout automatique, même principe de prudence que `STARTER_SOURCES` plus bas.
+ */
+export function competitorDiscoveryPrompt(keywords) {
+  return [
+    `Cherche des concurrents ou acteurs du marché en lien avec : ${keywords}.`,
+    "",
+    "Pour chaque résultat trouvé, donne-moi : le nom, le site officiel, et une phrase expliquant en quoi c'est un concurrent ou un acteur pertinent à surveiller.",
+    "",
+    "Je choisirai ensuite moi-même lesquels ajouter à ma liste de veille concurrence dans Pilotage.",
+  ].join("\n");
 }
 
 /** À appeler quand l'utilisateur clique le lien d'une source surveillée — efface le badge "🆕". */
