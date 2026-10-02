@@ -76,6 +76,19 @@ export async function createSource(data) {
     ca: (data.ca || "").trim(),
     linkedinUrl: (data.linkedinUrl || "").trim(),
     pappersUrl: (data.pappersUrl || "").trim(),
+    // Fiche comparative "face à Agreo" (02/10/2026, même jour, suite directe de la demande
+    // ci-dessus : "une étude de leur marché, un SWOT [...] pour chacun pouvoir éditer une fiche
+    // qui résume ce qu'ils sont et par rapport a Agreo, la force d'Agreo et leur force a eux,
+    // faiblesses"). Quatre champs texte libre plutôt qu'une structure SWOT rigide à 4 cases : le
+    // contenu réel (positionnement, forces/faiblesses) ne se découpe pas toujours proprement en
+    // Forces/Faiblesses/Opportunités/Menaces, et du texte libre reste éditable par Charles-Henri
+    // sans contrainte de forme. `agreoStrengths` documenté comme basé sur de l'info PUBLIQUE
+    // uniquement (js/views/veille.js affiche l'avertissement) — Pilotage n'a aucun accès aux
+    // retours clients ou à la roadmap interne réels d'Agreo, seul Charles-Henri les connaît.
+    profileSummary: (data.profileSummary || "").trim(),
+    competitorStrengths: (data.competitorStrengths || "").trim(),
+    competitorWeaknesses: (data.competitorWeaknesses || "").trim(),
+    agreoStrengths: (data.agreoStrengths || "").trim(),
   });
 }
 
