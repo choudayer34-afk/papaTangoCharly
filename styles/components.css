@@ -318,6 +318,10 @@ a { color: inherit; }
 .badge-health-success { background: var(--color-success-bg); color: var(--color-success); }
 .badge-health-warning { background: var(--color-warning-bg); color: var(--color-warning); }
 .badge-health-danger { background: var(--color-danger-bg); color: var(--color-danger); }
+/* "🆕 Nouveau" sur une source de veille surveillée (js/domain/veille.js#hasNewContent, 02/10/2026)
+   — teinte info (bleu), informative plutôt qu'alarmante : une nouveauté détectée n'est ni une
+   erreur ni un retard. */
+.badge-new { background: var(--color-info-bg); color: var(--color-info); }
 
 /* ---------- Empty state ---------- */
 .empty-state {
