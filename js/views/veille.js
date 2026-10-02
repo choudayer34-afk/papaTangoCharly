@@ -25,6 +25,30 @@ import { openModal, closeModal, confirmDelete, guardClick } from "../components/
 import { validateRequiredFields, validateUrlField, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
 import { guideLinkHtml } from "./guide.js";
+import { renderInfoTip } from "../components/infoTip.js";
+
+// Aide "à la demande" sur le sélecteur CSS (02/10/2026, demande directe de Charles-Henri après
+// son premier sélecteur trouvé sur SEMAE via F12 : "dis-moi la démarche via la console [...]
+// intègre ça directement dans pilotage à côté de détection des nouveautés"). Rédigée à partir de
+// son propre cas réel (`.hpo-acf-section.section-classic.container-fluid.dark`) : un nom de
+// classe de bloc générique, très probablement réutilisé par plusieurs sections de la page (cas
+// typique d'un site construit par blocs de contenu réutilisables) — d'où l'étape de vérification
+// `querySelectorAll(...).length` ci-dessous, qui est le vrai cœur de la méthode : un sélecteur qui
+// correspond à PLUSIEURS endroits de la page ne cible pas forcément le bon, puisque Pilotage (comme
+// `document.querySelector()`) ne regarde que le premier trouvé.
+const WATCH_SELECTOR_HELP_HTML = `
+  <p style="margin-top:0;">Pour trouver le bon sélecteur avec les outils de développement du navigateur (F12) :</p>
+  <ol style="padding-left:20px;margin:8px 0;">
+    <li>Clic droit sur un titre DANS la liste d'actualités de la page → <strong>Inspecter</strong> (ou touche F12).</li>
+    <li>Dans le panneau qui s'ouvre, clique l'icône de sélection (flèche, en haut à gauche), puis clique un élément de la liste d'actualités — le HTML correspondant se surligne dans l'onglet "Elements".</li>
+    <li>Remonte dans l'arborescence (clique les balises parentes juste au-dessus) jusqu'au plus petit conteneur qui englobe TOUTE la liste — pas un seul article, pas toute la page.</li>
+    <li>Bascule sur l'onglet <strong>Console</strong> et tape <code>$0.className</code> — ça affiche les classes CSS de l'élément sélectionné à l'étape précédente (<code>$0</code> = dernier élément inspecté).</li>
+    <li>Vérifie que c'est unique sur la page : <code>document.querySelectorAll('.ta-classe-ici').length</code>. Résultat <strong>1</strong> → c'est bon. Résultat supérieur à 1 (fréquent avec un nom de bloc générique type "section", réutilisé plusieurs fois sur une page construite par blocs) → ce sélecteur seul ne suffit pas, Pilotage ne regarde que LE PREMIER trouvé.</li>
+    <li>Si ambigu : remonte/descends dans l'arborescence pour trouver un identifiant ou une classe propre à cet endroit précis, ou ajoute <code>:nth-of-type(n)</code> pour viser la Nième occurrence (moins solide si l'ordre des sections change un jour).</li>
+    <li>Avant de coller le sélecteur ici : vérifie ce qu'il donnerait vraiment avec <code>document.querySelector('TON-SÉLECTEUR')?.textContent</code> dans la Console. Si ça commence par un vrai titre d'actualité (pas un menu, pas un bandeau de cookies), c'est gagné — confirme ensuite avec "🔍 Tester maintenant" ci-dessous.</li>
+  </ol>
+  <p style="margin-bottom:0;">Exemple réel : une classe comme <code>.hpo-acf-section.section-classic.container-fluid.dark</code> ressemble à un nom de bloc générique réutilisé par plusieurs sections de la page — vérifie son nombre d'occurrences (étape 5) avant de t'y fier telle quelle.</p>
+`;
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -219,7 +243,10 @@ export function renderVeille(container) {
           <input id="veille-watch-url" type="url" placeholder="https://..." value="${escapeAttr(existing?.watchUrl || "")}" />
         </div>
         <div class="field">
-          <label for="veille-watch-selector">Sélecteur CSS de la zone à comparer (optionnel)</label>
+          <label for="veille-watch-selector" style="display:inline-flex;align-items:center;gap:2px;">
+            Sélecteur CSS de la zone à comparer (optionnel)
+            <span id="veille-watch-selector-info"></span>
+          </label>
           <input id="veille-watch-selector" type="text" placeholder="Ex. .liste-actualites — laisse vide pour comparer toute la page" value="${escapeAttr(existing?.watchSelector || "")}" />
           <div class="item-meta">La partie de la page à surveiller, pas toute la page (sinon une pub ou une date qui tourne déclenche un faux "nouveau" à chaque fois). Teste avant d'enregistrer : chaque site a sa propre structure, impossible de deviner sans vérifier contre la vraie page.</div>
         </div>
@@ -237,6 +264,7 @@ export function renderVeille(container) {
       </details>
     `;
     clearFieldErrorOnInput(body, ["#veille-title"]);
+    renderInfoTip(body.querySelector("#veille-watch-selector-info"), WATCH_SELECTOR_HELP_HTML);
 
     const testBtn = body.querySelector("#veille-watch-test-btn");
     const testResultEl = body.querySelector("#veille-watch-test-result");
