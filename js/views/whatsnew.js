@@ -29,6 +29,18 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "2 octobre 2026",
+    items: [
+      {
+        type: "add",
+        title: "📡 Veille : un seul endroit pour les sources à surveiller",
+        text: "Un nouvel écran \"📡 Veille\" centralise les sources à consulter, classées en 3 catégories (⚖️ Réglementation, 🏢 Marché / concurrence, 🧭 Management / pilotage) : titre, lien et notes pour chacune. Une liste de 16 sources réelles (SEMAE, UFS, Bulletin officiel Agri, La France Agricole, Terre-net, SemWare, Mprise Agriware, ISAGRI, 5 podcasts management...) peut être importée en un clic pour démarrer, ou l'écran peut rester vide pour composer sa propre liste. La méthode (quel rythme pour quelle catégorie) est expliquée dans le Guide plutôt que répétée ici.",
+        howTo: "☰ Plus → \"📡 Veille\" pour consulter ou ajouter une source ; \"📖 Voir la méthode complète dans le guide\" en haut de l'écran pour la méthode de veille.",
+        gain: "Fini la tournée d'onglets épars pour savoir où regarder : un seul point de départ pour la ronde de veille quotidienne, avec les sources déjà qualifiées par sujet.",
+      },
+    ],
+  },
+  {
     date: "29 septembre 2026",
     items: [
       {
