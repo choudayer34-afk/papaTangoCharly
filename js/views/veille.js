@@ -428,11 +428,12 @@ export function renderVeille(container) {
           <label for="veille-pappers">Pappers (optionnel)</label>
           <input id="veille-pappers" type="url" placeholder="https://www.pappers.fr/entreprise/..." value="${escapeAttr(existing?.pappersUrl || "")}" />
         </div>
-        <button type="button" id="veille-competitor-prompt-btn" class="btn btn-secondary btn-sm">📋 Générer la demande de recherche (CA, actus...)</button>
+        <button type="button" id="veille-competitor-prompt-btn" class="btn btn-secondary btn-sm">📋 Générer la demande de recherche (CA, fiche, actus...)</button>
         <div class="item-meta">
           Pilotage ne peut pas interroger LinkedIn ou Pappers tout seul (pas de compte, pas de clé API) — ce bouton
-          prépare le texte à coller dans une conversation avec Claude, qui fait la recherche ; reporte ensuite
-          son résultat dans les champs ci-dessus et dans la Note.
+          prépare le texte à coller dans une conversation avec Claude, qui fait la recherche (y compris les 4
+          champs de la fiche "face à Agreo" ci-dessous) ; reporte ensuite son résultat dans les champs
+          correspondants.
         </div>
         <details>
           <summary>🎯 Fiche comparative face à Agreo</summary>
