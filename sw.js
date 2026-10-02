@@ -583,7 +583,13 @@
 // (erreur Cloudflare 522 sur allorigins — vraie panne du service, pas un blocage réseau) que les 2
 // proxys précédents peuvent tomber en même temps. `corsproxy.io` ajouté en secours dans
 // `js/domain/veille.js`. `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v99";
+//
+// Aide "à la demande" sur le sélecteur CSS (02/10/2026, même jour) : Charles-Henri a trouvé son
+// premier sélecteur via F12 et a demandé la démarche à suivre, intégrée directement dans
+// `js/views/veille.js` (ⓘ à côté du champ "Sélecteur CSS", même composant que le reste de l'app —
+// js/components/infoTip.js, déjà précaché) plutôt que seulement répondue en conversation. Aucun
+// nouveau fichier. `CACHE_NAME` incrémenté car le contenu de `js/views/veille.js` a changé.
+const CACHE_NAME = "pilotage-cache-v100";
 const APP_SHELL = [
   "./",
   "./index.html",
