@@ -589,7 +589,14 @@
 // `js/views/veille.js` (ⓘ à côté du champ "Sélecteur CSS", même composant que le reste de l'app —
 // js/components/infoTip.js, déjà précaché) plutôt que seulement répondue en conversation. Aucun
 // nouveau fichier. `CACHE_NAME` incrémenté car le contenu de `js/views/veille.js` a changé.
-const CACHE_NAME = "pilotage-cache-v100";
+//
+// Nouvelle rubrique Guide "🛠️ Mettre en place sa veille externe" (02/10/2026, même jour, demande
+// explicite de Charles-Henri) : la mise en place pas à pas de Feedly, Google Alertes et le dossier
+// mail dédié, jusque-là seulement évoquée en une phrase dans "📡 Comment faire sa veille" — cette
+// phrase renvoie désormais vers la nouvelle rubrique plutôt que de dupliquer l'explication.
+// `js/views/guide.js` et `js/views/whatsnew.js` (nouvelle entrée) modifiés, aucun nouveau
+// fichier. `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v101";
 const APP_SHELL = [
   "./",
   "./index.html",
