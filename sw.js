@@ -596,7 +596,18 @@
 // phrase renvoie désormais vers la nouvelle rubrique plutôt que de dupliquer l'explication.
 // `js/views/guide.js` et `js/views/whatsnew.js` (nouvelle entrée) modifiés, aucun nouveau
 // fichier. `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v101";
+//
+// Simplification de la bulle d'aide "Sélecteur CSS" de l'écran Veille (02/10/2026, retour direct
+// de Charles-Henri après un cas réel de debug sur la source SEMAE) : remplace la méthode manuelle
+// pas à pas (remonter balise par balise en tapant $0.className à chaque étape) par un script
+// console unique à coller, qui remonte automatiquement toute l'arborescence depuis l'élément
+// cliqué et affiche classe/id + taille + aperçu à chaque niveau — l'utilisateur n'a plus qu'à lire
+// le résultat pour repérer où s'arrêter. Exemple réel ajouté (cas SEMAE : classe générique écartée
+// car réutilisée ailleurs, sélecteur final retenu `#contents`). Contenu purement textuel/HTML dans
+// `js/views/veille.js`, aucun nouveau fichier. Pas d'entrée "quoi de neuf" pour ce changement : la
+// fonctionnalité (bulle d'aide elle-même) a déjà été annoncée en v100, ceci n'en est qu'une
+// clarification du contenu. `CACHE_NAME` incrémenté car `js/views/veille.js` a changé.
+const CACHE_NAME = "pilotage-cache-v102";
 const APP_SHELL = [
   "./",
   "./index.html",
