@@ -607,7 +607,16 @@
 // `js/views/veille.js`, aucun nouveau fichier. Pas d'entrée "quoi de neuf" pour ce changement : la
 // fonctionnalité (bulle d'aide elle-même) a déjà été annoncée en v100, ceci n'en est qu'une
 // clarification du contenu. `CACHE_NAME` incrémenté car `js/views/veille.js` a changé.
-const CACHE_NAME = "pilotage-cache-v102";
+//
+// Retrait de corsproxy.io de la liste des proxys de détection de nouveautés (02/10/2026, même
+// jour) : test réel de Charles-Henri en ouvrant l'URL du proxy directement dans son navigateur →
+// réponse `{"error":"A valid API key is required. ..."}`. Le service exige maintenant une
+// inscription/clé, ce n'était pas une panne passagère. Retour à la paire allorigins + codetabs
+// (celle qui existait avant son ajout), qui vient de fonctionner sur un test réel (source
+// Terre-net). Correction d'un changement de ce même jour, pas une nouvelle fonctionnalité : pas
+// d'entrée "quoi de neuf". `js/domain/veille.js` modifié, aucun nouveau fichier. `CACHE_NAME`
+// incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v103";
 const APP_SHELL = [
   "./",
   "./index.html",
