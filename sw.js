@@ -570,7 +570,15 @@
 // `styles/components.css` (`.badge-new`) et `js/views/guide.js` (explication ajoutée à la
 // rubrique "📡 Comment faire sa veille" existante). `CACHE_NAME` incrémenté car le contenu de ces
 // fichiers déjà précachés a changé, même si APP_SHELL lui-même ne gagne aucune nouvelle entrée.
-const CACHE_NAME = "pilotage-cache-v97";
+//
+// Correctif (02/10/2026, retour de Charles-Henri après premier test réel sur SEMAE : "⚠️ Échec de
+// récupération") : un seul proxy CORS public n'offrait aucune garantie de disponibilité — certains
+// sites bloquent même carrément les proxys les plus connus. `js/domain/veille.js` essaie
+// désormais plusieurs proxys dans l'ordre (le premier qui répond est utilisé) et garde la trace
+// de ce qui a été tenté (`lastCheckDetail`) pour que l'échec reste diagnosticable, affiché par
+// `js/views/veille.js` à côté du message d'erreur existant. `CACHE_NAME` incrémenté en
+// conséquence.
+const CACHE_NAME = "pilotage-cache-v98";
 const APP_SHELL = [
   "./",
   "./index.html",
