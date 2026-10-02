@@ -89,7 +89,37 @@ export async function createSource(data) {
     competitorStrengths: (data.competitorStrengths || "").trim(),
     competitorWeaknesses: (data.competitorWeaknesses || "").trim(),
     agreoStrengths: (data.agreoStrengths || "").trim(),
+    // SWOT complet + positionnement (02/10/2026, même jour, suite directe : "ça doit être
+    // réalisable dans pilote et même pour tout les nouveaux que je rajouterai" — après avoir vu
+    // la page visuelle livrée à part). Deux questions posées explicitement avant de coder : (1)
+    // Opportunités/Menaces en plus des 4 champs ci-dessus pour un vrai SWOT à 4 cases — retenu ;
+    // (2) comment généraliser la carte de positionnement à tout concurrent futur sans points codés
+    // en dur comme dans la page statique — retenu : 2 curseurs 0-10 réglés à la main par
+    // Charles-Henri plutôt qu'un score calculé (aucune donnée stockée ne permettrait de calculer
+    // "spécialisation" ou "visibilité de la roadmap" de façon fiable et objective — mieux vaut un
+    // jugement assumé, modifiable, que d'inventer un calcul qui aurait l'air objectif sans l'être).
+    opportunities: (data.opportunities || "").trim(),
+    threats: (data.threats || "").trim(),
+    specializationScore: clampScore(data.specializationScore, 5),
+    roadmapVisibilityScore: clampScore(data.roadmapVisibilityScore, 5),
   });
+}
+
+function clampScore(value, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(10, Math.max(0, n));
+}
+
+/**
+ * Un concurrent n'a de place sur la carte de positionnement du Benchmark visuel que s'il a déjà
+ * été ouvert et enregistré au moins une fois DEPUIS l'ajout des curseurs ci-dessus — avant ça, ces
+ * deux champs n'existent simplement pas sur le document (jamais écrits par `createSource` avant
+ * cette date). js/views/veille.js s'en sert pour séparer "positionnés" (affichés sur la carte) de
+ * "non positionnés" (listés à part, avec un rappel d'aller régler leurs curseurs).
+ */
+export function hasPositioning(source) {
+  return typeof source.specializationScore === "number" && typeof source.roadmapVisibilityScore === "number";
 }
 
 export async function updateSource(id, patch) {
@@ -286,6 +316,12 @@ export function hasNewContent(source) {
  * inclut maintenant une présentation minimale d'Agreo Seeds pour que la conversation Claude dans
  * laquelle ce texte est collé — potentiellement nouvelle, sans l'historique de ce projet — ait de
  * quoi produire une vraie comparaison plutôt qu'une fiche à trous.
+ *
+ * Extension du 02/10/2026 (même jour, suite — SWOT complet) : ajout d'Opportunités/Menaces à la
+ * demande, pour remplir les 2 nouvelles cases du SWOT à 4 cases. Les 2 curseurs de positionnement
+ * (spécialisation, visibilité de la roadmap) ne sont volontairement PAS demandés ici : un jugement
+ * de positionnement relatif appartient à Charles-Henri, pas à une recherche externe à reformuler
+ * en chiffre.
  */
 export function competitorResearchPrompt(source) {
   const lines = [
@@ -302,10 +338,12 @@ export function competitorResearchPrompt(source) {
     "- Un résumé de qui ils sont et de leur positionnement marché (2-3 phrases)",
     "- Leurs forces (ce qu'ils font mieux ou différemment)",
     "- Leurs faiblesses (limites, angles morts, retours clients négatifs trouvés publiquement)",
+    "- Leurs opportunités (ce qui pourrait les faire progresser sur leur marché)",
+    "- Leurs menaces (ce qui pourrait les freiner ou les fragiliser, hors de leur contrôle : réglementation, consolidation du secteur, dépendance à un partenaire...)",
     "",
-    "Pour le dernier point, compare-les à Agreo Seeds (éditeur SMAG, groupe InVivo) : logiciel de gestion de production de semences (planification, suivi, traçabilité champ → usine, facturation). Donne la force d'Agreo face à CE concurrent précis, en te basant uniquement sur de l'info publique sur Agreo (ne pas inventer de retours clients ou de roadmap qui ne seraient pas publics).",
+    "Pour le point \"leurs forces\", compare-les aussi à Agreo Seeds (éditeur SMAG, groupe InVivo) : logiciel de gestion de production de semences (planification, suivi, traçabilité champ → usine, facturation). Donne la force d'Agreo face à CE concurrent précis, en te basant uniquement sur de l'info publique sur Agreo (ne pas inventer de retours clients ou de roadmap qui ne seraient pas publics).",
     "",
-    "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note, puis dans la section \"🎯 Fiche comparative face à Agreo\" : Résumé, Leurs forces, Leurs faiblesses, Force d'Agreo).",
+    "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note, puis dans la section \"🎯 Fiche comparative face à Agreo\" : Résumé, Leurs forces, Leurs faiblesses, Opportunités, Menaces, Force d'Agreo).",
   ].filter((l) => l !== null);
   return lines.join("\n");
 }
