@@ -614,8 +614,17 @@
 // inscription/clé, ce n'était pas une panne passagère. Retour à la paire allorigins + codetabs
 // (celle qui existait avant son ajout), qui vient de fonctionner sur un test réel (source
 // Terre-net). Correction d'un changement de ce même jour, pas une nouvelle fonctionnalité : pas
-// d'entrée "quoi de neuf". `js/domain/veille.js` modifié, aucun nouveau fichier. `CACHE_NAME`
-// incrémenté en conséquence.
+// d'entrée "quoi de neuf". `js/domain/veille.js` modifié, aucun nouveau fichier.
+//
+// Bulle d'aide "Sélecteur CSS" complétée (02/10/2026, même jour) : nouvelle étape pour le cas
+// d'un sélecteur ambigu (plusieurs occurrences) — chercher un repère unique tout près de
+// l'élément (ancre de menu/sommaire, `$0.previousElementSibling`, recherche dans le code source)
+// plutôt que de s'arrêter à `:nth-of-type`. Exemple réel SEMAE mis à jour avec le sélecteur final
+// effectivement trouvé et confirmé (`a[name="actualites-reglementaires"] + section .texte`),
+// remplaçant l'exemple précédent qui s'arrêtait au compromis `#contents`. Contenu textuel/HTML
+// dans `js/views/veille.js`, aucun nouveau fichier. Pas d'entrée "quoi de neuf" : clarification
+// de contenu déjà annoncé, pas une nouvelle fonctionnalité. `CACHE_NAME` incrémenté pour les deux
+// changements ci-dessus (le premier n'avait pas encore été accompagné d'un incrément).
 const CACHE_NAME = "pilotage-cache-v103";
 const APP_SHELL = [
   "./",
