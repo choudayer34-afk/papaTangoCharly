@@ -547,7 +547,18 @@
 // pour écrire ce code n'ayant pas d'accès réseau vers npm/les CDN publics pour les récupérer lui-
 // même. Tant qu'ils ne sont pas en place, le bouton de scan échoue proprement avec un message
 // d'erreur explicite plutôt qu'un plantage silencieux (voir js/services/ocr.js).
-const CACHE_NAME = "pilotage-cache-v95";
+//
+// 📡 Veille — écran "accès centralisé" (01-02/10/2026, besoin direct de Charles-Henri, hors
+// roadmap TODO_TECHNIQUE.md — voir claude/sources-veille-02-10-2026.md pour toute la réflexion
+// qui a précédé ce code). DEUX nouveaux fichiers ajoutés à APP_SHELL ci-dessous :
+// `js/domain/veille.js` (collection `veilleSources` + liste de départ proposée) et
+// `js/views/veille.js` (écran accessible depuis ☰ Plus → 📡 Veille). Fichiers modifiés :
+// `js/app.js` (route `#/veille`), `js/services/navConfig.js` (module pinnable dans la barre
+// principale, comme Ressources/Prompts), `js/views/more.js` (ligne dans le groupe
+// "Bibliothèques"), `js/views/guide.js` (nouvelle rubrique "📡 Comment faire sa veille" —
+// explique la méthode une seule fois, pendant que l'écran Veille ne porte que la liste de
+// sources elle-même, pour ne pas dupliquer le texte à deux endroits qui finiraient par diverger).
+const CACHE_NAME = "pilotage-cache-v96";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -617,6 +628,10 @@ const APP_SHELL = [
   "./js/domain/workload.js",
   "./js/domain/projectHealth.js",
   "./js/domain/stickyNotes.js",
+  // Nouveau fichier (01-02/10/2026, écran Veille, voir le commentaire daté juste au-dessus de
+  // CACHE_NAME) : ajouté à APP_SHELL dès sa création, même règle que tous les nouveaux fichiers
+  // précédents de ce document.
+  "./js/domain/veille.js",
   "./js/components/modal.js",
   // BUG corrigé (21/09/2026, même correctif que le bump de CACHE_NAME ci-dessus) : ce fichier
   // (LOT 1, TODO-006, "validation partagée") n'avait jamais été ajouté ici depuis sa création —
@@ -672,6 +687,10 @@ const APP_SHELL = [
   "./js/views/calendar.js",
   "./js/views/resources.js",
   "./js/views/prompts.js",
+  // Nouveau fichier (01-02/10/2026, écran Veille, voir le commentaire daté juste au-dessus de
+  // CACHE_NAME) : ajouté à APP_SHELL dès sa création, même règle que tous les nouveaux fichiers
+  // précédents de ce document.
+  "./js/views/veille.js",
   "./js/views/more.js",
   "./js/views/guide.js",
   "./js/views/whatsnew.js",
