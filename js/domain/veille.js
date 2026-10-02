@@ -102,6 +102,11 @@ export async function createSource(data) {
     threats: (data.threats || "").trim(),
     specializationScore: clampScore(data.specializationScore, 5),
     roadmapVisibilityScore: clampScore(data.roadmapVisibilityScore, 5),
+    // Horodatage dédié de la fiche (02/10/2026) — voir le commentaire détaillé dans
+    // js/views/veille.js#openSourceModal (bouton "Enregistrer") pour pourquoi ce n'est PAS le
+    // `updatedAt` générique de storage.js. Posé dès la création : une fiche tout juste créée est,
+    // par définition, à jour au moment de sa création.
+    ficheUpdatedAt: Date.now(),
   });
 }
 
@@ -322,6 +327,15 @@ export function hasNewContent(source) {
  * (spécialisation, visibilité de la roadmap) ne sont volontairement PAS demandés ici : un jugement
  * de positionnement relatif appartient à Charles-Henri, pas à une recherche externe à reformuler
  * en chiffre.
+ *
+ * Extension du 02/10/2026 (même jour, suite — retour direct : "il faut [...] que le prompt renvoi
+ * également les notes qu'il faut saisir") : ajout d'une demande explicite de contenu pour le champ
+ * générique "Note" (mot-clé d'alerte/point de vigilance — le "Note" de la fiche existait déjà comme
+ * DESTINATION dans la dernière ligne de la demande, mais rien ne demandait explicitement quoi y
+ * mettre). Ajout aussi d'une demande de lien source par info, utile avec n'importe quel outil mais
+ * en particulier avec Perplexity (que Charles-Henri utilise pour coller cette demande) — un outil
+ * de recherche justement construit autour de la citation de ses sources, donc une demande qui tire
+ * parti de ce point fort plutôt que de l'ignorer.
  */
 export function competitorResearchPrompt(source) {
   const lines = [
@@ -335,6 +349,7 @@ export function competitorResearchPrompt(source) {
     "- Le chiffre d'affaires (CA) le plus récent trouvé, avec l'année et la source",
     "- Les actualités et évolutions récentes (produits, levées de fonds, recrutements clés, partenariats...) — si disponible, une page de changelog/actualités produit ou un canal où les clients demandent des évolutions",
     "- Toute autre info utile pour une veille concurrentielle (positionnement, effectifs, zone géographique...)",
+    "- Une note courte et pratique à garder sous les yeux (mot-clé d'alerte, point de vigilance, prochaine chose à vérifier) — pas un résumé, juste de quoi me rappeler quoi surveiller la prochaine fois",
     "- Un résumé de qui ils sont et de leur positionnement marché (2-3 phrases)",
     "- Leurs forces (ce qu'ils font mieux ou différemment)",
     "- Leurs faiblesses (limites, angles morts, retours clients négatifs trouvés publiquement)",
@@ -342,6 +357,8 @@ export function competitorResearchPrompt(source) {
     "- Leurs menaces (ce qui pourrait les freiner ou les fragiliser, hors de leur contrôle : réglementation, consolidation du secteur, dépendance à un partenaire...)",
     "",
     "Pour le point \"leurs forces\", compare-les aussi à Agreo Seeds (éditeur SMAG, groupe InVivo) : logiciel de gestion de production de semences (planification, suivi, traçabilité champ → usine, facturation). Donne la force d'Agreo face à CE concurrent précis, en te basant uniquement sur de l'info publique sur Agreo (ne pas inventer de retours clients ou de roadmap qui ne seraient pas publics).",
+    "",
+    "Indique le lien de la source à côté de chaque information quand c'est possible, pour que je puisse vérifier et dater l'info.",
     "",
     "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note, puis dans la section \"🎯 Fiche comparative face à Agreo\" : Résumé, Leurs forces, Leurs faiblesses, Opportunités, Menaces, Force d'Agreo).",
   ].filter((l) => l !== null);
