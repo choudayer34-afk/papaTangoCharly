@@ -625,7 +625,25 @@
 // dans `js/views/veille.js`, aucun nouveau fichier. Pas d'entrée "quoi de neuf" : clarification
 // de contenu déjà annoncé, pas une nouvelle fonctionnalité. `CACHE_NAME` incrémenté pour les deux
 // changements ci-dessus (le premier n'avait pas encore été accompagné d'un incrément).
-const CACHE_NAME = "pilotage-cache-v103";
+//
+// Veille concurrentielle enrichie (02/10/2026, même jour, demande directe de Charles-Henri : "je
+// dois pouvoir [...] retrouver [les concurrents] avec leur CA, évolutions, nouveautés [...] en se
+// basant sur différents site linkedin, pappers, le site officiel" + "je veux pouvoir en
+// rechercher d'autres si besoin par rapport à des mots clé" + benchmark). Quatre questions posées
+// explicitement avant de coder (emplacement, mode de collecte, découverte, forme du benchmark) —
+// voir js/domain/veille.js#competitorResearchPrompt pour le détail des réponses retenues. Pilotage
+// restant une app 100% navigateur sans serveur (ne peut interroger ni LinkedIn ni Pappers tout
+// seul), le choix retenu est : Pilotage stocke les champs structurés (`ca`, `linkedinUrl`,
+// `pappersUrl` sur chaque source) et sert de mémoire ; la recherche elle-même passe par une
+// demande préparée en un clic ("📋 Générer la demande de recherche" sur une fiche concurrent,
+// "🔎 Chercher de nouveaux concurrents" par mot-clé en haut de la section) à coller dans une
+// conversation avec Claude, qui fait la vraie recherche. Un bouton "📊 Benchmark" compile les
+// fiches concurrence déjà renseignées en un tableau comparatif (réutilise `.pilotage-table` de
+// styles/components.css, déjà utilisé par la vue Tableau du Kanban). `js/domain/veille.js`
+// (nouveaux champs + 2 fonctions de génération de texte), `js/views/veille.js` (champs, 2
+// nouvelles modales, boutons de section) et `js/views/whatsnew.js` (nouvelle entrée) modifiés,
+// aucun nouveau fichier. `CACHE_NAME` incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v104";
 const APP_SHELL = [
   "./",
   "./index.html",
