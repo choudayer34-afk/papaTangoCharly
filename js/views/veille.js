@@ -127,6 +127,13 @@ function competitorFicheHTML(source) {
         ${source.ca ? `<span class="badge badge-new">CA : ${escapeHtml(source.ca)}</span>` : ""}
         ${links ? `<div class="item-meta">${links}</div>` : ""}
       </div>
+      <div class="item-meta">
+        ${
+          typeof source.ficheUpdatedAt === "number"
+            ? `Dernière mise à jour : ${new Date(source.ficheUpdatedAt).toLocaleString("fr-FR")}`
+            : "Pas encore enregistrée — ceci est un aperçu du formulaire en cours de saisie."
+        }
+      </div>
       <p class="fiche-visual-summary">${summary ? escapeHtml(summary).replace(/\n/g, "<br>") : "<em>Résumé non renseigné — à compléter dans la fiche.</em>"}</p>
       <div class="swot-grid">
         ${swotCell("good", "Forces", source.competitorStrengths)}
@@ -396,6 +403,11 @@ export function renderVeille(container) {
             }${isNew ? ` <span class="badge badge-new">🆕 Nouveau</span>` : ""}
             ${source.notes ? `<div class="item-meta">${escapeHtml(source.notes)}</div>` : ""}
           </div>
+          ${
+            cat.key === "concurrence"
+              ? `<button type="button" class="btn btn-ghost btn-sm veille-fiche-btn" aria-label="Voir la fiche visuelle" title="Voir la fiche visuelle">🪪</button>`
+              : ""
+          }
           <button type="button" class="btn btn-ghost btn-sm veille-edit-btn" aria-label="Modifier" title="Modifier">✏️</button>
         `;
         // Le badge "🆕" s'efface dès qu'on suit le lien — même principe que la pastille "Nouveau"
@@ -404,6 +416,12 @@ export function renderVeille(container) {
         if (isNew) {
           row.querySelector("a")?.addEventListener("click", () => veilleApi.acknowledgeSource(source.id));
         }
+        // "🪪 Voir la fiche visuelle" directement depuis la liste (02/10/2026, retour direct de
+        // Charles-Henri : "la fiche doit être consultable dans la partie veille" — jusque-là
+        // accessible uniquement depuis l'intérieur de la fiche d'édition ✏️, un détour inutile
+        // pour une simple consultation). Ouvre la source RÉELLEMENT enregistrée (pas un brouillon
+        // de formulaire comme le bouton équivalent à l'intérieur de la fiche d'édition).
+        row.querySelector(".veille-fiche-btn")?.addEventListener("click", () => openCompetitorFicheModal(source));
         row.querySelector(".veille-edit-btn").addEventListener("click", () => openSourceModal(source));
         list.appendChild(row);
       }
@@ -759,6 +777,14 @@ export function renderVeille(container) {
             agreoStrengths: bodyEl.querySelector("#veille-agreo-strengths").value.trim(),
             specializationScore: Number(bodyEl.querySelector("#veille-specialization").value),
             roadmapVisibilityScore: Number(bodyEl.querySelector("#veille-roadmap-visibility").value),
+            // Horodatage DÉDIÉ à la fiche (02/10/2026, retour direct de Charles-Henri : "il faut
+            // une date de dernière mise à jour") — PAS le `updatedAt` générique de
+            // js/services/storage.js#setFields, qui est aussi touché par un simple "🔍 Vérifier"
+            // ou un clic sur le lien pour effacer le badge "🆕" (voir acknowledgeSource) : avec le
+            // générique, la fiche aurait affiché "mise à jour il y a 2 minutes" après une action
+            // qui n'a rien changé à son contenu. `ficheUpdatedAt` n'avance que quand ce formulaire
+            // est réellement enregistré.
+            ficheUpdatedAt: Date.now(),
             watchEnabled: bodyEl.querySelector("#veille-watch-enabled").checked,
             watchUrl: bodyEl.querySelector("#veille-watch-url").value.trim(),
             watchSelector: bodyEl.querySelector("#veille-watch-selector").value.trim(),
