@@ -8,6 +8,17 @@
 // expliquée une seule fois dans le Guide (js/views/guide.js, rubrique "📡 Comment faire sa
 // veille") plutôt que répétée ici — ce fichier se contente d'un rappel très court + un lien direct
 // vers cette rubrique, pour ne pas dupliquer le texte à deux endroits qui finiraient par diverger.
+//
+// 🔍 Détection de nouveautés (02/10/2026) — voir js/domain/veille.js pour le fonctionnement
+// (proxy CORS gratuit + empreinte de contenu) et le pourquoi (pas de flux RSS exploitable pour la
+// plupart des sources, abandon explicite de Charles-Henri : "Laisse tomber pour les flux"). Deux
+// ajouts à cet écran : un badge "🆕" sur les sources surveillées ayant du nouveau depuis la
+// dernière visite, et un bouton de vérification manuelle (jamais automatique — même principe que
+// le reste de l'app). La configuration PAR SITE (activer, URL à surveiller si différente, sélecteur
+// CSS de la zone à comparer) vit dans la modale d'édition de la source, avec un bouton "🔍 Tester"
+// pour la régler contre la vraie page avant d'enregistrer — jamais à l'aveugle, vu que chaque site
+// a sa propre structure (voir le retour de Charles-Henri : "ça doit dépendre aussi des sites en
+// terme de structure").
 
 import * as veilleApi from "../domain/veille.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
@@ -32,7 +43,10 @@ export function renderVeille(container) {
         <h1>📡 Veille</h1>
         <div class="subtitle">Tes sources à consulter par sujet — le point de départ de ta ronde du matin</div>
       </div>
-      <button id="veille-new-btn" class="btn btn-primary btn-sm">+ Source</button>
+      <div style="display:flex;gap:8px;">
+        <button id="veille-check-btn" class="btn btn-secondary btn-sm" style="display:none;">🔍 Vérifier</button>
+        <button id="veille-new-btn" class="btn btn-primary btn-sm">+ Source</button>
+      </div>
     </div>
     <div class="view">
       <p class="item-meta" style="margin-top:0;">
@@ -48,10 +62,39 @@ export function renderVeille(container) {
   `;
 
   const newBtn = container.querySelector("#veille-new-btn");
+  const checkBtn = container.querySelector("#veille-check-btn");
   const starterEl = container.querySelector("#veille-starter-prompt");
   const sectionsEl = container.querySelector("#veille-sections");
 
   newBtn.addEventListener("click", () => openSourceModal());
+
+  // Bouton de vérification groupée (02/10/2026) : visible seulement s'il existe au moins une
+  // source surveillée (`watchEnabled`) — inutile de l'afficher tant que personne n'a configuré de
+  // détection. Séquentiel, pas en parallèle : un proxy public gratuit et partagé n'a aucune raison
+  // d'être sollicité d'un coup pour 16 requêtes simultanées, et ça reste cohérent avec le rythme
+  // "une ronde, pas une rafale" du reste de la veille.
+  checkBtn.addEventListener(
+    "click",
+    guardClick(checkBtn, async () => {
+      const watched = currentSources.filter((s) => s.watchEnabled);
+      if (!watched.length) return;
+      checkBtn.textContent = "🔍 Vérification…";
+      let changed = 0;
+      let failed = 0;
+      for (const source of watched) {
+        const result = await veilleApi.checkSourceForChanges(source);
+        if (!result.ok) failed++;
+        else if (result.changed) changed++;
+      }
+      checkBtn.textContent = "🔍 Vérifier";
+      const parts = [`${watched.length} vérifiée${watched.length > 1 ? "s" : ""}`];
+      if (changed) parts.push(`${changed} nouveauté${changed > 1 ? "s" : ""}`);
+      if (failed) parts.push(`${failed} échec${failed > 1 ? "s" : ""}`);
+      showToast(parts.join(" · "));
+    })
+  );
+
+  let currentSources = [];
 
   let unsubscribe = null;
   unsubscribe = veilleApi.subscribe((sources) => {
@@ -59,6 +102,8 @@ export function renderVeille(container) {
   });
 
   function render(sources) {
+    currentSources = sources;
+    checkBtn.style.display = sources.some((s) => s.watchEnabled) ? "" : "none";
     renderStarterPrompt(sources);
     renderSections(sources);
   }
@@ -113,6 +158,7 @@ export function renderVeille(container) {
       list.className = "card";
       list.style.marginBottom = "16px";
       for (const source of items) {
+        const isNew = veilleApi.hasNewContent(source);
         const row = document.createElement("div");
         row.className = "item-row";
         row.innerHTML = `
@@ -121,11 +167,17 @@ export function renderVeille(container) {
               source.url
                 ? `<a href="${escapeAttr(source.url)}" target="_blank" rel="noopener" class="item-title">${escapeHtml(source.title)}</a>`
                 : `<div class="item-title">${escapeHtml(source.title)}</div>`
-            }
+            }${isNew ? ` <span class="badge badge-new">🆕 Nouveau</span>` : ""}
             ${source.notes ? `<div class="item-meta">${escapeHtml(source.notes)}</div>` : ""}
           </div>
           <button type="button" class="btn btn-ghost btn-sm veille-edit-btn" aria-label="Modifier" title="Modifier">✏️</button>
         `;
+        // Le badge "🆕" s'efface dès qu'on suit le lien — même principe que la pastille "Nouveau"
+        // de ☰ Plus (js/views/more.js) sur Nouveautés : "vu" se déclenche en allant réellement
+        // regarder, pas en ouvrant juste la fiche d'édition.
+        if (isNew) {
+          row.querySelector("a")?.addEventListener("click", () => veilleApi.acknowledgeSource(source.id));
+        }
         row.querySelector(".veille-edit-btn").addEventListener("click", () => openSourceModal(source));
         list.appendChild(row);
       }
@@ -156,8 +208,52 @@ export function renderVeille(container) {
         <label for="veille-notes">Note (optionnel)</label>
         <textarea id="veille-notes" placeholder="Ce que cette source apporte, mot-clé d'alerte à surveiller...">${escapeHtml(existing?.notes || "")}</textarea>
       </div>
+      <details>
+        <summary>🔍 Détection de nouveautés (expérimental)</summary>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+          <input id="veille-watch-enabled" type="checkbox" style="width:auto;" ${existing?.watchEnabled ? "checked" : ""} />
+          Activer la détection sur ce site
+        </label>
+        <div class="field">
+          <label for="veille-watch-url">URL à surveiller (si différente du lien ci-dessus)</label>
+          <input id="veille-watch-url" type="url" placeholder="https://..." value="${escapeAttr(existing?.watchUrl || "")}" />
+        </div>
+        <div class="field">
+          <label for="veille-watch-selector">Sélecteur CSS de la zone à comparer (optionnel)</label>
+          <input id="veille-watch-selector" type="text" placeholder="Ex. .liste-actualites — laisse vide pour comparer toute la page" value="${escapeAttr(existing?.watchSelector || "")}" />
+          <div class="item-meta">La partie de la page à surveiller, pas toute la page (sinon une pub ou une date qui tourne déclenche un faux "nouveau" à chaque fois). Teste avant d'enregistrer : chaque site a sa propre structure, impossible de deviner sans vérifier contre la vraie page.</div>
+        </div>
+        <button type="button" id="veille-watch-test-btn" class="btn btn-secondary btn-sm">🔍 Tester maintenant</button>
+        <div id="veille-watch-test-result" class="item-meta"></div>
+        ${
+          existing?.watchEnabled
+            ? `<div class="item-meta">
+                ${existing.lastCheckedAt ? `Dernière vérification : ${new Date(existing.lastCheckedAt).toLocaleString("fr-FR")}.` : "Jamais encore vérifiée."}
+                ${existing.lastCheckError ? ` ⚠️ ${escapeHtml(veilleApi.WATCH_ERROR_LABELS[existing.lastCheckError] || existing.lastCheckError)}` : ""}
+                ${veilleApi.hasNewContent(existing) ? ` 🆕 Nouveauté détectée le ${new Date(existing.lastChangedAt).toLocaleString("fr-FR")}.` : ""}
+              </div>`
+            : ""
+        }
+      </details>
     `;
     clearFieldErrorOnInput(body, ["#veille-title"]);
+
+    const testBtn = body.querySelector("#veille-watch-test-btn");
+    const testResultEl = body.querySelector("#veille-watch-test-result");
+    testBtn.addEventListener(
+      "click",
+      guardClick(testBtn, async () => {
+        testResultEl.textContent = "Vérification en cours...";
+        const result = await veilleApi.previewWatch({
+          url: body.querySelector("#veille-url").value.trim(),
+          watchUrl: body.querySelector("#veille-watch-url").value.trim(),
+          watchSelector: body.querySelector("#veille-watch-selector").value.trim(),
+        });
+        testResultEl.textContent = result.ok
+          ? `✅ Zone trouvée (${result.text.length} caractères) — aperçu : « ${result.preview}${result.text.length > result.preview.length ? "…" : ""} »`
+          : `⚠️ ${veilleApi.WATCH_ERROR_LABELS[result.error] || result.error}`;
+      })
+    );
 
     const actions = [
       { label: "Annuler", variant: "ghost" },
@@ -173,6 +269,9 @@ export function renderVeille(container) {
             url: bodyEl.querySelector("#veille-url").value.trim(),
             category: bodyEl.querySelector("#veille-category").value,
             notes: bodyEl.querySelector("#veille-notes").value.trim(),
+            watchEnabled: bodyEl.querySelector("#veille-watch-enabled").checked,
+            watchUrl: bodyEl.querySelector("#veille-watch-url").value.trim(),
+            watchSelector: bodyEl.querySelector("#veille-watch-selector").value.trim(),
           };
           if (existing) {
             await veilleApi.updateSource(existing.id, patch);
