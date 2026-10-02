@@ -273,8 +273,19 @@ export function hasNewContent(source) {
 
 /**
  * Texte de la demande pour mettre à jour la fiche d'UN concurrent déjà suivi (CA, actualités,
- * évolutions). `source` peut être un brouillon non encore enregistré (valeurs des champs de la
- * modale en cours de saisie) — seuls `title`/`url`/`linkedinUrl`/`pappersUrl` sont utilisés.
+ * évolutions, et depuis le 02/10/2026 la fiche "face à Agreo" : résumé/positionnement, leurs
+ * forces, leurs faiblesses, force d'Agreo face à eux). `source` peut être un brouillon non encore
+ * enregistré (valeurs des champs de la modale en cours de saisie) — seuls
+ * `title`/`url`/`linkedinUrl`/`pappersUrl` sont utilisés.
+ *
+ * Extension du 02/10/2026 (même jour, suite de l'étude de marché livrée à part) : Charles-Henri
+ * demande si le remplissage des 4 champs "face à Agreo" peut être automatique ou via l'IA —
+ * réponse retenue après lui avoir exposé les deux options (étendre ce bouton existant, gratuit et
+ * sans changement d'architecture, VS une vraie automatisation nécessitant clé API + serveur
+ * relais + coût, écartée pour l'instant comme Pappers) : "Étendre le bouton existant". La demande
+ * inclut maintenant une présentation minimale d'Agreo Seeds pour que la conversation Claude dans
+ * laquelle ce texte est collé — potentiellement nouvelle, sans l'historique de ce projet — ait de
+ * quoi produire une vraie comparaison plutôt qu'une fiche à trous.
  */
 export function competitorResearchPrompt(source) {
   const lines = [
@@ -286,10 +297,15 @@ export function competitorResearchPrompt(source) {
     "",
     "Donne-moi :",
     "- Le chiffre d'affaires (CA) le plus récent trouvé, avec l'année et la source",
-    "- Les actualités et évolutions récentes (produits, levées de fonds, recrutements clés, partenariats...)",
+    "- Les actualités et évolutions récentes (produits, levées de fonds, recrutements clés, partenariats...) — si disponible, une page de changelog/actualités produit ou un canal où les clients demandent des évolutions",
     "- Toute autre info utile pour une veille concurrentielle (positionnement, effectifs, zone géographique...)",
+    "- Un résumé de qui ils sont et de leur positionnement marché (2-3 phrases)",
+    "- Leurs forces (ce qu'ils font mieux ou différemment)",
+    "- Leurs faiblesses (limites, angles morts, retours clients négatifs trouvés publiquement)",
     "",
-    "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note).",
+    "Pour le dernier point, compare-les à Agreo Seeds (éditeur SMAG, groupe InVivo) : logiciel de gestion de production de semences (planification, suivi, traçabilité champ → usine, facturation). Donne la force d'Agreo face à CE concurrent précis, en te basant uniquement sur de l'info publique sur Agreo (ne pas inventer de retours clients ou de roadmap qui ne seraient pas publics).",
+    "",
+    "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note, puis dans la section \"🎯 Fiche comparative face à Agreo\" : Résumé, Leurs forces, Leurs faiblesses, Force d'Agreo).",
   ].filter((l) => l !== null);
   return lines.join("\n");
 }
