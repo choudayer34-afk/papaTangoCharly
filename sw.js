@@ -658,7 +658,16 @@
 // (nouveaux champs), `js/views/veille.js` (section de fiche + colonne benchmark) et
 // `js/views/whatsnew.js` (nouvelle entrée) modifiés, aucun nouveau fichier. `CACHE_NAME`
 // incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v105";
+//
+// Demande de recherche étendue à la fiche "face à Agreo" (02/10/2026, même jour — Charles-Henri
+// demande si les 4 champs ci-dessus peuvent être "automatique ou rempli via IA"). Deux options
+// exposées et validée par lui : étendre le bouton existant (gratuit, pas de changement
+// d'architecture) plutôt qu'une vraie automatisation (clé API + serveur relais + coût, écartée
+// pour l'instant comme Pappers — "on en reste là" de la discussion précédente). `competitorResearchPrompt()`
+// (js/domain/veille.js) demande désormais aussi le résumé/forces/faiblesses et une comparaison
+// explicite à Agreo Seeds (SMAG/InVivo) ; libellé du bouton et texte d'aide mis à jour
+// (js/views/veille.js) ; nouvelle entrée whatsnew. Aucun nouveau fichier. `CACHE_NAME` incrémenté.
+const CACHE_NAME = "pilotage-cache-v106";
 const APP_SHELL = [
   "./",
   "./index.html",
