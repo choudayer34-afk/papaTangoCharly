@@ -667,7 +667,26 @@
 // (js/domain/veille.js) demande désormais aussi le résumé/forces/faiblesses et une comparaison
 // explicite à Agreo Seeds (SMAG/InVivo) ; libellé du bouton et texte d'aide mis à jour
 // (js/views/veille.js) ; nouvelle entrée whatsnew. Aucun nouveau fichier. `CACHE_NAME` incrémenté.
-const CACHE_NAME = "pilotage-cache-v106";
+//
+// Fiche visuelle + Benchmark visuel (02/10/2026, même jour — retour direct de Charles-Henri après
+// avoir vu la page HTML externe livrée à part : "ça doit être réalisable dans pilote et même pour
+// tout les nouveaux que je rajouterai"). Deux questions posées explicitement avant de coder : (1)
+// SWOT à 4 cases (Forces/Faiblesses/Opportunités/Menaces) plutôt que les 4 champs existants —
+// "Ajouter Opportunités + Menaces" retenu ; (2) comment généraliser la carte de positionnement à
+// tout concurrent futur sans points codés en dur — "2 curseurs à régler sur la fiche" retenu
+// (js/domain/veille.js#hasPositioning). Nouveaux champs `opportunities`/`threats`/
+// `specializationScore`/`roadmapVisibilityScore` sur chaque source concurrence ; nouveau bouton
+// "🪪 Voir la fiche visuelle" sur la fiche d'édition (SWOT en 4 cases colorées + encart "Force
+// d'Agreo", construite dynamiquement à partir des champs enregistrés — jamais de contenu écrit en
+// dur, donc valable pour tout concurrent y compris ajouté après coup) ; "📊 Benchmark" renommé
+// "📊 Benchmark visuel" et complété d'une carte de positionnement SVG (tous les concurrents
+// positionnés) au-dessus du tableau déjà existant, plus un bouton "🪪 Fiche" par ligne.
+// `js/domain/veille.js` (nouveaux champs + `hasPositioning()`), `js/views/veille.js` (champs,
+// curseurs, fiche visuelle, carte de positionnement), `styles/components.css` (nouvelles classes
+// `.swot-*`/`.agreo-callout`/`.position-chart-wrap`, réutilisant les jetons de couleur existants)
+// et `js/views/whatsnew.js` (nouvelle entrée) modifiés, aucun nouveau fichier. `CACHE_NAME`
+// incrémenté en conséquence.
+const CACHE_NAME = "pilotage-cache-v107";
 const APP_SHELL = [
   "./",
   "./index.html",
