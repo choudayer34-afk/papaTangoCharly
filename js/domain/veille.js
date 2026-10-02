@@ -113,10 +113,19 @@ export function subscribe(callback) {
 // coïncidence malheureuse plutôt qu'un problème de fond, mais qui montre que 2 services gratuits
 // et non garantis peuvent très bien tomber ensemble : un 3e en secours augmente les chances qu'au
 // moins un réponde.
+//
+// corsproxy.io RETIRÉ (02/10/2026, même jour) : un test réel a renvoyé HTTP 401 de façon répétée,
+// pas une panne ponctuelle. Charles-Henri a vérifié en ouvrant l'URL directement dans son
+// navigateur — réponse : {"error":"A valid API key is required. Get one at
+// https://console.corsproxy.io/"}. Le service exige désormais une inscription/clé, incompatible
+// avec la contrainte "rester gratuit, sans compte". On revient à la paire allorigins + codetabs,
+// qui a fonctionné sans accroc sur un test réel juste après (source Terre-net, 4976 caractères
+// extraits). Si une nouvelle source gratuite et sans compte est identifiée et testée (vérification
+// manuelle de Charles-Henri obligatoire avant tout ajout, vu l'historique de ce fichier), elle
+// pourra reprendre la 3e place.
 const PROXIES = [
   { name: "allorigins", build: (target) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(target) },
   { name: "codetabs", build: (target) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(target) },
-  { name: "corsproxy.io", build: (target) => "https://corsproxy.io/?url=" + encodeURIComponent(target) },
 ];
 const PROXY_TIMEOUT_MS = 15000;
 
