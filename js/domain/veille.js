@@ -14,6 +14,25 @@
 // volontairement minimal (titre, lien, catégorie, note) — pas de liaison à un Projet/une Tâche
 // comme js/domain/resources.js : une source de veille est un point d'entrée à consulter
 // régulièrement, pas une pièce jointe de travail rattachée à autre chose dans l'app.
+//
+// 🔍 Détection de nouveautés (02/10/2026, suite directe du point ci-dessus — retour de
+// Charles-Henri après la livraison de la liste de sources : "comment rendre cette analyse
+// paramétrable par site"). Contexte : un flux RSS exploitable n'existe que pour une poignée de
+// sources (confirmé : La France Agricole ; absent ou non trouvé : SEMAE, UFS, ISAGRI, Agro
+// Matin) — abandonné par Charles-Henri lui-même ("Laisse tomber pour les flux"). Ce qui suit
+// est donc une détection de CHANGEMENT DE PAGE, pas un flux structuré : on récupère le HTML
+// d'une page (via un proxy CORS public, gratuit, sans inscription — un simple fetch() direct
+// échoue sur la quasi-totalité de ces sites, qui n'exposent pas d'en-têtes CORS), on en isole
+// une zone (si un sélecteur CSS est configuré, sinon un repli générique qui retire menus/pubs/
+// scripts), on en garde une empreinte, et on compare à la précédente lors de la prochaine
+// vérification. "Paramétrable par site" = chaque source porte ses propres `watchUrl` (si l'URL
+// à surveiller diffère du lien affiché) et `watchSelector` (la zone précise à comparer) —
+// JAMAIS un script générique unique pour les 16 sources, impossible vu à quel point leurs pages
+// diffèrent. Le bouton "🔍 Tester" de js/views/veille.js permet de vérifier/ajuster ces deux
+// champs contre la vraie page AVANT de les enregistrer, sans quoi régler un sélecteur à l'aveugle
+// n'aurait aucun sens. Vérification toujours MANUELLE (un bouton), jamais en tâche de fond —
+// même principe que partout ailleurs dans l'app, et une façon de ne pas solliciter sans retenue
+// un service public gratuit, sans garantie de disponibilité, qu'on ne contrôle pas.
 
 import * as storage from "../services/storage.js";
 
@@ -41,6 +60,13 @@ export async function createSource(data) {
     url: (data.url || "").trim(),
     category: CATEGORY_MAP[data.category] ? data.category : CATEGORIES[0].key,
     notes: (data.notes || "").trim(),
+    // Détection de nouveautés (voir le commentaire d'en-tête du fichier) — optionnelle, désactivée
+    // par défaut. Passée ici (plutôt que seulement via updateSource) pour que STARTER_SOURCES
+    // ci-dessous puisse l'activer dès l'import sur les sources qui en bénéficient le plus (celles
+    // sans flux RSS), sans étape manuelle supplémentaire.
+    watchEnabled: !!data.watchEnabled,
+    watchUrl: (data.watchUrl || "").trim(),
+    watchSelector: (data.watchSelector || "").trim(),
   });
 }
 
@@ -64,6 +90,117 @@ export function subscribe(callback) {
   return storage.subscribe(COLLECTION, callback, { sort: false });
 }
 
+// Proxy CORS public, gratuit, sans inscription ni clé API — nécessaire car la quasi-totalité des
+// sites de veille ciblés ne renvoient pas d'en-tête CORS autorisant un fetch() direct depuis le
+// navigateur. Choisi pour rester à coût et configuration nuls (contrainte explicite de
+// Charles-Henri : "je veux rester gratuit") plutôt qu'un service avec compte/clé API (rss2json...)
+// ou une fonction serverless (Firebase Cloud Functions, qui imposerait le plan payant à l'usage).
+// Contrepartie assumée : ressource communautaire sans garantie de disponibilité — un échec
+// (`error: "fetch_failed"`) est une situation normale et prévue, jamais traitée comme "rien n'a
+// changé".
+const PROXY_URL = "https://api.allorigins.win/raw?url=";
+const PROXY_TIMEOUT_MS = 15000;
+
+/** Empreinte simple (non cryptographique, suffisante pour détecter un changement) d'une chaîne. */
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16);
+}
+
+/**
+ * Isole le texte à comparer dans une page HTML récupérée. Avec `selector` : prend le texte de CE
+ * nœud précis (la zone configurée pour CE site) — si introuvable, erreur explicite plutôt qu'un
+ * repli silencieux (le site a probablement changé de structure, mieux vaut le savoir que
+ * continuer à comparer autre chose sans le dire). Sans `selector` : repli générique qui retire
+ * les zones quasi certainement sans rapport avec le contenu (menus, pubs, scripts) avant de
+ * prendre le texte restant — imparfait (peut encore inclure des blocs "articles les plus lus" qui
+ * bougent sans rapport avec une vraie nouveauté), un sélecteur précis reste préférable dès qu'il
+ * est identifié via le bouton "🔍 Tester".
+ */
+function extractTextForWatch(html, selector) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  let root;
+  if (selector) {
+    root = doc.querySelector(selector);
+    if (!root) return { text: null, error: "selector_not_found" };
+  } else {
+    root = doc.body.cloneNode(true);
+    root.querySelectorAll("script, style, nav, header, footer, aside, iframe, noscript").forEach((el) => el.remove());
+  }
+  const text = (root.textContent || "").replace(/\s+/g, " ").trim();
+  if (!text) return { text: null, error: "empty" };
+  return { text, error: null };
+}
+
+/** Libellés humains des codes d'erreur renvoyés par `previewWatch()`/`checkSourceForChanges()`. */
+export const WATCH_ERROR_LABELS = {
+  no_url: "Aucune URL à surveiller",
+  fetch_failed: "Échec de récupération (site ou proxy indisponible pour l'instant)",
+  selector_not_found: "Sélecteur introuvable sur la page (le site a peut-être changé de structure)",
+  empty: "Aucun contenu trouvé à cet endroit",
+};
+
+/**
+ * Récupère et analyse une page SANS rien écrire — utilisé par le bouton "🔍 Tester" de la modale
+ * (contre les valeurs de champs en cours de saisie, pas encore enregistrées) et en interne par
+ * `checkSourceForChanges()`.
+ * @param {{url?:string, watchUrl?:string, watchSelector?:string}} fields
+ * @returns {Promise<{ok:boolean, error?:string, text?:string, hash?:string, preview?:string}>}
+ */
+export async function previewWatch({ url, watchUrl, watchSelector } = {}) {
+  const target = (watchUrl || url || "").trim();
+  if (!target) return { ok: false, error: "no_url" };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+  let html;
+  try {
+    const res = await fetch(PROXY_URL + encodeURIComponent(target), { signal: controller.signal });
+    if (!res.ok) return { ok: false, error: "fetch_failed" };
+    html = await res.text();
+  } catch {
+    return { ok: false, error: "fetch_failed" };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const { text, error } = extractTextForWatch(html, (watchSelector || "").trim());
+  if (error) return { ok: false, error };
+  return { ok: true, text, hash: simpleHash(text), preview: text.slice(0, 220) };
+}
+
+/**
+ * Vérifie une source déjà enregistrée et persiste le résultat (empreinte, horodatage, erreur
+ * éventuelle). Ne marque "🆕 nouveauté" que si une empreinte précédente existait déjà — la toute
+ * première vérification établit seulement une référence, jamais un faux "du nouveau" immédiat.
+ */
+export async function checkSourceForChanges(source) {
+  const result = await previewWatch({ url: source.url, watchUrl: source.watchUrl, watchSelector: source.watchSelector });
+  const now = Date.now();
+  if (!result.ok) {
+    await updateSource(source.id, { lastCheckedAt: now, lastCheckError: result.error });
+    return result;
+  }
+  const changed = !!source.lastContentHash && result.hash !== source.lastContentHash;
+  const patch = { lastContentHash: result.hash, lastCheckedAt: now, lastCheckError: "" };
+  if (changed) patch.lastChangedAt = now;
+  await updateSource(source.id, patch);
+  return { ...result, changed };
+}
+
+/** `true` si cette source est surveillée ET porte une nouveauté pas encore "vue" (lien cliqué). */
+export function hasNewContent(source) {
+  return !!(source.watchEnabled && source.lastChangedAt && source.lastChangedAt > (source.lastAcknowledgedAt || 0));
+}
+
+/** À appeler quand l'utilisateur clique le lien d'une source surveillée — efface le badge "🆕". */
+export async function acknowledgeSource(id) {
+  return storage.setFields(COLLECTION, id, { lastAcknowledgedAt: Date.now() });
+}
+
 /**
  * Liste de départ proposée à Charles-Henri, construite avec lui le 02/10/2026 (voir
  * claude/sources-veille-02-10-2026.md pour le détail et les sources écartées par prudence).
@@ -73,8 +210,13 @@ export function subscribe(callback) {
  * prudence que partout ailleurs dans l'app pour une action qui écrit plusieurs fiches d'un coup).
  */
 export const STARTER_SOURCES = [
-  { title: "SEMAE — réglementation semences", url: "https://www.semae.fr/reglementation-semences/", category: "reglementation", notes: "Interprofession semences (ex-GNIS) — publie directement la réglementation." },
-  { title: "UFS — À la une", url: "https://www.ufs-semenciers.org/alaune/", category: "reglementation", notes: "Union Française des Semenciers — prises de position sur les textes en cours (NGT, CIR...)." },
+  // `watchEnabled: true` sur ces deux-là seulement (02/10/2026) : ce sont les deux sources les
+  // plus "flux" sans aucun flux RSS disponible par ailleurs (voir le commentaire d'en-tête du
+  // fichier) — celles où la détection de changement de page apporte le plus. `watchSelector`
+  // volontairement vide au départ (repli générique) : à affiner via le bouton "🔍 Tester" de la
+  // modale d'édition une fois la page réellement observée, pas deviné depuis ce fichier.
+  { title: "SEMAE — réglementation semences", url: "https://www.semae.fr/reglementation-semences/", category: "reglementation", notes: "Interprofession semences (ex-GNIS) — publie directement la réglementation.", watchEnabled: true },
+  { title: "UFS — À la une", url: "https://www.ufs-semenciers.org/alaune/", category: "reglementation", notes: "Union Française des Semenciers — prises de position sur les textes en cours (NGT, CIR...).", watchEnabled: true },
   { title: "Ministère de l'Agriculture — Bulletin officiel (BO Agri)", url: "https://info.agriculture.gouv.fr/gedei/site/bo-agri/", category: "reglementation", notes: "Textes réglementaires officiels, inclut des RTA semences certifiées." },
   { title: "Ministère de l'Agriculture — Les actualités", url: "https://agriculture.gouv.fr/les-actualites", category: "reglementation", notes: "Fil d'actualités générales du ministère." },
   { title: "Alim'agri — le magazine du ministère", url: "https://agriculture.gouv.fr/alimagri-le-magazine-du-ministere", category: "reglementation", notes: "Format magazine, plus digeste que le Bulletin officiel." },
