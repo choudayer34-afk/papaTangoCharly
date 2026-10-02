@@ -52,6 +52,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → \"📖 Guide\" → rubrique \"🛠️ Mettre en place sa veille externe\".",
         gain: "Un seul geste quotidien (Feedly + dossier mail + badges 🆕 de l'écran Veille) plutôt qu'une tournée d'onglets, avec la marche à suivre pour y arriver détaillée une bonne fois pour toutes.",
       },
+      {
+        type: "add",
+        title: "🏢 Veille concurrentielle enrichie (CA, LinkedIn, Pappers, benchmark)",
+        text: "Les sources de catégorie \"🏢 Marché / concurrence\" portent désormais trois champs dédiés (CA, LinkedIn, Pappers) en plus du titre/lien/note habituels. Pilotage ne pouvant pas interroger LinkedIn ou Pappers tout seul (ni compte ni clé API), un bouton \"📋 Générer la demande de recherche\" prépare un texte prêt à coller dans une conversation avec Claude, qui fait la recherche et renvoie de quoi compléter la fiche. Même principe pour découvrir de nouveaux concurrents par mot-clé (\"🔎 Chercher de nouveaux concurrents\", en haut de la section). Un bouton \"📊 Benchmark\" compile toutes les fiches concurrence déjà renseignées en un seul tableau comparatif (CA, dernière note, liens).",
+        howTo: "☰ Plus → \"📡 Veille\" → section \"🏢 Marché / concurrence\" → \"🔎 Chercher de nouveaux concurrents\" ou \"📊 Benchmark\" en haut de la section, et \"📋 Générer la demande de recherche\" dans la fiche ✏️ d'un concurrent.",
+        gain: "Un point d'entrée unique pour la veille concurrentielle (CA, actualités, évolutions), sans avoir à rouvrir LinkedIn/Pappers à chaque fois pour s'en souvenir soi-même, et une vue d'ensemble pour comparer les concurrents entre eux d'un coup d'œil.",
+      },
     ],
   },
   {
