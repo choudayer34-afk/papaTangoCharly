@@ -11,6 +11,7 @@ import { renderCalendar } from "./views/calendar.js";
 import { renderPriorisation } from "./views/priorisation.js";
 import { renderResources } from "./views/resources.js";
 import { renderPrompts } from "./views/prompts.js";
+import { renderVeille } from "./views/veille.js";
 import { renderMore } from "./views/more.js";
 import { renderGuide } from "./views/guide.js";
 import { renderWhatsNew } from "./views/whatsnew.js";
@@ -72,6 +73,12 @@ const ROUTES = {
   "#/priorisation": { render: renderPriorisation, label: "Priorisation", icon: "🎯" },
   "#/resources": { render: renderResources, label: "Ressources", icon: "📎" },
   "#/prompts": { render: renderPrompts, label: "Prompts", icon: "🤖" },
+  // 📡 Veille (01-02/10/2026) — même principe que Ressources/Prompts juste au-dessus : une
+  // bibliothèque consultée depuis ☰ Plus par défaut (js/views/more.js), mais enregistrée dans
+  // ROUTES (pas HIDDEN_ROUTES) pour rester personnalisable comme elles dans la barre du bas
+  // (js/services/navConfig.js#MODULE_CATALOG) — contrairement à Guide/Nouveautés/Mémoire, de
+  // pures pages de référence jamais pinnables.
+  "#/veille": { render: renderVeille, label: "Veille", icon: "📡" },
   "#/more": { render: renderMore, label: "Plus", icon: "☰" },
 };
 
