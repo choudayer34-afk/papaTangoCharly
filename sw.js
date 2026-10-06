@@ -723,7 +723,11 @@
 // recopier). js/domain/veille.js (catégorie "outils", raccourcis proposés, requêtes Google Alerts),
 // js/views/veille.js (zone "🔗 Accès rapide" + fenêtre "🔔 Requêtes Google Alerts"),
 // styles/components.css, entrée js/views/whatsnew.js. Aucun nouveau fichier.
-const CACHE_NAME = "pilotage-cache-v111";
+// v112 (06/10/2026) — retour direct de Charles-Henri : "quand je clique sur vérifier, je sais pas trop ce
+// qu'il se passe [...] où il en est par point et la progression ?". js/domain/veille.js (progression
+// remontée par previewWatch/checkSourceForChanges, indicateur "première vérification"), js/views/veille.js
+// (panneau de progression), styles/components.css, entrée js/views/whatsnew.js. Aucun nouveau fichier.
+const CACHE_NAME = "pilotage-cache-v112";
 const APP_SHELL = [
   "./",
   "./index.html",
