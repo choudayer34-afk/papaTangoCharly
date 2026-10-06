@@ -35,6 +35,7 @@
 // un service public gratuit, sans garantie de disponibilité, qu'on ne contrôle pas.
 
 import * as storage from "../services/storage.js";
+import { RESEARCH_JSON_TEMPLATE } from "./veilleResearchImport.js";
 
 const COLLECTION = "veilleSources";
 
@@ -336,6 +337,17 @@ export function hasNewContent(source) {
  * en particulier avec Perplexity (que Charles-Henri utilise pour coller cette demande) — un outil
  * de recherche justement construit autour de la citation de ses sources, donc une demande qui tire
  * parti de ce point fort plutôt que de l'ignorer.
+ *
+ * Refonte du 06/10/2026 (retour direct : "la recherche sur les concurrents devrait pouvoir se faire
+ * beaucoup plus facilement et de manière automatisée via les IA" — option "A. Import en 1 clic"
+ * choisie via AskUserQuestion) : la demande exige désormais UNE réponse en bloc JSON au modèle de
+ * js/domain/veilleResearchImport.js#RESEARCH_JSON_TEMPLATE, que js/views/veille.js (bouton
+ * "📥 Remplir la fiche") lit et déverse dans TOUS les champs du formulaire d'un coup, plus
+ * d'aller-retour champ par champ. Les liens sources passent dans une clé "sources" (reprise dans la
+ * Note, datée du jour) au lieu d'être glissés dans le texte, et les 2 curseurs de positionnement
+ * sont désormais DEMANDÉS comme estimations (ce qui contredit le paragraphe du 02/10/2026 plus haut,
+ * à dessein : Charles-Henri a confirmé l'import "CA, SWOT, note, sources, scores") — ils ne sont
+ * jamais que des propositions, relues et corrigeables dans le formulaire avant l'enregistrement.
  */
 export function competitorResearchPrompt(source) {
   const lines = [
@@ -358,9 +370,16 @@ export function competitorResearchPrompt(source) {
     "",
     "Pour le point \"leurs forces\", compare-les aussi à Agreo Seeds (éditeur SMAG, groupe InVivo) : logiciel de gestion de production de semences (planification, suivi, traçabilité champ → usine, facturation). Donne la force d'Agreo face à CE concurrent précis, en te basant uniquement sur de l'info publique sur Agreo (ne pas inventer de retours clients ou de roadmap qui ne seraient pas publics).",
     "",
-    "Indique le lien de la source à côté de chaque information quand c'est possible, pour que je puisse vérifier et dater l'info.",
+    "Réponds UNIQUEMENT avec un bloc de code JSON (sans aucun texte avant ni après), exactement sur ce modèle — Pilotage le lira pour remplir la fiche automatiquement :",
     "",
-    "Réponds champ par champ, de façon synthétique, pour que je puisse coller directement le résultat dans sa fiche dans Pilotage (champs CA, LinkedIn, Pappers, Note, puis dans la section \"🎯 Fiche comparative face à Agreo\" : Résumé, Leurs forces, Leurs faiblesses, Opportunités, Menaces, Force d'Agreo).",
+    "```json",
+    RESEARCH_JSON_TEMPLATE,
+    "```",
+    "",
+    "Règles du JSON :",
+    "- Chaque champ texte est une chaîne (plusieurs points = lignes commençant par \"- \", séparées par \\n). Si une info est introuvable, mets une chaîne vide : n'invente rien.",
+    "- \"specialisation\" : nombre de 0 à 10 (0 = éditeur généraliste, 10 = spécialiste pur de la production de semences). \"visibilite_roadmap\" : nombre de 0 à 10 (0 = aucune visibilité publique sur leurs évolutions, 10 = feuille de route et demandes clients entièrement publiques). Ce sont des estimations que je corrigerai.",
+    "- Pas de marqueurs de citation du type [1] dans les valeurs : mets les liens dans \"sources\" (un par information importante : CA, actualités, point clé), pour que je puisse vérifier et dater l'info.",
   ].filter((l) => l !== null);
   return lines.join("\n");
 }
