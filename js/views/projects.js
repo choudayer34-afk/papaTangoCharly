@@ -33,6 +33,7 @@ import * as projectHealthApi from "../domain/projectHealth.js";
 import { renderProjectHealth } from "../components/projectHealth.js";
 import { renderTagsEditor } from "../components/tagsEditor.js";
 import { guideLinkHtml } from "./guide.js";
+import { attachDragReorder } from "../components/dragReorder.js";
 
 // Légende ⓘ (audit de simplification du 02/09/2026) : la fiche Projet est le seul écran où les
 // trois vocabulaires de statut de l'app coexistent côte à côte (Tâches, Suivis, Sous-parties) —
@@ -1125,12 +1126,27 @@ export async function openProjectDetail(project, tasks) {
   // Ordre d'affichage + édition en place (28/09/2026, retour direct de Charles-Henri : "les 🧩
   // Sous-parties dans un projet doivent s'ordonner avec les mêmes règles que les checklist") —
   // même principe que `js/components/checklist.js` : les Sous-parties non "Terminé" restent en
-  // tête dans leur ordre manuel (▲/▼, comme `onReorder`), les "Terminé" descendent en bas triées
+  // tête dans leur ordre manuel (glisser-déposer par appui maintenu depuis le 06/10/2026, comme `onReorder`), les "Terminé" descendent en bas triées
   // par date de passage à "Terminé" la plus récente en premier (voir
   // `projectsApi.sortPartsForDisplay`, qui traite "Pas commencé" et "En cours" identiquement comme
   // "non coché" — seul le passage à "Terminé" a le sens de "coché" ici). Le libellé s'édite en
   // place via "✏️" (comme `onEdit`), jamais de modale pour un simple texte.
   const partsEl = body.querySelector("#detail-parts");
+  // Réordonnancement par appui maintenu + glissement (js/components/dragReorder.js) — remplace les
+  // boutons ▲/▼ d'origine (06/10/2026, retour de Charles-Henri : "partout pareil, comme les post-it").
+  // Seules les Sous-parties non "Terminé" sont déplaçables (voir `drag-reorder-row` dans renderParts).
+  attachDragReorder(partsEl, {
+    getCurrentOrder: () =>
+      projectsApi
+        .sortPartsForDisplay(project.parts || [])
+        .filter((p) => p.status !== "done")
+        .map((p) => p.id),
+    onReorder: async (orderedIds) => {
+      const updatedParts = await projectsApi.reorderParts(project.id, orderedIds);
+      project.parts = updatedParts || project.parts;
+    },
+    rerender: () => renderParts(),
+  });
   function renderParts() {
     const currentParts = project.parts || [];
     if (!currentParts.length) {
@@ -1139,7 +1155,6 @@ export async function openProjectDetail(project, tasks) {
     }
     partsEl.innerHTML = "";
     const visible = projectsApi.sortPartsForDisplay(currentParts);
-    const notDoneIds = visible.filter((p) => p.status !== "done").map((p) => p.id);
     for (const part of visible) {
       const partNotes = part.notesLog || [];
       const lastNote = partNotes.length ? [...partNotes].sort((a, b) => b.createdAt - a.createdAt)[0] : null;
@@ -1154,38 +1169,10 @@ export async function openProjectDetail(project, tasks) {
       const titleEl = row.querySelector(".item-title");
       titleEl.textContent = part.label;
 
-      // ▲/▼ — uniquement sur les Sous-parties non "Terminé", même principe et même classe
-      // (`.kanban-move-btn`) que `js/components/checklist.js`.
+      // Sous-partie non "Terminé" : ligne déplaçable par appui maintenu + glissement (plus de ▲/▼).
       if (part.status !== "done") {
-        const pos = notDoneIds.indexOf(part.id);
-        const upBtn = document.createElement("button");
-        upBtn.type = "button";
-        upBtn.className = "kanban-move-btn";
-        upBtn.setAttribute("aria-label", "Monter");
-        upBtn.title = "Monter";
-        upBtn.textContent = "▲";
-        if (pos <= 0) upBtn.disabled = true;
-        const downBtn = document.createElement("button");
-        downBtn.type = "button";
-        downBtn.className = "kanban-move-btn";
-        downBtn.setAttribute("aria-label", "Descendre");
-        downBtn.title = "Descendre";
-        downBtn.textContent = "▼";
-        if (pos < 0 || pos >= notDoneIds.length - 1) downBtn.disabled = true;
-        async function move(direction) {
-          const from = notDoneIds.indexOf(part.id);
-          const to = direction === "up" ? from - 1 : from + 1;
-          if (from < 0 || to < 0 || to >= notDoneIds.length) return;
-          const reordered = [...notDoneIds];
-          [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
-          const updatedParts = await projectsApi.reorderParts(project.id, reordered);
-          project.parts = updatedParts || project.parts;
-          renderParts();
-        }
-        upBtn.addEventListener("click", () => move("up"));
-        downBtn.addEventListener("click", () => move("down"));
-        row.appendChild(upBtn);
-        row.appendChild(downBtn);
+        row.classList.add("drag-reorder-row");
+        row.dataset.dragId = part.id;
       }
 
       // ✏️ — édition en place du libellé, même principe que `js/components/checklist.js`.
