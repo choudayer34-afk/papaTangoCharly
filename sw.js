@@ -700,7 +700,18 @@
 // que Charles-Henri utilise). `js/domain/veille.js`, `js/views/veille.js` et `js/views/whatsnew.js`
 // (entrée précédente amendée plutôt que dupliquée, livrée le même jour) modifiés, aucun nouveau
 // fichier. `CACHE_NAME` incrémenté en conséquence.
-const CACHE_NAME = "pilotage-cache-v108";
+// v109 (06/10/2026) — deux retours directs de Charles-Henri : (1) "la recherche sur les concurrents
+// devrait pouvoir se faire beaucoup plus facilement et de manière automatisée via les IA" — option
+// "A. Import en 1 clic" (nouveau js/domain/veilleResearchImport.js, js/domain/veille.js#
+// competitorResearchPrompt qui exige désormais une réponse JSON, js/views/veille.js : bloc "🤖
+// Recherche assistée par IA" dans la fiche d'un concurrent, styles/components.css) ; (2) "sur les
+// post-it, je n'aime pas les boutons de navigation sur les éléments" — lignes de checklist de
+// post-it épurées (js/components/checklist.js `compactActions` : clic sur le texte = barre
+// d'actions, appui maintenu + glisser = déplacer ; js/components/stickyNoteShared.js : option
+// activée pour les post-it + "Projet" ajouté à "Créer depuis cette ligne"). Deux specs e2e existants
+// adaptés (clic sur le texte avant le bouton "Créer…"), un nouveau spec unitaire pour le parseur,
+// entrée "6 octobre 2026" dans js/views/whatsnew.js.
+const CACHE_NAME = "pilotage-cache-v109";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -774,6 +785,7 @@ const APP_SHELL = [
   // CACHE_NAME) : ajouté à APP_SHELL dès sa création, même règle que tous les nouveaux fichiers
   // précédents de ce document.
   "./js/domain/veille.js",
+  "./js/domain/veilleResearchImport.js",
   "./js/components/modal.js",
   // BUG corrigé (21/09/2026, même correctif que le bump de CACHE_NAME ci-dessus) : ce fichier
   // (LOT 1, TODO-006, "validation partagée") n'avait jamais été ajouté ici depuis sa création —
