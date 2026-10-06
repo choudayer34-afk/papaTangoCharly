@@ -267,6 +267,7 @@ export function renderVeille(container) {
           "📖 Voir la méthode complète dans le guide"
         )}
       </p>
+      <div id="veille-check-progress"></div>
       <div id="veille-quick-access"></div>
       <div id="veille-starter-prompt"></div>
       <div id="veille-sections"></div>
@@ -277,6 +278,7 @@ export function renderVeille(container) {
   const checkBtn = container.querySelector("#veille-check-btn");
   const starterEl = container.querySelector("#veille-starter-prompt");
   const quickAccessEl = container.querySelector("#veille-quick-access");
+  const checkProgressEl = container.querySelector("#veille-check-progress");
   const sectionsEl = container.querySelector("#veille-sections");
 
   newBtn.addEventListener("click", () => openSourceModal());
@@ -291,16 +293,91 @@ export function renderVeille(container) {
     guardClick(checkBtn, async () => {
       const watched = currentSources.filter((s) => s.watchEnabled);
       if (!watched.length) return;
-      checkBtn.textContent = "🔍 Vérification…";
-      let changed = 0;
-      let failed = 0;
-      for (const source of watched) {
-        const result = await veilleApi.checkSourceForChanges(source);
-        if (!result.ok) failed++;
-        else if (result.changed) changed++;
+      // Panneau de progression (06/10/2026, retour de Charles-Henri : "quand je clique sur vérifier, je
+      // sais pas trop ce qu'il se passe, y'a moyen de voir ce qu'il fait, où il en est par point et la
+      // progression ?") : une ligne par source avec son état en direct + une barre globale. Les
+      // vérifications restent séquentielles (voir plus haut) — c'est ce qui rend la progression lisible.
+      const rows = watched.map((source) => ({ source, status: "pending", text: "En attente" }));
+      let finished = false;
+      const doneCount = () => rows.filter((r) => r.status !== "pending" && r.status !== "running").length;
+      const renderProgress = () => {
+        const done = doneCount();
+        const pct = Math.round((done / rows.length) * 100);
+        const ICONS = { pending: "⏳", running: "🔄", unchanged: "✅", first: "📌", changed: "🆕", failed: "⚠️" };
+        const changed = rows.filter((r) => r.status === "changed").length;
+        const failed = rows.filter((r) => r.status === "failed").length;
+        checkProgressEl.innerHTML = `
+          <div class="card veille-check-panel" role="status" aria-live="polite">
+            <div class="veille-quick-head">
+              <div class="item-title">🔍 Vérification des sources — ${done} / ${rows.length}</div>
+              ${finished ? `<button type="button" class="btn btn-ghost btn-sm veille-check-close" aria-label="Fermer le détail de la vérification">Fermer</button>` : ""}
+            </div>
+            <div class="veille-check-bar" role="progressbar" aria-valuemin="0" aria-valuemax="${rows.length}" aria-valuenow="${done}">
+              <div class="veille-check-bar-fill" style="width:${pct}%"></div>
+            </div>
+            <ul class="veille-check-list">
+              ${rows
+                .map(
+                  (r) => `<li class="veille-check-row veille-check-row--${r.status}">
+                    <span class="veille-check-icon" aria-hidden="true">${ICONS[r.status]}</span>
+                    <span class="veille-check-main"><strong>${escapeHtml(r.source.title)}</strong><span class="item-meta">${escapeHtml(r.text)}</span></span>
+                  </li>`
+                )
+                .join("")}
+            </ul>
+            ${
+              finished
+                ? `<div class="item-meta" style="margin-top:8px;">Terminé : ${rows.length} vérifiée${rows.length > 1 ? "s" : ""}${
+                    changed ? ` · ${changed} nouveauté${changed > 1 ? "s" : ""}` : " · aucune nouveauté"
+                  }${failed ? ` · ${failed} échec${failed > 1 ? "s" : ""}` : ""}.</div>`
+                : ""
+            }
+          </div>`;
+        checkProgressEl.querySelector(".veille-check-close")?.addEventListener("click", () => {
+          checkProgressEl.innerHTML = "";
+        });
+        // Garde la ligne en cours visible dans la liste si elle déborde (nombreuses sources).
+        checkProgressEl.querySelector(".veille-check-row--running")?.scrollIntoView?.({ block: "nearest" });
+      };
+      renderProgress();
+      checkBtn.textContent = `🔍 Vérification 0/${rows.length}…`;
+      for (const row of rows) {
+        row.status = "running";
+        row.text = "Récupération de la page…";
+        renderProgress();
+        const result = await veilleApi.checkSourceForChanges(row.source, {
+          onProgress: (p) => {
+            row.text =
+              p.step === "analyse"
+                ? "Analyse de la page…"
+                : p.total > 1
+                ? `Récupération de la page… (essai ${p.attempt}/${p.total} — ${p.proxy})`
+                : "Récupération de la page…";
+            renderProgress();
+          },
+        });
+        if (!result.ok) {
+          row.status = "failed";
+          row.text = `${veilleApi.WATCH_ERROR_LABELS[result.error] || result.error}${result.detail ? ` (${result.detail})` : ""}`;
+        } else if (result.changed) {
+          row.status = "changed";
+          row.text = "Nouveauté détectée — la page a changé depuis la dernière vérification";
+        } else if (result.firstCheck) {
+          row.status = "first";
+          row.text = "Première vérification : référence enregistrée (les prochaines détecteront les changements)";
+        } else {
+          row.status = "unchanged";
+          row.text = "Rien de nouveau depuis la dernière vérification";
+        }
+        checkBtn.textContent = `🔍 Vérification ${doneCount()}/${rows.length}…`;
+        renderProgress();
       }
+      finished = true;
+      renderProgress();
       checkBtn.textContent = "🔍 Vérifier";
-      const parts = [`${watched.length} vérifiée${watched.length > 1 ? "s" : ""}`];
+      const changed = rows.filter((r) => r.status === "changed").length;
+      const failed = rows.filter((r) => r.status === "failed").length;
+      const parts = [`${rows.length} vérifiée${rows.length > 1 ? "s" : ""}`];
       if (changed) parts.push(`${changed} nouveauté${changed > 1 ? "s" : ""}`);
       if (failed) parts.push(`${failed} échec${failed > 1 ? "s" : ""}`);
       showToast(parts.join(" · "));
