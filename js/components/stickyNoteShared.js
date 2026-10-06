@@ -26,6 +26,7 @@ import { openCreateTaskModal } from "../views/kanban.js";
 import { openCreateResourceModal } from "../views/resources.js";
 import { openCreateFollowUpModal } from "../views/people.js";
 import { openCreateDecisionModal } from "../views/dashboard.js";
+import { openCreateProjectModal } from "../views/projects.js";
 import { openKeptItemDetail } from "../views/inbox.js";
 import { renderChecklist } from "./checklist.js";
 import { openModal, closeModal, confirmDelete } from "./modal.js";
@@ -50,6 +51,12 @@ export const CONVERT_CHOICES = [
   { key: "kept", emoji: "🧠", label: "Information" },
 ];
 
+// Choix de conversion d'une LIGNE de checklist (06/10/2026, retour de Charles-Henri : "dans le créer
+// depuis cette ligne, je dois pouvoir également transformer en projet") — les mêmes choix que pour
+// un post-it entier, plus "Projet". Volontairement PAS ajouté à CONVERT_CHOICES : la conversion du
+// post-it ENTIER (menu "⋯" du post-it) n'a pas été demandée avec "Projet" et reste inchangée.
+export const LINE_CONVERT_CHOICES = [...CONVERT_CHOICES, { key: "project", emoji: "📁", label: "Projet" }];
+
 export function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str || "";
@@ -60,10 +67,10 @@ export function escapeAttr(str) {
   return escapeHtml(str).replace(/"/g, "&quot;");
 }
 
-export function buildConvertChoiceGrid(onChoose) {
+export function buildConvertChoiceGrid(onChoose, choices = CONVERT_CHOICES) {
   const grid = document.createElement("div");
   grid.className = "choice-grid";
-  for (const choice of CONVERT_CHOICES) {
+  for (const choice of choices) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "choice-btn";
@@ -89,6 +96,8 @@ export function renderNoteBody(bodyEl, note, { onLineConvertClose } = {}) {
     renderChecklist(bodyEl, note.checklist || [], {
       emptyLabel: "Rien de noté pour l'instant.",
       sortDoneToBottom: true,
+      // Post-it : pas de rangée de boutons par ligne (retour du 06/10/2026, voir checklist.js).
+      compactActions: true,
       onAdd: async (text) => {
         const item = await stickyNotesApi.addChecklistItem(note.id, text);
         note.checklist = item ? [...(note.checklist || []), item] : note.checklist;
@@ -286,7 +295,7 @@ function openLineConvertModal(note, item, { onClose } = {}) {
     buildConvertChoiceGrid((key) => {
       closeModal();
       convertLine(note, item, key);
-    })
+    }, LINE_CONVERT_CHOICES)
   );
   openModal({ title: "Créer depuis cette ligne", body, actions: [{ label: "Annuler", variant: "ghost" }], onClose });
 }
@@ -309,6 +318,10 @@ async function convertLine(note, item, key) {
     openCreateDecisionModal({ title: text, onCreated: afterCreate });
   } else if (key === "kept") {
     await convertToInformation(text, "", afterCreate);
+  } else if (key === "project") {
+    // Seul le NOM est prérempli (la ligne), comme pour la Tâche ci-dessus ; la ligne n'est retirée
+    // qu'une fois le projet réellement créé (jamais si la modale est annulée).
+    openCreateProjectModal({ name: text, onCreated: afterCreate });
   }
 }
 
