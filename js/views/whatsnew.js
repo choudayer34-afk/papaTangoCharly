@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "6 octobre 2026",
     items: [
       {
+        type: "change",
+        title: "🔍 Veille : la vérification se suit en direct",
+        text: "Quand tu cliques sur \"🔍 Vérifier\", un panneau affiche la progression (barre et compteur \"2 / 4\") et l'état de chaque source : en attente, en cours (avec l'essai de connexion), rien de nouveau, nouveauté détectée, première vérification (référence enregistrée) ou échec avec sa raison. Le détail reste affiché à la fin, jusqu'à ce que tu le fermes.",
+        howTo: "☰ Plus → \"📡 Veille\" → \"🔍 Vérifier\" : suis les lignes qui se mettent à jour ; \"Fermer\" masque le détail.",
+        gain: "Plus de doute sur ce que fait le bouton : tu vois où il en est et pourquoi une source a échoué.",
+      },
+      {
         type: "add",
         title: "🔗 Veille : accès direct à tes outils et à ta boîte mail",
         text: "En haut de l'écran Veille, une zone \"Accès rapide\" ouvre en un clic tes outils tiers et ta messagerie dans un nouvel onglet. Une première liste est proposée (boîte mail à renseigner, Google Alerts, Perplexity, Pappers, LinkedIn) ; tu peux modifier chaque raccourci (✏️) ou en ajouter (+ Raccourci). Pilotage n'enregistre que le lien — jamais d'identifiant ni de mot de passe. Un bouton \"🔔 Requêtes Google Alerts\" donne aussi la liste des alertes conseillées, à copier une par une.",
