@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "6 octobre 2026",
     items: [
       {
+        type: "change",
+        title: "↕️ Réordonner par glisser-déposer, partout pareil",
+        text: "Les boutons ▲/▼ disparaissent : pour déplacer un élément, maintiens-le appuyé (clic maintenu à la souris, appui long sur mobile) puis glisse-le. C'est désormais le même geste dans les sous-étapes des Tâches et des Suivis, les Sous-parties d'un Projet, l'ordre des rubriques de l'Accueil et la barre de navigation, comme sur les post-it. Les éléments terminés restent classés automatiquement, comme avant.",
+        howTo: "Maintiens une ligne appuyée une fraction de seconde, puis glisse-la à sa nouvelle place et relâche. Pour faire défiler la page normalement, glisse sans t'arrêter.",
+        gain: "Un seul geste à retenir pour déplacer quelque chose, au lieu d'une série de clics ▲/▼.",
+      },
+      {
         type: "add",
         title: "🤖 Fiche concurrent : remplissage en un clic avec l'IA",
         text: "Dans la fiche d'un concurrent, un nouveau bloc \"🤖 Recherche assistée par IA\" prépare la demande (au bon format) et lit la réponse de l'IA pour remplir d'un coup le CA, la Note (avec les actualités et les sources datées), le résumé, le SWOT complet, la Force d'Agreo et les 2 curseurs de positionnement. Les champs remplis sont surlignés pour que tu les relises ; rien n'est enregistré avant ton clic sur \"Enregistrer\".",
