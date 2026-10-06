@@ -296,6 +296,53 @@ function buildAlertProcedure(source, { inForm = false } = {}) {
   return wrap;
 }
 
+// 🆕 "Voir ce qui a changé" (06/10/2026, retour de Charles-Henri : "est-ce qu'on peut voir les nouveautés
+// détectées ?" — réponse choisie : le texte nouveau). Affiche les lignes apparues sur la page depuis la
+// vérification précédente (voir js/domain/veilleDiff.js pour le calcul et ses limites). Disponible tant que
+// la nouveauté n'a pas été vue ; "Marquer comme vu" revient à cliquer sur le lien de la source.
+function openChangeDetailsModal(source, detail) {
+  const body = document.createElement("div");
+  const when = detail.at ? new Date(detail.at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" }) : "";
+  let html = when ? `<p class="item-meta" style="margin-top:0;">Détecté le ${escapeHtml(when)}.</p>` : "";
+  if (!detail.hasDetail) {
+    html += `<p>Pilotage n'avait pas encore gardé la version précédente de cette page : il ne peut pas dire ce qui a changé cette fois. C'est fait maintenant — au prochain changement, le détail s'affichera ici. En attendant, « Ouvrir la page » permet de regarder directement.</p>`;
+  } else if (!detail.added.length) {
+    html += `<p>Le contenu de la page a changé, mais aucune nouvelle ligne n'est apparue${
+      detail.removedCount ? ` (${detail.removedCount} ligne${detail.removedCount > 1 ? "s ont" : " a"} disparu)` : ""
+    } : une ligne existante a probablement été retouchée, ou l'ordre a changé.</p>`;
+  } else {
+    html += `<p style="margin-top:0;"><strong>${detail.added.length} nouvelle${detail.added.length > 1 ? "s" : ""} ligne${detail.added.length > 1 ? "s" : ""}</strong> sur la page :</p>
+      <ul class="change-lines">${detail.added.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
+      <p class="item-meta" style="margin-bottom:0;">${
+        detail.removedCount ? `${detail.removedCount} ligne${detail.removedCount > 1 ? "s ont" : " a"} aussi disparu de la page. ` : ""
+      }Une ligne correspond à un bloc de la page : un titre simplement retouché ou une date qui change peut apparaître comme nouveau.${
+        detail.added.length >= 60 ? " Liste limitée aux 60 premières lignes." : ""
+      }</p>`;
+  }
+  body.innerHTML = html;
+  const actions = [{ label: "Fermer", variant: "ghost" }];
+  if (/^https?:\/\//i.test(source.watchUrl || source.url || "")) {
+    actions.push({
+      label: "Ouvrir la page ↗",
+      variant: "secondary",
+      closesModal: false,
+      onClick: () => {
+        window.open(source.watchUrl || source.url, "_blank", "noopener,noreferrer");
+        veilleApi.acknowledgeSource(source.id);
+      },
+    });
+  }
+  actions.push({
+    label: "✔ Marquer comme vu",
+    variant: "primary",
+    onClick: async () => {
+      await veilleApi.acknowledgeSource(source.id);
+      showToast("Nouveauté marquée comme vue");
+    },
+  });
+  openModal({ title: `🆕 Nouveautés — ${source.title}`, body, actions });
+}
+
 function openAlertProcedureModal(source) {
   const body = document.createElement("div");
   const intro = document.createElement("p");
@@ -401,6 +448,10 @@ export function renderVeille(container) {
                     r.status === "short"
                       ? `<button type="button" class="btn btn-secondary btn-sm veille-check-alert-btn" data-row-idx="${rows.indexOf(r)}">🔔 Procédure Google Alerts</button>`
                       : ""
+                  }${
+                    r.status === "changed"
+                      ? `<button type="button" class="btn btn-secondary btn-sm veille-check-changes-btn" data-row-idx="${rows.indexOf(r)}">🆕 Voir ce qui a changé</button>`
+                      : ""
                   }</span>
                   </li>`
                 )
@@ -422,6 +473,12 @@ export function renderVeille(container) {
           </div>`;
         checkProgressEl.querySelectorAll(".veille-check-alert-btn").forEach((btn) => {
           btn.addEventListener("click", () => openAlertProcedureModal(rows[Number(btn.dataset.rowIdx)].source));
+        });
+        checkProgressEl.querySelectorAll(".veille-check-changes-btn").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const row = rows[Number(btn.dataset.rowIdx)];
+            openChangeDetailsModal(row.source, row.detail);
+          });
         });
         checkProgressEl.querySelector(".veille-check-close")?.addEventListener("click", () => {
           checkProgressEl.innerHTML = "";
@@ -456,7 +513,13 @@ export function renderVeille(container) {
           row.text = `Zone lue très courte (${result.text.length} caractères : « ${result.preview} ») — le contenu est probablement chargé par JavaScript et invisible pour Pilotage : aucune nouveauté ne pourra être détectée ici.`;
         } else if (result.changed) {
           row.status = "changed";
-          row.text = "Nouveauté détectée — la page a changé depuis la dernière vérification";
+          row.detail = result.changeDetail;
+          const n = row.detail.added.length;
+          row.text = !row.detail.hasDetail
+            ? "Nouveauté détectée — détail indisponible cette fois (la version précédente n'avait pas été conservée ; le prochain changement sera détaillé)"
+            : n
+            ? `Nouveauté détectée — ${n} nouvelle${n > 1 ? "s" : ""} ligne${n > 1 ? "s" : ""} sur la page`
+            : "Nouveauté détectée — contenu modifié, mais aucune nouvelle ligne repérée";
         } else if (result.firstCheck) {
           row.status = "first";
           row.text = "Première vérification : référence enregistrée (les prochaines détecteront les changements)";
@@ -707,7 +770,7 @@ export function renderVeille(container) {
               source.url
                 ? `<a href="${escapeAttr(source.url)}" target="_blank" rel="noopener" class="item-title">${escapeHtml(source.title)}</a>`
                 : `<div class="item-title">${escapeHtml(source.title)}</div>`
-            }${isNew ? ` <span class="badge badge-new">🆕 Nouveau</span>` : ""}
+            }${isNew ? ` <span class="badge badge-new">🆕 Nouveau</span> <button type="button" class="btn btn-ghost btn-sm veille-changes-btn">Voir ce qui a changé</button>` : ""}
             ${source.notes ? `<div class="item-meta">${escapeHtml(source.notes)}</div>` : ""}
           </div>
           ${
@@ -729,6 +792,9 @@ export function renderVeille(container) {
         // pour une simple consultation). Ouvre la source RÉELLEMENT enregistrée (pas un brouillon
         // de formulaire comme le bouton équivalent à l'intérieur de la fiche d'édition).
         row.querySelector(".veille-fiche-btn")?.addEventListener("click", () => openCompetitorFicheModal(source));
+        row.querySelector(".veille-changes-btn")?.addEventListener("click", () =>
+          openChangeDetailsModal(source, veilleApi.changeDetailOf(source))
+        );
         row.querySelector(".veille-edit-btn").addEventListener("click", () => openSourceModal(source));
         list.appendChild(row);
       }
