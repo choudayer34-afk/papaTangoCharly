@@ -320,7 +320,11 @@ export function renderVeille(container) {
                 .map(
                   (r) => `<li class="veille-check-row veille-check-row--${r.status}">
                     <span class="veille-check-icon" aria-hidden="true">${ICONS[r.status]}</span>
-                    <span class="veille-check-main"><strong>${escapeHtml(r.source.title)}</strong><span class="item-meta">${escapeHtml(r.text)}</span></span>
+                    <span class="veille-check-main"><strong>${escapeHtml(r.source.title)}</strong><span class="item-meta">${escapeHtml(r.text)}</span>${
+                    r.status === "failed" && /^https?:\/\//i.test(r.source.watchUrl || r.source.url || "")
+                      ? `<a class="item-meta" href="${escapeAttr(r.source.watchUrl || r.source.url)}" target="_blank" rel="noopener noreferrer">Ouvrir la page ↗</a>`
+                      : ""
+                  }</span>
                   </li>`
                 )
                 .join("")}
@@ -329,7 +333,11 @@ export function renderVeille(container) {
               finished
                 ? `<div class="item-meta" style="margin-top:8px;">Terminé : ${rows.length} vérifiée${rows.length > 1 ? "s" : ""}${
                     changed ? ` · ${changed} nouveauté${changed > 1 ? "s" : ""}` : " · aucune nouveauté"
-                  }${failed ? ` · ${failed} échec${failed > 1 ? "s" : ""}` : ""}.</div>`
+                  }${failed ? ` · ${failed} échec${failed > 1 ? "s" : ""}` : ""}.</div>${
+                    failed === rows.length && rows.length > 1
+                      ? `<div class="item-meta" style="margin-top:6px;">Toutes les sources ont échoué en même temps : c'est presque toujours le service de relais (proxy) qui est indisponible, pas les sites eux-mêmes. Réessaie un peu plus tard ; « Ouvrir la page » permet de consulter une source à la main en attendant.</div>`
+                      : ""
+                  }`
                 : ""
             }
           </div>`;
