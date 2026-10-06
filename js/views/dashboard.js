@@ -54,6 +54,7 @@ import { mountBureau } from "../components/bureau.js";
 // place) de l'icône équipée ci-dessus. Voir js/components/progressionCard.js pour le détail
 // complet : toujours visible, hors du système de sections réordonnables/masquables ci-dessous.
 import { mountProgressionCard } from "../components/progressionCard.js";
+import { attachDragReorder } from "../components/dragReorder.js";
 
 // TODO-021 (LOT 9, 21/09/2026) — fusion « Information »/« Idée » en un seul libellé utilisateur
 // (décision produit du 15/09/2026, voir js/views/inbox.js) : un seul libellé affiché désormais,
@@ -1035,7 +1036,7 @@ export function renderDashboard(container) {
       ).join("")}
       <div class="field" style="margin-top:20px;">
         <label style="display:block;margin-bottom:6px;">Ordre des rubriques</label>
-        <p class="item-meta" style="margin:0 0 8px;">Déplace les rubriques ci-dessous dans l'ordre qui te convient.</p>
+        <p class="item-meta" style="margin:0 0 8px;">Déplace les rubriques ci-dessous dans l'ordre qui te convient : maintiens une ligne appuyée, puis glisse-la.</p>
         <div id="home-order-list"></div>
         <button type="button" id="home-order-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:6px;">↺ Revenir à l'ordre par défaut</button>
       </div>
@@ -1070,30 +1071,29 @@ export function renderDashboard(container) {
       });
     });
 
+    // Réordonnancement par appui maintenu + glissement (js/components/dragReorder.js) — remplace les
+    // boutons ▲/▼ d'origine (06/10/2026, retour de Charles-Henri : "partout pareil, comme les post-it").
+    // `orderChanged`/`resetRequested` : voir le commentaire plus haut — jamais mis à `true` sans un vrai
+    // déplacement (`onReorder` n'est appelé que si l'ordre a réellement changé).
+    attachDragReorder(body.querySelector("#home-order-list"), {
+      getCurrentOrder: () => currentOrder,
+      onReorder: (orderedIds) => {
+        currentOrder = orderedIds;
+        orderChanged = true;
+        resetRequested = false;
+      },
+      rerender: () => renderOrderList(),
+    });
     function renderOrderList() {
       const listEl = body.querySelector("#home-order-list");
       listEl.innerHTML = currentOrder
         .map(
-          (key, idx) => `
-        <div class="item-row" style="padding:6px 0;">
+          (key) => `
+        <div class="item-row drag-reorder-row" data-drag-id="${key}" style="padding:6px 0;">
           <div class="item-main"><div class="item-title">${HOME_ORDER_LABELS[key] || key}</div></div>
-          <div style="display:flex;gap:4px;">
-            <button type="button" class="btn btn-ghost btn-sm" data-dir="up" data-idx="${idx}" aria-label="Monter" ${idx === 0 ? "disabled" : ""}>▲</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-dir="down" data-idx="${idx}" aria-label="Descendre" ${idx === currentOrder.length - 1 ? "disabled" : ""}>▼</button>
-          </div>
         </div>`
         )
         .join("");
-      listEl.querySelectorAll("button[data-dir]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const idx = Number(btn.dataset.idx);
-          const swapIdx = idx + (btn.dataset.dir === "up" ? -1 : 1);
-          [currentOrder[idx], currentOrder[swapIdx]] = [currentOrder[swapIdx], currentOrder[idx]];
-          orderChanged = true;
-          resetRequested = false;
-          renderOrderList();
-        });
-      });
     }
     renderOrderList();
     body.querySelector("#home-order-reset-btn").addEventListener("click", () => {
@@ -1178,15 +1178,16 @@ export function renderDashboard(container) {
    * choisi ce point d'entrée UNIQUE plutôt que d'introduire une nouvelle zone d'interface ou un
    * geste supplémentaire.
    *
-   * Réutilise le mécanisme ▲/▼ de "Ordre des rubriques" ci-dessus (même arbitrage de
-   * Charles-Henri : boutons ▲/▼ + bouton de bascule plutôt qu'un vrai glisser-déposer, qui
-   * n'existe nulle part ailleurs dans cette app vanilla JS) plutôt que le glisser-déposer
-   * littéralement décrit par la spec.
+   * Réordonnancement : boutons ▲/▼ à l'origine (arbitrage initial de Charles-Henri : un vrai
+   * glisser-déposer n'existait nulle part ailleurs dans cette app vanilla JS), REMPLACÉS le
+   * 06/10/2026 par le glisser-déposer par appui maintenu partagé (js/components/dragReorder.js),
+   * sur sa demande explicite : "partout pareil, comme les post-it". Le bouton de bascule
+   * "→ Barre principale" ci-dessous est inchangé.
    *
    * Invariant "la barre principale contient 4 modules personnalisables + Plus" (règle métier
    * explicite de la spec) gardé VRAI à tout instant plutôt que vérifié seulement à
    * l'enregistrement : aucun bouton ne permet de retirer un module de la barre principale sans
-   * qu'un autre le remplace aussitôt — faire descendre un module en dernière position (▼) puis
+   * qu'un autre le remplace aussitôt — faire descendre un module en dernière position puis
    * cliquer "→ Barre principale" sur un module de Plus l'évince automatiquement, qui réapparaît
    * en tête de "Dans Plus". Impossible d'arriver à 3 ou 5 modules dans la barre principale, donc
    * jamais besoin d'un message de validation bloquant à l'enregistrement. Décision
@@ -1209,11 +1210,12 @@ export function renderDashboard(container) {
       <p class="item-meta" style="margin:0 0 12px;">Identique sur web et mobile — ce choix est propre à ton compte, sans effet pour les autres personnes utilisant Pilotage.</p>
       <div class="field">
         <label style="display:block;margin-bottom:6px;">Barre principale (4 modules + ☰ Plus, toujours en 5e position)</label>
+        <p class="item-meta" style="margin:0 0 8px;">Maintiens une ligne appuyée, puis glisse-la pour la déplacer.</p>
         <div id="nav-main-list"></div>
       </div>
       <div class="field" style="margin-top:20px;">
         <label style="display:block;margin-bottom:6px;">Dans ☰ Plus</label>
-        <p class="item-meta" style="margin:0 0 8px;">Pour faire entrer un module ici dans la barre principale : fais-le d'abord passer en dernière position (▼) à gauche, puis clique "→ Barre principale" sur le module voulu — il prend automatiquement la place du dernier de la barre.</p>
+        <p class="item-meta" style="margin:0 0 8px;">Pour faire entrer un module ici dans la barre principale : fais-le d'abord passer en dernière position à gauche (maintiens sa ligne puis glisse-la tout en bas), puis clique "→ Barre principale" sur le module voulu — il prend automatiquement la place du dernier de la barre.</p>
         <div id="nav-plus-list"></div>
       </div>
       <button type="button" id="nav-reset-btn" class="btn btn-ghost btn-sm" style="margin-top:16px;">↺ Revenir à Accueil, Inbox, Pilotage, Équipe, Plus</button>
@@ -1224,30 +1226,28 @@ export function renderDashboard(container) {
       return m ? `${m.icon} ${m.label}` : key;
     }
 
+    // Réordonnancement par appui maintenu + glissement (js/components/dragReorder.js), identique à
+    // "Ordre des rubriques" et aux post-it — remplace les boutons ▲/▼ (06/10/2026).
+    attachDragReorder(body.querySelector("#nav-main-list"), {
+      getCurrentOrder: () => currentMain,
+      onReorder: (orderedIds) => {
+        currentMain = orderedIds;
+        changed = true;
+        resetRequested = false;
+      },
+      rerender: () => renderLists(),
+    });
+
     function renderLists() {
       const mainEl = body.querySelector("#nav-main-list");
       mainEl.innerHTML = currentMain
         .map(
-          (key, idx) => `
-        <div class="item-row" style="padding:6px 0;">
+          (key) => `
+        <div class="item-row drag-reorder-row" data-drag-id="${key}" style="padding:6px 0;">
           <div class="item-main"><div class="item-title">${moduleLabel(key)}</div></div>
-          <div style="display:flex;gap:4px;">
-            <button type="button" class="btn btn-ghost btn-sm" data-dir="up" data-idx="${idx}" aria-label="Monter" ${idx === 0 ? "disabled" : ""}>▲</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-dir="down" data-idx="${idx}" aria-label="Descendre" ${idx === currentMain.length - 1 ? "disabled" : ""}>▼</button>
-          </div>
         </div>`
         )
         .join("");
-      mainEl.querySelectorAll("button[data-dir]").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const idx = Number(btn.dataset.idx);
-          const swapIdx = idx + (btn.dataset.dir === "up" ? -1 : 1);
-          [currentMain[idx], currentMain[swapIdx]] = [currentMain[swapIdx], currentMain[idx]];
-          changed = true;
-          resetRequested = false;
-          renderLists();
-        });
-      });
 
       const plusEl = body.querySelector("#nav-plus-list");
       plusEl.innerHTML = currentPlus
