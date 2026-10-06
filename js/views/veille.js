@@ -247,6 +247,78 @@ function openPromptModal(title, text) {
   });
 }
 
+// 🔔 Procédure Google Alerts de remplacement (06/10/2026, retour de Charles-Henri après le cas Terre-net :
+// "si c'est le cas, donne la procédure via Google Alerts dans une popup"). Proposée quand la zone lue d'une
+// source est trop courte pour contenir des actualités (voir `veilleApi.SHORT_ZONE_CHARS`) : la page se remplit
+// par JavaScript, que Pilotage ne voit pas. Une alerte `site:` ne dépend pas de la page. Pilotage ne touche à
+// aucun compte Google : il prépare la requête et explique les réglages, Charles-Henri crée l'alerte lui-même.
+function buildAlertProcedure(source, { inForm = false } = {}) {
+  const wrap = document.createElement("div");
+  const alert = veilleApi.googleAlertForSource(source);
+  if (!alert) {
+    wrap.innerHTML = `<p class="item-meta">Cette source n'a pas d'adresse exploitable : renseigne son lien dans sa fiche (champ « Lien »), puis recommence.</p>`;
+    return wrap;
+  }
+  wrap.innerHTML = `
+    <ol class="alert-steps">
+      <li>
+        <strong>Copie la requête</strong> (tu peux la modifier avant) :
+        <div class="alert-query-row">
+          <div class="alert-query-main"><input type="text" class="alert-proc-query" value="${escapeAttr(alert.query)}" aria-label="Requête Google Alerts" /></div>
+          <button type="button" class="btn btn-ghost btn-sm alert-proc-copy" aria-label="Copier la requête" title="Copier">📋</button>
+        </div>
+      </li>
+      <li><strong>Ouvre Google Alerts</strong> : <a href="https://www.google.com/alerts" target="_blank" rel="noopener noreferrer">google.com/alerts ↗</a> (connecté à ton compte Google), puis colle la requête dans le champ « Créer une alerte sur… ».</li>
+      <li><strong>Clique sur « Afficher les options »</strong> et règle :
+        <ul class="alert-steps-settings">${veilleApi.GOOGLE_ALERT_SITE_SETTINGS.map(
+          (o) => `<li><em>${escapeHtml(o.label)}</em> : ${escapeHtml(o.value)}</li>`
+        ).join("")}</ul>
+      </li>
+      <li><strong>Clique sur « Créer une alerte ».</strong> Un aperçu des résultats s'affiche : s'il est vide ou hors sujet, ajuste la requête.</li>
+      <li><strong>Dans Pilotage</strong>, ${
+        inForm
+          ? "dans la section « 🔍 Détection de nouveautés » de cette fiche, décoche « Activer la détection sur ce site » puis clique sur « Enregistrer »"
+          : "ouvre la fiche de cette source (✏️ → « 🔍 Détection de nouveautés ») et décoche « Activer la détection sur ce site »"
+      } : elle ne voit rien ici, autant ne pas s'y fier. Les alertes arriveront dans ta boîte mail.</li>
+    </ol>
+    <p class="item-meta" style="margin-bottom:0;">Les libellés de Google peuvent légèrement varier selon la langue de ton compte.</p>
+  `;
+  wrap.querySelector(".alert-proc-copy").addEventListener("click", async () => {
+    const value = wrap.querySelector(".alert-proc-query").value;
+    try {
+      await navigator.clipboard.writeText(value);
+      showToast("Requête copiée");
+    } catch {
+      wrap.querySelector(".alert-proc-query").select();
+      showToast("Copie automatique indisponible — la requête est sélectionnée, copie-la (Ctrl+C / Cmd+C)");
+    }
+  });
+  return wrap;
+}
+
+function openAlertProcedureModal(source) {
+  const body = document.createElement("div");
+  const intro = document.createElement("p");
+  intro.className = "item-meta";
+  intro.style.marginTop = "0";
+  intro.textContent =
+    "Pilotage ne voit pas les actualités de cette page : elles sont ajoutées par JavaScript après le chargement, et il ne lit que le code source de départ. Une alerte Google ne dépend pas de la page — Google te prévient dès qu'il repère une nouvelle page de ce site.";
+  body.append(intro, buildAlertProcedure(source));
+  openModal({
+    title: `🔔 Surveiller « ${source.title} » via Google Alerts`,
+    body,
+    actions: [
+      { label: "Fermer", variant: "ghost" },
+      {
+        label: "Ouvrir Google Alerts ↗",
+        variant: "primary",
+        closesModal: false,
+        onClick: () => window.open("https://www.google.com/alerts", "_blank", "noopener,noreferrer"),
+      },
+    ],
+  });
+}
+
 export function renderVeille(container) {
   container.innerHTML = `
     <div class="topbar">
@@ -303,9 +375,10 @@ export function renderVeille(container) {
       const renderProgress = () => {
         const done = doneCount();
         const pct = Math.round((done / rows.length) * 100);
-        const ICONS = { pending: "⏳", running: "🔄", unchanged: "✅", first: "📌", changed: "🆕", failed: "⚠️" };
+        const ICONS = { pending: "⏳", running: "🔄", unchanged: "✅", first: "📌", changed: "🆕", failed: "⚠️", short: "⚠️" };
         const changed = rows.filter((r) => r.status === "changed").length;
         const failed = rows.filter((r) => r.status === "failed").length;
+        const shortCount = rows.filter((r) => r.status === "short").length;
         checkProgressEl.innerHTML = `
           <div class="card veille-check-panel" role="status" aria-live="polite">
             <div class="veille-quick-head">
@@ -324,6 +397,10 @@ export function renderVeille(container) {
                     r.status === "failed" && /^https?:\/\//i.test(r.source.watchUrl || r.source.url || "")
                       ? `<a class="item-meta" href="${escapeAttr(r.source.watchUrl || r.source.url)}" target="_blank" rel="noopener noreferrer">Ouvrir la page ↗</a>`
                       : ""
+                  }${
+                    r.status === "short"
+                      ? `<button type="button" class="btn btn-secondary btn-sm veille-check-alert-btn" data-row-idx="${rows.indexOf(r)}">🔔 Procédure Google Alerts</button>`
+                      : ""
                   }</span>
                   </li>`
                 )
@@ -333,7 +410,9 @@ export function renderVeille(container) {
               finished
                 ? `<div class="item-meta" style="margin-top:8px;">Terminé : ${rows.length} vérifiée${rows.length > 1 ? "s" : ""}${
                     changed ? ` · ${changed} nouveauté${changed > 1 ? "s" : ""}` : " · aucune nouveauté"
-                  }${failed ? ` · ${failed} échec${failed > 1 ? "s" : ""}` : ""}.</div>${
+                  }${failed ? ` · ${failed} échec${failed > 1 ? "s" : ""}` : ""}${
+                    shortCount ? ` · ${shortCount} source${shortCount > 1 ? "s" : ""} illisible${shortCount > 1 ? "s" : ""} (zone trop courte)` : ""
+                  }.</div>${
                     failed === rows.length && rows.length > 1
                       ? `<div class="item-meta" style="margin-top:6px;">Toutes les sources ont échoué en même temps : c'est presque toujours le service de relais (proxy) qui est indisponible, pas les sites eux-mêmes. Réessaie un peu plus tard ; « Ouvrir la page » permet de consulter une source à la main en attendant.</div>`
                       : ""
@@ -341,6 +420,9 @@ export function renderVeille(container) {
                 : ""
             }
           </div>`;
+        checkProgressEl.querySelectorAll(".veille-check-alert-btn").forEach((btn) => {
+          btn.addEventListener("click", () => openAlertProcedureModal(rows[Number(btn.dataset.rowIdx)].source));
+        });
         checkProgressEl.querySelector(".veille-check-close")?.addEventListener("click", () => {
           checkProgressEl.innerHTML = "";
         });
@@ -367,6 +449,11 @@ export function renderVeille(container) {
         if (!result.ok) {
           row.status = "failed";
           row.text = `${veilleApi.WATCH_ERROR_LABELS[result.error] || result.error}${result.detail ? ` (${result.detail})` : ""}`;
+        } else if (result.short) {
+          // Prioritaire sur "nouveauté"/"rien de nouveau"/"première vérification" : une zone de quelques
+          // mots (message d'attente) n'est pas une liste d'actualités, aucun de ces verdicts n'aurait de sens.
+          row.status = "short";
+          row.text = `Zone lue très courte (${result.text.length} caractères : « ${result.preview} ») — le contenu est probablement chargé par JavaScript et invisible pour Pilotage : aucune nouveauté ne pourra être détectée ici.`;
         } else if (result.changed) {
           row.status = "changed";
           row.text = "Nouveauté détectée — la page a changé depuis la dernière vérification";
@@ -385,9 +472,11 @@ export function renderVeille(container) {
       checkBtn.textContent = "🔍 Vérifier";
       const changed = rows.filter((r) => r.status === "changed").length;
       const failed = rows.filter((r) => r.status === "failed").length;
+      const shortCount = rows.filter((r) => r.status === "short").length;
       const parts = [`${rows.length} vérifiée${rows.length > 1 ? "s" : ""}`];
       if (changed) parts.push(`${changed} nouveauté${changed > 1 ? "s" : ""}`);
       if (failed) parts.push(`${failed} échec${failed > 1 ? "s" : ""}`);
+      if (shortCount) parts.push(`${shortCount} illisible${shortCount > 1 ? "s" : ""}`);
       showToast(parts.join(" · "));
     })
   );
@@ -1088,8 +1177,31 @@ export function renderVeille(container) {
           watchSelector: body.querySelector("#veille-watch-selector").value.trim(),
         });
         testResultEl.textContent = result.ok
-          ? `✅ Zone trouvée (${result.text.length} caractères) — aperçu : « ${result.preview}${result.text.length > result.preview.length ? "…" : ""} »`
+          ? `${result.short ? "⚠️ Zone très courte" : "✅ Zone trouvée"} (${result.text.length} caractères) — aperçu : « ${result.preview}${result.text.length > result.preview.length ? "…" : ""} »`
           : `⚠️ ${veilleApi.WATCH_ERROR_LABELS[result.error] || result.error}${result.detail ? ` (${result.detail})` : ""}`;
+        if (result.ok && result.short) {
+          // Procédure affichée ICI plutôt que dans une fenêtre : `openModal()` n'en garde qu'une à la fois,
+          // en ouvrir une autre fermerait cette fiche et ferait perdre ce qui n'est pas encore enregistré.
+          const warn = document.createElement("div");
+          warn.style.marginTop = "6px";
+          warn.textContent =
+            "Probablement du contenu chargé par JavaScript, invisible pour Pilotage : aucune nouveauté ne sera détectée sur cette page.";
+          const details = document.createElement("details");
+          details.open = true;
+          details.style.marginTop = "8px";
+          const summary = document.createElement("summary");
+          summary.innerHTML = "<strong>🔔 Surveiller ce site via Google Alerts à la place</strong>";
+          details.append(
+            summary,
+            buildAlertProcedure({
+              title: body.querySelector("#veille-title").value.trim(),
+              url: body.querySelector("#veille-url").value.trim(),
+              watchUrl: body.querySelector("#veille-watch-url").value.trim(),
+              category: body.querySelector("#veille-category").value,
+            }, { inForm: true })
+          );
+          testResultEl.append(warn, details);
+        }
       })
     );
 
