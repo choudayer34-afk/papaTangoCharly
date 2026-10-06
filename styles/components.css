@@ -2582,3 +2582,19 @@ tbody.drag-over-group {
    sombre — un fond thémé y deviendrait sombre sous du texte sombre. */
 .sticky-note-body .drag-reorder-row--dragging { background: rgba(255, 255, 255, 0.85); }
 .drag-reorder-list--dragging { cursor: grabbing; }
+
+/* 🔗 Veille — zone "Accès rapide" (06/10/2026) : raccourcis vers les outils tiers et la boîte mail. */
+.veille-quick-access { margin-bottom: 16px; }
+.veille-quick-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.veille-quick-head-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.veille-quick-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.veille-quick-link { display: inline-flex; align-items: center; gap: 2px; }
+.veille-quick-link .btn-ghost { padding: 4px 6px; }
+.veille-quick-link > a.btn { text-decoration: none; }
+.veille-quick-link--todo { border: 1px dashed var(--color-border); }
+
+/* 🔔 Veille — liste des requêtes Google Alerts à recopier. */
+.alert-query-row { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+.alert-query-row:last-child { border-bottom: none; }
+.alert-query-main { flex: 1; min-width: 0; }
+.alert-query-code { display: block; font-size: var(--font-size-sm); overflow-wrap: anywhere; user-select: all; }
