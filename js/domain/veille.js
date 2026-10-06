@@ -36,6 +36,7 @@
 
 import * as storage from "../services/storage.js";
 import { RESEARCH_JSON_TEMPLATE } from "./veilleResearchImport.js";
+import { cleanLines, packSnapshot, unpackSnapshot, diffLines, mergeAdded } from "./veilleDiff.js";
 
 const COLLECTION = "veilleSources";
 
@@ -236,7 +237,22 @@ function extractTextForWatch(html, selector) {
   }
   const text = (root.textContent || "").replace(/\s+/g, " ").trim();
   if (!text) return { text: null, error: "empty" };
-  return { text, error: null };
+  // Même zone, mais découpée en LIGNES (un bloc de page = une ligne) pour "voir ce qui a changé" (06/10/2026,
+  // voir js/domain/veilleDiff.js). `text` ci-dessus, et donc l'empreinte, reste calculé exactement comme
+  // avant : sinon toutes les sources déjà suivies afficheraient une fausse nouveauté à la prochaine vérification.
+  const clone = root.cloneNode(true);
+  clone.querySelectorAll("br").forEach((el) => el.replaceWith("\n"));
+  // Un titre suivi de sa date (<a>…</a><span>12/10</span>) s'affiche côte à côte sans espace dans le code :
+  // on en glisse un pour ne pas coller les mots ("…réglementation12/10"). Normalisé ensuite par cleanLines.
+  clone.querySelectorAll("a, span, time").forEach((el) => el.append(" "));
+  clone
+    .querySelectorAll("p, div, li, h1, h2, h3, h4, h5, h6, tr, td, th, section, article, header, footer, ul, ol, table, dt, dd, blockquote, figure, figcaption")
+    .forEach((el) => {
+      el.prepend("\n");
+      el.append("\n");
+    });
+  const lines = cleanLines((clone.textContent || "").split("\n"));
+  return { text, lines, error: null };
 }
 
 /** Libellés humains des codes d'erreur renvoyés par `previewWatch()`/`checkSourceForChanges()`. */
@@ -301,9 +317,9 @@ export async function previewWatch({ url, watchUrl, watchSelector } = {}, { onAt
   }
 
   onAttempt?.({ step: "analyse" });
-  const { text, error } = extractTextForWatch(html, (watchSelector || "").trim());
+  const { text, lines, error } = extractTextForWatch(html, (watchSelector || "").trim());
   if (error) return { ok: false, error };
-  return { ok: true, text, hash: simpleHash(text), preview: text.slice(0, 220), short: text.length < SHORT_ZONE_CHARS };
+  return { ok: true, text, lines, hash: simpleHash(text), preview: text.slice(0, 220), short: text.length < SHORT_ZONE_CHARS };
 }
 
 /**
@@ -325,10 +341,46 @@ export async function checkSourceForChanges(source, { onProgress } = {}) {
   const changed = !firstCheck && result.hash !== source.lastContentHash;
   const patch = { lastContentHash: result.hash, lastCheckedAt: now, lastCheckError: "", lastCheckDetail: "" };
   if (changed) patch.lastChangedAt = now;
+  // "Voir ce qui a changé" (06/10/2026, voir js/domain/veilleDiff.js) : on garde la dernière version lue (en
+  // lignes) à CHAQUE vérification réussie — c'est ce qui permet, au changement suivant, de dire QUOI est
+  // apparu. Une source suivie avant cette fonction n'a pas encore de version conservée : son premier
+  // changement n'aura pas de détail (`hasDetail: false`), le suivant en aura un.
+  const hadSnapshot = !!source.lastContentSnapshot;
+  patch.lastContentSnapshot = packSnapshot(result.lines);
+  let changeDetail = null;
+  if (changed) {
+    if (hadSnapshot) {
+      const d = diffLines(unpackSnapshot(source.lastContentSnapshot), result.lines);
+      // Nouveauté pas encore vue + nouveau changement : on cumule (A→B puis B→C = ce qui est apparu dans les deux).
+      const unseen = hasNewContent(source) && source.lastChangeHasDetail;
+      const added = unseen ? mergeAdded(unpackSnapshot(source.lastChangeAdded), d.added) : d.added;
+      const removedCount = (unseen ? Number(source.lastChangeRemovedCount) || 0 : 0) + d.removedCount;
+      changeDetail = { hasDetail: true, added, removedCount, at: now };
+    } else {
+      changeDetail = { hasDetail: false, added: [], removedCount: 0, at: now };
+    }
+    patch.lastChangeHasDetail = changeDetail.hasDetail;
+    patch.lastChangeAdded = changeDetail.added.join("\n");
+    patch.lastChangeRemovedCount = changeDetail.removedCount;
+  }
   await updateSource(source.id, patch);
   // `firstCheck` : aucune empreinte précédente — cette vérification a seulement posé la référence
   // (l'écran le dit explicitement plutôt que d'afficher un "rien de nouveau" trompeur).
-  return { ...result, changed, firstCheck };
+  return { ...result, changed, firstCheck, changeDetail };
+}
+
+/**
+ * Détail du dernier changement détecté, relu depuis la fiche (voir `checkSourceForChanges`). `hasDetail`
+ * est faux pour une nouveauté détectée avant que Pilotage ne conserve la version précédente de la page.
+ * @returns {{hasDetail:boolean, added:string[], removedCount:number, at:number|null}}
+ */
+export function changeDetailOf(source) {
+  return {
+    hasDetail: !!source?.lastChangeHasDetail,
+    added: unpackSnapshot(source?.lastChangeAdded),
+    removedCount: Number(source?.lastChangeRemovedCount) || 0,
+    at: source?.lastChangedAt || null,
+  };
 }
 
 /** `true` si cette source est surveillée ET porte une nouveauté pas encore "vue" (lien cliqué). */
