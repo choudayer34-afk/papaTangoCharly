@@ -29,6 +29,25 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "6 octobre 2026",
+    items: [
+      {
+        type: "add",
+        title: "🤖 Fiche concurrent : remplissage en un clic avec l'IA",
+        text: "Dans la fiche d'un concurrent, un nouveau bloc \"🤖 Recherche assistée par IA\" prépare la demande (au bon format) et lit la réponse de l'IA pour remplir d'un coup le CA, la Note (avec les actualités et les sources datées), le résumé, le SWOT complet, la Force d'Agreo et les 2 curseurs de positionnement. Les champs remplis sont surlignés pour que tu les relises ; rien n'est enregistré avant ton clic sur \"Enregistrer\".",
+        howTo: "☰ Plus → \"📡 Veille\" → ✏️ sur un concurrent → \"🔎 Copier la demande et ouvrir Perplexity\" → colle-la, lance la recherche, copie toute la réponse → colle-la dans \"Réponse de l'IA\" → \"📥 Remplir la fiche avec cette réponse\" → relis → Enregistrer.",
+        gain: "Plus de recopie champ par champ : un aller-retour (copier, coller, relire) au lieu d'une dizaine de copier-coller.",
+      },
+      {
+        type: "change",
+        title: "📝 Post-it : lignes de checklist épurées",
+        text: "Chaque ligne d'un post-it n'affiche plus que la case et son texte (en toute largeur, sans boutons qui élargissent le post-it). Clique sur le texte d'une ligne pour faire apparaître ✏️ Modifier, 📋 Créer… et 🗑️ ; maintiens appuyé sur une ligne (clic maintenu à la souris, appui long sur mobile) puis glisse pour la déplacer parmi les autres. Dans \"Créer…\", tu peux maintenant aussi transformer la ligne en 📁 Projet.",
+        howTo: "Post-it en mode checklist → clic sur le texte d'une ligne pour ses actions ; appui maintenu puis glisser pour la déplacer.",
+        gain: "Des post-it lisibles dans leur taille réelle, sans que les boutons prennent plus de la moitié de la place.",
+      },
+    ],
+  },
+  {
     date: "2 octobre 2026",
     items: [
       {
