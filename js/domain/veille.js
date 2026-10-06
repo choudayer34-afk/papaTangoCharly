@@ -190,7 +190,16 @@ export function subscribe(callback) {
 // extraits). Si une nouvelle source gratuite et sans compte est identifiée et testée (vérification
 // manuelle de Charles-Henri obligatoire avant tout ajout, vu l'historique de ce fichier), elle
 // pourra reprendre la 3e place.
+//
+// RELAIS PERSONNEL EN PREMIER (06/10/2026) : les deux proxys ci-dessous ont échoué ENSEMBLE sur toutes les
+// sources (délai dépassé / injoignable) lors d'une vérification réelle, la panne déjà vue le 02/10.
+// Retour de Charles-Henri : "les 3 du moment que ça reste gratuit" — dont un relais à lui, la fonction
+// Cloudflare Pages `functions/api/veille-proxy.js` (déployée avec le reste de l'app, gratuite dans le quota
+// habituel, voir le commentaire de ce fichier pour ses garde-fous). Appelée en premier, même origine que
+// l'app ; si elle échoue (pas encore déployée, site qui bloque ses adresses...), la suite reste inchangée.
+// `explain: true` : son corps de réponse d'erreur est un court message lisible, repris dans le détail.
 const PROXIES = [
+  { name: "Pilotage", explain: true, build: (target) => "/api/veille-proxy?url=" + encodeURIComponent(target) },
   { name: "allorigins", build: (target) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(target) },
   { name: "codetabs", build: (target) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(target) },
 ];
@@ -261,7 +270,15 @@ export async function previewWatch({ url, watchUrl, watchSelector } = {}, { onAt
     try {
       const res = await fetch(proxy.build(target), { signal: controller.signal });
       if (!res.ok) {
-        attempts.push(`${proxy.name} : HTTP ${res.status}`);
+        let why = "";
+        if (proxy.explain) {
+          try {
+            why = (await res.text()).trim().slice(0, 120);
+          } catch {
+            // message d'explication facultatif
+          }
+        }
+        attempts.push(`${proxy.name} : HTTP ${res.status}${why ? ` (${why})` : ""}`);
         continue;
       }
       html = await res.text();
