@@ -739,9 +739,14 @@
 // Google Alerts), js/views/veille.js (avertissement dans "Tester" et "Vérifier", procédure), styles/components.css,
 // entrée js/views/whatsnew.js. Aucun nouveau fichier. Cette livraison remplace aussi sw.js et
 // functions/api/veille-proxy.js, qui étaient corrompus dans le dépôt (voir le message de livraison).
+// v115 (06/10/2026) — retour direct de Charles-Henri : "est-ce qu'on peut voir les nouveautés détectées ?" —
+// réponse retenue : le texte nouveau. Nouveau js/domain/veilleDiff.js (comparaison ligne à ligne, ajouté à
+// APP_SHELL), js/domain/veille.js (version lue conservée à chaque vérification, détail du changement),
+// js/views/veille.js ("🆕 Voir ce qui a changé" sur la source et dans le détail de "Vérifier"),
+// styles/components.css, entrée js/views/whatsnew.js, tests/unit/veille-diff.spec.js.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v114";
+const CACHE_NAME = "pilotage-cache-v115";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -816,6 +821,7 @@ const APP_SHELL = [
   // précédents de ce document.
   "./js/domain/veille.js",
   "./js/domain/veilleResearchImport.js",
+  "./js/domain/veilleDiff.js",
   "./js/components/modal.js",
   // BUG corrigé (21/09/2026, même correctif que le bump de CACHE_NAME ci-dessus) : ce fichier
   // (LOT 1, TODO-006, "validation partagée") n'avait jamais été ajouté ici depuis sa création —
