@@ -2618,3 +2618,8 @@ tbody.drag-over-group {
 .alert-steps-settings { padding-left: 18px; margin: 4px 0 0; }
 .alert-proc-query { width: 100%; font-family: inherit; }
 .veille-check-alert-btn { align-self: flex-start; margin-top: 4px; }
+
+/* 🆕 Veille — "Voir ce qui a changé" (06/10/2026). */
+.change-lines { margin: 8px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; overflow-wrap: anywhere; }
+.veille-check-changes-btn { align-self: flex-start; margin-top: 4px; }
+.veille-changes-btn { padding: 2px 8px; }
