@@ -2598,3 +2598,17 @@ tbody.drag-over-group {
 .alert-query-row:last-child { border-bottom: none; }
 .alert-query-main { flex: 1; min-width: 0; }
 .alert-query-code { display: block; font-size: var(--font-size-sm); overflow-wrap: anywhere; user-select: all; }
+
+/* 🔍 Veille — panneau de progression de "Vérifier" (06/10/2026). */
+.veille-check-panel { margin-bottom: 16px; }
+.veille-check-bar { height: 8px; border-radius: 4px; background: var(--color-surface-alt); overflow: hidden; margin-bottom: 8px; }
+.veille-check-bar-fill { height: 100%; background: var(--color-primary); transition: width 0.2s ease; }
+.veille-check-list { list-style: none; margin: 0; padding: 0; max-height: 40vh; overflow-y: auto; }
+.veille-check-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+.veille-check-row:last-child { border-bottom: none; }
+.veille-check-icon { flex: none; width: 1.5em; text-align: center; }
+.veille-check-main { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.veille-check-row--pending { opacity: 0.6; }
+.veille-check-row--running .veille-check-icon { display: inline-block; animation: veille-check-spin 1s linear infinite; }
+@keyframes veille-check-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .veille-check-row--running .veille-check-icon { animation: none; } .veille-check-bar-fill { transition: none; } }
