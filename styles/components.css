@@ -2612,3 +2612,9 @@ tbody.drag-over-group {
 .veille-check-row--running .veille-check-icon { display: inline-block; animation: veille-check-spin 1s linear infinite; }
 @keyframes veille-check-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .veille-check-row--running .veille-check-icon { animation: none; } .veille-check-bar-fill { transition: none; } }
+
+/* 🔔 Veille — procédure Google Alerts de remplacement (06/10/2026). */
+.alert-steps { padding-left: 20px; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; }
+.alert-steps-settings { padding-left: 18px; margin: 4px 0 0; }
+.alert-proc-query { width: 100%; font-family: inherit; }
+.veille-check-alert-btn { align-self: flex-start; margin-top: 4px; }
