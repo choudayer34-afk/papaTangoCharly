@@ -1653,6 +1653,41 @@ tbody.drag-over-group {
 .checklist-item-text.done { text-decoration: line-through; color: var(--color-text-muted); }
 .checklist-item-date { flex: none; color: var(--color-text-muted); font-size: var(--font-size-xs); white-space: nowrap; }
 
+/* ---------- Checklist en mode compact (post-it, 06/10/2026 — voir `compactActions` dans
+   js/components/checklist.js) : une ligne = case + texte seulement, texte sur toute la largeur. ---------- */
+.checklist-item--compact { flex-wrap: wrap; position: relative; }
+/* Un mot trop long passe à la ligne plutôt que d'élargir le post-it (avant : les 5 boutons par ligne
+   mangeaient plus de la moitié de la largeur). */
+.checklist-item--compact .checklist-item-text { overflow-wrap: anywhere; }
+.checklist-item-text--tappable { cursor: pointer; }
+.checklist-item-text--tappable:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: 2px; }
+.checklist-item--draggable {
+  /* Pas de sélection de texte ni de menu d'appui long du navigateur : l'appui maintenu sert à
+     déplacer la ligne. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.checklist-item--active { background: rgba(255, 255, 255, 0.45); border-radius: var(--radius-sm); }
+/* Barre d'actions de la ligne touchée : sous le texte, sur toute la largeur, qui passe à la ligne
+   si le post-it est étroit (jamais de défilement horizontal). */
+.checklist-item-actions {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 2px 0 4px;
+}
+.checklist-item-actions .btn { padding: 4px 6px; }
+.checklist-item--dragging {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  cursor: grabbing;
+  z-index: 1;
+}
+.checklist-items--dragging { cursor: grabbing; }
+
 /* ---------- Aide contextuelle (js/components/hint.js) ---------- */
 .hint-banner {
   display: flex;
@@ -2517,3 +2552,22 @@ tbody.drag-over-group {
   align-items: center;
   gap: var(--space-2);
 }
+
+/* ---------- Import d'une réponse d'IA dans la fiche concurrent (06/10/2026) —
+   js/views/veille.js, js/domain/veilleResearchImport.js ---------- */
+.ai-import-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+}
+.ai-import-box .field { align-self: stretch; margin-bottom: 0; }
+.ai-import-title { font-weight: 600; color: var(--color-text); }
+/* Champ rempli par l'import et pas encore retouché : repérable d'un coup d'œil pendant la relecture,
+   sans changer la couleur du texte (le fond reste sur les tokens neutres du thème). */
+.field-imported { outline: 2px solid var(--color-primary); outline-offset: 0; }
