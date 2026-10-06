@@ -246,13 +246,16 @@ export const WATCH_ERROR_LABELS = {
  * @param {{url?:string, watchUrl?:string, watchSelector?:string}} fields
  * @returns {Promise<{ok:boolean, error?:string, detail?:string, text?:string, hash?:string, preview?:string}>}
  */
-export async function previewWatch({ url, watchUrl, watchSelector } = {}) {
+export async function previewWatch({ url, watchUrl, watchSelector } = {}, { onAttempt } = {}) {
   const target = (watchUrl || url || "").trim();
   if (!target) return { ok: false, error: "no_url" };
 
   let html = null;
   const attempts = [];
-  for (const proxy of PROXIES) {
+  for (const [i, proxy] of PROXIES.entries()) {
+    // Permet à l'écran d'afficher "où en est" la vérification (tentative n/N) — voir `onProgress` de
+    // `checkSourceForChanges()` (06/10/2026).
+    onAttempt?.({ step: "fetch", attempt: i + 1, total: PROXIES.length, proxy: proxy.name });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
     try {
@@ -273,6 +276,7 @@ export async function previewWatch({ url, watchUrl, watchSelector } = {}) {
     return { ok: false, error: "fetch_failed", detail: attempts.join(" · ") };
   }
 
+  onAttempt?.({ step: "analyse" });
   const { text, error } = extractTextForWatch(html, (watchSelector || "").trim());
   if (error) return { ok: false, error };
   return { ok: true, text, hash: simpleHash(text), preview: text.slice(0, 220) };
@@ -283,18 +287,24 @@ export async function previewWatch({ url, watchUrl, watchSelector } = {}) {
  * éventuelle). Ne marque "🆕 nouveauté" que si une empreinte précédente existait déjà — la toute
  * première vérification établit seulement une référence, jamais un faux "du nouveau" immédiat.
  */
-export async function checkSourceForChanges(source) {
-  const result = await previewWatch({ url: source.url, watchUrl: source.watchUrl, watchSelector: source.watchSelector });
+export async function checkSourceForChanges(source, { onProgress } = {}) {
+  const result = await previewWatch(
+    { url: source.url, watchUrl: source.watchUrl, watchSelector: source.watchSelector },
+    { onAttempt: onProgress }
+  );
   const now = Date.now();
   if (!result.ok) {
     await updateSource(source.id, { lastCheckedAt: now, lastCheckError: result.error, lastCheckDetail: result.detail || "" });
     return result;
   }
-  const changed = !!source.lastContentHash && result.hash !== source.lastContentHash;
+  const firstCheck = !source.lastContentHash;
+  const changed = !firstCheck && result.hash !== source.lastContentHash;
   const patch = { lastContentHash: result.hash, lastCheckedAt: now, lastCheckError: "", lastCheckDetail: "" };
   if (changed) patch.lastChangedAt = now;
   await updateSource(source.id, patch);
-  return { ...result, changed };
+  // `firstCheck` : aucune empreinte précédente — cette vérification a seulement posé la référence
+  // (l'écran le dit explicitement plutôt que d'afficher un "rien de nouveau" trompeur).
+  return { ...result, changed, firstCheck };
 }
 
 /** `true` si cette source est surveillée ET porte une nouveauté pas encore "vue" (lien cliqué). */
