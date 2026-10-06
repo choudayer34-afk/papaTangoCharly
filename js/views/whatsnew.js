@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "6 octobre 2026",
     items: [
       {
+        type: "add",
+        title: "🔗 Veille : accès direct à tes outils et à ta boîte mail",
+        text: "En haut de l'écran Veille, une zone \"Accès rapide\" ouvre en un clic tes outils tiers et ta messagerie dans un nouvel onglet. Une première liste est proposée (boîte mail à renseigner, Google Alerts, Perplexity, Pappers, LinkedIn) ; tu peux modifier chaque raccourci (✏️) ou en ajouter (+ Raccourci). Pilotage n'enregistre que le lien — jamais d'identifiant ni de mot de passe. Un bouton \"🔔 Requêtes Google Alerts\" donne aussi la liste des alertes conseillées, à copier une par une.",
+        howTo: "☰ Plus → \"📡 Veille\" → \"📥 Ajouter les raccourcis proposés\" → ✏️ sur \"✉️ Boîte mail — à renseigner\" pour coller le lien de ta messagerie → Enregistrer. Pour les alertes : \"🔔 Requêtes Google Alerts\" → 📋 sur une requête → \"Ouvrir Google Alerts\" → colle-la.",
+        gain: "Plus besoin de chercher les onglets de ta veille : sources, outils et messagerie sont au même endroit.",
+      },
+      {
         type: "change",
         title: "↕️ Réordonner par glisser-déposer, partout pareil",
         text: "Les boutons ▲/▼ disparaissent : pour déplacer un élément, maintiens-le appuyé (clic maintenu à la souris, appui long sur mobile) puis glisse-le. C'est désormais le même geste dans les sous-étapes des Tâches et des Suivis, les Sous-parties d'un Projet, l'ordre des rubriques de l'Accueil et la barre de navigation, comme sur les post-it. Les éléments terminés restent classés automatiquement, comme avant.",
