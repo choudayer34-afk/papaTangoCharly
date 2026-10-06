@@ -255,6 +255,9 @@ test.describe.serial("LOT 13 — post-it flottants (widget \"toujours visible\")
     const item = note.el.locator(".checklist-item").first();
     await expect(item).toBeVisible({ timeout: 5_000 });
 
+    // 06/10/2026 : la barre d'actions de la ligne (donc le bouton "Créer…") n'apparaît qu'après un
+    // clic sur le texte de la ligne — plus de bouton permanent (js/components/checklist.js).
+    await item.locator(".checklist-item-text").click();
     await item.locator(".checklist-line-menu-btn").click();
     await expect(page.getByRole("heading", { name: "Créer depuis cette ligne" })).toBeVisible({ timeout: 5_000 });
     // La carte est bien masquée (jamais juste "en dessous" visuellement — `visibility: hidden` la
