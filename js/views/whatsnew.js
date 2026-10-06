@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "6 octobre 2026",
     items: [
       {
+        type: "add",
+        title: "⚠️ Veille : alerte quand une page ne peut pas être surveillée",
+        text: "Certaines pages (comme Terre-net) chargent leurs actualités par JavaScript : Pilotage n'y lit qu'un message d'attente et ne peut rien détecter. \"🔍 Tester\" et \"🔍 Vérifier\" le signalent désormais (⚠️ zone très courte au lieu d'un faux ✅) et proposent la procédure pas à pas pour surveiller ce site avec Google Alerts : requête prête à copier, réglages à choisir, et quoi décocher dans la fiche.",
+        howTo: "Dans le détail de \"🔍 Vérifier\", bouton \"🔔 Procédure Google Alerts\" sous la source concernée ; dans la fiche d'une source, \"🔍 Tester maintenant\" affiche la procédure sous le résultat.",
+        gain: "Plus de fausse tranquillité : tu sais quelles sources Pilotage ne peut pas lire, et comment les surveiller autrement.",
+      },
+      {
         type: "fix",
         title: "🔍 Veille : un relais à toi quand les proxys publics tombent",
         text: "Les deux services gratuits utilisés par \"🔍 Vérifier\" tombaient en panne en même temps, et toutes les sources échouaient. Pilotage utilise maintenant en premier son propre relais de lecture (hébergé avec l'app sur Cloudflare, gratuit) et ne se rabat sur les anciens services qu'en secours. Les échecs expliquent désormais la cause (ex. « le site a répondu HTTP 403 »), proposent « Ouvrir la page » pour consulter la source à la main, et la vérification ne lit plus une copie en cache d'une vérification précédente.",
