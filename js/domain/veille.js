@@ -247,6 +247,13 @@ export const WATCH_ERROR_LABELS = {
   empty: "Aucun contenu trouvé à cet endroit",
 };
 
+// Seuil sous lequel la zone lue est jugée trop courte pour être une liste d'actualités (06/10/2026, cas réel
+// Terre-net : la page ne contenait que "⏳Chargement…", 12 caractères — ses articles sont ajoutés par
+// JavaScript APRÈS le chargement, donc invisibles pour une lecture du code source brut). Une liste de
+// quelques titres dépasse largement ce seuil. Sans cet avertissement, le test dit "zone trouvée" (exact mais
+// trompeur) et la vérification ne signale jamais rien : l'empreinte ne bouge pas, sans la moindre erreur.
+export const SHORT_ZONE_CHARS = 200;
+
 /**
  * Récupère et analyse une page SANS rien écrire — utilisé par le bouton "🔍 Tester" de la modale
  * (contre les valeurs de champs en cours de saisie, pas encore enregistrées) et en interne par
@@ -296,7 +303,7 @@ export async function previewWatch({ url, watchUrl, watchSelector } = {}, { onAt
   onAttempt?.({ step: "analyse" });
   const { text, error } = extractTextForWatch(html, (watchSelector || "").trim());
   if (error) return { ok: false, error };
-  return { ok: true, text, hash: simpleHash(text), preview: text.slice(0, 220) };
+  return { ok: true, text, hash: simpleHash(text), preview: text.slice(0, 220), short: text.length < SHORT_ZONE_CHARS };
 }
 
 /**
@@ -544,3 +551,42 @@ export const GOOGLE_ALERTS_GROUPS = [
 /** Conseil de livraison valable pour toutes les alertes. */
 export const GOOGLE_ALERTS_DELIVERY_TIP =
   "Dans « Afficher les options » de chaque alerte, « Livrer à » propose un flux RSS à la place de la boîte mail : plus propre si tu ne veux pas recevoir d'e-mails d'alerte. Après deux semaines, resserre les alertes bruyantes avec des signes moins.";
+
+/**
+ * Procédure Google Alerts de remplacement pour une source dont la page ne peut pas être surveillée
+ * directement (zone trop courte : contenu chargé par JavaScript — voir `SHORT_ZONE_CHARS`). Une alerte
+ * "site:" demande à Google de prévenir dès qu'il indexe une nouvelle page de ce site : aucune lecture de la
+ * page par Pilotage, donc aucun problème de JavaScript.
+ * Réglementation : requête resserrée sur les mots-clés du sujet (un site de presse publie beaucoup de
+ * contenu hors sujet) ; autres catégories : toutes les nouvelles pages du site.
+ * @returns {{ domain: string, query: string } | null} `null` si la source n'a pas d'adresse exploitable.
+ */
+export function googleAlertForSource(source) {
+  let host = "";
+  for (const candidate of [source?.watchUrl, source?.url]) {
+    try {
+      if (candidate) {
+        host = new URL(candidate).hostname.replace(/^www\./i, "");
+        break;
+      }
+    } catch {
+      // adresse invalide : on essaie la suivante
+    }
+  }
+  if (!host) return null;
+  const query =
+    source?.category === "reglementation"
+      ? `site:${host} (semences OR "nouvelles techniques génomiques" OR NGT)`
+      : `site:${host}`;
+  return { domain: host, query };
+}
+
+/** Réglages à choisir dans « Afficher les options » de Google Alerts, pour une alerte `site:` (peu de résultats). */
+export const GOOGLE_ALERT_SITE_SETTINGS = [
+  { label: "Fréquence", value: "Une fois par jour" },
+  { label: "Sources", value: "Automatique" },
+  { label: "Langue", value: "Français" },
+  { label: "Région", value: "France" },
+  { label: "Quantité", value: "Tous les résultats (un seul site : peu de bruit, tu ne dois rien rater)" },
+  { label: "Envoyer à", value: "Ton adresse e-mail (ou un flux RSS si tu préfères ne pas recevoir d'e-mail)" },
+];
