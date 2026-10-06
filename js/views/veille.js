@@ -21,6 +21,7 @@
 // terme de structure").
 
 import * as veilleApi from "../domain/veille.js";
+import { parseCompetitorResearchResponse } from "../domain/veilleResearchImport.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
 import { validateRequiredFields, validateUrlField, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
@@ -597,7 +598,22 @@ export function renderVeille(container) {
           champs de la fiche "face à Agreo" ci-dessous) ; reporte ensuite son résultat dans les champs
           correspondants.
         </div>
-        <details>
+        <div class="ai-import-box">
+          <div class="ai-import-title">🤖 Recherche assistée par IA — remplissage en un clic</div>
+          <div class="item-meta">
+            1) "Copier la demande et ouvrir Perplexity", colle-la et lance la recherche · 2) copie toute la
+            réponse (le bloc JSON) · 3) colle-la ci-dessous et clique "Remplir la fiche". Rien n'est
+            enregistré tant que tu ne cliques pas "Enregistrer" ("Annuler" remet tout comme avant).
+          </div>
+          <button type="button" id="veille-ai-open-btn" class="btn btn-secondary btn-sm">🔎 Copier la demande et ouvrir Perplexity</button>
+          <div class="field" style="margin-top:var(--space-2);">
+            <label for="veille-ai-response">Réponse de l'IA</label>
+            <textarea id="veille-ai-response" rows="4" placeholder="Colle ici la réponse complète (le bloc JSON)…"></textarea>
+          </div>
+          <button type="button" id="veille-ai-import-btn" class="btn btn-primary btn-sm">📥 Remplir la fiche avec cette réponse</button>
+          <div id="veille-ai-import-result" class="item-meta" role="status" aria-live="polite"></div>
+        </div>
+        <details id="veille-competitor-details">
           <summary>🎯 Fiche comparative face à Agreo (SWOT)</summary>
           <div class="field">
             <label for="veille-profile">Résumé (qui ils sont, positionnement, marché)</label>
@@ -698,6 +714,114 @@ export function renderVeille(container) {
           pappersUrl: body.querySelector("#veille-pappers").value.trim(),
         })
       );
+    });
+
+    // Recherche assistée par IA (06/10/2026, option "A. Import en 1 clic" — retour de Charles-Henri :
+    // "la recherche sur les concurrents devrait pouvoir se faire beaucoup plus facilement et de manière
+    // automatisée via les IA"). Tout se passe DANS ce formulaire, sans ouvrir de nouvelle modale
+    // (openModal() n'en garde qu'une à la fois : en ouvrir une ici aurait fait disparaître le
+    // formulaire et tout ce qui y est déjà saisi pendant l'aller-retour vers l'IA).
+    // Pilotage reste 100 % client, sans clé API ni serveur : il prépare la demande et lit la réponse,
+    // c'est Charles-Henri qui fait tourner l'IA (Perplexity). Voir js/domain/veilleResearchImport.js.
+    const aiOpenBtn = body.querySelector("#veille-ai-open-btn");
+    aiOpenBtn.addEventListener("click", async () => {
+      const title = body.querySelector("#veille-title").value.trim();
+      if (!title) {
+        showToast("Renseigne d'abord le titre (le nom du concurrent)");
+        body.querySelector("#veille-title").focus();
+        return;
+      }
+      const prompt = veilleApi.competitorResearchPrompt({
+        title,
+        url: body.querySelector("#veille-url").value.trim(),
+        linkedinUrl: body.querySelector("#veille-linkedin").value.trim(),
+        pappersUrl: body.querySelector("#veille-pappers").value.trim(),
+      });
+      // Ouverture de l'onglet AVANT tout `await` : après une opération asynchrone, certains
+      // navigateurs (Safari en tête) ne considèrent plus le clic comme un geste utilisateur et
+      // bloquent la fenêtre. Page d'accueil de Perplexity plutôt qu'un lien "?q=<demande>" : cette
+      // demande est longue (modèle JSON inclus) et une adresse trop longue peut être tronquée en
+      // silence, ce qui lancerait une recherche avec une demande amputée de son format de réponse.
+      window.open("https://www.perplexity.ai/", "_blank", "noopener");
+      try {
+        await navigator.clipboard.writeText(prompt);
+        showToast("Demande copiée — colle-la dans Perplexity (Ctrl+V ou Cmd+V)");
+      } catch {
+        showToast("Copie automatique indisponible — utilise \"📋 Générer la demande\" pour la copier à la main");
+      }
+    });
+
+    // Champs du formulaire alimentés par l'import. `IMPORT_FILL_IF_EMPTY` = liens : jamais écrasés s'ils
+    // sont déjà renseignés (une URL saisie par Charles-Henri vaut mieux qu'une URL retrouvée par une IA).
+    const IMPORT_TARGETS = [
+      ["ca", "#veille-ca", "CA"],
+      ["notes", "#veille-notes", "Note"],
+      ["profileSummary", "#veille-profile", "Résumé"],
+      ["competitorStrengths", "#veille-their-strengths", "Forces"],
+      ["competitorWeaknesses", "#veille-their-weaknesses", "Faiblesses"],
+      ["opportunities", "#veille-opportunities", "Opportunités"],
+      ["threats", "#veille-threats", "Menaces"],
+      ["agreoStrengths", "#veille-agreo-strengths", "Force d'Agreo"],
+    ];
+    const IMPORT_FILL_IF_EMPTY = [
+      ["url", "#veille-url", "Site"],
+      ["linkedinUrl", "#veille-linkedin", "LinkedIn"],
+      ["pappersUrl", "#veille-pappers", "Pappers"],
+    ];
+    function markImported(el) {
+      el.classList.add("field-imported");
+      el.addEventListener("input", () => el.classList.remove("field-imported"), { once: true });
+    }
+    const aiImportBtn = body.querySelector("#veille-ai-import-btn");
+    const aiResultEl = body.querySelector("#veille-ai-import-result");
+    aiResultEl.style.whiteSpace = "pre-line";
+    aiImportBtn.addEventListener("click", () => {
+      const result = parseCompetitorResearchResponse(body.querySelector("#veille-ai-response").value);
+      if (!result.ok) {
+        aiResultEl.textContent = `⚠️ ${result.error}`;
+        return;
+      }
+      const { fields } = result;
+      const replaced = [];
+      const kept = [];
+      const skipped = []; // liens déjà saisis, non touchés (identiques ou non) : retirés du "Fiche remplie"
+      for (const [key, selector, label] of IMPORT_TARGETS) {
+        if (!(key in fields)) continue;
+        const el = body.querySelector(selector);
+        const previous = el.value.trim();
+        if (previous && previous !== fields[key]) replaced.push(label);
+        el.value = fields[key];
+        markImported(el);
+      }
+      for (const [key, selector, label] of IMPORT_FILL_IF_EMPTY) {
+        if (!(key in fields)) continue;
+        const el = body.querySelector(selector);
+        if (el.value.trim()) {
+          skipped.push(label);
+          if (el.value.trim() !== fields[key]) kept.push(label);
+          continue;
+        }
+        el.value = fields[key];
+        markImported(el);
+      }
+      // Curseurs : on déclenche "input" pour que la valeur affichée à côté du libellé suive.
+      for (const [key, selector] of [
+        ["specializationScore", "#veille-specialization"],
+        ["roadmapVisibilityScore", "#veille-roadmap-visibility"],
+      ]) {
+        if (!(key in fields)) continue;
+        const el = body.querySelector(selector);
+        el.value = String(fields[key]);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        markImported(el);
+      }
+      body.querySelector("#veille-competitor-details").open = true;
+      const lines = [`✅ Fiche remplie : ${result.filled.filter((l) => !skipped.includes(l)).join(", ")}.`];
+      if (replaced.length) lines.push(`↻ Remplacé (valeur précédente écrasée) : ${replaced.join(", ")}.`);
+      if (kept.length) lines.push(`Liens déjà saisis conservés : ${kept.join(", ")}.`);
+      if (result.missing.length) lines.push(`Non trouvé par l'IA : ${result.missing.join(", ")}.`);
+      lines.push("Relis les champs surlignés (\"🪪 Voir la fiche visuelle\" pour l'aperçu), corrige, puis clique \"Enregistrer\". Les 2 curseurs et la Force d'Agreo sont des propositions de l'IA, à ajuster avec ta propre connaissance.");
+      aiResultEl.textContent = lines.join("\n");
     });
 
     // Curseurs de positionnement (02/10/2026, Benchmark visuel) : valeur affichée à côté du
