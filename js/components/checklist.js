@@ -59,10 +59,9 @@
 //  - `onEdit(itemId, newText)` : un bouton "✏️" transforme le texte en champ éditable (Entrée ou
 //    perte de focus valide, Échap annule) — même principe d'édition en place que partout ailleurs
 //    dans l'app (ex. renommer un tag), jamais de modale dédiée pour un simple texte.
-//  - `onReorder(orderedIds)` : deux boutons ▲/▼ (réutilisant tels quels `.kanban-move-btn`, déjà
-//    stylés et déjà dotés d'une zone cliquable élargie à 44px — LOT 9/TODO-017 — sans dupliquer
-//    de CSS) permettent de monter/descendre un élément NON coché parmi les autres non cochés.
-//    Volontairement UNIQUEMENT sur les éléments non cochés : les éléments cochés sont de toute
+//  - `onReorder(orderedIds)` : permet de déplacer un élément NON coché parmi les autres non cochés.
+//    [06/10/2026 : les deux boutons ▲/▼ d'origine sont REMPLACÉS, sur tous les usages, par un appui
+//    maintenu puis glissement — js/components/dragReorder.js, voir plus bas.] Volontairement UNIQUEMENT sur les éléments non cochés : les éléments cochés sont de toute
 //    façon reclassés automatiquement par date de coche dès que `sortDoneToBottom` est actif (voir
 //    plus haut), un ordre manuel n'y aurait aucun sens. `orderedIds` est la liste des identifiants
 //    des éléments non cochés dans le nouvel ordre souhaité ; à charge de l'appelant (voir
@@ -74,21 +73,23 @@
 // boutons de navigation sur les éléments, ils rendent le post-it encore plus large pour les voir
 // entièrement, les boutons prennent plus de la moitié du post-it") — option OPTIONNELLE, activée
 // UNIQUEMENT par js/components/stickyNoteShared.js#renderNoteBody (post-it du plan de travail et
-// widgets flottants) ; les checklists de Tâche/Suivi gardent leurs boutons ▲/▼/✏️/✕ inchangés.
+// widgets flottants) ; les checklists de Tâche/Suivi gardent leurs boutons ✏️/✕ inchangés (seuls
+// ▲/▼ disparaissent, pour le glisser-déposer, sur TOUS les usages).
 // En mode compact, une ligne = case + texte (toute la largeur, texte entier visible), RIEN d'autre :
 //  - clic/toucher sur le TEXTE : ouvre, sous la ligne et pour CETTE ligne seulement, une petite
 //    barre d'actions (✏️ Modifier · 📋 Créer… [= créer une fiche depuis cette ligne] · 🗑️ Supprimer — libellés courts pour tenir sur UNE ligne dans un post-it étroit) — un second clic sur
 //    le texte, ou un clic sur le texte d'une autre ligne, la referme/la déplace.
 //  - maintien appuyé sur la ligne (souris : clic maintenu ; mobile : appui long) PUIS glissement :
-//    déplace l'élément parmi les autres éléments NON cochés (même règle que ▲/▼ avant : les cochés
-//    sont reclassés automatiquement, voir `sortDoneToBottom`). La liste se réordonne en direct sous
-//    le doigt/le curseur ; `onReorder(orderedIds)` n'est appelé qu'UNE fois, au relâchement, avec le
-//    même contrat que pour ▲/▼ — aucun changement côté appelant ni côté domaine.
+//    déplace l'élément parmi les autres éléments NON cochés (les cochés sont reclassés
+//    automatiquement, voir `sortDoneToBottom`). Mécanisme partagé, identique partout :
+//    js/components/dragReorder.js — `onReorder(orderedIds)` n'est appelé qu'UNE fois, au relâchement,
+//    avec le même contrat qu'avec ▲/▼ : aucun changement côté appelant ni côté domaine.
 // La barre d'actions reprend le bouton "Créer…" avec la classe `checklist-line-menu-btn` : c'est ce
 // qui permet à js/components/pinnedNotesOverlay.js de continuer à détecter, par délégation, l'ouverture
 // de la modale de conversion et de masquer la carte flottante le temps de sa chaîne de modales.
 
 import { guardClick } from "./modal.js";
+import { attachDragReorder } from "./dragReorder.js";
 
 /**
  * Tri d'affichage partagé (voir le commentaire du 22/09/2026 plus haut) : non cochés d'abord
@@ -113,13 +114,6 @@ export function renderChecklist(
   // Mode compact uniquement (voir `compactActions` en tête de fichier) : identifiant de la ligne dont
   // la barre d'actions est actuellement ouverte (une seule à la fois), `null` si aucune.
   let activeId = null;
-  // Glisser-déposer du mode compact (voir setupRowDrag plus bas) : déclarés ICI, avant tout appel,
-  // pour ne jamais dépendre de l'ordre d'exécution (const/let ne sont pas remontés comme les fonctions).
-  const LONG_PRESS_MS = 350;
-  const MOVE_TOLERANCE_PX = 8; // avant l'appui long : au-delà, c'est un défilement/balayage, pas un appui
-  const EDGE_SCROLL_PX = 32;
-  let drag = null;
-  let suppressTapUntil = 0;
   container.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
       <input id="checklist-new-text" type="text" placeholder="Ajouter un élément..." style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
@@ -130,7 +124,19 @@ export function renderChecklist(
   `;
 
   const listEl = container.querySelector("#checklist-items");
-  if (compactActions && onReorder) setupRowDrag();
+  // Réordonnancement par appui maintenu + glissement (js/components/dragReorder.js) — remplace les
+  // boutons ▲/▼ partout dans l'app (06/10/2026), pas seulement sur les post-it. Les éléments cochés
+  // n'ont pas la classe `drag-reorder-row` (voir renderList) : ils ne bougent pas.
+  const dragApi = onReorder
+    ? attachDragReorder(listEl, {
+        getCurrentOrder: () => current.filter((it) => !it.done).map((it) => it.id),
+        onReorder: async (orderedIds) => {
+          const updated = await onReorder(orderedIds);
+          current = updated || current;
+        },
+        rerender: () => renderList(),
+      })
+    : null;
   const clearDoneRowEl = container.querySelector("#checklist-clear-done-row");
 
   function renderClearDoneButton() {
@@ -159,11 +165,6 @@ export function renderChecklist(
     // plus récente en premier (retour de Charles-Henri, 14/09/2026 puis 22/09/2026 — voir le
     // commentaire en tête de ce fichier) — voir `sortChecklistForDisplay` ci-dessus.
     const visible = sortDoneToBottom ? sortChecklistForDisplay(current) : current;
-    // Ordre des éléments NON cochés tel qu'affiché — c'est cet ordre que `onReorder` fait
-    // évoluer (voir le commentaire en tête de fichier) : identique que `sortDoneToBottom` soit
-    // actif ou non, puisque le groupe non coché garde toujours son ordre d'origine dans les deux
-    // cas (voir `sortChecklistForDisplay`).
-    const notDoneIds = visible.filter((it) => !it.done).map((it) => it.id);
     listEl.innerHTML = "";
     for (const item of visible) {
       const row = document.createElement("div");
@@ -176,38 +177,11 @@ export function renderChecklist(
       `;
       const textSpan = row.querySelector(".checklist-item-text");
 
-      // ▲/▼ — uniquement sur les éléments non cochés (voir le commentaire en tête de fichier) et
-      // seulement quand l'appelant fournit `onReorder`.
-      if (!compactActions && onReorder && !item.done) {
-        const pos = notDoneIds.indexOf(item.id);
-        const upBtn = document.createElement("button");
-        upBtn.type = "button";
-        upBtn.className = "kanban-move-btn";
-        upBtn.setAttribute("aria-label", "Monter");
-        upBtn.title = "Monter";
-        upBtn.textContent = "▲";
-        if (pos <= 0) upBtn.disabled = true;
-        const downBtn = document.createElement("button");
-        downBtn.type = "button";
-        downBtn.className = "kanban-move-btn";
-        downBtn.setAttribute("aria-label", "Descendre");
-        downBtn.title = "Descendre";
-        downBtn.textContent = "▼";
-        if (pos < 0 || pos >= notDoneIds.length - 1) downBtn.disabled = true;
-        async function move(direction) {
-          const from = notDoneIds.indexOf(item.id);
-          const to = direction === "up" ? from - 1 : from + 1;
-          if (from < 0 || to < 0 || to >= notDoneIds.length) return;
-          const reordered = [...notDoneIds];
-          [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
-          const updated = await onReorder(reordered);
-          current = updated || current;
-          renderList();
-        }
-        upBtn.addEventListener("click", () => move("up"));
-        downBtn.addEventListener("click", () => move("down"));
-        row.appendChild(upBtn);
-        row.appendChild(downBtn);
+      // Élément non coché + `onReorder` fourni : ligne déplaçable par appui maintenu + glissement
+      // (js/components/dragReorder.js) — plus de boutons ▲/▼ (retour du 06/10/2026).
+      if (onReorder && !item.done) {
+        row.classList.add("drag-reorder-row");
+        row.dataset.dragId = item.id;
       }
 
       // ✏️ — édition en place du texte (retour de Charles-Henri, 22/09/2026 : "je suis obligé de
@@ -257,7 +231,7 @@ export function renderChecklist(
         row.appendChild(removeBtn);
         removeBtn.addEventListener("click", removeItem);
       } else {
-        decorateCompactRow(row, item, textSpan, removeItem, !item.done && !!onReorder);
+        decorateCompactRow(row, item, textSpan, removeItem);
       }
 
       row.querySelector('input[type="checkbox"]').addEventListener("change", async (e) => {
@@ -274,9 +248,8 @@ export function renderChecklist(
   // ---------------------------------------------------------------------------------------------
 
   /** Texte cliquable + barre d'actions sous la ligne active + ligne glissable (non cochée). */
-  function decorateCompactRow(row, item, textSpan, removeItem, draggable) {
+  function decorateCompactRow(row, item, textSpan, removeItem) {
     row.classList.add("checklist-item--compact");
-    if (draggable) row.classList.add("checklist-item--draggable");
     const isActive = item.id === activeId;
     if (isActive) row.classList.add("checklist-item--active");
     textSpan.classList.add("checklist-item-text--tappable");
@@ -285,7 +258,7 @@ export function renderChecklist(
     textSpan.setAttribute("aria-expanded", isActive ? "true" : "false");
     function toggleActions() {
       // Un relâchement de glisser-déposer ne doit jamais compter comme un clic sur le texte.
-      if (Date.now() < suppressTapUntil) return;
+      if (dragApi?.justDropped()) return;
       activeId = isActive ? null : item.id;
       renderList();
     }
@@ -333,153 +306,6 @@ export function renderChecklist(
     delBtn.addEventListener("click", removeItem);
     bar.appendChild(delBtn);
     row.appendChild(bar);
-  }
-
-  // Glisser-déposer par appui maintenu (souris : clic maintenu ; tactile : appui long). Un seul
-  // glissement à la fois, état partagé dans `drag`. Les écouteurs `document` ne sont posés que le
-  // temps d'un appui (pointerdown → pointerup/pointercancel) : rien ne traîne entre deux gestes.
-  function setupRowDrag() {
-    // Un `touchmove` NON passif, posé une fois sur la liste (jamais recréé par renderList), est ce qui
-    // permet d'empêcher le défilement du post-it PENDANT un glissement actif sans l'empêcher le reste
-    // du temps (le gestionnaire ne fait rien tant que `drag.active` est faux). Un écouteur ajouté
-    // seulement au moment de l'appui long arriverait trop tard pour certains navigateurs mobiles,
-    // qui décident dès le début du geste s'ils attendent ou non le thread principal.
-    listEl.addEventListener(
-      "touchmove",
-      (e) => {
-        if (drag?.active && e.cancelable) e.preventDefault();
-      },
-      { passive: false }
-    );
-    listEl.addEventListener("contextmenu", (e) => {
-      // L'appui long tactile ouvre sinon le menu contextuel/la sélection de texte du navigateur.
-      if (drag && e.target.closest(".checklist-item--draggable")) e.preventDefault();
-    });
-    listEl.addEventListener("pointerdown", (e) => {
-      const row = e.target.closest(".checklist-item--draggable");
-      if (!row || drag) return;
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-      // Cases à cocher, champ de modification, boutons : jamais le début d'un glissement.
-      if (e.target.closest("input, textarea, button")) return;
-      drag = {
-        row,
-        pointerId: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        lastY: e.clientY,
-        active: false,
-        moved: false,
-        rafId: 0,
-        timer: setTimeout(activateDrag, LONG_PRESS_MS),
-      };
-      document.addEventListener("pointermove", onDragMove);
-      document.addEventListener("pointerup", onDragEnd);
-      document.addEventListener("pointercancel", onDragCancel);
-    });
-  }
-
-  function activateDrag() {
-    if (!drag || !drag.row.isConnected) return endDrag();
-    drag.active = true;
-    drag.row.classList.add("checklist-item--dragging");
-    listEl.classList.add("checklist-items--dragging");
-    drag.rafId = requestAnimationFrame(autoScrollTick);
-  }
-
-  function onDragMove(e) {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    if (!drag.active) {
-      // Avant l'appui long : un déplacement notable = défilement ou balayage, on abandonne.
-      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) > MOVE_TOLERANCE_PX) endDrag();
-      return;
-    }
-    if (!drag.row.isConnected) return endDrag();
-    drag.lastY = e.clientY;
-    if (Math.abs(e.clientY - drag.startY) > 3) drag.moved = true;
-    repositionDraggedRow(e.clientY);
-  }
-
-  // Place la ligne glissée à l'endroit déduit de la position du pointeur : devant la première ligne
-  // (non cochée, autre que la sienne) dont le milieu est sous le pointeur, sinon après la dernière.
-  // Comparer aux seules AUTRES lignes (qui ne bougent pas entre elles) garantit qu'aucun va-et-vient
-  // n'apparaît, même quand les lignes ont des hauteurs différentes (texte sur plusieurs lignes).
-  function repositionDraggedRow(y) {
-    const others = [...listEl.querySelectorAll(".checklist-item--draggable")].filter((r) => r !== drag.row);
-    const before = others.find((r) => {
-      const rect = r.getBoundingClientRect();
-      return y < rect.top + rect.height / 2;
-    });
-    if (before) {
-      if (drag.row.nextElementSibling !== before) listEl.insertBefore(drag.row, before);
-    } else if (others.length) {
-      const last = others[others.length - 1];
-      if (last.nextElementSibling !== drag.row) last.after(drag.row);
-    }
-  }
-
-  function autoScrollTick() {
-    if (!drag?.active) return;
-    const scroller = scrollParentOf(listEl);
-    if (scroller) {
-      const rect = scroller.getBoundingClientRect();
-      let delta = 0;
-      if (drag.lastY < rect.top + EDGE_SCROLL_PX) delta = -8;
-      else if (drag.lastY > rect.bottom - EDGE_SCROLL_PX) delta = 8;
-      if (delta) {
-        scroller.scrollTop += delta;
-        repositionDraggedRow(drag.lastY);
-      }
-    }
-    drag.rafId = requestAnimationFrame(autoScrollTick);
-  }
-
-  async function onDragEnd(e) {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    const wasActive = drag.active;
-    const moved = drag.moved;
-    const row = drag.row;
-    const newOrder = wasActive && row.isConnected
-      ? [...listEl.querySelectorAll(".checklist-item--draggable")].map((r) => r.dataset.itemId)
-      : null;
-    endDrag();
-    if (!wasActive) return;
-    // Si le doigt/curseur a réellement bougé, le clic synthétique qui suit le relâchement ne doit pas
-    // ouvrir la barre d'actions ; sans mouvement (simple appui un peu long), il reste un clic normal.
-    if (moved) suppressTapUntil = Date.now() + 150;
-    const currentOrder = current.filter((it) => !it.done).map((it) => it.id);
-    if (newOrder && newOrder.join("|") !== currentOrder.join("|")) {
-      const updated = await onReorder(newOrder);
-      current = updated || current;
-    }
-    renderList();
-  }
-
-  function onDragCancel(e) {
-    if (!drag || e.pointerId !== drag.pointerId) return;
-    const wasActive = drag.active;
-    endDrag();
-    // Le navigateur reprend le geste (défilement) : on rétablit l'ordre d'origine sans rien écrire.
-    if (wasActive) renderList();
-  }
-
-  function endDrag() {
-    if (!drag) return;
-    clearTimeout(drag.timer);
-    cancelAnimationFrame(drag.rafId);
-    drag.row.classList.remove("checklist-item--dragging");
-    listEl.classList.remove("checklist-items--dragging");
-    document.removeEventListener("pointermove", onDragMove);
-    document.removeEventListener("pointerup", onDragEnd);
-    document.removeEventListener("pointercancel", onDragCancel);
-    drag = null;
-  }
-
-  function scrollParentOf(el) {
-    for (let node = el.parentElement; node; node = node.parentElement) {
-      const overflowY = getComputedStyle(node).overflowY;
-      if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) return node;
-    }
-    return null;
   }
 
   function startEdit(item, textSpan) {
