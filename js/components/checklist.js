@@ -69,6 +69,25 @@
 //    js/domain/tasks.js#reorderChecklist / js/domain/followups.js#reorderChecklist) de
 //    reconstituer le tableau complet en conservant les éléments cochés à leur place.
 
+//
+// `compactActions` (06/10/2026, retour direct de Charles-Henri sur les POST-IT : "je n'aime pas les
+// boutons de navigation sur les éléments, ils rendent le post-it encore plus large pour les voir
+// entièrement, les boutons prennent plus de la moitié du post-it") — option OPTIONNELLE, activée
+// UNIQUEMENT par js/components/stickyNoteShared.js#renderNoteBody (post-it du plan de travail et
+// widgets flottants) ; les checklists de Tâche/Suivi gardent leurs boutons ▲/▼/✏️/✕ inchangés.
+// En mode compact, une ligne = case + texte (toute la largeur, texte entier visible), RIEN d'autre :
+//  - clic/toucher sur le TEXTE : ouvre, sous la ligne et pour CETTE ligne seulement, une petite
+//    barre d'actions (✏️ Modifier · 📋 Créer… [= créer une fiche depuis cette ligne] · 🗑️ Supprimer — libellés courts pour tenir sur UNE ligne dans un post-it étroit) — un second clic sur
+//    le texte, ou un clic sur le texte d'une autre ligne, la referme/la déplace.
+//  - maintien appuyé sur la ligne (souris : clic maintenu ; mobile : appui long) PUIS glissement :
+//    déplace l'élément parmi les autres éléments NON cochés (même règle que ▲/▼ avant : les cochés
+//    sont reclassés automatiquement, voir `sortDoneToBottom`). La liste se réordonne en direct sous
+//    le doigt/le curseur ; `onReorder(orderedIds)` n'est appelé qu'UNE fois, au relâchement, avec le
+//    même contrat que pour ▲/▼ — aucun changement côté appelant ni côté domaine.
+// La barre d'actions reprend le bouton "Créer…" avec la classe `checklist-line-menu-btn` : c'est ce
+// qui permet à js/components/pinnedNotesOverlay.js de continuer à détecter, par délégation, l'ouverture
+// de la modale de conversion et de masquer la carte flottante le temps de sa chaîne de modales.
+
 import { guardClick } from "./modal.js";
 
 /**
@@ -88,9 +107,19 @@ export function sortChecklistForDisplay(items) {
 export function renderChecklist(
   container,
   items,
-  { onAdd, onToggle, onRemove, onEdit, onReorder, onClearDone, onLineMenu, sortDoneToBottom = false, emptyLabel = "Pas encore de sous-étape." } = {}
+  { onAdd, onToggle, onRemove, onEdit, onReorder, onClearDone, onLineMenu, sortDoneToBottom = false, compactActions = false, emptyLabel = "Pas encore de sous-étape." } = {}
 ) {
   let current = items || [];
+  // Mode compact uniquement (voir `compactActions` en tête de fichier) : identifiant de la ligne dont
+  // la barre d'actions est actuellement ouverte (une seule à la fois), `null` si aucune.
+  let activeId = null;
+  // Glisser-déposer du mode compact (voir setupRowDrag plus bas) : déclarés ICI, avant tout appel,
+  // pour ne jamais dépendre de l'ordre d'exécution (const/let ne sont pas remontés comme les fonctions).
+  const LONG_PRESS_MS = 350;
+  const MOVE_TOLERANCE_PX = 8; // avant l'appui long : au-delà, c'est un défilement/balayage, pas un appui
+  const EDGE_SCROLL_PX = 32;
+  let drag = null;
+  let suppressTapUntil = 0;
   container.innerHTML = `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
       <input id="checklist-new-text" type="text" placeholder="Ajouter un élément..." style="flex:1;min-width:0;border:1px solid var(--color-border);border-radius:var(--radius-sm);padding:var(--space-3);" />
@@ -101,6 +130,7 @@ export function renderChecklist(
   `;
 
   const listEl = container.querySelector("#checklist-items");
+  if (compactActions && onReorder) setupRowDrag();
   const clearDoneRowEl = container.querySelector("#checklist-clear-done-row");
 
   function renderClearDoneButton() {
@@ -138,6 +168,7 @@ export function renderChecklist(
     for (const item of visible) {
       const row = document.createElement("div");
       row.className = "checklist-item";
+      row.dataset.itemId = item.id;
       row.innerHTML = `
         <input type="checkbox" ${item.done ? "checked" : ""} aria-label="${escapeAttr(item.text)}" />
         <span class="checklist-item-text${item.done ? " done" : ""}">${escapeHtml(item.text)}</span>
@@ -147,7 +178,7 @@ export function renderChecklist(
 
       // ▲/▼ — uniquement sur les éléments non cochés (voir le commentaire en tête de fichier) et
       // seulement quand l'appelant fournit `onReorder`.
-      if (onReorder && !item.done) {
+      if (!compactActions && onReorder && !item.done) {
         const pos = notDoneIds.indexOf(item.id);
         const upBtn = document.createElement("button");
         upBtn.type = "button";
@@ -182,7 +213,7 @@ export function renderChecklist(
       // ✏️ — édition en place du texte (retour de Charles-Henri, 22/09/2026 : "je suis obligé de
       // supprimer et de le réécrire") : jamais de modale pour un simple texte, même principe
       // qu'ailleurs dans l'app pour renommer un élément court.
-      if (onEdit) {
+      if (!compactActions && onEdit) {
         const editBtn = document.createElement("button");
         editBtn.type = "button";
         editBtn.className = "btn btn-ghost btn-sm";
@@ -196,7 +227,7 @@ export function renderChecklist(
       // "⋯" — menu de conversion de cette seule ligne (voir le commentaire en tête de fichier),
       // avant le bouton de suppression pour ne jamais changer la position de ce dernier sur les
       // trois usages existants qui ne passent pas `onLineMenu`.
-      if (onLineMenu) {
+      if (!compactActions && onLineMenu) {
         const lineMenuBtn = document.createElement("button");
         lineMenuBtn.type = "button";
         // `checklist-line-menu-btn` (complément du 28/09/2026) — classe dédiée, en plus des classes
@@ -212,25 +243,243 @@ export function renderChecklist(
         row.appendChild(lineMenuBtn);
       }
 
-      const removeBtn = document.createElement("button");
-      removeBtn.type = "button";
-      removeBtn.className = "btn btn-ghost btn-sm";
-      removeBtn.setAttribute("aria-label", "Retirer cet élément");
-      removeBtn.textContent = "✕";
-      row.appendChild(removeBtn);
+      async function removeItem() {
+        const updated = await onRemove(item.id);
+        current = updated || current;
+        renderList();
+      }
+      if (!compactActions) {
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "btn btn-ghost btn-sm";
+        removeBtn.setAttribute("aria-label", "Retirer cet élément");
+        removeBtn.textContent = "✕";
+        row.appendChild(removeBtn);
+        removeBtn.addEventListener("click", removeItem);
+      } else {
+        decorateCompactRow(row, item, textSpan, removeItem, !item.done && !!onReorder);
+      }
 
       row.querySelector('input[type="checkbox"]').addEventListener("change", async (e) => {
         const updated = await onToggle(item.id, e.target.checked);
         current = updated || current;
         renderList();
       });
-      removeBtn.addEventListener("click", async () => {
-        const updated = await onRemove(item.id);
-        current = updated || current;
-        renderList();
-      });
       listEl.appendChild(row);
     }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Mode compact (post-it) — voir `compactActions` en tête de fichier.
+  // ---------------------------------------------------------------------------------------------
+
+  /** Texte cliquable + barre d'actions sous la ligne active + ligne glissable (non cochée). */
+  function decorateCompactRow(row, item, textSpan, removeItem, draggable) {
+    row.classList.add("checklist-item--compact");
+    if (draggable) row.classList.add("checklist-item--draggable");
+    const isActive = item.id === activeId;
+    if (isActive) row.classList.add("checklist-item--active");
+    textSpan.classList.add("checklist-item-text--tappable");
+    textSpan.tabIndex = 0;
+    textSpan.setAttribute("role", "button");
+    textSpan.setAttribute("aria-expanded", isActive ? "true" : "false");
+    function toggleActions() {
+      // Un relâchement de glisser-déposer ne doit jamais compter comme un clic sur le texte.
+      if (Date.now() < suppressTapUntil) return;
+      activeId = isActive ? null : item.id;
+      renderList();
+    }
+    textSpan.addEventListener("click", toggleActions);
+    textSpan.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleActions();
+      }
+    });
+    if (!isActive) return;
+
+    const bar = document.createElement("div");
+    bar.className = "checklist-item-actions";
+    if (onEdit) {
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn btn-ghost btn-sm";
+      editBtn.textContent = "✏️ Modifier";
+      editBtn.addEventListener("click", () => {
+        activeId = null;
+        bar.remove();
+        row.classList.remove("checklist-item--active");
+        startEdit(item, textSpan);
+      });
+      bar.appendChild(editBtn);
+    }
+    if (onLineMenu) {
+      const createBtn = document.createElement("button");
+      createBtn.type = "button";
+      // `checklist-line-menu-btn` : voir le commentaire de `compactActions` en tête de fichier.
+      createBtn.className = "btn btn-ghost btn-sm checklist-line-menu-btn";
+      createBtn.setAttribute("aria-label", "Créer une fiche à partir de cette ligne");
+      createBtn.title = "Créer une fiche à partir de cette ligne";
+      createBtn.textContent = "📋 Créer…";
+      createBtn.addEventListener("click", () => onLineMenu(item));
+      bar.appendChild(createBtn);
+    }
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "btn btn-ghost btn-sm";
+    delBtn.setAttribute("aria-label", "Retirer cet élément");
+    delBtn.title = "Supprimer cette ligne";
+    delBtn.textContent = "🗑️";
+    delBtn.addEventListener("click", removeItem);
+    bar.appendChild(delBtn);
+    row.appendChild(bar);
+  }
+
+  // Glisser-déposer par appui maintenu (souris : clic maintenu ; tactile : appui long). Un seul
+  // glissement à la fois, état partagé dans `drag`. Les écouteurs `document` ne sont posés que le
+  // temps d'un appui (pointerdown → pointerup/pointercancel) : rien ne traîne entre deux gestes.
+  function setupRowDrag() {
+    // Un `touchmove` NON passif, posé une fois sur la liste (jamais recréé par renderList), est ce qui
+    // permet d'empêcher le défilement du post-it PENDANT un glissement actif sans l'empêcher le reste
+    // du temps (le gestionnaire ne fait rien tant que `drag.active` est faux). Un écouteur ajouté
+    // seulement au moment de l'appui long arriverait trop tard pour certains navigateurs mobiles,
+    // qui décident dès le début du geste s'ils attendent ou non le thread principal.
+    listEl.addEventListener(
+      "touchmove",
+      (e) => {
+        if (drag?.active && e.cancelable) e.preventDefault();
+      },
+      { passive: false }
+    );
+    listEl.addEventListener("contextmenu", (e) => {
+      // L'appui long tactile ouvre sinon le menu contextuel/la sélection de texte du navigateur.
+      if (drag && e.target.closest(".checklist-item--draggable")) e.preventDefault();
+    });
+    listEl.addEventListener("pointerdown", (e) => {
+      const row = e.target.closest(".checklist-item--draggable");
+      if (!row || drag) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      // Cases à cocher, champ de modification, boutons : jamais le début d'un glissement.
+      if (e.target.closest("input, textarea, button")) return;
+      drag = {
+        row,
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastY: e.clientY,
+        active: false,
+        moved: false,
+        rafId: 0,
+        timer: setTimeout(activateDrag, LONG_PRESS_MS),
+      };
+      document.addEventListener("pointermove", onDragMove);
+      document.addEventListener("pointerup", onDragEnd);
+      document.addEventListener("pointercancel", onDragCancel);
+    });
+  }
+
+  function activateDrag() {
+    if (!drag || !drag.row.isConnected) return endDrag();
+    drag.active = true;
+    drag.row.classList.add("checklist-item--dragging");
+    listEl.classList.add("checklist-items--dragging");
+    drag.rafId = requestAnimationFrame(autoScrollTick);
+  }
+
+  function onDragMove(e) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    if (!drag.active) {
+      // Avant l'appui long : un déplacement notable = défilement ou balayage, on abandonne.
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) > MOVE_TOLERANCE_PX) endDrag();
+      return;
+    }
+    if (!drag.row.isConnected) return endDrag();
+    drag.lastY = e.clientY;
+    if (Math.abs(e.clientY - drag.startY) > 3) drag.moved = true;
+    repositionDraggedRow(e.clientY);
+  }
+
+  // Place la ligne glissée à l'endroit déduit de la position du pointeur : devant la première ligne
+  // (non cochée, autre que la sienne) dont le milieu est sous le pointeur, sinon après la dernière.
+  // Comparer aux seules AUTRES lignes (qui ne bougent pas entre elles) garantit qu'aucun va-et-vient
+  // n'apparaît, même quand les lignes ont des hauteurs différentes (texte sur plusieurs lignes).
+  function repositionDraggedRow(y) {
+    const others = [...listEl.querySelectorAll(".checklist-item--draggable")].filter((r) => r !== drag.row);
+    const before = others.find((r) => {
+      const rect = r.getBoundingClientRect();
+      return y < rect.top + rect.height / 2;
+    });
+    if (before) {
+      if (drag.row.nextElementSibling !== before) listEl.insertBefore(drag.row, before);
+    } else if (others.length) {
+      const last = others[others.length - 1];
+      if (last.nextElementSibling !== drag.row) last.after(drag.row);
+    }
+  }
+
+  function autoScrollTick() {
+    if (!drag?.active) return;
+    const scroller = scrollParentOf(listEl);
+    if (scroller) {
+      const rect = scroller.getBoundingClientRect();
+      let delta = 0;
+      if (drag.lastY < rect.top + EDGE_SCROLL_PX) delta = -8;
+      else if (drag.lastY > rect.bottom - EDGE_SCROLL_PX) delta = 8;
+      if (delta) {
+        scroller.scrollTop += delta;
+        repositionDraggedRow(drag.lastY);
+      }
+    }
+    drag.rafId = requestAnimationFrame(autoScrollTick);
+  }
+
+  async function onDragEnd(e) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const wasActive = drag.active;
+    const moved = drag.moved;
+    const row = drag.row;
+    const newOrder = wasActive && row.isConnected
+      ? [...listEl.querySelectorAll(".checklist-item--draggable")].map((r) => r.dataset.itemId)
+      : null;
+    endDrag();
+    if (!wasActive) return;
+    // Si le doigt/curseur a réellement bougé, le clic synthétique qui suit le relâchement ne doit pas
+    // ouvrir la barre d'actions ; sans mouvement (simple appui un peu long), il reste un clic normal.
+    if (moved) suppressTapUntil = Date.now() + 150;
+    const currentOrder = current.filter((it) => !it.done).map((it) => it.id);
+    if (newOrder && newOrder.join("|") !== currentOrder.join("|")) {
+      const updated = await onReorder(newOrder);
+      current = updated || current;
+    }
+    renderList();
+  }
+
+  function onDragCancel(e) {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const wasActive = drag.active;
+    endDrag();
+    // Le navigateur reprend le geste (défilement) : on rétablit l'ordre d'origine sans rien écrire.
+    if (wasActive) renderList();
+  }
+
+  function endDrag() {
+    if (!drag) return;
+    clearTimeout(drag.timer);
+    cancelAnimationFrame(drag.rafId);
+    drag.row.classList.remove("checklist-item--dragging");
+    listEl.classList.remove("checklist-items--dragging");
+    document.removeEventListener("pointermove", onDragMove);
+    document.removeEventListener("pointerup", onDragEnd);
+    document.removeEventListener("pointercancel", onDragCancel);
+    drag = null;
+  }
+
+  function scrollParentOf(el) {
+    for (let node = el.parentElement; node; node = node.parentElement) {
+      const overflowY = getComputedStyle(node).overflowY;
+      if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) return node;
+    }
+    return null;
   }
 
   function startEdit(item, textSpan) {
