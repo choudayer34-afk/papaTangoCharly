@@ -33,6 +33,13 @@ const WHATS_NEW = [
     items: [
       {
         type: "add",
+        title: "🆕 Veille : voir ce qui a changé sur une page",
+        text: "Quand \"🔍 Vérifier\" détecte une nouveauté, un bouton \"🆕 Voir ce qui a changé\" affiche les lignes apparues sur la page depuis la vérification précédente (nouveaux titres, nouveaux liens). Il est disponible sous la source concernée et dans le détail de la vérification, tant que la nouveauté n'est pas marquée comme vue. Limites : une ligne retouchée ou une date qui change peut apparaître comme nouvelle, et les sources déjà suivies n'auront de détail qu'à partir de leur prochain changement.",
+        howTo: "☰ Plus → \"📡 Veille\" → \"🔍 Vérifier\" → \"🆕 Voir ce qui a changé\" ; \"✔ Marquer comme vu\" efface la nouveauté.",
+        gain: "Plus besoin d'ouvrir chaque site pour deviner ce qui est nouveau : les lignes nouvelles sont sous tes yeux.",
+      },
+      {
+        type: "add",
         title: "⚠️ Veille : alerte quand une page ne peut pas être surveillée",
         text: "Certaines pages (comme Terre-net) chargent leurs actualités par JavaScript : Pilotage n'y lit qu'un message d'attente et ne peut rien détecter. \"🔍 Tester\" et \"🔍 Vérifier\" le signalent désormais (⚠️ zone très courte au lieu d'un faux ✅) et proposent la procédure pas à pas pour surveiller ce site avec Google Alerts : requête prête à copier, réglages à choisir, et quoi décocher dans la fiche.",
         howTo: "Dans le détail de \"🔍 Vérifier\", bouton \"🔔 Procédure Google Alerts\" sous la source concernée ; dans la fiche d'une source, \"🔍 Tester maintenant\" affiche la procédure sous le résultat.",
