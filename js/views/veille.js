@@ -267,6 +267,7 @@ export function renderVeille(container) {
           "📖 Voir la méthode complète dans le guide"
         )}
       </p>
+      <div id="veille-quick-access"></div>
       <div id="veille-starter-prompt"></div>
       <div id="veille-sections"></div>
     </div>
@@ -275,6 +276,7 @@ export function renderVeille(container) {
   const newBtn = container.querySelector("#veille-new-btn");
   const checkBtn = container.querySelector("#veille-check-btn");
   const starterEl = container.querySelector("#veille-starter-prompt");
+  const quickAccessEl = container.querySelector("#veille-quick-access");
   const sectionsEl = container.querySelector("#veille-sections");
 
   newBtn.addEventListener("click", () => openSourceModal());
@@ -315,12 +317,142 @@ export function renderVeille(container) {
   function render(sources) {
     currentSources = sources;
     checkBtn.style.display = sources.some((s) => s.watchEnabled) ? "" : "none";
+    renderQuickAccess(sources);
     renderStarterPrompt(sources);
     renderSections(sources);
   }
 
+  // Les raccourcis (catégorie "outils") ne sont pas des sources à scanner : ils vivent dans la zone
+  // "Accès rapide" et ne comptent ni pour l'écran vide de départ ni pour les sections par sujet.
+  const isTool = (s) => s.category === veilleApi.TOOLS_CATEGORY_KEY;
+
+  // 🔗 Accès rapide (06/10/2026, demande directe de Charles-Henri : "met moi en accès direct le lien
+  // vers les outils et boîte mail tiers dans la veille"). Un clic ouvre le service dans un nouvel
+  // onglet ; la session reste celle du navigateur — Pilotage ne stocke ni identifiant ni mot de passe.
+  // Un raccourci sans lien (la boîte mail livrée par défaut) s'affiche "à renseigner" et ouvre sa fiche.
+  function renderQuickAccess(sources) {
+    const tools = sources
+      .filter(isTool)
+      .sort((a, b) => sortKey(a.title).localeCompare(sortKey(b.title), "fr"));
+    const hasHttp = (t) => /^https?:\/\//i.test(t.url || "");
+    quickAccessEl.innerHTML = `
+      <div class="card veille-quick-access">
+        <div class="veille-quick-head">
+          <div class="item-title">🔗 Accès rapide</div>
+          <div class="veille-quick-head-actions">
+            <button type="button" id="veille-alerts-btn" class="btn btn-ghost btn-sm">🔔 Requêtes Google Alerts</button>
+            <button type="button" id="veille-tool-add-btn" class="btn btn-ghost btn-sm">+ Raccourci</button>
+          </div>
+        </div>
+        ${
+          tools.length
+            ? `<div class="veille-quick-links">${tools
+                .map((t, i) =>
+                  hasHttp(t)
+                    ? `<span class="veille-quick-link">
+                        <a class="btn btn-secondary btn-sm" href="${escapeAttr(t.url)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(t.notes || t.url)}">${escapeHtml(t.title)} ↗</a>
+                        <button type="button" class="btn btn-ghost btn-sm veille-quick-edit" data-tool-idx="${i}" aria-label="Modifier le raccourci ${escapeAttr(t.title)}" title="Modifier">✏️</button>
+                      </span>`
+                    : `<span class="veille-quick-link">
+                        <button type="button" class="btn btn-secondary btn-sm veille-quick-edit veille-quick-link--todo" data-tool-idx="${i}" title="Aucun lien enregistré — clique pour le renseigner">${escapeHtml(t.title)} — à renseigner</button>
+                      </span>`
+                )
+                .join("")}</div>`
+            : `<div class="item-meta">
+                Tes outils et ta boîte mail à un clic, depuis la veille. Une première liste est prête
+                (boîte mail à renseigner, Google Alerts, Perplexity, Pappers, LinkedIn) — tu peux
+                l'ajouter d'un clic puis l'ajuster, ou ajouter tes propres raccourcis avec « + Raccourci ».
+                <div style="margin-top:8px;"><button type="button" id="veille-tools-starter-btn" class="btn btn-secondary btn-sm">📥 Ajouter les raccourcis proposés</button></div>
+              </div>`
+        }
+      </div>
+    `;
+    quickAccessEl.querySelector("#veille-alerts-btn").addEventListener("click", () => openAlertsModal());
+    quickAccessEl.querySelector("#veille-tool-add-btn").addEventListener("click", () =>
+      openSourceModal(null, { category: veilleApi.TOOLS_CATEGORY_KEY })
+    );
+    quickAccessEl.querySelectorAll(".veille-quick-edit").forEach((btn) => {
+      btn.addEventListener("click", () => openSourceModal(tools[Number(btn.dataset.toolIdx)]));
+    });
+    const starterBtn = quickAccessEl.querySelector("#veille-tools-starter-btn");
+    starterBtn?.addEventListener(
+      "click",
+      guardClick(starterBtn, async () => {
+        await Promise.all(veilleApi.STARTER_TOOLS.map((t) => veilleApi.createSource(t)));
+        showToast(`${veilleApi.STARTER_TOOLS.length} raccourcis ajoutés`);
+      })
+    );
+  }
+
+  // Tri alphabétique qui ignore l'émoji/ponctuation de tête ("✉️ Boîte mail" se range au B).
+  function sortKey(title) {
+    return String(title || "").replace(/^[^\p{L}\p{N}]+/u, "");
+  }
+
+  // 🔔 Requêtes Google Alerts à recopier (06/10/2026) — une ligne = une alerte à coller dans le champ
+  // de recherche de Google Alerts. Aucun accès à ton compte Google : on prépare le texte, tu le colles.
+  function openAlertsModal() {
+    const body = document.createElement("div");
+    const syntaxHtml = veilleApi.GOOGLE_ALERTS_SYNTAX.map(
+      (e) => `<li><code>${escapeHtml(e.code)}</code> — ${escapeHtml(e.text)}</li>`
+    ).join("");
+    const groupsHtml = veilleApi.GOOGLE_ALERTS_GROUPS.map(
+      (g) => `
+        <div class="section-title" style="margin-top:12px;">${g.emoji} ${escapeHtml(g.label)}</div>
+        <div class="item-meta" style="margin-bottom:6px;">${escapeHtml(g.settings)}</div>
+        ${g.queries
+          .map(
+            (item) => `
+          <div class="alert-query-row">
+            <div class="alert-query-main">
+              <code class="alert-query-code">${escapeHtml(item.q)}</code>
+              ${item.note ? `<div class="item-meta">${escapeHtml(item.note)}</div>` : ""}
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm alert-query-copy" data-q="${escapeAttr(item.q)}" aria-label="Copier cette requête" title="Copier">📋</button>
+          </div>`
+          )
+          .join("")}`
+    ).join("");
+    body.innerHTML = `
+      <p class="item-meta" style="margin-top:0;">
+        Une ligne = une alerte. Copie la requête (📋), ouvre Google Alerts, colle-la dans le champ de
+        recherche, puis règle la fréquence indiquée au-dessus de chaque groupe.
+      </p>
+      <details>
+        <summary class="item-meta" style="cursor:pointer;">Syntaxe utile</summary>
+        <ul style="padding-left:20px;margin:6px 0;">${syntaxHtml}</ul>
+      </details>
+      ${groupsHtml}
+      <p class="item-meta" style="margin-bottom:0;">${escapeHtml(veilleApi.GOOGLE_ALERTS_DELIVERY_TIP)}</p>
+    `;
+    body.querySelectorAll(".alert-query-copy").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(btn.dataset.q);
+          showToast("Requête copiée");
+        } catch {
+          showToast("Copie automatique indisponible — sélectionne la requête et copie-la (Ctrl+C / Cmd+C)");
+        }
+      });
+    });
+    openModal({
+      title: "🔔 Requêtes Google Alerts",
+      body,
+      wide: true,
+      actions: [
+        { label: "Fermer", variant: "ghost" },
+        {
+          label: "Ouvrir Google Alerts ↗",
+          variant: "primary",
+          closesModal: false,
+          onClick: () => window.open("https://www.google.com/alerts", "_blank", "noopener,noreferrer"),
+        },
+      ],
+    });
+  }
+
   function renderStarterPrompt(sources) {
-    if (sources.length > 0) {
+    if (sources.some((s) => !isTool(s))) {
       starterEl.innerHTML = "";
       return;
     }
@@ -347,7 +479,7 @@ export function renderVeille(container) {
 
   function renderSections(sources) {
     sectionsEl.innerHTML = "";
-    for (const cat of veilleApi.CATEGORIES) {
+    for (const cat of veilleApi.CATEGORIES.filter((c) => c.key !== veilleApi.TOOLS_CATEGORY_KEY)) {
       const items = sources.filter((s) => s.category === cat.key).sort((a, b) => a.title.localeCompare(b.title, "fr"));
 
       const title = document.createElement("div");
@@ -555,12 +687,12 @@ export function renderVeille(container) {
     openModal({ title: "📊 Benchmark visuel concurrents", body, actions: [{ label: "Fermer", variant: "ghost" }], wide: true });
   }
 
-  function openSourceModal(existing = null) {
+  function openSourceModal(existing = null, presets = {}) {
     const body = document.createElement("div");
     body.innerHTML = `
       <div class="field">
         <label for="veille-title">Titre</label>
-        <input id="veille-title" type="text" placeholder="Ex. SEMAE — réglementation semences" value="${escapeAttr(existing?.title || "")}" />
+        <input id="veille-title" type="text" placeholder="Ex. SEMAE — réglementation semences" value="${escapeAttr(existing?.title || presets.title || "")}" />
       </div>
       <div class="field">
         <label for="veille-url">Lien (optionnel)</label>
@@ -570,7 +702,7 @@ export function renderVeille(container) {
         <label for="veille-category">Catégorie</label>
         <select id="veille-category">
           ${veilleApi.CATEGORIES.map(
-            (c) => `<option value="${c.key}" ${existing && existing.category === c.key ? "selected" : ""}>${c.emoji} ${c.label}</option>`
+            (c) => `<option value="${c.key}" ${(existing?.category || presets.category) === c.key ? "selected" : ""}>${c.emoji} ${c.label}</option>`
           ).join("")}
         </select>
       </div>
