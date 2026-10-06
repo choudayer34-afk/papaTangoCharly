@@ -353,6 +353,9 @@ test.describe("LOT 13 — Mon bureau : conversion intelligente (une seule ligne 
 
     // Menu "⋯" DE LA LIGNE (pas celui du post-it) — voir js/components/checklist.js#onLineMenu.
     const rowToConvert = note.el.locator(".checklist-item", { hasText: lineToConvert });
+    // 06/10/2026 : plus de bouton "⋯" permanent par ligne (retour de Charles-Henri) — un clic sur le
+    // TEXTE de la ligne ouvre d'abord sa barre d'actions (js/components/checklist.js, `compactActions`).
+    await rowToConvert.locator(".checklist-item-text").click();
     await rowToConvert.getByRole("button", { name: "Créer une fiche à partir de cette ligne" }).click();
 
     await expect(page.getByRole("heading", { name: "Créer depuis cette ligne" })).toBeVisible({ timeout: 5_000 });
