@@ -47,7 +47,16 @@ export const CATEGORIES = [
   { key: "reglementation", label: "Réglementation", emoji: "⚖️" },
   { key: "concurrence", label: "Marché / concurrence", emoji: "🏢" },
   { key: "management", label: "Management / pilotage", emoji: "🧭" },
+  // Raccourcis vers les outils tiers et la boîte mail (06/10/2026, demande directe de Charles-Henri :
+  // "met moi en accès direct le lien vers les outils et boîte mail tiers dans la veille"). Même
+  // collection que les sources — donc même fenêtre d'édition, mêmes données synchronisées entre
+  // appareils — mais PAS une source à scanner : js/views/veille.js les affiche dans la zone
+  // "Accès rapide" en haut de l'écran, pas dans les sections par sujet (ni dans le benchmark).
+  { key: "outils", label: "Outils & boîte mail", emoji: "🔗" },
 ];
+
+/** Clé de la catégorie "raccourcis" — voir le commentaire ci-dessus. */
+export const TOOLS_CATEGORY_KEY = "outils";
 
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]));
 
@@ -435,3 +444,76 @@ export const STARTER_SOURCES = [
   { title: "Vlan! (série Leadership)", url: "https://podcasts.apple.com/ca/podcast/vlan/id1233992877", category: "management", notes: "Podcast — posture de leader et culture d'organisation ; lien vers le podcast Vlan! dans son ensemble, à affiner sur l'épisode/la série précise une fois écouté." },
   { title: "Skills (Nadia Marouani)", url: "https://podcasts.apple.com/us/podcast/skills/id1783580702", category: "management", notes: "Podcast — compétences transverses (communication, influence) pour la montée en responsabilité." },
 ];
+
+/**
+ * Raccourcis proposés à l'import en un clic (06/10/2026) — des liens VERS des services, jamais d'identifiant
+ * ni de mot de passe (Pilotage n'en stocke aucun : on ouvre simplement la page, la session reste celle
+ * du navigateur). La boîte mail est volontairement livrée SANS lien : son adresse dépend du fournisseur
+ * (Outlook, Gmail...) et Pilotage n'a pas à le deviner — un raccourci sans lien s'affiche "à renseigner"
+ * et ouvre la fiche d'édition pour coller le bon lien une fois pour toutes.
+ */
+export const STARTER_TOOLS = [
+  { title: "✉️ Boîte mail", url: "", category: TOOLS_CATEGORY_KEY, notes: "Colle ici le lien de ta messagerie (ex. https://outlook.office.com/mail/ ou https://mail.google.com/)." },
+  { title: "Google Alerts", url: "https://www.google.com/alerts", category: TOOLS_CATEGORY_KEY, notes: "Créer et régler les alertes — les requêtes à recopier sont dans le bouton « 🔔 Requêtes Google Alerts »." },
+  { title: "Perplexity", url: "https://www.perplexity.ai/", category: TOOLS_CATEGORY_KEY, notes: "Recherche assistée par IA (fiches concurrents)." },
+  { title: "Pappers", url: "https://www.pappers.fr/", category: TOOLS_CATEGORY_KEY, notes: "Données légales et financières des entreprises." },
+  { title: "LinkedIn", url: "https://www.linkedin.com/", category: TOOLS_CATEGORY_KEY, notes: "Pages entreprises des concurrents." },
+];
+
+/**
+ * Requêtes à recopier dans Google Alerts (06/10/2026, "je veux bien" à la proposition d'une liste prête à
+ * recopier, après la question "quels mots me conseilles-tu pour Google Alert"). Une alerte = UNE requête
+ * dans le champ de Google Alerts : on les a donc stockées une par une, regroupées par rythme/réglage.
+ * Texte pur (aucune action ici) : js/views/veille.js les affiche avec un bouton "copier" par ligne.
+ * Tout est à ajuster après 2 semaines selon le bruit réellement observé (voir `tip` de chaque groupe).
+ */
+export const GOOGLE_ALERTS_SYNTAX = [
+  { code: '"expression exacte"', text: "les guillemets forcent l'expression exacte" },
+  { code: "OR", text: "regroupe plusieurs termes dans une seule alerte (évite d'en multiplier)" },
+  { code: "-emploi -recrutement", text: "le signe moins exclut le bruit (ici les offres d'emploi)" },
+  { code: "site:semae.fr", text: "limite l'alerte à un site précis" },
+];
+
+export const GOOGLE_ALERTS_GROUPS = [
+  {
+    key: "reglementation",
+    emoji: "⚖️",
+    label: "Réglementation semences",
+    settings: "Fréquence : une fois par jour · Sources : automatique · Langue : français · Région : France · Quantité : uniquement les meilleurs résultats (c'est le sujet le plus bavard).",
+    queries: [
+      { q: '"NGT" semences OR "nouvelles techniques génomiques"' },
+      { q: '"réglementation semences" France' },
+      { q: '"matériel de reproduction des végétaux" OR "plant reproductive material"', note: "règlement européen sur ces matériels, qui concerne directement les semences" },
+      { q: 'SEMAE réglementation OR "catalogue officiel" semences' },
+      { q: '"CIR" semences traitées', note: "sigle ambigu — à garder seulement si le sujet te concerne encore" },
+      { q: "FranceAgriMer déclaration semences" },
+      { q: '"facturation électronique" Factur-X logiciel', note: "touche tous les éditeurs de logiciels, donc aussi la concurrence" },
+    ],
+  },
+  {
+    key: "concurrence",
+    emoji: "🏢",
+    label: "Concurrence",
+    settings: "Fréquence : une alerte par concurrent, une fois par jour (« dès qu'il y en a » seulement si tu veux être prévenu tout de suite) · Quantité : toutes les actualités — ils publient peu, tu ne dois rien rater.",
+    queries: [
+      { q: '"SemWare" OR "Gus3" OR "iGus" OR "myGus"' },
+      { q: '"Mprise Agriware" OR "Agriware 365"' },
+      { q: "ISAGRI (rachat OR acquisition OR lancement)" },
+      { q: '"ERP semences" OR "logiciel station semences" OR "traçabilité semences" logiciel', note: "repérer de nouveaux entrants ou des appels d'offres publics" },
+    ],
+  },
+  {
+    key: "produit",
+    emoji: "🧭",
+    label: "Toi et ton produit",
+    settings: "Fréquence : une fois par jour · Quantité : toutes les actualités.",
+    queries: [
+      { q: '"Agreo Seeds" OR "SMAG Agreo"' },
+      { q: "SMAG InVivo logiciel", note: "ce qui se dit de vous, à l'inverse de la concurrence" },
+    ],
+  },
+];
+
+/** Conseil de livraison valable pour toutes les alertes. */
+export const GOOGLE_ALERTS_DELIVERY_TIP =
+  "Dans « Afficher les options » de chaque alerte, « Livrer à » propose un flux RSS à la place de la boîte mail : plus propre si tu ne veux pas recevoir d'e-mails d'alerte. Après deux semaines, resserre les alertes bruyantes avec des signes moins.";
