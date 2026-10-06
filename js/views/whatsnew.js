@@ -32,6 +32,13 @@ const WHATS_NEW = [
     date: "6 octobre 2026",
     items: [
       {
+        type: "fix",
+        title: "🔍 Veille : un relais à toi quand les proxys publics tombent",
+        text: "Les deux services gratuits utilisés par \"🔍 Vérifier\" tombaient en panne en même temps, et toutes les sources échouaient. Pilotage utilise maintenant en premier son propre relais de lecture (hébergé avec l'app sur Cloudflare, gratuit) et ne se rabat sur les anciens services qu'en secours. Les échecs expliquent désormais la cause (ex. « le site a répondu HTTP 403 »), proposent « Ouvrir la page » pour consulter la source à la main, et la vérification ne lit plus une copie en cache d'une vérification précédente.",
+        howTo: "Rien à faire : \"🔍 Vérifier\" l'utilise tout seul après la mise en ligne de cette version.",
+        gain: "La vérification reste utilisable même quand les services publics gratuits sont indisponibles.",
+      },
+      {
         type: "change",
         title: "🔍 Veille : la vérification se suit en direct",
         text: "Quand tu cliques sur \"🔍 Vérifier\", un panneau affiche la progression (barre et compteur \"2 / 4\") et l'état de chaque source : en attente, en cours (avec l'essai de connexion), rien de nouveau, nouveauté détectée, première vérification (référence enregistrée) ou échec avec sa raison. Le détail reste affiché à la fin, jusqu'à ce que tu le fermes.",
