@@ -711,7 +711,14 @@
 // activée pour les post-it + "Projet" ajouté à "Créer depuis cette ligne"). Deux specs e2e existants
 // adaptés (clic sur le texte avant le bouton "Créer…"), un nouveau spec unitaire pour le parseur,
 // entrée "6 octobre 2026" dans js/views/whatsnew.js.
-const CACHE_NAME = "pilotage-cache-v109";
+// v110 (06/10/2026) — retour direct de Charles-Henri, suite à v109 : "je veux que ce soit partout
+// pareil pour les déplacements où il y a ces icônes [▲▼], que ça fonctionne maintenant comme les
+// post-it". Nouveau js/components/dragReorder.js (mécanisme d'appui maintenu + glissement, extrait de
+// js/components/checklist.js) branché sur : checklists de Tâche/Suivi/post-it (checklist.js),
+// Sous-parties d'un Projet (js/views/projects.js), "Ordre des rubriques" de l'Accueil et barre de
+// navigation (js/views/dashboard.js) — plus aucun bouton ▲/▼. styles/components.css (classes
+// génériques `drag-reorder-*` à la place de `checklist-item--drag*`), entrée js/views/whatsnew.js.
+const CACHE_NAME = "pilotage-cache-v110";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -799,6 +806,7 @@ const APP_SHELL = [
   "./js/components/infoTip.js",
   "./js/components/notesBlock.js",
   "./js/components/checklist.js",
+  "./js/components/dragReorder.js",
   "./js/components/meetingLauncher.js",
   "./js/components/suggestNextStep.js",
   "./js/components/recipes.js",
