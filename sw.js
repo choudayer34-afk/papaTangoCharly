@@ -718,7 +718,12 @@
 // Sous-parties d'un Projet (js/views/projects.js), "Ordre des rubriques" de l'Accueil et barre de
 // navigation (js/views/dashboard.js) — plus aucun bouton ▲/▼. styles/components.css (classes
 // génériques `drag-reorder-*` à la place de `checklist-item--drag*`), entrée js/views/whatsnew.js.
-const CACHE_NAME = "pilotage-cache-v110";
+// v111 (06/10/2026) — retour direct de Charles-Henri : "met moi en accès direct le lien vers les outils et
+// boîte mail tiers dans la veille" (+ "je veux bien" à la liste de requêtes Google Alerts prête à
+// recopier). js/domain/veille.js (catégorie "outils", raccourcis proposés, requêtes Google Alerts),
+// js/views/veille.js (zone "🔗 Accès rapide" + fenêtre "🔔 Requêtes Google Alerts"),
+// styles/components.css, entrée js/views/whatsnew.js. Aucun nouveau fichier.
+const CACHE_NAME = "pilotage-cache-v111";
 const APP_SHELL = [
   "./",
   "./index.html",
