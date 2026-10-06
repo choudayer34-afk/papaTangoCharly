@@ -1661,13 +1661,6 @@ tbody.drag-over-group {
 .checklist-item--compact .checklist-item-text { overflow-wrap: anywhere; }
 .checklist-item-text--tappable { cursor: pointer; }
 .checklist-item-text--tappable:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; border-radius: 2px; }
-.checklist-item--draggable {
-  /* Pas de sélection de texte ni de menu d'appui long du navigateur : l'appui maintenu sert à
-     déplacer la ligne. */
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
 .checklist-item--active { background: rgba(255, 255, 255, 0.45); border-radius: var(--radius-sm); }
 /* Barre d'actions de la ligne touchée : sous le texte, sur toute la largeur, qui passe à la ligne
    si le post-it est étroit (jamais de défilement horizontal). */
@@ -1679,14 +1672,7 @@ tbody.drag-over-group {
   padding: 2px 0 4px;
 }
 .checklist-item-actions .btn { padding: 4px 6px; }
-.checklist-item--dragging {
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow-md);
-  cursor: grabbing;
-  z-index: 1;
-}
-.checklist-items--dragging { cursor: grabbing; }
+
 
 /* ---------- Aide contextuelle (js/components/hint.js) ---------- */
 .hint-banner {
@@ -2571,3 +2557,28 @@ tbody.drag-over-group {
 /* Champ rempli par l'import et pas encore retouché : repérable d'un coup d'œil pendant la relecture,
    sans changer la couleur du texte (le fond reste sur les tokens neutres du thème). */
 .field-imported { outline: 2px solid var(--color-primary); outline-offset: 0; }
+
+/* ---------- Réordonnancement par appui maintenu + glissement (06/10/2026 —
+   js/components/dragReorder.js, utilisé partout où il y avait des boutons ▲/▼) ---------- */
+.drag-reorder-row {
+  /* Pas de sélection de texte ni de menu d'appui long du navigateur : l'appui maintenu sert à
+     déplacer la ligne. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+/* Ligne en cours de déplacement : fond et ombre issus des tokens du thème (texte `--color-text` sur
+   `--color-surface`, lisible en clair comme en sombre — voir tokens.css, TODO-023). */
+.drag-reorder-row--dragging {
+  position: relative;
+  z-index: 1;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  outline: 1px solid var(--color-primary);
+  cursor: grabbing;
+}
+/* Exception : un post-it garde sa couleur propre (jaune, bleu...) dans les deux thèmes, avec un texte
+   sombre — un fond thémé y deviendrait sombre sous du texte sombre. */
+.sticky-note-body .drag-reorder-row--dragging { background: rgba(255, 255, 255, 0.85); }
+.drag-reorder-list--dragging { cursor: grabbing; }
