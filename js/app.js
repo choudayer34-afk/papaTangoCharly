@@ -40,6 +40,7 @@ import { initGlobalShortcuts, teardownGlobalShortcuts } from "./services/shortcu
 import { onAuthChange, isEmailAllowed, signOutUser } from "./services/firebase.js";
 import { logView, logLogin } from "./services/usageTracking.js";
 import { showToast } from "./components/toast.js";
+import { showUpdatePrompt } from "./components/updatePrompt.js";
 import { autoArchiveStaleKept } from "./domain/inbox.js";
 import { migrateInboxTags } from "./domain/tags.js";
 import { fetchBundle, resolveRef } from "./components/linkedItems.js";
@@ -498,20 +499,23 @@ onAuthChange(async (user) => {
 // personne ne rechargeait la page déjà ouverte, dont le JS chargé en mémoire restait celui de
 // l'ancienne version tant qu'on ne fermait/rouvrait pas soi-même l'app. `clients.claim()`
 // déclenche un événement "controllerchange" sur chaque onglet ouvert au moment précis où la
-// nouvelle version prend le relais : on l'écoute ici pour recharger la page toute seule à ce
-// moment-là, avec un bref toast pour prévenir juste avant plutôt qu'un rafraîchissement silencieux
-// et déroutant. `hadController` distingue ce cas (une mise à jour, une version tournait déjà) du
-// tout premier enregistrement du service worker (première visite) : dans ce second cas il n'y a
-// rien de "mis à jour", donc rien à recharger.
+// nouvelle version prend le relais : on l'écoute ici pour le signaler à ce moment-là. Pour
+// mémoire, jusqu'au 13/10/2026 on rechargeait alors la page TOUTE SEULE avec un bref
+// toast — ce qui faisait perdre une saisie en cours (retour de Charles-Henri, 14/10/2026 : "l'écran
+// se recharge tout seul et je perds tout"). Désormais on affiche une carte qui informe et demande
+// (js/components/updatePrompt.js) : "Mettre à jour maintenant" recharge, "Plus tard" ne recharge
+// rien (la nouvelle version, déjà en cache, s'applique à la prochaine ouverture de l'application).
+// `hadController` distingue ce cas (une mise à jour, une version tournait déjà) du tout premier
+// enregistrement du service worker (première visite) : dans ce second cas il n'y a rien de "mis à
+// jour", donc rien à proposer.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     const hadController = !!navigator.serviceWorker.controller;
-    let reloading = false;
+    let promptedForUpdate = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!hadController || reloading) return;
-      reloading = true;
-      showToast("🔄 Mise à jour disponible — l'application se recharge…", { duration: 1500 });
-      setTimeout(() => window.location.reload(), 700);
+      if (!hadController || promptedForUpdate) return;
+      promptedForUpdate = true;
+      showUpdatePrompt({ onUpdate: () => window.location.reload() });
     });
 
     navigator.serviceWorker.register("./sw.js").then((registration) => {
