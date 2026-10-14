@@ -756,9 +756,13 @@
 // js/services/draftStore.js) ; (2) fin du rechargement automatique à la mise à jour : nouvelle carte
 // js/components/updatePrompt.js (ajoutée à APP_SHELL) branchée dans js/app.js, "Mettre à jour maintenant" / "Plus tard".
 // Aussi styles/components.css, entrée js/views/whatsnew.js, tests/unit/modal-draft.spec.js.
+// v118 (15/10/2026) — retour direct de Charles-Henri : dans le point avec un collaborateur, les sujets dont les dates
+// renseignées (échéance et/ou contrôle) sont toutes futures forment un bloc à part "⏳ Pas avant plus tard". Nouvelle
+// fonction followups.js#isNotYetDue ; js/views/people.js (computePrepSections, openPrepModal), js/views/prepMask.js,
+// js/views/whatsnew.js. Aucun nouveau fichier JS.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v117";
+const CACHE_NAME = "pilotage-cache-v118";
 const APP_SHELL = [
   "./",
   "./index.html",
