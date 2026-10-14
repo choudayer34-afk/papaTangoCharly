@@ -29,6 +29,18 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "15 octobre 2026",
+    items: [
+      {
+        type: "change",
+        title: "⏳ Point avec un collaborateur : un bloc « Pas avant plus tard »",
+        text: "Dans « 🗒️ Point avec… » (et dans la fenêtre privée de masquage), les sujets dont les dates renseignées sont toutes après aujourd'hui — l'échéance de la personne, le prochain contrôle, ou l'une des deux seulement si l'autre est vide — quittent « À aborder » pour un bloc à part, juste en dessous, comme « En retard de contrôle » en haut. Un sujet sans aucune date, ou dont une date tombe aujourd'hui ou est déjà passée, reste dans « À aborder ». Les sujets « À transmettre » ne bougent pas. Ils ne comptent pas dans « sujets restants à passer ».",
+        howTo: "Fiche d'un collaborateur → « 🗒️ Préparer mon point » : le bloc « ⏳ Pas avant plus tard » apparaît sous « À aborder ». Il se remplit tout seul quand les dates avancent.",
+        gain: "Le point se concentre sur ce qui est à traiter maintenant, sans se perdre dans ce qui n'est pas encore d'actualité.",
+      },
+    ],
+  },
+  {
     date: "14 octobre 2026",
     items: [
       {
