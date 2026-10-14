@@ -377,3 +377,19 @@ export function isControlDue(followUp) {
   if (!followUp.controlDate || followUp.status === "done") return false;
   return dateUtils.daysFromToday(followUp.controlDate) < 0;
 }
+
+/**
+ * Sujet "pas avant plus tard" (retour de Charles-Henri, 14/10/2026 : dans le suivi avec un
+ * collaborateur, les sujets dont l'échéance (si renseignée) ET le contrôle (si renseigné) sont
+ * strictement après aujourd'hui doivent former un bloc à part, comme ceux en retard). Il faut au
+ * moins une date renseignée — un sujet sans aucune date reste dans "À aborder" — et TOUTES les
+ * dates renseignées doivent être futures : une échéance déjà passée ou tombant aujourd'hui, même
+ * avec un contrôle futur, garde le sujet visible dans "À aborder". Un sujet terminé n'est jamais
+ * concerné. Même référence de calcul de dates que `isControlDue` (js/services/dateUtils.js).
+ */
+export function isNotYetDue(followUp) {
+  if (followUp.status === "done") return false;
+  const dates = [followUp.dueDate, followUp.controlDate].filter(Boolean);
+  if (!dates.length) return false;
+  return dates.every((d) => dateUtils.daysFromToday(d) > 0);
+}
