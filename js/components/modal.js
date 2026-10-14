@@ -4,6 +4,7 @@
 
 import { isOnline } from "../services/onlineStatus.js";
 import { showToast } from "./toast.js";
+import { attachModalDraft, modalDraftKey, shouldClearDraft } from "./modalDraft.js";
 
 let activeOverlay = null;
 let activeClose = null; // la fonction close() propre à la modale actuellement ouverte — voir closeModal() plus bas
@@ -59,13 +60,18 @@ export function subscribeModalState(callback) {
  *   24/09/2026, pour "🧠 Mon bureau — Tout voir" : un plan de travail à post-it positionnés
  *   librement, voir js/components/bureau.js#openFullCanvasModal). Ajoute `.modal--wide`, définie
  *   dans styles/components.css ; n'affecte aucune autre modale par défaut.
+ * @param {boolean} [opts.autoDraft=true] - sauvegarde automatiquement, à chaque frappe, le texte
+ *   saisi dans les champs de la fenêtre (14/10/2026, retour de Charles-Henri : saisie perdue
+ *   faute d'avoir cliqué sur Enregistrer, ou à cause d'un rechargement) et le restitue à la
+ *   réouverture de la même fenêtre — voir js/components/modalDraft.js. Mettre `false` pour une
+ *   fenêtre qui gère déjà son propre brouillon (capture rapide, js/components/capture.js).
  * @param {Function} [opts.onClose] - appelé une seule fois, quel que soit le chemin de
  *   fermeture (clic en dehors, Échap, ou n'importe quelle action) — utile pour un appelant qui
  *   doit rafraîchir un affichage derrière la modale sans avoir à dupliquer la logique sur
  *   chaque action (voir "✏️ Saisie laissée en cours", js/views/dashboard.js).
  * @returns {{close: Function, bodyEl: HTMLElement}}
  */
-export function openModal({ title, body, actions = [], dismissible = true, wide = false, onClose }) {
+export function openModal({ title, body, actions = [], dismissible = true, wide = false, autoDraft = true, onClose }) {
   closeModal(); // une seule modale à la fois
 
   // Piège de focus standard (LOT 8, TODO-016, COMP-UX-001/002) : mémorise l'élément qui avait le
@@ -95,6 +101,14 @@ export function openModal({ title, body, actions = [], dismissible = true, wide 
     bodyEl.appendChild(body);
   }
   modal.appendChild(bodyEl);
+
+  // Brouillon automatique de la saisie (voir js/components/modalDraft.js). `closeIntent` dit à
+  // close() pourquoi la fenêtre se ferme : "clear" = une action de validation (Enregistrer,
+  // Créer...) ou Annuler explicite → le brouillon est effacé ; sinon (Fermer, remplacement par
+  // une autre fenêtre, fermeture programmatique, rechargement) → il est conservé pour la prochaine
+  // ouverture.
+  const draft = autoDraft ? attachModalDraft(bodyEl, modalDraftKey(title, location.hash)) : null;
+  let closeIntent = null;
 
   if (actions.length) {
     const actionsRow = document.createElement("div");
@@ -126,9 +140,11 @@ export function openModal({ title, body, actions = [], dismissible = true, wide 
       // (`closesModal` absent ou `true`, ex. "Annuler"/"Fermer") ferment la modale de façon
       // synchrone comme avant, sans fenêtre où un double clic pourrait rejouer deux fois.
       btn.addEventListener("click", async () => {
+        const clears = shouldClearDraft({ label: action.label, variant: action.variant });
         if (action.closesModal === false) {
           if (btn.disabled) return;
           btn.disabled = true;
+          closeIntent = clears ? "clear" : null;
           // BUG corrigé (15/09/2026, audit "usage en mode déconnecté") : cette action est
           // presque toujours une écriture Firestore (`onClick` await un `storage.put`/`update`)
           // — hors-ligne, cette promesse ne se résout qu'au retour du réseau (voir
@@ -145,10 +161,14 @@ export function openModal({ title, body, actions = [], dismissible = true, wide 
             await action.onClick?.();
           } finally {
             clearTimeout(pendingTimer);
-            if (overlay.isConnected) btn.disabled = false;
+            if (overlay.isConnected) {
+              btn.disabled = false;
+              closeIntent = null; // la fenêtre est restée ouverte (validation refusée...) : rien n'est validé
+            }
           }
         } else {
           action.onClick?.();
+          closeIntent = clears ? "clear" : null;
           close();
         }
       });
@@ -249,6 +269,10 @@ export function openModal({ title, body, actions = [], dismissible = true, wide 
     if (closed) return;
     closed = true;
     document.removeEventListener("keydown", onKeydown);
+    if (draft) {
+      if (closeIntent === "clear") draft.discard();
+      else draft.destroy();
+    }
     overlay.remove();
     if (activeOverlay === overlay) activeOverlay = null;
     if (activeClose === close) activeClose = null;
@@ -274,6 +298,7 @@ export function openModal({ title, body, actions = [], dismissible = true, wide 
   // relais de ce focus initial générique.
   const initialFocusable = getFocusableEls();
   (initialFocusable[0] || modal).focus();
+  draft?.start();
 
   return { close, bodyEl };
 }

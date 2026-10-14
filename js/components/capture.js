@@ -105,6 +105,7 @@ export function openCaptureModal(opts = {}) {
     title: "Capturer",
     body,
     dismissible: true,
+    autoDraft: false, // a déjà son propre brouillon (DRAFT_KEY, ci-dessus)
     onClose: () => opts.onClose?.(),
     actions: [
       {
