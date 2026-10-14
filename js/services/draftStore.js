@@ -38,3 +38,27 @@ export function clearDraft(key) {
     // silencieux — voir saveDraft.
   }
 }
+
+// Ajouté le 14/10/2026 (brouillons automatiques des fenêtres, voir js/components/modalDraft.js) :
+// purge des brouillons anciens d'une famille de clés (préfixe) — sans ça, une fenêtre fermée
+// sans enregistrer il y a des mois ferait toujours resurgir son texte. Jamais bloquant.
+export function pruneDrafts(keyPrefix, maxAgeMs, now = Date.now()) {
+  try {
+    const fullPrefix = PREFIX + keyPrefix;
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const storageKey = localStorage.key(i);
+      if (!storageKey || !storageKey.startsWith(fullPrefix)) continue;
+      let savedAt = 0;
+      try {
+        savedAt = JSON.parse(localStorage.getItem(storageKey) || "{}").savedAt || 0;
+      } catch {
+        savedAt = 0; // entrée illisible : considérée comme périmée
+      }
+      if (now - savedAt > maxAgeMs) toRemove.push(storageKey);
+    }
+    for (const storageKey of toRemove) localStorage.removeItem(storageKey);
+  } catch {
+    // silencieux — voir saveDraft.
+  }
+}
