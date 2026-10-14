@@ -672,8 +672,13 @@ export function computePrepSections(person, allFollowUps, projects, { includeHid
   const active = [...own.filter((f) => f.status !== "done")].sort((a, b) => soonestDate(a) - soonestDate(b));
   const overdue = active.filter(followUpsApi.isControlDue);
   const notOverdue = active.filter((f) => !followUpsApi.isControlDue(f));
-  const upcoming = notOverdue.filter((f) => f.direction !== "to_tell");
   const toTell = notOverdue.filter((f) => f.direction === "to_tell");
+  const toDiscuss = notOverdue.filter((f) => f.direction !== "to_tell");
+  // 14/10/2026 (retour de Charles-Henri) : les sujets dont toutes les dates renseignées sont
+  // futures sortent de "À aborder" vers un bloc à part, "⏳ Pas avant plus tard". Les sujets
+  // "À transmettre" restent dans leur section (choix de Charles-Henri).
+  const later = toDiscuss.filter(followUpsApi.isNotYetDue);
+  const upcoming = toDiscuss.filter((f) => !followUpsApi.isNotYetDue(f));
   const recentlyDone = [...own.filter((f) => f.status === "done")]
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
     .slice(0, 5);
@@ -682,8 +687,9 @@ export function computePrepSections(person, allFollowUps, projects, { includeHid
   // groupes eux-mêmes s'enchaînent dans l'ordre d'apparition de leur premier sujet — donc du
   // plus urgent au moins urgent, y compris pour les sujets sans projet.
   const upcomingGroups = groupByProject(upcoming, projects);
+  const laterGroups = groupByProject(later, projects);
 
-  return { overdue, toTell, upcoming, upcomingGroups, recentlyDone };
+  return { overdue, toTell, upcoming, upcomingGroups, later, laterGroups, recentlyDone };
 }
 
 /**
@@ -802,7 +808,7 @@ function openPrepMaskModal(person, { onDone } = {}) {
 
 async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   const [allFollowUps, projects] = await Promise.all([followUpsApi.listAll(), projectsApi.listAll()]);
-  const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects);
+  const { overdue, toTell, upcoming, upcomingGroups, later, laterGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects);
   // Tous les sujets de la personne, sans exception (retour de Charles-Henri, vague 41,
   // 09/09/2026 : "pouvoir faire une recherche lors d'un point [...] sur l'ensemble des sujets
   // d'une personne") — contrairement aux 4 sections ci-dessus (curatées : "En retard"/"À
@@ -826,6 +832,8 @@ async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
       <div class="card" id="prep-to-tell" style="margin-bottom:16px;"></div>
       <div class="section-title">🎯 À aborder (${upcoming.length})</div>
       <div class="card" id="prep-upcoming" style="margin-bottom:16px;"></div>
+      <div class="section-title">⏳ Pas avant plus tard (${later.length})</div>
+      <div class="card" id="prep-later" style="margin-bottom:16px;"></div>
       <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
       <div class="card" id="prep-done" style="margin-bottom:8px;"></div>
     </div>
@@ -843,6 +851,7 @@ async function openPrepModal(person, { onDone, coveredIds = new Set() } = {}) {
   renderFollowUpList(body.querySelector("#prep-overdue"), overdue, { onOpen: openFromPrep, coveredIds });
   renderFollowUpList(body.querySelector("#prep-to-tell"), toTell, { onOpen: openFromPrep, coveredIds });
   renderGroupedFollowUpList(body.querySelector("#prep-upcoming"), upcomingGroups, { onOpen: openFromPrep, coveredIds });
+  renderGroupedFollowUpList(body.querySelector("#prep-later"), laterGroups, { onOpen: openFromPrep, coveredIds });
   renderFollowUpList(body.querySelector("#prep-done"), recentlyDone, { onOpen: openFromPrep });
 
   const sectionsEl = body.querySelector("#prep-sections");
