@@ -744,9 +744,21 @@
 // APP_SHELL), js/domain/veille.js (version lue conservée à chaque vérification, détail du changement),
 // js/views/veille.js ("🆕 Voir ce qui a changé" sur la source et dans le détail de "Vérifier"),
 // styles/components.css, entrée js/views/whatsnew.js, tests/unit/veille-diff.spec.js.
+// v116 (08/10/2026) — retour direct de Charles-Henri : "sur prompt IA, je ne sais pas comment faire mieux pour
+// mieux organiser les éléments [...] ce ne sont que les miens, les autres utilisateurs en auront d'autres" —
+// réponse retenue : tags # + filtres, classement des prompts existants par soi-même et par une IA. Nouveau
+// js/domain/promptsClassify.js (ajouté à APP_SHELL), js/views/prompts.js (tags, filtres, "Classer avec l'IA"),
+// js/domain/veilleResearchImport.js (deux fonctions exportées), styles/components.css, entrée js/views/whatsnew.js,
+// tests/unit/prompts-classify.spec.js.
+// v117 (14/10/2026) — retour direct de Charles-Henri : "je saisis un texte dans un champ, j'oublie d'enregistrer, ou
+// l'écran se recharge tout seul et je perds tout". Deux réponses : (1) brouillons automatiques des fenêtres de saisie
+// (nouveau js/components/modalDraft.js, ajouté à APP_SHELL ; js/components/modal.js, js/components/capture.js,
+// js/services/draftStore.js) ; (2) fin du rechargement automatique à la mise à jour : nouvelle carte
+// js/components/updatePrompt.js (ajoutée à APP_SHELL) branchée dans js/app.js, "Mettre à jour maintenant" / "Plus tard".
+// Aussi styles/components.css, entrée js/views/whatsnew.js, tests/unit/modal-draft.spec.js.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v115";
+const CACHE_NAME = "pilotage-cache-v117";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -822,6 +834,7 @@ const APP_SHELL = [
   "./js/domain/veille.js",
   "./js/domain/veilleResearchImport.js",
   "./js/domain/veilleDiff.js",
+  "./js/domain/promptsClassify.js",
   "./js/components/modal.js",
   // BUG corrigé (21/09/2026, même correctif que le bump de CACHE_NAME ci-dessus) : ce fichier
   // (LOT 1, TODO-006, "validation partagée") n'avait jamais été ajouté ici depuis sa création —
@@ -831,6 +844,8 @@ const APP_SHELL = [
   "./js/components/formValidation.js",
   "./js/components/changeType.js",
   "./js/components/toast.js",
+  "./js/components/modalDraft.js",
+  "./js/components/updatePrompt.js",
   "./js/components/hint.js",
   "./js/components/infoTip.js",
   "./js/components/notesBlock.js",
