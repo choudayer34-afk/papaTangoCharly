@@ -79,8 +79,10 @@ function clampScore(value) {
   return Math.min(10, Math.max(0, Math.round(n)));
 }
 
+// `extractJsonText` et `loosenJson` sont exportées depuis le 08/10/2026 : js/domain/promptsClassify.js
+// (classement des prompts par une IA) lit lui aussi une réponse JSON collée et réutilise ces deux étapes.
 /** Isole le JSON dans le texte collé : bloc ```json ... ``` s'il y en a un, sinon du premier "{" au dernier "}". */
-function extractJsonText(raw) {
+export function extractJsonText(raw) {
   const text = String(raw || "").replace(/^﻿/, "");
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced && fenced[1].includes("{") ? fenced[1] : text;
@@ -95,7 +97,7 @@ function extractJsonText(raw) {
  * l'intérieur d'une chaîne (interdits en JSON strict, fréquents quand une IA ou un copier-coller
  * "déplie" un texte multi-lignes) et virgules finales avant } ou ].
  */
-function loosenJson(jsonText) {
+export function loosenJson(jsonText) {
   let out = "";
   let inString = false;
   let escaped = false;
