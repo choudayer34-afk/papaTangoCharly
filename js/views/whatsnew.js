@@ -29,6 +29,37 @@ export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifi�
 
 const WHATS_NEW = [
   {
+    date: "14 octobre 2026",
+    items: [
+      {
+        type: "fix",
+        title: "📝 Ta saisie dans une fenêtre n'est plus perdue",
+        text: "Ce que tu tapes dans les champs d'une fenêtre de saisie est maintenant gardé automatiquement sur ton appareil, au fil de la frappe. Si tu fermes la fenêtre sans enregistrer (bouton « Fermer », ouverture d'une autre fenêtre) ou si l'écran se recharge, retrouve la même fenêtre : ton texte est remis en place, avec un bandeau « Saisie précédente récupérée » et un bouton « Repartir de zéro ». Il disparaît dès que tu enregistres, ou si tu cliques sur « Annuler ». Il est aussi effacé tout seul au bout de 7 jours. Les mots de passe et les champs de recherche ne sont jamais gardés. À savoir : les champs placés directement dans une page (hors fenêtre) ne sont pas concernés.",
+        howTo: "Rien à faire : tape normalement. Pour récupérer un texte, rouvre la même fenêtre depuis le même écran.",
+        gain: "Plus besoin de penser à cliquer sur Enregistrer pour ne rien perdre.",
+      },
+      {
+        type: "change",
+        title: "🔄 Mise à jour de l'application : c'est toi qui décides du moment",
+        text: "L'application ne se recharge plus toute seule quand une nouvelle version est disponible. Une carte s'affiche à la place : « Mettre à jour maintenant » recharge l'application (une saisie non enregistrée risque alors d'être perdue), « Plus tard » ne change rien à l'écran et la mise à jour s'appliquera à la prochaine ouverture de l'application.",
+        howTo: "Quand la carte apparaît, termine ce que tu es en train de saisir, puis touche « Mettre à jour maintenant » — ou « Plus tard » pour continuer sans interruption.",
+        gain: "Fini l'écran qui se recharge au milieu d'une saisie.",
+      },
+    ],
+  },
+  {
+    date: "8 octobre 2026",
+    items: [
+      {
+        type: "add",
+        title: "🏷️ Prompts IA : des tags et des filtres pour s'y retrouver",
+        text: "Chaque prompt peut maintenant porter des tags # (les mêmes que partout dans l'app), saisis à la création ou dans sa fiche. Une barre de filtres en haut de l'écran Prompts liste uniquement les tags que tu utilises, avec le nombre de prompts, plus « Sans tag » pour repérer ceux qui restent à classer ; la recherche trouve aussi les tags. Pour ranger d'un coup tes prompts existants, « 🏷️ Classer avec l'IA » prépare une demande à coller dans ton IA, puis lit sa réponse et te montre un aperçu : les tags ne sont posés qu'au clic sur « Appliquer », sur les prompts que tu laisses cochés.",
+        howTo: "☰ Plus → \"🤖 Prompts\" → touche un prompt pour lui ajouter des tags, ou \"🏷️ Classer avec l'IA\" → \"📋 Copier la demande\" → colle-la dans ton IA → colle sa réponse → \"👀 Aperçu\" → \"✅ Appliquer\". Touche un tag dans la barre pour filtrer, touche-le encore pour revenir à tous.",
+        gain: "Chacun range ses prompts à sa façon, sans liste imposée, et retrouve le bon en deux touches.",
+      },
+    ]
+  },
+  {
     date: "6 octobre 2026",
     items: [
       {
