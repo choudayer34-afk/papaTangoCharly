@@ -63,10 +63,10 @@ export async function renderMaskChecklist(container, person, { closeLabel = "✅
       container.querySelector("#mask-retry-btn").addEventListener("click", refresh);
       return;
     }
-    const { overdue, toTell, upcoming, upcomingGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects, {
+    const { overdue, toTell, upcoming, upcomingGroups, later, laterGroups, recentlyDone } = computePrepSections(person, allFollowUps, projects, {
       includeHidden: true,
     });
-    const hiddenCount = [...overdue, ...toTell, ...upcoming, ...recentlyDone].filter((f) => f.hiddenFromPrep).length;
+    const hiddenCount = [...overdue, ...toTell, ...upcoming, ...later, ...recentlyDone].filter((f) => f.hiddenFromPrep).length;
 
     container.innerHTML = `
       <p class="item-meta" style="margin-bottom:8px;">
@@ -80,6 +80,8 @@ export async function renderMaskChecklist(container, person, { closeLabel = "✅
       <div class="card" id="mask-to-tell" style="margin-bottom:16px;"></div>
       <div class="section-title">🎯 À aborder (${upcoming.length})</div>
       <div class="card" id="mask-upcoming" style="margin-bottom:16px;"></div>
+      <div class="section-title">⏳ Pas avant plus tard (${later.length})</div>
+      <div class="card" id="mask-later" style="margin-bottom:16px;"></div>
       <div class="section-title">🟢 Terminé récemment (${recentlyDone.length})</div>
       <div class="card" id="mask-done" style="margin-bottom:20px;"></div>
       <button type="button" id="mask-close-btn" class="btn btn-primary btn-block">${closeLabel}</button>
@@ -88,6 +90,7 @@ export async function renderMaskChecklist(container, person, { closeLabel = "✅
     renderMaskList(container.querySelector("#mask-overdue"), overdue, refresh);
     renderMaskList(container.querySelector("#mask-to-tell"), toTell, refresh);
     renderMaskGroupedList(container.querySelector("#mask-upcoming"), upcomingGroups, refresh);
+    renderMaskGroupedList(container.querySelector("#mask-later"), laterGroups, refresh);
     renderMaskList(container.querySelector("#mask-done"), recentlyDone, refresh);
 
     container.querySelector("#mask-close-btn").addEventListener("click", () => onClose?.(hiddenCount));
