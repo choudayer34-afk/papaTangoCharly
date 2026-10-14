@@ -2623,3 +2623,73 @@ tbody.drag-over-group {
 .change-lines { margin: 8px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; overflow-wrap: anywhere; }
 .veille-check-changes-btn { align-self: flex-start; margin-top: 4px; }
 .veille-changes-btn { padding: 2px 8px; }
+
+/* 🏷️ Prompts IA — filtres par tag et classement par l'IA (08/10/2026). */
+.prompts-filters { flex-wrap: wrap; overflow-x: visible; }
+.classify-preview-row { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--color-border); cursor: pointer; }
+.classify-preview-row:last-child { border-bottom: none; }
+.classify-preview-row input[type="checkbox"] { width: auto; margin-top: 4px; flex: none; }
+.classify-preview-main { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- Brouillon récupéré dans une fenêtre (14/10/2026) ----------
+   Bandeau en tête d'une fenêtre dont la saisie précédente a été restituée automatiquement —
+   voir js/components/modalDraft.js. Jetons -bg = pastel clair même en mode sombre, donc
+   associés à la couleur sémantique correspondante (même principe que .offline-banner). */
+.draft-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-info-bg);
+  color: var(--color-info);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+.draft-banner .draft-banner-reset {
+  flex: none;
+  /* Le fond du bandeau reste un pastel clair en mode sombre : le bouton ghost (texte clair en
+     sombre) y devenait illisible — on lui donne la couleur sémantique du bandeau. */
+  color: var(--color-info);
+  border: 1px solid var(--color-info);
+  background: transparent;
+}
+
+/* ---------- Carte "Mise à jour disponible" (14/10/2026) ----------
+   Carte flottante non bloquante (pas une modale : elle ne doit jamais fermer une fenêtre de saisie
+   ouverte) — voir js/components/updatePrompt.js. Au-dessus des modales (50), toasts (60) et du
+   bandeau hors ligne (65). */
+.update-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-4));
+  transform: translateX(-50%);
+  z-index: 68;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 2 * var(--space-3)));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.update-prompt-title { font-size: var(--font-size-md, 1rem); }
+.update-prompt-text {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+.update-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
