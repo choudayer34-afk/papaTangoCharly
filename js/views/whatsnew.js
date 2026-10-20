@@ -28,6 +28,19 @@ import * as preferencesApi from "../domain/preferences.js";
 export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifié", fix: "🐛 Corrigé", remove: "🗑️ Retiré" };
 
 const WHATS_NEW = [
+  // À ajouter en tête de WHATS_NEW (js/components/whatsnew.js) :
+  {
+    date: "20 octobre 2026",
+    items: [
+      {
+        type: "add",
+        title: "Copier une référence discrète vers une fiche, et la retrouver par collage",
+        text: "Le bouton « Copier le lien » propose désormais trois choix : un code discret (réf. 3adb08), un point cliquable qui porte le lien, ou le lien complet. La recherche 🔎 reconnaît un lien, un « Type:id » ou un code collé et ouvre directement la fiche.",
+        howTo: "Dans une fiche, clique sur le bouton de lien, choisis le code ou le point, colle-le dans ta conversation. Quand on te répond, colle le code dans 🔎.",
+        gain: "Garder un repère invisible pour les autres et retrouver instantanément de quoi il s'agissait.",
+      },
+    ],
+  },
   {
     date: "15 octobre 2026",
     items: [
