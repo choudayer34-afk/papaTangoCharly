@@ -2693,3 +2693,20 @@ tbody.drag-over-group {
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+/* À AJOUTER À LA FIN de styles/components.css — modale « 🆕 Nouveautés » de la Veille (20/10/2026) */
+.change-cards { list-style: none; margin: var(--space-3) 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.change-card {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--space-3); background: var(--color-surface-alt);
+  border: 1px solid var(--color-border); border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.change-card-title { font-weight: 600; color: var(--color-text); line-height: 1.35; overflow-wrap: anywhere; }
+a.change-card-title { color: var(--color-primary); text-decoration: none; }
+a.change-card-title:hover, a.change-card-title:focus-visible { text-decoration: underline; }
+.change-card-date { font-size: var(--font-size-xs); color: var(--color-text-muted); }
+.change-others, .change-help { margin-top: var(--space-3); font-size: var(--font-size-sm); }
+.change-others > summary, .change-help > summary { cursor: pointer; color: var(--color-text-muted); }
+.change-lines { margin: var(--space-2) 0 0; padding-left: var(--space-5); color: var(--color-text-muted); }
+.change-lines li { margin-bottom: var(--space-1); overflow-wrap: anywhere; }
