@@ -762,7 +762,7 @@
 // js/views/whatsnew.js. Aucun nouveau fichier JS.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v118";
+const CACHE_NAME = "pilotage-cache-v119";
 const APP_SHELL = [
   "./",
   "./index.html",
