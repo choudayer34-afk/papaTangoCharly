@@ -22,6 +22,7 @@
 
 import * as veilleApi from "../domain/veille.js";
 import { parseCompetitorResearchResponse } from "../domain/veilleResearchImport.js";
+import { buildChangeItems } from "../domain/veilleDiff.js";
 import { openModal, closeModal, confirmDelete, guardClick } from "../components/modal.js";
 import { validateRequiredFields, validateUrlField, clearFieldErrorOnInput } from "../components/formValidation.js";
 import { showToast } from "../components/toast.js";
@@ -311,13 +312,36 @@ function openChangeDetailsModal(source, detail) {
       detail.removedCount ? ` (${detail.removedCount} ligne${detail.removedCount > 1 ? "s ont" : " a"} disparu)` : ""
     } : une ligne existante a probablement été retouchée, ou l'ordre a changé.</p>`;
   } else {
-    html += `<p style="margin-top:0;"><strong>${detail.added.length} nouvelle${detail.added.length > 1 ? "s" : ""} ligne${detail.added.length > 1 ? "s" : ""}</strong> sur la page :</p>
-      <ul class="change-lines">${detail.added.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
-      <p class="item-meta" style="margin-bottom:0;">${
-        detail.removedCount ? `${detail.removedCount} ligne${detail.removedCount > 1 ? "s ont" : " a"} aussi disparu de la page. ` : ""
-      }Une ligne correspond à un bloc de la page : un titre simplement retouché ou une date qui change peut apparaître comme nouveau.${
+    // Présentation lisible (20/10/2026, retour de Charles-Henri : "c'est un peu illisible") : une carte par
+    // nouveauté (titre cliquable quand la page fournit un lien, date isolée), les lignes parasites repliées
+    // à part, l'explication des limites repliée aussi. Le calcul reste celui de veilleDiff.js#diffLines.
+    const { items, others } = buildChangeItems(detail.added, detail.links || {});
+    const plural = (n, one, many) => `${n} ${n > 1 ? many : one}`;
+    html += `<p style="margin-top:0;"><strong>${plural(items.length || detail.added.length, "nouveauté repérée", "nouveautés repérées")}</strong>${
+      detail.removedCount ? ` <span class="item-meta">· ${plural(detail.removedCount, "ligne a disparu", "lignes ont disparu")}</span>` : ""
+    }</p>`;
+    if (items.length) {
+      html += `<ul class="change-cards">${items
+        .map((it) => {
+          const title = /^https?:\/\//i.test(it.url)
+            ? `<a class="change-card-title" href="${escapeAttr(it.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(it.title)} ↗</a>`
+            : `<span class="change-card-title">${escapeHtml(it.title)}</span>`;
+          return `<li class="change-card">${title}${it.date ? `<span class="change-card-date">${escapeHtml(it.date)}</span>` : ""}</li>`;
+        })
+        .join("")}</ul>`;
+    }
+    if (others.length) {
+      html += `<details class="change-others"${items.length ? "" : " open"}>
+        <summary>${items.length ? `Autres lignes nouvelles (${others.length})` : `Lignes nouvelles (${others.length})`}</summary>
+        <ul class="change-lines">${others.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
+      </details>`;
+    }
+    html += `<details class="change-help">
+      <summary>Comment lire cette liste ?</summary>
+      <p class="item-meta">Chaque entrée est un bloc de la page apparu depuis la vérification précédente. Un titre simplement retouché ou une date qui change peut apparaître comme nouveau. Un titre n'est cliquable que si la page fournit son lien.${
         detail.added.length >= 60 ? " Liste limitée aux 60 premières lignes." : ""
-      }</p>`;
+      }</p>
+    </details>`;
   }
   body.innerHTML = html;
   const actions = [{ label: "Fermer", variant: "ghost" }];
