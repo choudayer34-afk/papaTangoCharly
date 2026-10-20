@@ -31,8 +31,6 @@ import * as meetingsApi from "../domain/meetings.js";
 import * as decisionsApi from "../domain/decisions.js";
 import * as inboxApi from "../domain/inbox.js";
 import * as objectivesApi from "../domain/objectives.js";
-import * as tagsApi from "../domain/tags.js";
-import * as preferencesApi from "../domain/preferences.js";
 import { openTaskDetail } from "../views/kanban.js";
 import { openDuplicateTaskModal } from "./duplicateTask.js";
 import { openProjectDetail } from "../views/projects.js";
@@ -40,12 +38,11 @@ import { openPersonDetail, openEditFollowUpModal, openObjectiveDetail } from "..
 import { openResourceDetail } from "../views/resources.js";
 import { openRecentDetail } from "../views/dashboard.js";
 import { openKeptItemDetail } from "../views/inbox.js";
-import { attachAutocomplete } from "./autocomplete.js";
+import { parseOpenParam } from "../services/deeplink.js";
+import { fetchBundle, resolveRef } from "./linkedItems.js";
 
 // Ordre = celui des chips affichées et des touches Alt+1…Alt+9 qui leur correspondent.
-// TODO-021 (LOT 9, 21/09/2026) : "Information/Idée" renommé "Information" (fusion des libellés,
-// voir js/views/inbox.js) — même 9 entrées, mêmes raccourcis Alt+1…Alt+9, rien d'autre ne change.
-const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information", "Objectif"];
+const SEARCH_TYPES = ["Tâche", "Projet", "Personne", "Suivi", "Ressource", "Réunion", "Décision", "Information/Idée", "Objectif"];
 
 function haystack(...parts) {
   return parts.filter(Boolean).join(" ").toLowerCase();
@@ -57,36 +54,48 @@ function notesText(notesLog) {
   return (notesLog || []).map((n) => n.text).join(" ");
 }
 
-/** Les noms des tags posés sur une fiche donnée (collection générique, voir js/domain/tags.js
- *  — vague 44 puis généralisée à toute fiche le 13/09/2026), concaténés comme `notesText`
- *  ci-dessus pour rester injectables dans `haystack`. */
-function tagsTextFor(allTags, type, id) {
-  return tagsApi
-    .tagsFor(allTags, type, id)
-    .map((t) => t.tag)
-    .join(" ");
+/** Reconnaît un lien Pilotage collé, un « Type:id », ou un code discret « réf. 3adb08 » (voir
+ *  copyLink.js). Renvoie { type, id } ou { code, strict } selon le cas, sinon null — auquel cas
+ *  le texte reste une recherche de mot ordinaire. `strict` = le mot « réf » était présent : un
+ *  code introuvable affiche alors « Fiche introuvable » plutôt que de lancer une recherche. */
+function extractReference(text) {
+  const t = text.trim();
+  if (!t) return null;
+  const q = t.includes("?") ? t.slice(t.indexOf("?") + 1) : "";
+  const fromLink = parseOpenParam(q);
+  if (fromLink) return fromLink;
+  const typed = t.match(/^([A-Za-z]+):([\w-]+)$/);
+  if (typed) return { type: typed[1], id: typed[2] };
+  const code = t.match(/^(?:\(?\s*r[ée]f\.?\s*)?#?([0-9a-f]{6})\s*\)?$/i);
+  if (code) return { code: code[1].toLowerCase(), strict: /r[ée]f/i.test(t) };
+  return null;
 }
 
-/**
- * Recherche globale — deux modes.
- * - Normal : `query` est comparée au texte habituel de chaque fiche (titre, description,
- *   notes...) ET à ses tags, comme avant (un tag reste trouvable en tapant simplement son nom).
- * - "#" (retour de Charles-Henri, 13/09/2026 : "dans la recherche global par tags, ça permet
- *   éventuellement de retrouver plus rapidement... tout les éléments associés à ce tags") — dès
- *   que `query` commence par "#", elle ne compare plus QUE les tags de chaque fiche, tous types
- *   confondus, jamais le reste de son texte : un raccourci dédié pour "quelles fiches portent ce
- *   tag ?", plutôt qu'une simple variante de la recherche normale.
- */
-// BUG corrigé (15/09/2026, audit performance) : `runSearch` rechargeait ces 10 collections
-// ENTIÈRES à chaque frappe (une fois le debounce de 150ms écoulé) — avec un volume de fiches et
-// de tags qui grandit avec l'usage, chaque frappe devenait plus coûteuse que la précédente.
-// Scindé en deux : `loadSearchBundle()` charge une seule fois, à l'ouverture de la modale de
-// recherche ; `filterBundle()` ne fait plus que le filtrage en mémoire (rapide) à chaque frappe,
-// sur les mêmes données déjà chargées. Les nouvelles fiches créées pendant qu'une recherche est
-// ouverte n'apparaîtront qu'à la prochaine ouverture — compromis assumé, une session de
-// recherche est toujours courte.
-async function loadSearchBundle() {
-  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags] = await Promise.all([
+/** Cherche, dans toutes les fiches, celle dont l'identifiant commence par `code`. */
+function findRefByCode(bundle, code) {
+  const groups = [
+    ["Task", bundle.tasks],
+    ["Project", bundle.projects],
+    ["Person", bundle.people],
+    ["FollowUp", bundle.followUps],
+    ["Resource", bundle.resources],
+    ["Meeting", bundle.meetings],
+    ["Decision", bundle.decisions],
+    ["Kept", bundle.keptItems || []],
+    ["Objective", bundle.objectives],
+  ];
+  for (const [type, items] of groups) {
+    const hit = items.find((x) => String(x.id).toLowerCase().startsWith(code));
+    if (hit) return { type, id: hit.id };
+  }
+  return null;
+}
+
+async function runSearch(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const [tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives] = await Promise.all([
     tasksApi.listAll(),
     projectsApi.listAll(),
     peopleApi.listAll(),
@@ -100,49 +109,18 @@ async function loadSearchBundle() {
     // js/domain/inbox.js pour la distinction avec un élément classé sans suite.
     inboxApi.listKeptIncludingArchived(),
     objectivesApi.listAll(),
-    tagsApi.listAll(),
   ]);
-  return { tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags };
-}
-
-/**
- * Recherche globale — deux modes.
- * - Normal : `query` est comparée au texte habituel de chaque fiche (titre, description,
- *   notes...) ET à ses tags, comme avant (un tag reste trouvable en tapant simplement son nom).
- * - "#" (retour de Charles-Henri, 13/09/2026 : "dans la recherche global par tags, ça permet
- *   éventuellement de retrouver plus rapidement... tout les éléments associés à ce tags") — dès
- *   que `query` commence par "#", elle ne compare plus QUE les tags de chaque fiche, tous types
- *   confondus, jamais le reste de son texte : un raccourci dédié pour "quelles fiches portent ce
- *   tag ?", plutôt qu'une simple variante de la recherche normale.
- */
-function filterBundle(bundle, query) {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-  const tagMode = trimmed.startsWith("#");
-  const q = (tagMode ? trimmed.slice(1) : trimmed).trim().toLowerCase();
-  if (!q) return [];
-
-  const { tasks, projects, people, followUps, resources, meetings, decisions, keptItems, objectives, allTags } = bundle;
-
-  /** true si la fiche {type,id} correspond à `q` — en mode "#", uniquement par ses tags ; sinon
-   *  par son texte habituel (`textParts`) ET ses tags, comme avant cette vague. */
-  function matches(type, id, ...textParts) {
-    const tagsText = tagsTextFor(allTags, type, id).toLowerCase();
-    if (tagMode) return tagsText.includes(q);
-    return haystack(...textParts, tagsText).includes(q);
-  }
 
   const results = [];
 
   for (const t of tasks) {
     const checklistText = (t.checklist || []).map((c) => c.text).join(" ");
-    if (matches("Task", t.id, t.title, t.description, t.successCriteria, t.waitingOn, checklistText, notesText(t.notesLog))) {
+    if (haystack(t.title, t.description, t.successCriteria, t.waitingOn, checklistText, notesText(t.notesLog)).includes(q)) {
       results.push({
         type: "Tâche",
         emoji: "✅",
         title: t.title,
         status: `${tasksApi.STATUS_ICONS[t.status] || ""} ${tasksApi.STATUS_LABELS[t.status] || ""}`.trim(),
-        done: t.status === "done",
         onOpen: () => openTaskDetail(t, projects),
         // "🗐 Dupliquer" directement depuis la recherche (retour de Charles-Henri, 07/09/2026 :
         // "que ce soit via la recherche ou la tâche elle-même") — seul type à le proposer, une
@@ -153,21 +131,19 @@ function filterBundle(bundle, query) {
   }
   for (const p of projects) {
     const partsText = (p.parts || []).map((part) => `${part.label} ${notesText(part.notesLog)}`).join(" ");
-    if (matches("Project", p.id, p.name, p.objective, p.successCriteria, partsText, notesText(p.notesLog))) {
+    if (haystack(p.name, p.objective, p.successCriteria, partsText, notesText(p.notesLog)).includes(q)) {
       const projectTasks = tasks.filter((t) => t.projectId === p.id);
-      const archived = projectsApi.isArchived(p);
       results.push({
         type: "Projet",
         emoji: "📦",
         title: p.name,
-        status: archived ? "🗄️ Fermé" : "🟢 Actif",
-        done: archived,
+        status: projectsApi.isArchived(p) ? "🗄️ Fermé" : "🟢 Actif",
         onOpen: () => openProjectDetail(p, projectTasks),
       });
     }
   }
   for (const person of people) {
-    if (matches("Person", person.id, person.name, person.role, notesText(person.notesLog))) {
+    if (haystack(person.name, person.role, notesText(person.notesLog)).includes(q)) {
       results.push({
         type: "Personne",
         emoji: person.type === "manager" ? "👔" : "👤",
@@ -177,7 +153,7 @@ function filterBundle(bundle, query) {
     }
   }
   for (const f of followUps) {
-    if (matches("FollowUp", f.id, f.title, f.expectedResult, f.successCriteria, f.notes, notesText(f.notesLog))) {
+    if (haystack(f.title, f.expectedResult, f.successCriteria, f.notes, notesText(f.notesLog)).includes(q)) {
       const person = people.find((p) => p.id === f.personId);
       results.push({
         type: "Suivi",
@@ -185,18 +161,17 @@ function filterBundle(bundle, query) {
         title: f.title,
         meta: person ? person.name : "",
         status: followUpsApi.STATUS_LABELS[f.status] || "",
-        done: f.status === "done",
         onOpen: () => openEditFollowUpModal(f),
       });
     }
   }
   for (const r of resources) {
-    if (matches("Resource", r.id, r.title, r.description, r.url, notesText(r.notesLog))) {
+    if (haystack(r.title, r.description, r.url, (r.tags || []).join(" "), notesText(r.notesLog)).includes(q)) {
       results.push({ type: "Ressource", emoji: "📎", title: r.title, onOpen: () => openResourceDetail(r, projects, tasks) });
     }
   }
   for (const m of meetings) {
-    if (matches("Meeting", m.id, m.title, m.objective, m.notes, notesText(m.notesLog))) {
+    if (haystack(m.title, m.objective, m.notes, notesText(m.notesLog)).includes(q)) {
       results.push({
         type: "Réunion",
         emoji: "🗓️",
@@ -206,7 +181,7 @@ function filterBundle(bundle, query) {
     }
   }
   for (const d of decisions) {
-    if (matches("Decision", d.id, d.title, d.decision, d.context, notesText(d.notesLog))) {
+    if (haystack(d.title, d.decision, d.context, notesText(d.notesLog)).includes(q)) {
       results.push({
         type: "Décision",
         emoji: "🗳️",
@@ -219,15 +194,11 @@ function filterBundle(bundle, query) {
   // vague, comme elles l'avaient été du fil conducteur avant la correction du 31/08/2026
   // (même trou d'architecture, même correction : un type de plus à ne jamais oublier).
   for (const item of keptItems) {
-    if (matches("Kept", item.id, item.rawContent, notesText(item.notesLog))) {
+    if (haystack(item.rawContent, notesText(item.notesLog)).includes(q)) {
       results.push({
-        // TODO-021 (LOT 9, 21/09/2026) — libellé "Information" unique, fusion "Idée" (voir
-        // js/views/inbox.js) ; `item.keptAsType` peut encore valoir "idea" pour un élément
-        // ancien, sans effet sur l'affichage.
-        type: "Information",
-        emoji: "🧠",
+        type: "Information/Idée",
+        emoji: item.keptAsType === "idea" ? "💡" : "🧠",
         title: item.rawContent,
-        done: item.status === "archived",
         onOpen: () => openKeptItemDetail(item),
       });
     }
@@ -237,14 +208,13 @@ function filterBundle(bundle, query) {
   // alors qu'il l'est déjà par ouverture directe de la fiche Objectif.
   for (const o of objectives) {
     const entriesText = (o.entries || []).map((e) => e.note).join(" ");
-    if (matches("Objective", o.id, o.title, entriesText)) {
+    if (haystack(o.title, entriesText).includes(q)) {
       const owner = people.find((p) => p.id === o.personId);
       results.push({
         type: "Objectif",
         emoji: o.status === "done" ? "✅" : "🎯",
         title: o.title,
         meta: owner ? owner.name : "",
-        done: o.status === "done",
         onOpen: () => openObjectiveDetail(o, owner, {}),
       });
     }
@@ -257,26 +227,15 @@ export function openSearchModal() {
   const body = document.createElement("div");
   body.innerHTML = `
     <div class="field">
-      <input id="global-search-input" type="text" placeholder="Rechercher un mot, ou #tag pour cibler un tag..." />
+      <input id="global-search-input" type="text" placeholder="Un mot, un lien ou une réf. (ex. réf. 3adb08)..." />
     </div>
     <div class="chip-row" id="search-type-filter" style="margin-bottom:8px;"></div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:var(--font-size-sm);color:var(--color-text-muted);margin-bottom:8px;">
-      <input id="search-include-done" type="checkbox" style="width:auto;" />
-      Inclure ce qui est terminé / archivé
-    </label>
     <div id="global-search-results"></div>
   `;
 
   const resultsEl = body.querySelector("#global-search-results");
   const inputEl = body.querySelector("#global-search-input");
   const filterEl = body.querySelector("#search-type-filter");
-  // Par défaut, la recherche ne porte que sur ce qui est encore actif (retour de Charles-Henri,
-  // 13/09/2026 : retrouver un vieux sujet clos ne doit pas noyer ce qu'on cherche activement
-  // aujourd'hui) — cette case à cocher permet de l'élargir ponctuellement sans rien perdre :
-  // aucune donnée n'est exclue de la recherche elle-même (`runSearch` calcule tout), seul
-  // l'affichage filtre selon `r.done` (Tâche/Suivi/Objectif terminés, Projet fermé, Information/
-  // Idée archivée — les autres types n'ont pas cette notion et restent toujours visibles).
-  const includeDoneEl = body.querySelector("#search-include-done");
 
   let lastResults = [];
   const activeTypes = new Set(SEARCH_TYPES);
@@ -284,28 +243,6 @@ export function openSearchModal() {
   filterEl.innerHTML = SEARCH_TYPES.map(
     (t, i) => `<button type="button" class="chip active" data-type="${escapeHtml(t)}" title="Alt+${i + 1}">${t}</button>`
   ).join("");
-
-  // Autocomplétion "#" (retour de Charles-Henri, 13/09/2026 : "l'auto complession dans le
-  // recherche peut se faire après # et proposer tout les tags dispo en auto compression") —
-  // chargée une fois à l'ouverture de la modale, pas à chaque frappe. Remplace le <datalist>
-  // natif (TODO-031, 29/09/2026 : n'affichait jamais rien sur Safari iOS) par le composant
-  // partagé (js/components/autocomplete.js) — filtrage par PRÉFIXE de la saisie ENTIÈRE
-  // uniquement, comme le faisait le <datalist> natif ici (contrairement à tagsEditor.js/
-  // projects.js/kanban.js, où le filtrage est par sous-chaîne) : le "#" fait partie à la fois de
-  // la saisie et des options, donc chercher un mot ordinaire qui ressemblerait au milieu d'un nom
-  // de tag ne doit jamais faire apparaître une suggestion hors de propos — seul un champ qui
-  // COMMENCE par "#" déclenche l'autocomplétion de tag.
-  let tagOptions = [];
-  Promise.all([tagsApi.listAll(), preferencesApi.getPreferences()]).then(([allTags, prefs]) => {
-    tagOptions = tagsApi.visibleTagNames(allTags, prefs.disabledTags).map((t) => `#${t}`);
-  });
-  attachAutocomplete(inputEl, {
-    getSuggestions: (query) => {
-      if (!query.startsWith("#")) return [];
-      const q = query.toLowerCase();
-      return tagOptions.filter((t) => t.toLowerCase().startsWith(q));
-    },
-  });
 
   function updateFilterChips() {
     filterEl.querySelectorAll("[data-type]").forEach((chip) => chip.classList.toggle("active", activeTypes.has(chip.dataset.type)));
@@ -323,27 +260,18 @@ export function openSearchModal() {
   }
 
   filterEl.querySelectorAll("[data-type]").forEach((chip) => chip.addEventListener("click", () => toggleType(chip.dataset.type)));
-  includeDoneEl.addEventListener("change", () => renderResults(lastResults, inputEl.value));
 
   function renderResults(results, query) {
     lastResults = results;
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery) {
-      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Tape un mot-clé — titre, nom, notes, tag... ou # pour chercher directement par tag.</div>`;
+    if (!query.trim()) {
+      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Tape un mot-clé — titre, nom, notes, tag...</div>`;
       return;
     }
-    const includeDone = includeDoneEl.checked;
-    const filtered = results.filter((r) => activeTypes.has(r.type) && (includeDone || !r.done));
+    const filtered = results.filter((r) => activeTypes.has(r.type));
     if (!filtered.length) {
-      // "#" seul (retour de Charles-Henri : autocomplétion juste après #) : les suggestions
-      // viennent de la <datalist> du champ, pas de ce panneau — message dédié plutôt que
-      // "Rien ne correspond à « # »", qui donnerait l'impression d'une recherche déjà ratée.
-      resultsEl.innerHTML =
-        trimmedQuery === "#"
-          ? `<div class="empty-state" style="padding:16px;">Tape le nom d'un tag après # — les tags déjà utilisés sont proposés en autocomplétion.</div>`
-          : `<div class="empty-state" style="padding:16px;">Rien ne correspond à « ${escapeHtml(query)} »${
-              results.length ? " avec ces filtres." : "."
-            }</div>`;
+      resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Rien ne correspond à « ${escapeHtml(query)} »${
+        results.length ? " avec ces filtres." : "."
+      }</div>`;
       return;
     }
     resultsEl.innerHTML = "";
@@ -384,18 +312,34 @@ export function openSearchModal() {
 
   renderResults([], "");
 
-  // Chargé une seule fois à l'ouverture (voir le commentaire de `loadSearchBundle` plus haut) —
-  // `bundlePromise` plutôt qu'une variable déjà résolue pour ne jamais perdre une frappe tapée
-  // avant la fin du tout premier chargement (elle attend simplement la même promesse).
-  const bundlePromise = loadSearchBundle();
-
   let debounceTimer = null;
   inputEl.addEventListener("input", () => {
     clearTimeout(debounceTimer);
     const query = inputEl.value;
     debounceTimer = setTimeout(async () => {
-      const bundle = await bundlePromise;
-      renderResults(filterBundle(bundle, query), query);
+      // Lien, « Type:id » ou code discret collé : on ouvre la fiche directement. Jamais bloquant :
+      // un code nu (sans « réf ») qui ne correspond à rien retombe sur la recherche de mot.
+      const reference = extractReference(query);
+      if (reference) {
+        try {
+          const bundle = await fetchBundle();
+          const target = reference.code ? findRefByCode(bundle, reference.code) : reference;
+          const resolved = target && resolveRef(bundle, target);
+          if (resolved) {
+            closeModal();
+            resolved.onOpen();
+            return;
+          }
+          if (!reference.code || reference.strict) {
+            resultsEl.innerHTML = `<div class="empty-state" style="padding:16px;">Fiche introuvable (supprimée ?).</div>`;
+            return;
+          }
+        } catch {
+          // silencieux : on retombe sur la recherche de mot ci-dessous.
+        }
+      }
+      const results = await runSearch(query);
+      renderResults(results, query);
     }, 150);
   });
 
