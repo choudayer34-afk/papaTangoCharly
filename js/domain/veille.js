@@ -36,7 +36,7 @@
 
 import * as storage from "../services/storage.js";
 import { RESEARCH_JSON_TEMPLATE } from "./veilleResearchImport.js";
-import { cleanLines, packSnapshot, unpackSnapshot, diffLines, mergeAdded } from "./veilleDiff.js";
+import { cleanLines, packSnapshot, unpackSnapshot, diffLines, mergeAdded, matchLinks } from "./veilleDiff.js";
 
 const COLLECTION = "veilleSources";
 
@@ -225,7 +225,7 @@ function simpleHash(str) {
  * bougent sans rapport avec une vraie nouveauté), un sélecteur précis reste préférable dès qu'il
  * est identifié via le bouton "🔍 Tester".
  */
-function extractTextForWatch(html, selector) {
+function extractTextForWatch(html, selector, baseUrl = "") {
   const doc = new DOMParser().parseFromString(html, "text/html");
   let root;
   if (selector) {
@@ -237,6 +237,24 @@ function extractTextForWatch(html, selector) {
   }
   const text = (root.textContent || "").replace(/\s+/g, " ").trim();
   if (!text) return { text: null, error: "empty" };
+  // Liens de la zone (20/10/2026) : [texte du lien, adresse absolue] — pour rendre cliquables les nouveautés
+  // dans la modale « Nouveautés » (voir `matchLinks` dans js/domain/veilleDiff.js). Les adresses relatives sont
+  // résolues contre la page surveillée ; ancres internes, mailto:, javascript: et tel: sont ignorés. N'influence
+  // ni `text` ni l'empreinte.
+  const links = [];
+  root.querySelectorAll("a[href]").forEach((a) => {
+    if (links.length >= 400) return;
+    const href = (a.getAttribute("href") || "").trim();
+    if (!href || href.startsWith("#") || /^(javascript|mailto|tel):/i.test(href)) return;
+    const label = (a.textContent || "").replace(/\s+/g, " ").trim();
+    if (!label) return;
+    try {
+      const abs = new URL(href, baseUrl || undefined).href;
+      if (/^https?:\/\//i.test(abs)) links.push([label, abs]);
+    } catch {
+      // adresse illisible : lien ignoré
+    }
+  });
   // Même zone, mais découpée en LIGNES (un bloc de page = une ligne) pour "voir ce qui a changé" (06/10/2026,
   // voir js/domain/veilleDiff.js). `text` ci-dessus, et donc l'empreinte, reste calculé exactement comme
   // avant : sinon toutes les sources déjà suivies afficheraient une fausse nouveauté à la prochaine vérification.
@@ -252,7 +270,7 @@ function extractTextForWatch(html, selector) {
       el.append("\n");
     });
   const lines = cleanLines((clone.textContent || "").split("\n"));
-  return { text, lines, error: null };
+  return { text, lines, links, error: null };
 }
 
 /** Libellés humains des codes d'erreur renvoyés par `previewWatch()`/`checkSourceForChanges()`. */
@@ -317,9 +335,9 @@ export async function previewWatch({ url, watchUrl, watchSelector } = {}, { onAt
   }
 
   onAttempt?.({ step: "analyse" });
-  const { text, lines, error } = extractTextForWatch(html, (watchSelector || "").trim());
+  const { text, lines, links, error } = extractTextForWatch(html, (watchSelector || "").trim(), target);
   if (error) return { ok: false, error };
-  return { ok: true, text, lines, hash: simpleHash(text), preview: text.slice(0, 220), short: text.length < SHORT_ZONE_CHARS };
+  return { ok: true, text, lines, links, hash: simpleHash(text), preview: text.slice(0, 220), short: text.length < SHORT_ZONE_CHARS };
 }
 
 /**
@@ -355,12 +373,18 @@ export async function checkSourceForChanges(source, { onProgress } = {}) {
       const unseen = hasNewContent(source) && source.lastChangeHasDetail;
       const added = unseen ? mergeAdded(unpackSnapshot(source.lastChangeAdded), d.added) : d.added;
       const removedCount = (unseen ? Number(source.lastChangeRemovedCount) || 0 : 0) + d.removedCount;
-      changeDetail = { hasDetail: true, added, removedCount, at: now };
+      // Liens des lignes nouvelles (20/10/2026) : on garde ceux des vérifications précédentes tant que la
+      // nouveauté n'est pas vue, limités aux lignes réellement listées.
+      const allLinks = { ...(unseen ? parseChangeLinks(source.lastChangeLinks) : {}), ...matchLinks(d.added, result.links) };
+      const links = {};
+      for (const line of added) if (allLinks[line]) links[line] = allLinks[line];
+      changeDetail = { hasDetail: true, added, links, removedCount, at: now };
     } else {
-      changeDetail = { hasDetail: false, added: [], removedCount: 0, at: now };
+      changeDetail = { hasDetail: false, added: [], links: {}, removedCount: 0, at: now };
     }
     patch.lastChangeHasDetail = changeDetail.hasDetail;
     patch.lastChangeAdded = changeDetail.added.join("\n");
+    patch.lastChangeLinks = Object.keys(changeDetail.links).length ? JSON.stringify(changeDetail.links) : "";
     patch.lastChangeRemovedCount = changeDetail.removedCount;
   }
   await updateSource(source.id, patch);
@@ -369,15 +393,31 @@ export async function checkSourceForChanges(source, { onProgress } = {}) {
   return { ...result, changed, firstCheck, changeDetail };
 }
 
+/** Relit le champ `lastChangeLinks` (JSON { ligne: adresse }) ; vide si absent, illisible ou non http(s). */
+function parseChangeLinks(raw) {
+  if (!raw) return {};
+  try {
+    const data = JSON.parse(raw);
+    const out = {};
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      for (const [line, url] of Object.entries(data)) if (typeof url === "string" && /^https?:\/\//i.test(url)) out[line] = url;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Détail du dernier changement détecté, relu depuis la fiche (voir `checkSourceForChanges`). `hasDetail`
  * est faux pour une nouveauté détectée avant que Pilotage ne conserve la version précédente de la page.
- * @returns {{hasDetail:boolean, added:string[], removedCount:number, at:number|null}}
+ * @returns {{hasDetail:boolean, added:string[], links:Record<string,string>, removedCount:number, at:number|null}}
  */
 export function changeDetailOf(source) {
   return {
     hasDetail: !!source?.lastChangeHasDetail,
     added: unpackSnapshot(source?.lastChangeAdded),
+    links: parseChangeLinks(source?.lastChangeLinks),
     removedCount: Number(source?.lastChangeRemovedCount) || 0,
     at: source?.lastChangedAt || null,
   };
