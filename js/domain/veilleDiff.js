@@ -95,3 +95,92 @@ export function mergeAdded(previousAdded, newAdded) {
   }
   return out.slice(0, ADDED_MAX_LINES);
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Présentation lisible des lignes nouvelles (20/10/2026, retour de Charles-Henri : la modale « Nouveautés »
+// affichait une liste de lignes brutes, titre et date collés, sans lien). Tout ce qui suit est PUR et ne
+// touche ni l'empreinte ni la comparaison : `diffLines` garde ses lignes exactes, on ne fait ici qu'habiller
+// le résultat pour l'affichage (titre / date / lien cliquable) et mettre à part les lignes parasites.
+// ---------------------------------------------------------------------------------------------------------
+
+/** Texte de lien trop court pour être associé de façon fiable à une ligne ("Lire", "Voir"...). */
+export const LINK_MIN_TEXT = 12;
+/** Titre plus court que ça, sans lien : traité comme une ligne parasite (rubrique, bouton...). */
+const TITLE_MIN_CHARS = 15;
+
+const MONTHS =
+  "janvier|f[ée]vrier|mars|avril|mai|juin|juillet|ao[uû]t|septembre|octobre|novembre|d[ée]cembre|janv|f[ée]vr|avr|juil|sept|oct|nov|d[ée]c";
+const DATE_RE = new RegExp(
+  `\\b\\d{1,2}(?:er)?\\s+(?:${MONTHS})\\.?(?:\\s+\\d{4})?(?![\\p{L}\\d])` + // 12 octobre 2026, 1er oct.
+    `|\\b\\d{1,2}[/.\\-]\\d{1,2}[/.\\-](?:\\d{4}|\\d{2})\\b` + // 12/10/2026, 12.10.26
+    `|\\b\\d{4}-\\d{2}-\\d{2}\\b`, // 2026-10-12
+  "iu"
+);
+const GENERIC_RE =
+  /^(lire la suite|lire plus|lire l.article|en savoir plus|voir plus|voir tout|plus d.infos?|d[ée]couvrir|t[ée]l[ée]charger|partager|suivant|pr[ée]c[ée]dent|retour|accueil|cliquez ici)\b/i;
+const EDGE_SEPARATORS = /^[\s\-–—|·:,/>»]+|[\s\-–—|·:,/>»]+$/g;
+
+/** Sépare une ligne en titre + date (première date reconnue, retirée du titre). */
+export function parseLine(line) {
+  const text = String(line || "").replace(/\s+/g, " ").trim();
+  const m = text.match(DATE_RE);
+  if (!m) return { title: text.replace(EDGE_SEPARATORS, ""), date: "" };
+  const title = (text.slice(0, m.index) + " " + text.slice(m.index + m[0].length)).replace(/\s+/g, " ").trim().replace(EDGE_SEPARATORS, "");
+  return { title, date: m[0].trim() };
+}
+
+/**
+ * Associe chaque ligne à l'adresse du lien qu'elle contient. `linkPairs` : [[texte du lien, adresse absolue], ...]
+ * lus sur la page. Une ligne reçoit le lien dont le texte y figure (le plus long d'abord) ; un lien qui enveloppe
+ * un bloc entier (carte d'article) est aussi reconnu quand la ligne est un morceau de ce bloc assez long.
+ * @returns {Record<string,string>} ligne → adresse (seulement les lignes pour lesquelles un lien est trouvé)
+ */
+export function matchLinks(lines, linkPairs) {
+  const pairs = [];
+  for (const [text, url] of linkPairs || []) {
+    const t = cleanLines([text])[0];
+    if (t && t.length >= LINK_MIN_TEXT && /^https?:\/\//i.test(url || "")) pairs.push([t, url]);
+  }
+  pairs.sort((a, b) => b[0].length - a[0].length);
+  const out = {};
+  for (const line of lines || []) {
+    const hit = pairs.find(([t]) => line.includes(t)) || (line.length >= LINK_MIN_TEXT ? pairs.find(([t]) => t.includes(line)) : null);
+    if (hit) out[line] = hit[1];
+  }
+  return out;
+}
+
+/**
+ * Prépare l'affichage : `items` = vraies nouveautés (titre, date éventuelle, lien éventuel), `others` = lignes
+ * parasites ou impossibles à interpréter, mises à part. Une ligne qui ne contient qu'une date est rattachée
+ * à l'élément voisin sans date (le précédent d'abord, sinon le suivant), puisque l'ordre de la page est conservé.
+ * @param {string[]} added lignes nouvelles (ordre de la page)
+ * @param {Record<string,string>} links ligne → adresse
+ * @returns {{ items: {title:string, date:string, url:string}[], others: string[] }}
+ */
+export function buildChangeItems(added, links = {}) {
+  const parsed = (added || []).map((line) => ({ line, url: links[line] || "", ...parseLine(line) }));
+  const items = [];
+  const others = [];
+  let pendingDate = ""; // date vue AVANT un titre, à lui donner
+  for (const p of parsed) {
+    if (!p.title) {
+      if (!p.date) continue;
+      const prev = items[items.length - 1];
+      if (prev && !prev.date) prev.date = p.date;
+      else pendingDate = p.date;
+      continue;
+    }
+    const generic = GENERIC_RE.test(p.title) || (p.title.length < TITLE_MIN_CHARS && !p.url);
+    if (generic) {
+      others.push(p.line);
+      continue;
+    }
+    items.push({ title: p.title, date: p.date || pendingDate, url: p.url });
+    pendingDate = "";
+  }
+  if (pendingDate) others.push(pendingDate);
+  // Doublons de titre (même article listé deux fois, ex. "À la une" + liste) : on garde le premier.
+  const seen = new Set();
+  return { items: items.filter((i) => (seen.has(i.title) ? false : seen.add(i.title))), others };
+}
