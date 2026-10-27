@@ -303,3 +303,4 @@ export function downloadPeopleZip(handover, options) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
   return handover.people.length;
 }
+ 
