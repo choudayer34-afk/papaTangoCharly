@@ -25,16 +25,33 @@ const PAGE_HEIGHT = 842;
 const MARGIN = 50;
 const CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN;
 
-// Estimation grossière des largeurs de caractères (unités / 1000, comme les fichiers AFM réels)
-// — voir l'avertissement en tête de fichier : catégorisée, pas la table exacte.
+// Largeurs de caractères d'Helvetica / Helvetica-Bold (unités / 1000), issues des fichiers AFM
+// standard des polices de base PDF, pour les codes ASCII 32 à 126. Remplace (27/10/2026, revue du
+// dossier de passation) l'ancienne estimation par catégorie, qui sous-estimait certains
+// caractères (tirets longs, majuscules larges, guillemets...) : des lignes dépassaient la marge
+// droite de plusieurs points. Les lettres accentuées ont la largeur de leur lettre de base ; les
+// quelques caractères typographiques courants du français sont traités à part (voir
+// EXTRA_WIDTHS). Tout autre caractère reçoit une largeur moyenne prudente (556).
+const AFM_REGULAR = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const AFM_BOLD = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+// code Unicode → [largeur régulière, largeur grasse]
+const EXTRA_WIDTHS = {
+  0xa0: [278, 278], 0xab: [556, 556], 0xbb: [556, 556], 0xb0: [400, 400], 0xb2: [333, 333], 0xb3: [333, 333], 0xb7: [278, 278],
+  0xd7: [584, 584], 0xf7: [584, 584], 0xc6: [1000, 1000], 0xe6: [889, 889], 0xdf: [611, 611], 0xa9: [737, 737], 0xae: [737, 737],
+  0x20ac: [556, 556], 0x2026: [1000, 1000], 0x2018: [222, 278], 0x2019: [222, 278], 0x201c: [333, 500], 0x201d: [333, 500],
+  0x2022: [350, 350], 0x2013: [556, 556], 0x2014: [1000, 1000], 0x2122: [1000, 1000], 0x0152: [1000, 1000], 0x0153: [944, 944],
+};
+
 function charWidth1000(code, bold) {
-  if (code === 32) return 278;
-  if (code >= 48 && code <= 57) return 556; // chiffres
-  if (code >= 65 && code <= 90) return bold ? 722 : 667; // majuscules
-  if (code >= 97 && code <= 122) return bold ? 556 : 500; // minuscules
-  if (code >= 0xc0 && code <= 0xde) return bold ? 722 : 667; // majuscules accentuées (WinAnsi/Latin-1)
-  if (code >= 0xdf && code <= 0xff) return bold ? 556 : 500; // minuscules accentuées
-  return 278; // ponctuation / symboles
+  if (code >= 32 && code <= 126) return (bold ? AFM_BOLD : AFM_REGULAR)[code - 32];
+  const extra = EXTRA_WIDTHS[code];
+  if (extra) return bold ? extra[1] : extra[0];
+  if (code >= 0xc0) {
+    // lettre accentuée : largeur de la lettre de base (é → e, À → A...)
+    const base = String.fromCharCode(code).normalize("NFD").charCodeAt(0);
+    if (base >= 32 && base <= 126) return (bold ? AFM_BOLD : AFM_REGULAR)[base - 32];
+  }
+  return 556;
 }
 
 function textWidth(text, size, bold) {
@@ -106,6 +123,24 @@ function toLatin1Safe(s) {
     .join("");
 }
 
+/** Coupe un mot plus large que `maxWidth` (URL, référence interminable...) en morceaux qui
+ *  tiennent — avant le 27/10/2026 il débordait simplement de la marge droite, voire sur la colonne
+ *  voisine d'un tableau. */
+function breakLongWord(word, maxWidth, size, bold) {
+  const pieces = [];
+  let piece = "";
+  for (const ch of word) {
+    if (piece && textWidth(piece + ch, size, bold) > maxWidth) {
+      pieces.push(piece);
+      piece = ch;
+    } else {
+      piece += ch;
+    }
+  }
+  if (piece) pieces.push(piece);
+  return pieces;
+}
+
 /** Découpe `text` (peut contenir des retours à la ligne \n) en lignes tenant dans `maxWidth`. */
 function wrapText(text, maxWidth, size, bold) {
   const lines = [];
@@ -116,13 +151,16 @@ function wrapText(text, maxWidth, size, bold) {
     }
     const words = paragraph.split(/\s+/).filter(Boolean);
     let current = "";
-    for (const word of words) {
-      const candidate = current ? current + " " + word : word;
-      if (textWidth(candidate, size, bold) > maxWidth && current) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = candidate;
+    for (const rawWord of words) {
+      const wordPieces = textWidth(rawWord, size, bold) > maxWidth ? breakLongWord(rawWord, maxWidth, size, bold) : [rawWord];
+      for (const word of wordPieces) {
+        const candidate = current ? current + " " + word : word;
+        if (textWidth(candidate, size, bold) > maxWidth && current) {
+          lines.push(current);
+          current = word;
+        } else {
+          current = candidate;
+        }
       }
     }
     if (current) lines.push(current);
@@ -162,9 +200,12 @@ export function createPdfDoc({ title = "" } = {}) {
     // le flux PDF, mais hors de la zone visible). heading() appelle maintenant wrapText comme le
     // fait déjà paragraph(), et gère en plus la couleur, l'italique et le centrage (nécessaires
     // pour le titre "EADP [Nom]" centré en orange et les sous-titres gris foncé).
-    heading(text, { size = 14, bold = true, italic = false, color = null, align = "left" } = {}) {
+    heading(text, { size = 14, bold = true, italic = false, color = null, align = "left", keepWithNext = 0 } = {}) {
       const lineHeight = size * 1.3;
       const lines = wrapText(text || "", CONTENT_WIDTH, size, bold);
+      // `keepWithNext` (27/10/2026) : réserve de la place pour le contenu qui suit, afin qu'un titre
+      // ne reste jamais seul en bas de page. 0 par défaut : comportement inchangé pour les autres exports.
+      if (keepWithNext) ensureSpace(lines.length * lineHeight + keepWithNext);
       for (const line of lines) {
         ensureSpace(lineHeight);
         cursorY -= lineHeight;
@@ -184,6 +225,10 @@ export function createPdfDoc({ title = "" } = {}) {
         if (line) drawLine(line, { size, bold });
       }
       cursorY -= gapAfter;
+    },
+    /** Saute à la page suivante s'il reste moins de `height` points — pour garder un bloc entier. */
+    keepTogether(height) {
+      ensureSpace(height);
     },
     spacer(px = 8) {
       cursorY -= px;
@@ -218,16 +263,22 @@ export function createPdfDoc({ title = "" } = {}) {
         x += c.width;
         return thisX;
       });
+      const drawHeader = () => {
+        cursorY -= lineHeight;
+        columns.forEach((c, i) => drawLine(c.header, { size, bold: true, x: xs[i] }));
+        cursorY -= lineHeight * 0.4;
+        currentPage.ops.push(`${MARGIN} ${cursorY} m ${MARGIN + CONTENT_WIDTH} ${cursorY} l 0.7 0.7 0.7 RG S`);
+        cursorY -= 6;
+      };
       ensureSpace(lineHeight * 1.5);
-      cursorY -= lineHeight;
-      columns.forEach((c, i) => drawLine(c.header, { size, bold: true, x: xs[i] }));
-      cursorY -= lineHeight * 0.4;
-      currentPage.ops.push(`${MARGIN} ${cursorY} m ${MARGIN + CONTENT_WIDTH} ${cursorY} l 0.7 0.7 0.7 RG S`);
-      cursorY -= 6;
+      drawHeader();
       for (const row of rows) {
         const cellLines = row.map((cell, i) => wrapText(cell.text || "", columns[i].width - 4, size, false));
         const rowLines = Math.max(1, ...cellLines.map((l) => l.length));
+        const pageBeforeRow = currentPage;
         ensureSpace(rowLines * lineHeight);
+        // Nouvelle page : on répète l'en-tête pour que les colonnes restent lisibles.
+        if (currentPage !== pageBeforeRow) drawHeader();
         const rowTopY = cursorY;
         for (let li = 0; li < rowLines; li++) {
           cursorY -= lineHeight;
