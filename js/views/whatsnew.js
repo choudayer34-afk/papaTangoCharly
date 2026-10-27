@@ -38,6 +38,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → « 📦 Dossier de passation » → coche les personnes → « 📄 Dossier global (PDF) », « 📊 Tableau Excel » et « 👥 Fiches de l'équipe ».",
         gain: "En cas d'absence ou d'arrêt, ton chef reprend le travail sans rien te demander : tout ce qui est en cours est écrit, daté et relié à ses ressources.",
       },
+      {
+        type: "add",
+        title: "📦 Passation : choisir les projets à exclure + « En attente de » exporté",
+        text: "Dans « Dossier de passation », une nouvelle liste « Projets inclus » te laisse décocher les projets personnels (CSE, etc.) : le projet et tout ce qui s'y rattache (tâches, suivis, objectifs) ne sortent dans aucun fichier. Ton choix est mémorisé sur l'appareil. La référence « ⏳ En attente de » saisie sur les tâches En attente / À suivre du Kanban est reprise dans les PDF et dans une colonne dédiée de l'Excel (« non précisé » si elle est vide). Les fichiers ont aussi été fiabilisés : longues URL et titres coupés proprement, en-têtes de tableaux répétés à chaque page, symboles non imprimables remplacés, listes tronquées signalées (« les 15 plus urgentes sur 20 », « 3 derniers suivis sur N »), Excel avec ligne de titres figée.",
+        howTo: "☰ Plus → « 📦 Dossier de passation » → décoche les projets à ne pas transmettre.",
+        gain: "Tu remets à ton chef uniquement ce qui le concerne, et tu sais toujours ce que tu attends de qui.",
+      },
     ],
   },
   // À ajouter en tête de WHATS_NEW (js/components/whatsnew.js) :
