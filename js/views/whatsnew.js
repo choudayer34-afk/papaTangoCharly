@@ -28,6 +28,18 @@ import * as preferencesApi from "../domain/preferences.js";
 export const WHATS_NEW_TYPE_LABELS = { add: "✨ Ajouté", change: "🔧 Modifié", fix: "🐛 Corrigé", remove: "🗑️ Retiré" };
 
 const WHATS_NEW = [
+  {
+    date: "27 octobre 2026",
+    items: [
+      {
+        type: "add",
+        title: "📦 Dossier de passation : remettre ce qui est en cours à ton chef",
+        text: "Un nouvel écran (☰ Plus → « Dossier de passation ») prépare, à partir de tes données et uniquement pour ce qui n'est pas terminé : un PDF global (synthèse, projets en cours avec avancement, sous-parties, notes, tâches avec échéances, checklists restantes et ressources avec leurs liens, tâches hors projet), une fiche PDF par membre de l'équipe (ce qu'il devait faire et pour quand, ce que tu devais lui transmettre, relances et notes de suivi, objectifs en cours), regroupées dans un seul ZIP, et un tableau Excel avec une ligne par sujet et deux colonnes vides, « Qui reprend ? » et « Commentaire ». Les sujets que tu as masqués du point ne sortent jamais ; tes notes privées sur chaque personne non plus, sauf si tu coches l'option. Tu choisis quelles personnes sont incluses et tu peux ajouter un mot d'introduction. Le PDF global ne contient que des chiffres sur l'équipe : le détail des personnes est dans les fiches (confidentielles) et dans l'Excel pour les personnes cochées.",
+        howTo: "☰ Plus → « 📦 Dossier de passation » → coche les personnes → « 📄 Dossier global (PDF) », « 📊 Tableau Excel » et « 👥 Fiches de l'équipe ».",
+        gain: "En cas d'absence ou d'arrêt, ton chef reprend le travail sans rien te demander : tout ce qui est en cours est écrit, daté et relié à ses ressources.",
+      },
+    ],
+  },
   // À ajouter en tête de WHATS_NEW (js/components/whatsnew.js) :
   {
     date: "20 octobre 2026",
