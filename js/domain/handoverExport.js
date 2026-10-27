@@ -17,7 +17,7 @@ import * as peopleApi from "./people.js";
 import * as objectivesApi from "./objectives.js";
 import * as linksApi from "./links.js";
 import * as resourcesApi from "./resources.js";
-import { buildHandoverData, buildHandoverRows, HANDOVER_COLUMNS, formatDateFr, pdfText } from "./handover.js";
+import { buildHandoverData, buildHandoverRows, HANDOVER_COLUMNS, HANDOVER_GUIDE, formatDateFr, pdfText } from "./handover.js";
 import { createPdfDoc, downloadPdfBytes } from "../services/pdfWriter.js";
 import { buildXlsxBytes, downloadXlsxBytes, buildZip } from "../services/xlsxWriter.js";
 
@@ -148,11 +148,33 @@ function writeCover(doc, title, subtitle, intro) {
   }
 }
 
+/** Page « Comment lire ce dossier » (texte HANDOVER_GUIDE, partagé avec le message copiable de l'écran). */
+function writeGuide(doc) {
+  const g = HANDOVER_GUIDE;
+  // Typographie française : espaces insécables à l'intérieur des « guillemets » et avant « ? » / « : ».
+  const nb = (t) => t.replace(/« /g, "«\u00a0").replace(/ (»|\?|:)/g, "\u00a0$1");
+  doc.spacer(4);
+  doc.heading(g.title, { size: 14, color: ORANGE, keepWithNext: 60 });
+  doc.paragraph(nb(g.intro), { size: 10, gapAfter: 6 });
+  for (const d of g.documents) {
+    doc.heading(d.title, { size: 11, keepWithNext: 50 });
+    doc.paragraph(nb(d.text), { size: 9.5, gapAfter: 5 });
+  }
+  doc.heading(g.readingTitle, { size: 11, keepWithNext: 50 });
+  doc.paragraph(g.reading.map((r) => "- " + nb(r)).join("\n"), { size: 9.5, gapAfter: 5 });
+  doc.heading(g.excludedTitle, { size: 11, keepWithNext: 40 });
+  doc.paragraph(nb(g.excluded), { size: 9.5, gapAfter: 5 });
+  doc.heading(g.startTitle, { size: 11, keepWithNext: 40 });
+  doc.paragraph(nb(g.start), { size: 9.5, gapAfter: 5 });
+  doc.pageBreak();
+}
+
 /** PDF global : synthèse, projets en cours, tâches hors projet. */
 export function buildGlobalPdf(handover, { intro = "", generatedOn = todayIso() } = {}) {
   const s = handover.summary;
   const doc = createPdfDoc({ title: "Dossier de passation" });
   writeCover(doc, "Dossier de passation", `Établi le ${formatDateFr(generatedOn)} · uniquement ce qui n'est pas terminé`, intro);
+  writeGuide(doc);
 
   doc.heading("Synthèse", { size: 14, color: ORANGE });
   doc.paragraph(
