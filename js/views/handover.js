@@ -5,6 +5,7 @@
 // personne, un mot d'introduction facultatif, et un aperçu des chiffres avant de générer.
 import * as peopleApi from "../domain/people.js";
 import { loadHandoverSource, computeHandover, downloadGlobalPdf, downloadHandoverExcel, downloadPeopleZip } from "../domain/handoverExport.js";
+import { buildCoverMessage } from "../domain/handover.js";
 import { showToast } from "../components/toast.js";
 import { saveDraft, getDraft, clearDraft } from "../services/draftStore.js";
 
@@ -102,6 +103,12 @@ export async function renderHandover(container) {
       <label for="handover-intro">Mot d'introduction pour ton chef (facultatif)</label>
       <textarea id="handover-intro" rows="4" placeholder="Ex. : Voici l'état de mes sujets en cours. Les points les plus urgents sont en page 1…">${escapeHtml(draft?.value || "")}</textarea>
     </div>
+    <div class="field">
+      <label for="handover-cover-message">Message d'accompagnement pour ton chef (à coller dans un mail)</label>
+      <textarea id="handover-cover-message" rows="17" readonly style="font-size:13px;"></textarea>
+      <button type="button" id="handover-copy-btn" class="btn btn-secondary btn-block" style="margin-top:8px;">📋 Copier le message</button>
+      <p class="item-meta" style="margin-top:6px;">Il explique ce que contient chaque document joint ; la page « Comment lire ce dossier » du PDF global détaille la lecture. Tu pourras l'adapter une fois collé.</p>
+    </div>
     <div class="section-title">Générer</div>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
       <button type="button" id="handover-global-btn" class="btn btn-primary btn-block">📄 Dossier global (PDF)</button>
@@ -135,12 +142,41 @@ export async function renderHandover(container) {
     `;
   }
   refreshPreview();
+  const coverEl = body.querySelector("#handover-cover-message");
+  function refreshCoverMessage() {
+    coverEl.value = buildCoverMessage({ withTeam: getOptions().personIds.length > 0, withExcel: true });
+  }
+  refreshCoverMessage();
+  body.querySelector("#handover-copy-btn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(coverEl.value);
+      showToast("📋 Message copié");
+    } catch (_err) {
+      // Repli (contexte non sécurisé, permission refusée) : sélection manuelle du texte.
+      coverEl.removeAttribute("readonly");
+      coverEl.focus();
+      coverEl.select();
+      let ok = false;
+      try {
+        ok = document.execCommand("copy");
+      } catch (_e) {
+        ok = false;
+      }
+      coverEl.setAttribute("readonly", "");
+      showToast(ok ? "📋 Message copié" : "Sélectionne le texte et copie-le manuellement");
+    }
+  });
   function persistExcludedProjects() {
     const ids = getOptions().excludedProjectIds;
     if (ids.length) saveDraft(EXCLUDED_PROJECTS_KEY, { ids });
     else clearDraft(EXCLUDED_PROJECTS_KEY);
   }
-  body.querySelectorAll(".handover-person").forEach((el) => el.addEventListener("change", refreshPreview));
+  body.querySelectorAll(".handover-person").forEach((el) =>
+    el.addEventListener("change", () => {
+      refreshPreview();
+      refreshCoverMessage();
+    })
+  );
   body.querySelectorAll(".handover-project").forEach((el) =>
     el.addEventListener("change", () => {
       persistExcludedProjects();
@@ -155,6 +191,7 @@ export async function renderHandover(container) {
       body.querySelectorAll(`.handover-${kind}`).forEach((el) => (el.checked = checked));
       if (kind === "project") persistExcludedProjects();
       refreshPreview();
+      refreshCoverMessage();
     })
   );
 
