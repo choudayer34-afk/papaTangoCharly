@@ -6,7 +6,7 @@
 import { test, expect } from "@playwright/test";
 import { buildXlsxBytes } from "../../js/services/xlsxWriter.js";
 import { createPdfDoc } from "../../js/services/pdfWriter.js";
-import { buildHandoverData, buildHandoverRows, HANDOVER_COLUMNS, formatDateFr, pdfText } from "../../js/domain/handover.js";
+import { buildHandoverData, buildHandoverRows, HANDOVER_COLUMNS, HANDOVER_GUIDE, buildCoverMessage, formatDateFr, pdfText } from "../../js/domain/handover.js";
 
 const labels = {
   taskStatus: (s) => ({ todo: "À faire", in_progress: "En cours", waiting: "En attente", follow_up: "À suivre", done: "Terminé" }[s] || s),
@@ -250,5 +250,29 @@ test.describe("générateurs : robustesse des fichiers de sortie", () => {
     const headers = (text.match(/\(ColonneUnique\) Tj/g) || []).length;
     expect(pageCount).toBeGreaterThan(1);
     expect(headers).toBe(pageCount);
+  });
+});
+
+test.describe("texte explicatif pour le chef", () => {
+  test("le guide couvre les trois documents, les colonnes citées existent et le texte est imprimable tel quel en PDF", () => {
+    expect(HANDOVER_GUIDE.documents).toHaveLength(3);
+    const all = JSON.stringify(HANDOVER_GUIDE);
+    // Les deux colonnes vides citées dans le guide existent bien dans l'Excel.
+    for (const header of ["Qui reprend ?", "Commentaire"]) expect(HANDOVER_COLUMNS.map((c) => c.header)).toContain(header);
+    expect(all).toContain("En attente de");
+    // Aucun caractère que la police PDF imprimerait en « ? » : pdfText ne doit rien changer d'essentiel.
+    const walk = (v) => (typeof v === "string" ? [v] : Array.isArray(v) ? v.flatMap(walk) : v && typeof v === "object" ? Object.values(v).flatMap(walk) : []);
+    for (const text of walk(HANDOVER_GUIDE)) expect(pdfText(text).replace(/\s+/g, " ")).toBe(text.replace(/\s+/g, " ").trim());
+  });
+
+  test("le message d'accompagnement s'adapte aux documents joints et reste en tutoiement", () => {
+    const full = buildCoverMessage();
+    expect(full).toContain("Tu trouveras");
+    expect(full).toContain("fiches de l'équipe");
+    expect(full).toContain("tableau Excel");
+    expect(full).not.toMatch(/\bvous\b|\bvotre\b/i);
+    const withoutTeam = buildCoverMessage({ withTeam: false });
+    expect(withoutTeam).not.toContain("fiches de l'équipe (un PDF");
+    expect(withoutTeam).toContain("dossier global");
   });
 });
