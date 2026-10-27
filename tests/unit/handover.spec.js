@@ -48,7 +48,7 @@ function sample() {
       { id: "f6", personId: "pm", title: "Sujet avec mon manager", direction: "waiting_on", status: "waiting" },
     ],
     people: [
-      { id: "pe1", name: "Camille", role: "Dev", type: "collaborateur", order: 1, notes: "Contexte privé", notesLog: [{ text: "Note privée", createdAt: 9 }] },
+      { id: "pe1", name: "Camille", role: "Dev", type: "collaborateur", order: 1, notes: "Contexte privé", notesLog: [{ text: "Note privée", createdAt: 9 }], expectationsInOneToOne: "  Plus de visibilité  ", personalConsideration: "Rigoureuse" },
       { id: "pe2", name: "Dominique", type: "collaborateur", order: 2 },
       { id: "pm", name: "Mon chef", type: "manager", order: 3 },
     ],
@@ -124,6 +124,27 @@ test.describe("buildHandoverData — équipe et confidentialité", () => {
     const withNotes = buildHandoverData(sample(), { includePersonNotes: true }, labels).people[0].privateNotes;
     expect(withNotes.notes).toBe("Contexte privé");
     expect(withNotes.journal.map((n) => n.text)).toEqual(["Note privée"]);
+  });
+
+  test("repères managériaux : seuls les champs renseignés sortent, nettoyés, avec les notes datées, dans l'Excel aussi", () => {
+    const h = buildHandoverData(sample(), { includePersonNotes: true }, labels);
+    const pn = h.people[0].privateNotes;
+    expect(pn.markers.map((m) => m.text)).toEqual(["Plus de visibilité", "Rigoureuse"]); // attente manager vide : absente
+    expect(pn.markers[0].label).toContain("O2O");
+    expect(pn.journal[0].date).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+    const rows = buildHandoverRows(h);
+    const typeIdx = HANDOVER_COLUMNS.findIndex((c) => c.key === "type");
+    const notesIdx = HANDOVER_COLUMNS.findIndex((c) => c.key === "notes");
+    const detailIdx = HANDOVER_COLUMNS.findIndex((c) => c.key === "detail");
+    const personRow = rows.find((r) => r[typeIdx] === "Notes et repères sur la personne");
+    expect(personRow[notesIdx]).toContain("Contexte privé");
+    expect(personRow[notesIdx]).toContain("Note privée");
+    expect(personRow[detailIdx]).toContain("Plus de visibilité");
+    // Option décochée : ni PDF-données ni ligne Excel.
+    const without = buildHandoverRows(buildHandoverData(sample(), {}, labels));
+    expect(without.some((r) => r[typeIdx] === "Notes et repères sur la personne")).toBe(false);
+    // Personne sans aucune note ni repère : pas de ligne vide.
+    expect(rows.filter((r) => r[typeIdx] === "Notes et repères sur la personne")).toHaveLength(1);
   });
 
   test("sélection de personnes et objectifs non atteints seulement", () => {
