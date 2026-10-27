@@ -9,6 +9,7 @@ import { showToast } from "../components/toast.js";
 import { saveDraft, getDraft, clearDraft } from "../services/draftStore.js";
 
 const INTRO_DRAFT_KEY = "handover-intro";
+const EXCLUDED_PROJECTS_KEY = "handover-excluded-projects"; // choix mémorisé sur cet appareil (ex. projets personnels comme le CSE)
 
 function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -21,7 +22,7 @@ export async function renderHandover(container) {
         <h1>📦 Dossier de passation</h1>
         <div class="subtitle">Ce qui est en cours, à remettre à ton chef : projets, tâches, suivi de l'équipe</div>
       </div>
-      <a href="#/more" class="btn btn-secondary btn-sm">← Retour</a>
+      <a href="#/more" class="btn btn-secondary btn-sm" style="flex:none;white-space:nowrap;">← Retour</a>
     </div>
     <div class="view" id="handover-body"><p class="item-meta">Chargement de tes données…</p></div>
   `;
@@ -37,7 +38,11 @@ export async function renderHandover(container) {
   }
 
   const team = peopleApi.sortPeople(source.people.filter((p) => p.type !== "manager"));
+  const activeProjects = source.projects.filter((p) => p.status === "active").sort((a, b) => (a.order ?? a.createdAt ?? 0) - (b.order ?? b.createdAt ?? 0));
+  const openTaskCountByProject = new Map();
+  for (const t of source.tasks) if (t.projectId && t.status !== "done") openTaskCountByProject.set(t.projectId, (openTaskCountByProject.get(t.projectId) || 0) + 1);
   const draft = getDraft(INTRO_DRAFT_KEY);
+  const previouslyExcluded = new Set(getDraft(EXCLUDED_PROJECTS_KEY)?.ids || []);
 
   body.innerHTML = `
     <p class="item-meta" style="margin-bottom:12px;">
@@ -46,7 +51,30 @@ export async function renderHandover(container) {
     </p>
     <div class="section-title" style="margin-top:0;">Aperçu</div>
     <div class="card" id="handover-preview" style="margin-bottom:16px;"></div>
-    <div class="section-title">Personnes incluses dans les fiches</div>
+    <div class="section-header-row">
+      <div class="section-title" style="margin-top:0;">Projets inclus</div>
+      <span style="flex:none;white-space:nowrap;display:inline-flex"><button type="button" class="btn btn-ghost btn-sm" data-check-all="project">Tout</button><button type="button" class="btn btn-ghost btn-sm" data-check-none="project">Aucun</button></span>
+    </div>
+    <p class="item-meta" style="margin:0 0 6px;">Décoche les projets personnels (ex. CSE) : le projet et tout ce qui s'y rattache (tâches, suivis, objectifs) ne sortent dans aucun fichier. Ton choix est mémorisé sur cet appareil.</p>
+    <div class="card" id="handover-projects" style="margin-bottom:16px;">
+      ${
+        activeProjects.length
+          ? activeProjects
+              .map((p) => {
+                const n = openTaskCountByProject.get(p.id) || 0;
+                return `<label class="item-row" style="cursor:pointer;gap:10px;">
+        <input type="checkbox" class="handover-project" value="${escapeHtml(p.id)}" ${previouslyExcluded.has(p.id) ? "" : "checked"} />
+        <div class="item-main"><div class="item-title">${escapeHtml(p.name)}</div><div class="item-meta">${n} tâche(s) non terminée(s)${p.category ? " · " + escapeHtml(p.category) : ""}</div></div>
+      </label>`;
+              })
+              .join("")
+          : '<p class="item-meta">Aucun projet en cours.</p>'
+      }
+    </div>
+    <div class="section-header-row">
+      <div class="section-title" style="margin-top:0;">Personnes incluses dans les fiches</div>
+      <span style="flex:none;white-space:nowrap;display:inline-flex"><button type="button" class="btn btn-ghost btn-sm" data-check-all="person">Toutes</button><button type="button" class="btn btn-ghost btn-sm" data-check-none="person">Aucune</button></span>
+    </div>
     <div class="card" id="handover-people" style="margin-bottom:16px;">
       ${
         team.length
@@ -93,6 +121,7 @@ export async function renderHandover(container) {
 
   const getOptions = () => ({
     personIds: [...body.querySelectorAll(".handover-person:checked")].map((el) => el.value),
+    excludedProjectIds: [...body.querySelectorAll(".handover-project:not(:checked)")].map((el) => el.value),
     includePersonNotes: privateEl.checked,
   });
   const compute = () => computeHandover(source, getOptions());
@@ -106,7 +135,28 @@ export async function renderHandover(container) {
     `;
   }
   refreshPreview();
+  function persistExcludedProjects() {
+    const ids = getOptions().excludedProjectIds;
+    if (ids.length) saveDraft(EXCLUDED_PROJECTS_KEY, { ids });
+    else clearDraft(EXCLUDED_PROJECTS_KEY);
+  }
   body.querySelectorAll(".handover-person").forEach((el) => el.addEventListener("change", refreshPreview));
+  body.querySelectorAll(".handover-project").forEach((el) =>
+    el.addEventListener("change", () => {
+      persistExcludedProjects();
+      refreshPreview();
+    })
+  );
+  // "Tout / Aucun" des deux listes.
+  body.querySelectorAll("[data-check-all], [data-check-none]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const kind = btn.dataset.checkAll || btn.dataset.checkNone;
+      const checked = btn.dataset.checkAll !== undefined;
+      body.querySelectorAll(`.handover-${kind}`).forEach((el) => (el.checked = checked));
+      if (kind === "project") persistExcludedProjects();
+      refreshPreview();
+    })
+  );
 
   introEl.addEventListener("input", () => {
     if (introEl.value.trim()) saveDraft(INTRO_DRAFT_KEY, { value: introEl.value });
