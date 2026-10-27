@@ -769,9 +769,12 @@
 // de sortie (troncatures, longues URL, caractères, en-têtes de tableau répétés). js/services/pdfWriter.js (métriques Helvetica
 // exactes, coupe des mots trop longs, en-tête de tableau répété, keepWithNext — partagé avec les PDF Objectifs/EADP),
 // js/services/xlsxWriter.js, js/domain/handover.js, handoverExport.js, js/views/handover.js, js/views/whatsnew.js. Aucun nouveau fichier JS.
+// v123 (27/10/2026) — passation : texte explicatif pour le chef. HANDOVER_GUIDE/buildCoverMessage (js/domain/handover.js), page
+// "Comment lire ce dossier" en tête du PDF global (handoverExport.js), message copiable (js/views/handover.js), pageBreak et espaces
+// insécables (js/services/pdfWriter.js), js/views/whatsnew.js, tests/unit/handover.spec.js. Aucun nouveau fichier JS.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v122";
+const CACHE_NAME = "pilotage-cache-v123";
 const APP_SHELL = [
   "./",
   "./index.html",
