@@ -1,8 +1,8 @@
 // Écran "📦 Dossier de passation" (27/10/2026, retour de Charles-Henri : arrêt maladie, besoin de
 // remettre à son chef ce qui est en cours) — voir js/domain/handover.js pour le périmètre et
 // js/domain/handoverExport.js pour les fichiers produits. Ce que l'écran ajoute : le choix des
-// personnes incluses, l'option (décochée par défaut) d'inclure ses notes privées sur chaque
-// personne, un mot d'introduction facultatif, et un aperçu des chiffres avant de générer.
+// personnes incluses, l'option (cochée par défaut) d'inclure ses notes datées et repères managériaux
+// sur chaque personne, un mot d'introduction facultatif, et un aperçu des chiffres avant de générer.
 import * as peopleApi from "../domain/people.js";
 import { loadHandoverSource, computeHandover, downloadGlobalPdf, downloadHandoverExcel, downloadPeopleZip } from "../domain/handoverExport.js";
 import { buildCoverMessage } from "../domain/handover.js";
@@ -92,10 +92,10 @@ export async function renderHandover(container) {
     </div>
     <div class="card" style="margin-bottom:16px;">
       <label class="item-row" style="cursor:pointer;gap:10px;border-bottom:none;">
-        <input type="checkbox" id="handover-private-notes" />
+        <input type="checkbox" id="handover-private-notes" checked />
         <div class="item-main">
-          <div class="item-title">Inclure mes notes privées sur chaque personne</div>
-          <div class="item-meta">Décoché par défaut : le journal de notes et le contexte de la fiche Personne ne sortent pas.</div>
+          <div class="item-title">Inclure mes notes et repères managériaux sur chaque personne</div>
+          <div class="item-meta">Journal de notes daté, contexte, attentes en 1:1 et comme manager, considération personnelle. Ils figurent dans la fiche PDF de la personne et dans l'Excel. Décoche pour ne pas les transmettre.</div>
         </div>
       </label>
     </div>
