@@ -149,7 +149,9 @@ function wrapText(text, maxWidth, size, bold) {
       lines.push("");
       continue;
     }
-    const words = paragraph.split(/\s+/).filter(Boolean);
+    // Coupure aux espaces ordinaires seulement : une espace insécable (« Qui reprend ? ») reste collée
+    // au mot voisin ; elle est imprimée comme une espace normale.
+    const words = paragraph.split(/[ \t\r\f\v\u2028\u2029]+/).filter(Boolean).map((w) => w.replace(/\u00a0/g, " "));
     let current = "";
     for (const rawWord of words) {
       const wordPieces = textWidth(rawWord, size, bold) > maxWidth ? breakLongWord(rawWord, maxWidth, size, bold) : [rawWord];
@@ -225,6 +227,10 @@ export function createPdfDoc({ title = "" } = {}) {
         if (line) drawLine(line, { size, bold });
       }
       cursorY -= gapAfter;
+    },
+    /** Force un saut de page (ex. page d'explication suivie du contenu). */
+    pageBreak() {
+      newPage();
     },
     /** Saute à la page suivante s'il reste moins de `height` points — pour garder un bloc entier. */
     keepTogether(height) {
