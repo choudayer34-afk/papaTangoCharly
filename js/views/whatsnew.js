@@ -45,6 +45,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → « 📦 Dossier de passation » → décoche les projets à ne pas transmettre.",
         gain: "Tu remets à ton chef uniquement ce qui le concerne, et tu sais toujours ce que tu attends de qui.",
       },
+      {
+        type: "add",
+        title: "📦 Passation : un texte prêt pour expliquer les documents à ton chef",
+        text: "Le PDF global s'ouvre désormais sur une page « Comment lire ce dossier » : ce que contient chaque document (PDF global, fiches de l'équipe, tableau Excel), comment lire les mentions (retard, « En attente de », prochain contrôle), ce qui est écarté et par où commencer. L'écran Passation propose aussi un message d'accompagnement déjà rédigé, à copier en un clic pour ton mail ; il s'adapte aux personnes cochées.",
+        howTo: "☰ Plus → « 📦 Dossier de passation » → « 📋 Copier le message », puis génère les documents.",
+        gain: "Ton chef sait quoi ouvrir, dans quel ordre et comment lire chaque mention, sans que tu aies à le lui expliquer.",
+      },
     ],
   },
   // À ajouter en tête de WHATS_NEW (js/components/whatsnew.js) :
