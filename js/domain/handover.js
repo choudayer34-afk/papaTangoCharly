@@ -304,6 +304,66 @@ function joinResources(resources) {
   return resources.map((r) => `${r.title}${r.url ? " : " + r.url : r.location ? " (" + r.location + ")" : ""}`).join("\n");
 }
 
+// ─── Texte explicatif pour le destinataire du dossier (le chef) ─────────────────────────────────
+// Rédigé en tutoiement (choix de Charles-Henri, 27/10/2026). Source unique : la page « Comment lire
+// ce dossier » du PDF global ET le message d'accompagnement copiable sur l'écran Passation.
+// Garder ces textes alignés avec ce que les PDF/Excel contiennent réellement (voir handoverExport.js).
+export const HANDOVER_GUIDE = {
+  title: "Comment lire ce dossier",
+  intro:
+    "Ce dossier te permet de reprendre mes sujets en cours pendant mon absence. Il ne contient que ce qui n'est pas terminé, tel que c'était au jour de son édition (date en première page). Il est composé de trois documents complémentaires.",
+  documents: [
+    {
+      title: "1. Le dossier global (ce PDF)",
+      text:
+        "C'est la vue d'ensemble. Il contient une synthèse chiffrée, les tâches à traiter en priorité (en retard ou à échéance sous 7 jours), puis chaque projet en cours : avancement, objectif, critère de réussite, sous-parties non terminées, notes, et les tâches non terminées avec leur statut, leur échéance, ce que j'attends et de qui, ce qu'il reste à faire dans leur checklist et les ressources associées (liens cliquables). Il se termine par les tâches qui ne sont rattachées à aucun projet. Il ne contient pas le détail du suivi de chaque personne de l'équipe.",
+    },
+    {
+      title: "2. Les fiches de l'équipe (un PDF par personne, confidentielles)",
+      text:
+        "Une fiche par membre de l'équipe : ce que la personne devait faire et pour quand (échéance, prochain contrôle, résultat attendu, notes de suivi), ce que je devais lui transmettre ou lui fournir, et ses objectifs en cours avec les derniers suivis. Ces fiches contiennent des informations sur des personnes : à ne consulter que toi et à ne partager qu'avec les personnes habilitées.",
+    },
+    {
+      title: "3. Le tableau Excel",
+      text:
+        "Une ligne par sujet non terminé (projet, sous-partie, tâche, suivi d'équipe, objectif), avec statut, échéance, prochain contrôle, retard, notes, checklist et liens. Tu peux filtrer et trier les colonnes. Les deux dernières colonnes, « Qui reprend ? » et « Commentaire », sont volontairement vides : elles servent à répartir les sujets et à noter tes remarques.",
+    },
+  ],
+  readingTitle: "Comment lire les mentions",
+  reading: [
+    "« retard N j » : l'échéance est dépassée depuis N jours. Les éléments en retard sont en rouge.",
+    "« En attente de » : ce que j'attends (une personne, un fournisseur, une référence de commande ou de ticket). « non précisé » signifie que je ne l'avais pas renseigné.",
+    "« Prochain contrôle » : la date à laquelle je comptais vérifier ou relancer. « À lui dire avant le » : la date limite pour transmettre une information à la personne.",
+    "« Reste à faire » : les étapes de la checklist qui ne sont pas encore cochées.",
+  ],
+  excludedTitle: "Ce qui ne figure pas dans ces documents",
+  excluded:
+    "Les sujets terminés, ceux que j'avais masqués du point de suivi, mes notes privées sur les personnes (sauf mention contraire) et les projets sans rapport avec ton périmètre que j'ai volontairement écartés. Quand une liste est raccourcie, c'est indiqué (par exemple « les 15 plus urgentes sur 20 ») : l'intégralité est dans le tableau Excel.",
+  startTitle: "Par où commencer",
+  start:
+    "Lis d'abord la synthèse et les priorités qui suivent, ouvre ensuite le tableau Excel pour répartir les sujets (colonne « Qui reprend ? »), puis consulte les fiches de l'équipe pour les points à traiter avec chaque personne.",
+};
+
+/** Message d'accompagnement prêt à coller dans un mail (texte brut). `withTeam`/`withExcel` adaptent
+ *  la liste aux documents réellement joints. */
+export function buildCoverMessage({ withTeam = true, withExcel = true } = {}) {
+  const docs = ["- le dossier global (PDF) : synthèse, priorités, projets en cours avec avancement, notes, échéances, tâches et ressources associées, tâches hors projet"];
+  if (withTeam) docs.push("- les fiches de l'équipe (un PDF par personne, confidentielles) : ce que chacun devait faire et pour quand, ce que je devais leur transmettre, notes de suivi et objectifs en cours");
+  if (withExcel) docs.push("- le tableau Excel : une ligne par sujet non terminé, filtrable, avec deux colonnes vides (« Qui reprend ? » et « Commentaire ») pour répartir les sujets");
+  return [
+    "Bonjour,",
+    "",
+    "Tu trouveras ci-joint le dossier de passation de mes sujets en cours. Il ne contient que ce qui n'est pas terminé, à la date d'édition indiquée en première page :",
+    ...docs,
+    "",
+    "Pour t'y retrouver : la page « Comment lire ce dossier » au début du PDF global explique chaque document et les mentions utilisées (retard, « En attente de », prochain contrôle). Je te conseille de commencer par la synthèse et les priorités, puis de répartir les sujets avec l'Excel.",
+    "",
+    "Les fiches de l'équipe contiennent des informations sur des personnes : merci de ne les partager qu'avec les personnes habilitées.",
+    "",
+    "Cordialement",
+  ].join("\n");
+}
+
 export const HANDOVER_COLUMNS = [
   { key: "type", header: "Type", width: 24 },
   { key: "project", header: "Projet", width: 24 },
