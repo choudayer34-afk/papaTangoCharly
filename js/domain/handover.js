@@ -12,8 +12,9 @@
 // Règles de périmètre décidées avec Charles-Henri (27/10/2026) :
 //  - UNIQUEMENT ce qui n'est pas terminé (tâche ≠ Terminé, projet actif, suivi ≠ Réglé, objectif
 //    non atteint, sous-partie de projet non terminée) ;
-//  - les sujets masqués du point (`hiddenFromPrep`) et ses notes privées sur chaque personne ne
-//    sortent JAMAIS par défaut (`includePersonNotes` doit être explicitement demandé) ;
+//  - les sujets masqués du point (`hiddenFromPrep`) ne sortent JAMAIS ; les notes datées et repères
+//    managériaux sur chaque personne ne sortent que si `includePersonNotes` est demandé (faux par défaut
+//    ici ; l'écran Passation le coche d'office, décision du 27/10/2026) ;
 //  - les ressources associées (liens) accompagnent chaque tâche, projet et suivi ;
 //  - les personnes de type "manager" (son propre manager) ne sont pas des "membres de l'équipe" :
 //    exclues de la liste des fiches.
@@ -157,12 +158,24 @@ function objectiveView(o, ctx) {
   };
 }
 
+/** « Repères managériaux » de la fiche Personne (js/views/people.js, onglet Notes & repères) : trois
+ *  textes libres, non datés. Seuls les champs renseignés sont retournés. */
+export const MANAGERIAL_MARK_FIELDS = [
+  { field: "expectationsInOneToOne", label: "Attente des O2O (ce que la personne attend de moi en 1:1)" },
+  { field: "expectationsAsManager", label: "Attente manager (ce que la personne attend de moi en tant que manager)" },
+  { field: "personalConsideration", label: "Considération personnelle" },
+];
+function managerialMarks(person) {
+  return MANAGERIAL_MARK_FIELDS.map(({ field, label }) => ({ label, text: String(person[field] || "").trim() })).filter((m) => m.text);
+}
+
 /**
  * @param {Object} data - { projects, tasks, followUps, people, objectives, links, resources }
  * @param {Object} [options]
  * @param {string[]|null} [options.personIds] - personnes retenues (null = toute l'équipe).
  * @param {boolean} [options.includePersonNotes=false] - notes PRIVÉES sur la personne (champ
- *   "notes" et journal de la fiche Personne). Jamais incluses sans demande explicite.
+ *   "notes", journal daté et repères managériaux de la fiche Personne). Faux par défaut au niveau du
+ *   domaine ; l'écran Passation la coche d'office (choix de Charles-Henri, 27/10/2026).
  * @param {boolean} [options.includeObjectives=true] - objectifs non atteints de la personne.
  * @param {string[]} [options.excludedProjectIds] - projets à exclure (avec leurs tâches, suivis et objectifs).
  * @param {Object} labels - fonctions de libellé (statuts, priorités...) injectées par l'appelant :
@@ -251,7 +264,7 @@ export function buildHandoverData(data, options = {}, labels) {
           ? (data.objectives || []).filter((o) => o.personId === person.id && o.status !== "done").map((o) => objectiveView(o, ctx))
           : [],
         privateNotes: includePersonNotes
-          ? { notes: (person.notes || "").trim(), journal: [...(person.notesLog || [])].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map((n) => ({ date: formatDateFr(n.createdAt), text: (n.text || "").trim() })).filter((n) => n.text) }
+          ? { notes: (person.notes || "").trim(), markers: managerialMarks(person), journal: [...(person.notesLog || [])].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)).map((n) => ({ date: formatDateFr(n.createdAt), text: (n.text || "").trim() })).filter((n) => n.text) }
           : null,
         lateCount: own.filter((f) => f.controlLate || f.dueLate).length,
       };
@@ -321,12 +334,12 @@ export const HANDOVER_GUIDE = {
     {
       title: "2. Les fiches de l'équipe (un PDF par personne, confidentielles)",
       text:
-        "Une fiche par membre de l'équipe : ce que la personne devait faire et pour quand (échéance, prochain contrôle, résultat attendu, notes de suivi), ce que je devais lui transmettre ou lui fournir, et ses objectifs en cours avec les derniers suivis. Ces fiches contiennent des informations sur des personnes : à ne consulter que toi et à ne partager qu'avec les personnes habilitées.",
+        "Une fiche par membre de l'équipe : ce que la personne devait faire et pour quand (échéance, prochain contrôle, résultat attendu, notes de suivi), ce que je devais lui transmettre ou lui fournir, ses objectifs en cours avec les derniers suivis et, à la fin, lorsque je les ai incluses, mes notes datées et mes repères managériaux sur la personne (ce qu'elle attend de moi en 1:1 et comme manager, sa personnalité, ses forces et axes de progrès). Ces fiches contiennent des informations sur des personnes : à ne consulter que toi et à ne partager qu'avec les personnes habilitées.",
     },
     {
       title: "3. Le tableau Excel",
       text:
-        "Une ligne par sujet non terminé (projet, sous-partie, tâche, suivi d'équipe, objectif), avec statut, échéance, prochain contrôle, retard, notes, checklist et liens. Tu peux filtrer et trier les colonnes. Les deux dernières colonnes, « Qui reprend ? » et « Commentaire », sont volontairement vides : elles servent à répartir les sujets et à noter tes remarques.",
+        "Une ligne par sujet non terminé (projet, sous-partie, tâche, suivi d'équipe, objectif) et, lorsque je les ai incluses, une ligne « Notes et repères sur la personne » par membre de l'équipe, avec statut, échéance, prochain contrôle, retard, notes, checklist et liens. Tu peux filtrer et trier les colonnes. Les deux dernières colonnes, « Qui reprend ? » et « Commentaire », sont volontairement vides : elles servent à répartir les sujets et à noter tes remarques.",
     },
   ],
   readingTitle: "Comment lire les mentions",
@@ -338,7 +351,7 @@ export const HANDOVER_GUIDE = {
   ],
   excludedTitle: "Ce qui ne figure pas dans ces documents",
   excluded:
-    "Les sujets terminés, ceux que j'avais masqués du point de suivi, mes notes privées sur les personnes (sauf mention contraire) et les projets sans rapport avec ton périmètre que j'ai volontairement écartés. Quand une liste est raccourcie, c'est indiqué (par exemple « les 15 plus urgentes sur 20 ») : l'intégralité est dans le tableau Excel.",
+    "Les sujets terminés, ceux que j'avais masqués du point de suivi, les projets sans rapport avec ton périmètre que j'ai volontairement écartés. Quand une liste est raccourcie, c'est indiqué (par exemple « les 15 plus urgentes sur 20 ») : l'intégralité est dans le tableau Excel.",
   startTitle: "Par où commencer",
   start:
     "Lis d'abord la synthèse et les priorités qui suivent, ouvre ensuite le tableau Excel pour répartir les sujets (colonne « Qui reprend ? »), puis consulte les fiches de l'équipe pour les points à traiter avec chaque personne.",
@@ -348,7 +361,7 @@ export const HANDOVER_GUIDE = {
  *  la liste aux documents réellement joints. */
 export function buildCoverMessage({ withTeam = true, withExcel = true } = {}) {
   const docs = ["- le dossier global (PDF) : synthèse, priorités, projets en cours avec avancement, notes, échéances, tâches et ressources associées, tâches hors projet"];
-  if (withTeam) docs.push("- les fiches de l'équipe (un PDF par personne, confidentielles) : ce que chacun devait faire et pour quand, ce que je devais leur transmettre, notes de suivi et objectifs en cours");
+  if (withTeam) docs.push("- les fiches de l'équipe (un PDF par personne, confidentielles) : ce que chacun devait faire et pour quand, ce que je devais leur transmettre, notes de suivi et objectifs en cours, et, lorsque je les ai incluses, mes notes datées et repères managériaux sur chaque personne");
   if (withExcel) docs.push("- le tableau Excel : une ligne par sujet non terminé, filtrable, avec deux colonnes vides (« Qui reprend ? » et « Commentaire ») pour répartir les sujets");
   return [
     "Bonjour,",
@@ -426,6 +439,18 @@ export function buildHandoverRows(handover) {
   }
   for (const t of handover.looseTasks) rows.push(taskRow(t, t.projectName ? "Tâche (projet clos)" : "Tâche hors projet", t.projectName));
   for (const person of handover.people) {
+    const pn = person.privateNotes;
+    if (pn && (pn.notes || pn.journal.length || pn.markers.length)) {
+      rows.push(
+        row({
+          type: "Notes et repères sur la personne",
+          person: person.name,
+          title: person.name,
+          detail: detailOf(pn.markers.map((m) => `${m.label} : ${m.text}`)),
+          notes: detailOf([pn.notes, ...pn.journal.map((n) => `${n.date} : ${n.text}`)]),
+        })
+      );
+    }
     const fuRow = (f, type) =>
       row({
         type,
