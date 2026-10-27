@@ -59,7 +59,7 @@ function u32(n) {
   return [n & 0xff, (n >> 8) & 0xff, (n >> 16) & 0xff, (n >> 24) & 0xff];
 }
 
-function buildZip(files) {
+export function buildZip(files) {
   // `files`: [{name: "xl/workbook.xml", data: Uint8Array}]
   const localParts = [];
   const centralParts = [];
@@ -163,10 +163,16 @@ const WORKBOOK_RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
 
-const WORKBOOK_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+// `sheetName` : ajouté le 27/10/2026 (dossier de passation, js/domain/handoverExport.js) — le nom
+// de l'onglet était figé à "Objectifs". Valeur par défaut inchangée, donc aucun effet sur l'export
+// Objectifs existant. Nom limité aux caractères sûrs d'Excel (31 max, sans \ / ? * [ ] :).
+function workbookXml(sheetName) {
+  const safe = String(sheetName).replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Feuille1";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Objectifs" sheetId="1" r:id="rId1"/></sheets>
+<sheets><sheet name="${xmlEscape(safe)}" sheetId="1" r:id="rId1"/></sheets>
 </workbook>`;
+}
 
 /**
  * Classeur à UNE feuille (suffisant pour l'export Objectifs demandé — pas de moteur multi-
@@ -175,7 +181,7 @@ const WORKBOOK_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
  * s'affiche sur plusieurs lignes dans Excel grâce au style `wrapText` appliqué à TOUTES les
  * cellules de données (nécessaire pour "indicateurs"/"suivi" compilés dans une même cellule).
  */
-export function buildXlsxBytes(columns, rows) {
+export function buildXlsxBytes(columns, rows, { sheetName = "Objectifs" } = {}) {
   const headerRow = `<row r="1">${columns
     .map((c, i) => `<c r="${colLetter(i)}1" t="inlineStr" s="2"><is><t xml:space="preserve">${xmlEscape(c.header)}</t></is></c>`)
     .join("")}</row>`;
@@ -205,7 +211,7 @@ ${cols}
   const files = [
     { name: "[Content_Types].xml", data: enc.encode(CONTENT_TYPES_XML) },
     { name: "_rels/.rels", data: enc.encode(RELS_XML) },
-    { name: "xl/workbook.xml", data: enc.encode(WORKBOOK_XML) },
+    { name: "xl/workbook.xml", data: enc.encode(workbookXml(sheetName)) },
     { name: "xl/_rels/workbook.xml.rels", data: enc.encode(WORKBOOK_RELS_XML) },
     { name: "xl/styles.xml", data: enc.encode(STYLES_XML) },
     { name: "xl/worksheets/sheet1.xml", data: enc.encode(sheetXml) },
