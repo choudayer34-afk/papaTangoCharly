@@ -16,12 +16,36 @@
 // et le XML relu manuellement contre le schéma OOXML, mais une ouverture réelle par Charles-Henri
 // reste nécessaire avant validation complète.
 
+// Revue du 27/10/2026 (dossier de passation) : un caractère de contrôle (ex. tabulation verticale
+// collée depuis un mail ou un PDF) ou un demi-caractère Unicode isolé rend le XML invalide, et Excel
+// refuse alors d'ouvrir le classeur ou le "répare" en supprimant des données. On les retire donc
+// avant écriture. Aucun effet sur un texte normal.
+function stripInvalidXmlChars(s) {
+  let out = "";
+  for (const ch of s) {
+    const code = ch.codePointAt(0);
+    if (code === 9 || code === 10 || code === 13) out += ch;
+    else if (code < 32 || code === 0xfffe || code === 0xffff || (code >= 0xd800 && code <= 0xdfff)) continue;
+    else out += ch;
+  }
+  return out;
+}
+
 function xmlEscape(s) {
-  return String(s == null ? "" : s)
+  return stripInvalidXmlChars(String(s == null ? "" : s))
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// Excel plafonne une cellule à 32 767 caractères : au-delà, le contenu est tronqué ou le fichier
+// signalé corrompu selon la version. On coupe nous-mêmes, avec une mention explicite.
+const MAX_CELL_CHARS = 32000;
+function cellText(value) {
+  const text = String(value == null ? "" : value);
+  if (text.length <= MAX_CELL_CHARS) return text;
+  return text.slice(0, MAX_CELL_CHARS - 70) + "\n[… texte tronqué : trop long pour une cellule Excel]";
 }
 
 function colLetter(index) {
@@ -181,7 +205,7 @@ function workbookXml(sheetName) {
  * s'affiche sur plusieurs lignes dans Excel grâce au style `wrapText` appliqué à TOUTES les
  * cellules de données (nécessaire pour "indicateurs"/"suivi" compilés dans une même cellule).
  */
-export function buildXlsxBytes(columns, rows, { sheetName = "Objectifs" } = {}) {
+export function buildXlsxBytes(columns, rows, { sheetName = "Objectifs", freezeHeader = false } = {}) {
   const headerRow = `<row r="1">${columns
     .map((c, i) => `<c r="${colLetter(i)}1" t="inlineStr" s="2"><is><t xml:space="preserve">${xmlEscape(c.header)}</t></is></c>`)
     .join("")}</row>`;
@@ -189,7 +213,7 @@ export function buildXlsxBytes(columns, rows, { sheetName = "Objectifs" } = {}) 
     .map((row, rIdx) => {
       const r = rIdx + 2;
       const cells = row
-        .map((val, cIdx) => `<c r="${colLetter(cIdx)}${r}" t="inlineStr" s="1"><is><t xml:space="preserve">${xmlEscape(val)}</t></is></c>`)
+        .map((val, cIdx) => `<c r="${colLetter(cIdx)}${r}" t="inlineStr" s="1"><is><t xml:space="preserve">${xmlEscape(cellText(val))}</t></is></c>`)
         .join("");
       return `<row r="${r}">${cells}</row>`;
     })
@@ -201,7 +225,7 @@ export function buildXlsxBytes(columns, rows, { sheetName = "Objectifs" } = {}) 
   const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <dimension ref="${dimension}"/>
-<sheetViews><sheetView workbookViewId="0"/></sheetViews>
+${freezeHeader ? '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft"/></sheetView></sheetViews>' : '<sheetViews><sheetView workbookViewId="0"/></sheetViews>'}
 ${cols}
 <sheetData>${headerRow}${dataRows}</sheetData>
 <autoFilter ref="${dimension}"/>
