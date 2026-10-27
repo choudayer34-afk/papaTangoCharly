@@ -765,9 +765,13 @@
 // de passation" : js/domain/handover.js, js/domain/handoverExport.js, js/views/handover.js (ajoutés à APP_SHELL),
 // js/app.js (route #/handover), js/views/more.js, js/services/xlsxWriter.js (nom d'onglet paramétrable, buildZip exporté),
 // js/views/whatsnew.js, tests/unit/handover.spec.js.
+// v122 (27/10/2026) — passation : exclusion de projets (CSE, etc.), colonne/ligne "En attente de" exportée, revue des fichiers
+// de sortie (troncatures, longues URL, caractères, en-têtes de tableau répétés). js/services/pdfWriter.js (métriques Helvetica
+// exactes, coupe des mots trop longs, en-tête de tableau répété, keepWithNext — partagé avec les PDF Objectifs/EADP),
+// js/services/xlsxWriter.js, js/domain/handover.js, handoverExport.js, js/views/handover.js, js/views/whatsnew.js. Aucun nouveau fichier JS.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v121";
+const CACHE_NAME = "pilotage-cache-v122";
 const APP_SHELL = [
   "./",
   "./index.html",
