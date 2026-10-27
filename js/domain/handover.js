@@ -138,6 +138,7 @@ function soonestKey(fu) {
 }
 
 function objectiveView(o, ctx) {
+  const entriesTotal = (o.entries || []).length;
   const lastEntries = [...(o.entries || [])]
     .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
     .slice(0, 3)
@@ -152,6 +153,7 @@ function objectiveView(o, ctx) {
     watchPoints: (o.watchPoints || "").trim(),
     indicators: (o.indicators || []).map((i) => ({ label: i.label || "(indicateur)", target: i.target || "", statusLabel: i.status ? ctx.labels.indicatorStatus(i.status) : "" })),
     lastEntries,
+    entriesTotal,
   };
 }
 
@@ -162,13 +164,23 @@ function objectiveView(o, ctx) {
  * @param {boolean} [options.includePersonNotes=false] - notes PRIVÉES sur la personne (champ
  *   "notes" et journal de la fiche Personne). Jamais incluses sans demande explicite.
  * @param {boolean} [options.includeObjectives=true] - objectifs non atteints de la personne.
+ * @param {string[]} [options.excludedProjectIds] - projets à exclure (avec leurs tâches, suivis et objectifs).
  * @param {Object} labels - fonctions de libellé (statuts, priorités...) injectées par l'appelant :
  *   garde ce module pur (les constantes d'origine vivent dans des modules qui touchent le stockage).
  */
 export function buildHandoverData(data, options = {}, labels) {
-  const { personIds = null, includePersonNotes = false, includeObjectives = true } = options;
-  const projects = data.projects || [];
-  const tasks = data.tasks || [];
+  const { personIds = null, includePersonNotes = false, includeObjectives = true, excludedProjectIds = [] } = options;
+  // Projets exclus à la demande de Charles-Henri (27/10/2026 : "exclure des projets plus perso comme
+  // le CSE de l'export") : le projet ET tout ce qui s'y rattache (tâches, suivis d'équipe, objectifs)
+  // sortent des trois fichiers — rien ne doit fuiter par un autre chemin.
+  const excluded = new Set(excludedProjectIds);
+  const projects = (data.projects || []).filter((p) => !excluded.has(p.id));
+  const tasks = (data.tasks || []).filter((t) => !t.projectId || !excluded.has(t.projectId));
+  data = {
+    ...data,
+    followUps: (data.followUps || []).filter((f) => !f.projectId || !excluded.has(f.projectId)),
+    objectives: (data.objectives || []).filter((o) => !o.projectId || !excluded.has(o.projectId)),
+  };
   const resources = data.resources || [];
   const ctx = {
     labels,
@@ -215,10 +227,9 @@ export function buildHandoverData(data, options = {}, labels) {
   const tasksLate = allOpenTaskViews.filter((t) => t.late).length;
   const due7 = allOpenTaskViews.filter((t) => t.daysUntilDue !== null && t.daysUntilDue >= 0 && t.daysUntilDue <= 7).length;
   const due30 = allOpenTaskViews.filter((t) => t.daysUntilDue !== null && t.daysUntilDue >= 0 && t.daysUntilDue <= 30).length;
-  const priorities = allOpenTaskViews
-    .filter((t) => t.late || (t.daysUntilDue !== null && t.daysUntilDue <= 7))
-    .sort(compareTasks)
-    .slice(0, 12);
+  const allPriorities = allOpenTaskViews.filter((t) => t.late || (t.daysUntilDue !== null && t.daysUntilDue <= 7)).sort(compareTasks);
+  const PRIORITIES_LIMIT = 15;
+  const priorities = allPriorities.slice(0, PRIORITIES_LIMIT);
 
   const selected = personIds ? new Set(personIds) : null;
   const team = (data.people || []).filter((p) => p.type !== "manager" && (!selected || selected.has(p.id)));
@@ -258,10 +269,31 @@ export function buildHandoverData(data, options = {}, labels) {
       peopleCount: peopleViews.length,
     },
     priorities,
+    prioritiesTotal: allPriorities.length,
     projects: projectViews,
     looseTasks,
     people: peopleViews,
   };
+}
+
+// Caractères que la police PDF (Helvetica de base) ne sait pas dessiner : sans traitement ils
+// s'impriment en "?" (revue du 27/10/2026 : flèches, espaces fines insécables des claviers
+// mobiles, symboles). Équivalents simples quand ils existent, sinon suppression (émojis compris).
+const SPACE_LIKE = /[\u2000-\u200A\u202F\u205F\u3000\u00AD\u200B\u2060]/g;
+const REPLACEMENTS = { "→": "->", "←": "<-", "↔": "<->", "⇒": "=>", "≥": ">=", "≤": "<=", "≠": "!=", "≈": "~", "−": "-", "‑": "-", "‒": "-", "✓": "", "✔": "", "✗": "x", "✘": "x", "★": "*", "☆": "*", "●": "-", "▪": "-", "■": "-", "◦": "-", "‣": "-", "※": "*" };
+const UNSUPPORTED_GLYPHS = /[\u{1F000}-\u{1FFFF}\u2190-\u21FF\u2300-\u23FF\u25A0-\u27BF\u2900-\u297F\u2B00-\u2BFF\uFE00-\uFE0F\u200C\u200D]/gu;
+const WIN_ANSI_EXTRA = new Set([0x20ac, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021, 0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x017d, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014, 0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x017e, 0x0178]);
+export function pdfText(value) {
+  let text = String(value ?? "").replace(SPACE_LIKE, " ");
+  text = text.replace(/[→←↔⇒≥≤≠≈−‑‒✓✔✗✘★☆●▪■◦‣※]/g, (c) => REPLACEMENTS[c] ?? "");
+  text = text.replace(UNSUPPORTED_GLYPHS, "");
+  // Dernier filet : tout caractère encore hors Latin-1/Windows-1252 serait imprimé en "?".
+  let out = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0);
+    if (code === 10 || code === 9 || (code >= 32 && code <= 255) || WIN_ANSI_EXTRA.has(code)) out += ch === "\t" ? " " : ch;
+  }
+  return out.replace(/[ \t]{2,}/g, " ").replace(/ +\n/g, "\n").trim();
 }
 
 function joinNotes(notes) {
@@ -273,21 +305,21 @@ function joinResources(resources) {
 }
 
 export const HANDOVER_COLUMNS = [
-  { header: "Type", width: 22 },
-  { header: "Projet", width: 24 },
-  { header: "Personne", width: 20 },
-  { header: "Titre", width: 40 },
-  { header: "Statut", width: 16 },
-  { header: "Priorité", width: 10 },
-  { header: "Échéance", width: 12 },
-  { header: "Prochain contrôle", width: 14 },
-  { header: "En retard", width: 10 },
-  { header: "Détail", width: 50 },
-  { header: "Notes et suivi", width: 60 },
-  { header: "Reste à faire (checklist)", width: 36 },
-  { header: "Ressources (liens)", width: 60 },
-  { header: "Qui reprend ?", width: 18 },
-  { header: "Commentaire", width: 30 },
+  { key: "type", header: "Type", width: 24 },
+  { key: "project", header: "Projet", width: 24 },
+  { key: "person", header: "Personne", width: 20 },
+  { key: "title", header: "Titre", width: 40 },
+  { key: "status", header: "Statut", width: 16 },
+  { key: "waitingOn", header: "En attente de (référence)", width: 30 },
+  { key: "due", header: "Échéance", width: 12 },
+  { key: "control", header: "Prochain contrôle", width: 14 },
+  { key: "late", header: "En retard", width: 10 },
+  { key: "detail", header: "Détail", width: 50 },
+  { key: "notes", header: "Notes et suivi", width: 60 },
+  { key: "checklist", header: "Reste à faire (checklist)", width: 36 },
+  { key: "resources", header: "Ressources (liens)", width: 60 },
+  { key: "owner", header: "Qui reprend ?", width: 18 },
+  { key: "comment", header: "Commentaire", width: 30 },
 ];
 
 function detailOf(parts) {
@@ -295,88 +327,73 @@ function detailOf(parts) {
 }
 
 /** Lignes du classeur Excel : une ligne par projet, sous-partie, tâche, suivi d'équipe ou objectif
- *  non terminé, avec deux colonnes vides ("Qui reprend ?", "Commentaire") à remplir par le lecteur. */
+ *  non terminé, avec deux colonnes vides ("Qui reprend ?", "Commentaire") à remplir par le lecteur.
+ *  Chaque ligne est écrite par NOM de colonne (voir `row`) : ajouter ou réordonner une colonne ne
+ *  peut plus décaler silencieusement les valeurs. */
 export function buildHandoverRows(handover) {
   const rows = [];
   const yesNo = (v) => (v ? "Oui" : "Non");
-  const taskRow = (t, typeLabel, projectName) => [
-    typeLabel,
-    projectName,
-    "",
-    t.title,
-    t.statusLabel + (t.blocked ? " (bloquée)" : ""),
-    t.priorityLabel,
-    formatDateFr(t.dueDate),
-    "",
-    yesNo(t.late),
-    detailOf([t.description, t.waitingOn ? `En attente de : ${t.waitingOn}` : "", t.successCriteria ? `Critère de réussite : ${t.successCriteria}` : "", t.parentTitle ? `Sous-tâche de : ${t.parentTitle}` : ""]),
-    joinNotes(t.notes),
-    t.checklistOpen.join("\n"),
-    joinResources(t.resources),
-    "",
-    "",
-  ];
+  const row = (values) => HANDOVER_COLUMNS.map((c) => values[c.key] ?? "");
+  const taskRow = (t, type, projectName) =>
+    row({
+      type,
+      project: projectName,
+      title: t.title,
+      status: t.statusLabel + (t.blocked ? " (bloquée)" : ""),
+      waitingOn: t.waitingOn || (t.status === "waiting" ? "non précisé" : ""),
+      due: formatDateFr(t.dueDate),
+      late: yesNo(t.late),
+      detail: detailOf([t.description, t.successCriteria ? `Critère de réussite : ${t.successCriteria}` : "", t.parentTitle ? `Sous-tâche de : ${t.parentTitle}` : ""]),
+      notes: joinNotes(t.notes),
+      checklist: t.checklistOpen.join("\n"),
+      resources: joinResources(t.resources),
+    });
   for (const p of handover.projects) {
     const progress = p.progress.percent === null ? "aucune tâche" : `${p.progress.percent} % (${p.progress.done}/${p.progress.total} tâches terminées)`;
-    rows.push([
-      "Projet",
-      p.name,
-      "",
-      p.name + (p.critical ? " (critique)" : ""),
-      "Actif",
-      "",
-      "",
-      "",
-      "",
-      detailOf([p.objective ? `Objectif : ${p.objective}` : "", p.successCriteria ? `Critère de réussite : ${p.successCriteria}` : "", `Avancement : ${progress}`]),
-      joinNotes(p.notes),
-      "",
-      joinResources(p.resources),
-      "",
-      "",
-    ]);
-    for (const part of p.parts) rows.push(["Sous-partie de projet", p.name, "", part.label, part.statusLabel, "", "", "", "", "", joinNotes(part.notes), "", "", "", ""]);
+    rows.push(
+      row({
+        type: "Projet",
+        project: p.name,
+        title: p.name + (p.critical ? " (critique)" : ""),
+        status: "Actif",
+        detail: detailOf([p.objective ? `Objectif : ${p.objective}` : "", p.successCriteria ? `Critère de réussite : ${p.successCriteria}` : "", `Avancement : ${progress}`]),
+        notes: joinNotes(p.notes),
+        resources: joinResources(p.resources),
+      })
+    );
+    for (const part of p.parts) rows.push(row({ type: "Sous-partie de projet", project: p.name, title: part.label, status: part.statusLabel, notes: joinNotes(part.notes) }));
     for (const t of p.tasks) rows.push(taskRow(t, "Tâche", p.name));
   }
   for (const t of handover.looseTasks) rows.push(taskRow(t, t.projectName ? "Tâche (projet clos)" : "Tâche hors projet", t.projectName));
   for (const person of handover.people) {
-    const fuRow = (f, typeLabel) => [
-      typeLabel,
-      f.projectName,
-      person.name,
-      f.title,
-      f.statusLabel,
-      "",
-      formatDateFr(f.dueDate),
-      formatDateFr(f.controlDate),
-      yesNo(f.controlLate || f.dueLate),
-      detailOf([f.categoryLabel, f.description, f.expectedResult ? `Résultat attendu : ${f.expectedResult}` : "", f.successCriteria ? `Critère de réussite : ${f.successCriteria}` : ""]),
-      joinNotes(f.notes),
-      f.checklistOpen.join("\n"),
-      joinResources(f.resources),
-      "",
-      "",
-    ];
+    const fuRow = (f, type) =>
+      row({
+        type,
+        project: f.projectName,
+        person: person.name,
+        title: f.title,
+        status: f.statusLabel,
+        due: formatDateFr(f.dueDate),
+        control: formatDateFr(f.controlDate),
+        late: yesNo(f.controlLate || f.dueLate),
+        detail: detailOf([f.categoryLabel, f.description, f.expectedResult ? `Résultat attendu : ${f.expectedResult}` : "", f.successCriteria ? `Critère de réussite : ${f.successCriteria}` : ""]),
+        notes: joinNotes(f.notes),
+        checklist: f.checklistOpen.join("\n"),
+        resources: joinResources(f.resources),
+      });
     for (const f of person.waitingOn) rows.push(fuRow(f, "Suivi équipe : attendu de la personne"));
     for (const f of person.toTell) rows.push(fuRow(f, "Suivi équipe : à lui transmettre"));
     for (const o of person.objectives) {
-      rows.push([
-        "Objectif en cours",
-        "",
-        person.name,
-        o.title,
-        "En cours",
-        "",
-        "",
-        "",
-        "",
-        detailOf([o.period ? `Campagne : ${o.period}` : "", o.description, ...o.indicators.map((i) => `Indicateur : ${i.label}${i.target ? " (cible : " + i.target + ")" : ""}${i.statusLabel ? " : " + i.statusLabel : ""}`)]),
-        o.lastEntries.map((e) => [e.date, e.note, e.nextSteps ? `Prévu : ${e.nextSteps}` : ""].filter(Boolean).join(" : ")).join("\n"),
-        "",
-        "",
-        "",
-        "",
-      ]);
+      rows.push(
+        row({
+          type: "Objectif en cours",
+          person: person.name,
+          title: o.title,
+          status: "En cours",
+          detail: detailOf([o.period ? `Campagne : ${o.period}` : "", o.description, ...o.indicators.map((i) => `Indicateur : ${i.label}${i.target ? " (cible : " + i.target + ")" : ""}${i.statusLabel ? " : " + i.statusLabel : ""}`)]),
+          notes: o.lastEntries.map((e) => [e.date, e.note, e.nextSteps ? `Prévu : ${e.nextSteps}` : ""].filter(Boolean).join(" : ")).join("\n"),
+        })
+      );
     }
   }
   return rows;
