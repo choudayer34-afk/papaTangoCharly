@@ -257,10 +257,23 @@ export function buildPersonPdf(person, { generatedOn = todayIso() } = {}) {
   }
 
   if (person.privateNotes) {
-    sectionTitle(doc, "Mes notes sur la personne (incluses à ma demande)");
-    if (person.privateNotes.notes) doc.paragraph(pdfText(person.privateNotes.notes), { size: 9.5 });
-    if (person.privateNotes.journal.length) doc.paragraph(person.privateNotes.journal.map((n) => `${n.date} : ${pdfText(n.text)}`).join("\n"), { size: 9 });
-    if (!person.privateNotes.notes && !person.privateNotes.journal.length) doc.paragraph("Aucune note.");
+    const pn = person.privateNotes;
+    sectionTitle(doc, "Mes notes et repères sur la personne");
+    if (pn.markers.length) {
+      doc.heading("Repères managériaux", { size: 11, keepWithNext: 50 });
+      for (const m of pn.markers) {
+        doc.paragraph(`${pdfText(m.label)} :\n${pdfText(m.text)}`, { size: 9.5, gapAfter: 4 });
+      }
+    }
+    if (pn.notes) {
+      doc.heading("Contexte", { size: 11, keepWithNext: 40 });
+      doc.paragraph(pdfText(pn.notes), { size: 9.5 });
+    }
+    if (pn.journal.length) {
+      doc.heading(`Notes datées (${pn.journal.length})`, { size: 11, keepWithNext: 40 });
+      doc.paragraph(pn.journal.map((n) => `${n.date} : ${pdfText(n.text)}`).join("\n"), { size: 9 });
+    }
+    if (!pn.markers.length && !pn.notes && !pn.journal.length) doc.paragraph("Aucune note ni repère renseigné.");
   }
   return doc.save();
 }
@@ -303,4 +316,3 @@ export function downloadPeopleZip(handover, options) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
   return handover.people.length;
 }
- 
