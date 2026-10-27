@@ -17,7 +17,7 @@ import * as peopleApi from "./people.js";
 import * as objectivesApi from "./objectives.js";
 import * as linksApi from "./links.js";
 import * as resourcesApi from "./resources.js";
-import { buildHandoverData, buildHandoverRows, HANDOVER_COLUMNS, formatDateFr } from "./handover.js";
+import { buildHandoverData, buildHandoverRows, HANDOVER_COLUMNS, formatDateFr, pdfText } from "./handover.js";
 import { createPdfDoc, downloadPdfBytes } from "../services/pdfWriter.js";
 import { buildXlsxBytes, downloadXlsxBytes, buildZip } from "../services/xlsxWriter.js";
 
@@ -35,15 +35,6 @@ const LABELS = {
   indicatorStatus: (s) => objectivesApi.INDICATOR_STATUS_LABELS[s] || s || "",
   resourceType: (t) => resourcesApi.typeInfo(t).label,
 };
-
-// Émojis, pictogrammes et sélecteurs de variation : absents de la police PDF (rendus en "?").
-const UNSUPPORTED_GLYPHS = /[\u{1F000}-\u{1FFFF}⌀-⏿☀-➿⬀-⯿️‍]/gu;
-export function pdfText(value) {
-  return String(value ?? "")
-    .replace(UNSUPPORTED_GLYPHS, "")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
-}
 
 function slug(text) {
   return (
@@ -111,10 +102,11 @@ function writeResources(doc, resources) {
 }
 
 function writeTask(doc, t, { showProject = false } = {}) {
-  doc.heading(pdfText(t.title), { size: 11, color: t.late ? ROUGE : null });
+  doc.heading(pdfText(t.title), { size: 11, color: t.late ? ROUGE : null, keepWithNext: 55 });
   const when = t.dueDate ? `Échéance : ${formatDateFr(t.dueDate)}${t.late ? ` (en retard de ${t.daysLate} j)` : ""}` : "Sans échéance";
   doc.paragraph(line([`Statut : ${t.statusLabel}${t.blocked ? " (bloquée)" : ""}`, t.priorityLabel ? `Priorité : ${t.priorityLabel}` : "", when, showProject && t.projectName ? `Projet : ${pdfText(t.projectName)} (clos)` : ""]), { size: 9.5, gapAfter: 3 });
   if (t.waitingOn) doc.paragraph(`En attente de : ${pdfText(t.waitingOn)}`, { size: 9.5, gapAfter: 3 });
+  else if (t.status === "waiting") doc.paragraph("En attente de : non précisé", { size: 9.5, gapAfter: 3 });
   if (t.parentTitle) doc.paragraph(`Sous-tâche de : ${pdfText(t.parentTitle)}`, { size: 9.5, gapAfter: 3 });
   if (t.description) doc.paragraph(pdfText(t.description), { size: 9.5, gapAfter: 3 });
   if (t.successCriteria) doc.paragraph(`Critère de réussite : ${pdfText(t.successCriteria)}`, { size: 9.5, gapAfter: 3 });
@@ -126,7 +118,7 @@ function writeTask(doc, t, { showProject = false } = {}) {
 
 function writeFollowUp(doc, f, { toTell }) {
   const lateNote = f.controlLate ? " (dépassé)" : "";
-  doc.heading(pdfText(f.title), { size: 11, color: f.controlLate || f.dueLate ? ROUGE : null });
+  doc.heading(pdfText(f.title), { size: 11, color: f.controlLate || f.dueLate ? ROUGE : null, keepWithNext: 55 });
   const dates = toTell
     ? [f.controlDate ? `À lui dire avant le : ${formatDateFr(f.controlDate)}${lateNote}` : "Sans date"]
     : [f.dueDate ? `Échéance de la personne : ${formatDateFr(f.dueDate)}${f.dueLate ? " (dépassée)" : ""}` : "", f.controlDate ? `Prochain contrôle : ${formatDateFr(f.controlDate)}${lateNote}` : ""];
@@ -142,7 +134,7 @@ function writeFollowUp(doc, f, { toTell }) {
 
 function sectionTitle(doc, text) {
   doc.spacer(6);
-  doc.heading(pdfText(text), { size: 14, color: ORANGE });
+  doc.heading(pdfText(text), { size: 14, color: ORANGE, keepWithNext: 90 });
   doc.rule();
 }
 
@@ -174,7 +166,8 @@ export function buildGlobalPdf(handover, { intro = "", generatedOn = todayIso() 
       .join("\n")
   );
   if (handover.priorities.length) {
-    doc.heading("À traiter en priorité (en retard ou à échéance sous 7 jours)", { size: 11 });
+    const more = handover.prioritiesTotal - handover.priorities.length;
+    doc.heading(`À traiter en priorité (en retard ou à échéance sous 7 jours)${more > 0 ? ` : les ${handover.priorities.length} plus urgentes sur ${handover.prioritiesTotal}` : ""}`, { size: 11, keepWithNext: 60 });
     doc.table(
       [
         { header: "Tâche", width: 230 },
@@ -184,12 +177,13 @@ export function buildGlobalPdf(handover, { intro = "", generatedOn = todayIso() 
       handover.priorities.map((t) => [{ text: pdfText(t.title) }, { text: pdfText(t.projectName || "—") }, { text: t.late ? `${formatDateFr(t.dueDate)} (retard ${t.daysLate} j)` : formatDateFr(t.dueDate) }]),
       { size: 9 }
     );
+    if (more > 0) doc.paragraph(`… et ${more} autre(s) tâche(s) en retard ou proche(s) de l'échéance, détaillée(s) dans les projets ci-dessous et dans le tableau Excel.`, { size: 9, gapAfter: 6 });
   }
 
   sectionTitle(doc, `Projets en cours (${handover.projects.length})`);
   if (!handover.projects.length) doc.paragraph("Aucun projet en cours.");
   for (const p of handover.projects) {
-    doc.heading(pdfText(p.name) + (p.critical ? " (critique)" : ""), { size: 13 });
+    doc.heading(pdfText(p.name) + (p.critical ? " (critique)" : ""), { size: 13, keepWithNext: 80 });
     const progress = p.progress.percent === null ? "Avancement : aucune tâche rattachée" : `Avancement : ${p.progress.percent} % (${p.progress.done} tâche(s) terminée(s) sur ${p.progress.total})`;
     doc.paragraph(line([progress, p.partsTotal ? `Sous-parties : ${p.partsDone}/${p.partsTotal} terminées` : "", pdfText(p.category)]), { size: 9.5, gapAfter: 3 });
     if (p.objective) doc.paragraph(`Objectif : ${pdfText(p.objective)}`, { size: 9.5, gapAfter: 3 });
@@ -229,13 +223,13 @@ export function buildPersonPdf(person, { generatedOn = todayIso() } = {}) {
   if (person.objectives.length) {
     sectionTitle(doc, `Objectifs en cours (${person.objectives.length})`);
     for (const o of person.objectives) {
-      doc.heading(pdfText(o.title), { size: 11 });
+      doc.heading(pdfText(o.title), { size: 11, keepWithNext: 55 });
       doc.paragraph(line([o.period ? `Campagne : ${o.period}` : "", o.scopeLabel]), { size: 9.5, gapAfter: 3 });
       if (o.description) doc.paragraph(pdfText(o.description), { size: 9.5, gapAfter: 3 });
       if (o.indicators.length) doc.paragraph("Indicateurs :\n" + o.indicators.map((i) => `- ${pdfText(i.label)}${i.target ? " (cible : " + pdfText(i.target) + ")" : ""}${i.statusLabel ? " : " + i.statusLabel : ""}`).join("\n"), { size: 9.5, gapAfter: 3 });
       if (o.actionPlan) doc.paragraph(`Plan d'action : ${pdfText(o.actionPlan)}`, { size: 9.5, gapAfter: 3 });
       if (o.watchPoints) doc.paragraph(`Points d'attention : ${pdfText(o.watchPoints)}`, { size: 9.5, gapAfter: 3 });
-      if (o.lastEntries.length) doc.paragraph("Derniers suivis :\n" + o.lastEntries.map((e) => `${e.date} : ${pdfText(e.note)}${e.nextSteps ? " (prévu : " + pdfText(e.nextSteps) + ")" : ""}`).join("\n"), { size: 9, gapAfter: 4 });
+      if (o.lastEntries.length) doc.paragraph(`Derniers suivis${o.entriesTotal > o.lastEntries.length ? ` (les ${o.lastEntries.length} plus récents sur ${o.entriesTotal})` : ""} :\n` + o.lastEntries.map((e) => `${e.date} : ${pdfText(e.note)}${e.nextSteps ? " (prévu : " + pdfText(e.nextSteps) + ")" : ""}`).join("\n"), { size: 9, gapAfter: 4 });
       doc.spacer(4);
     }
   }
@@ -257,7 +251,7 @@ export function downloadGlobalPdf(handover, options) {
 
 export function downloadHandoverExcel(handover) {
   const rows = buildHandoverRows(handover);
-  downloadXlsxBytes(buildXlsxBytes(HANDOVER_COLUMNS, rows, { sheetName: "Passation" }), `passation-${todayIso()}.xlsx`);
+  downloadXlsxBytes(buildXlsxBytes(HANDOVER_COLUMNS, rows, { sheetName: "Passation", freezeHeader: true }), `passation-${todayIso()}.xlsx`);
   return rows.length;
 }
 
