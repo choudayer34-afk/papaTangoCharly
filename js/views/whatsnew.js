@@ -52,6 +52,13 @@ const WHATS_NEW = [
         howTo: "☰ Plus → « 📦 Dossier de passation » → « 📋 Copier le message », puis génère les documents.",
         gain: "Ton chef sait quoi ouvrir, dans quel ordre et comment lire chaque mention, sans que tu aies à le lui expliquer.",
       },
+      {
+        type: "add",
+        title: "📦 Passation : tes notes datées et tes repères managériaux sur chaque personne",
+        text: "Les fiches PDF de l'équipe se terminent désormais par « Mes notes et repères sur la personne » : tes repères managériaux renseignés (attente des O2O, attente manager, considération personnelle), le contexte, puis le journal de notes avec la date de chaque note. Le tableau Excel reçoit une ligne « Notes et repères sur la personne » par membre. L'option est cochée par défaut ; décoche-la sur l'écran Passation pour ne pas les transmettre. Les champs vides sont ignorés.",
+        howTo: "☰ Plus → « 📦 Dossier de passation » → « Inclure mes notes et repères managériaux sur chaque personne » (coché).",
+        gain: "Ton chef reprend le suivi de chaque personne avec ce que tu avais noté et à quelle date, pas seulement la liste des tâches.",
+      },
     ],
   },
   // À ajouter en tête de WHATS_NEW (js/components/whatsnew.js) :
