@@ -760,9 +760,14 @@
 // renseignées (échéance et/ou contrôle) sont toutes futures forment un bloc à part "⏳ Pas avant plus tard". Nouvelle
 // fonction followups.js#isNotYetDue ; js/views/people.js (computePrepSections, openPrepModal), js/views/prepMask.js,
 // js/views/whatsnew.js. Aucun nouveau fichier JS.
+// v121 (27/10/2026) — retour direct de Charles-Henri (arrêt maladie) : "il faut que je puisse sortir à mon chef les tâches
+// et projets en cours, leurs notes, avancement, échéances, et le suivi de chaque membre de mon équipe". Nouveau "Dossier
+// de passation" : js/domain/handover.js, js/domain/handoverExport.js, js/views/handover.js (ajoutés à APP_SHELL),
+// js/app.js (route #/handover), js/views/more.js, js/services/xlsxWriter.js (nom d'onglet paramétrable, buildZip exporté),
+// js/views/whatsnew.js, tests/unit/handover.spec.js.
 // Hôtes des proxys publics de js/domain/veille.js — à tenir synchronisé avec la liste PROXIES de ce fichier.
 const VEILLE_PROXY_HOSTS = ["api.allorigins.win", "api.codetabs.com"];
-const CACHE_NAME = "pilotage-cache-v120";
+const CACHE_NAME = "pilotage-cache-v121";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -825,6 +830,8 @@ const APP_SHELL = [
   // Nouveau fichier (28/09/2026, "petite parenthèse" Objectifs/EADP, voir le commentaire daté
   // juste au-dessus de CACHE_NAME) : orchestration des exports PDF/Excel des Objectifs.
   "./js/domain/objectivesExport.js",
+  "./js/domain/handover.js",
+  "./js/domain/handoverExport.js",
   "./js/domain/prompts.js",
   "./js/domain/casquettes.js",
   "./js/domain/convert.js",
@@ -902,6 +909,7 @@ const APP_SHELL = [
   // précédents de ce document.
   "./js/views/veille.js",
   "./js/views/more.js",
+  "./js/views/handover.js",
   "./js/views/guide.js",
   "./js/views/whatsnew.js",
   "./js/views/memory.js",
